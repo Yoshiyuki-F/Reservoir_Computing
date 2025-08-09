@@ -42,13 +42,13 @@ def test_basic_functionality():
     print(f"予測形状: {predictions.shape}")
     print(f"MSE: {mse:.6f}")
     
-    print("✓ 基本機能テスト完了!")
+    print("基本機能テスト完了!")
 
 if __name__ == "__main__":
     try:
         test_basic_functionality()
-        print("\n🎉 すべてのテストが成功しました！")
+        print("\n すべてのテストが成功しました！")
     except Exception as e:
-        print(f"❌ エラーが発生しました: {e}")
+        print(f" エラーが発生しました: {e}")
         import traceback
         traceback.print_exc() 

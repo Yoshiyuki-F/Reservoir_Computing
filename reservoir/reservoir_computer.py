@@ -63,44 +63,94 @@ class ReservoirComputer:
         
     def _initialize_weights(self):
         """reservoir内部の重みを初期化します。"""
-        # CPUで重み初期化を実行（GPU問題回避）
-        with jax.default_device(jax.devices('cpu')[0]):
-            # 入力重みをランダムに初期化
-            key1, key2, self.key = random.split(self.key, 3)
-            
-            W_in_cpu = random.uniform(
-                key1, 
-                (self.n_reservoir, self.n_inputs), 
-                minval=-self.input_scaling, 
-                maxval=self.input_scaling,
-                dtype=jnp.float64
-            )
-            
-            # reservoir内部の重みを初期化
-            W_res_cpu = random.uniform(
-                key2, 
-                (self.n_reservoir, self.n_reservoir), 
-                minval=-1, 
-                maxval=1,
-                dtype=jnp.float64
-            )
-            
-            # NumPyで固有値計算（より安定）
-            W_res_np = np.array(W_res_cpu)
-            try:
-                eigenvalues = np.linalg.eigvals(W_res_np)
-                max_eigenvalue = np.max(np.abs(eigenvalues))
-                max_eigenvalue = max(max_eigenvalue, 1e-8)
-                W_res_scaled = (self.spectral_radius / max_eigenvalue) * W_res_np
-            except:
-                # 固有値計算が失敗した場合
-                frobenius_norm = np.linalg.norm(W_res_np, 'fro')
-                frobenius_norm = max(frobenius_norm, 1e-8)
-                W_res_scaled = (self.spectral_radius / frobenius_norm) * W_res_np
-            
-            # GPUに転送
-            self.W_in = device_put(jnp.array(W_in_cpu), jax.devices()[0])
-            self.W_res = device_put(jnp.array(W_res_scaled), jax.devices()[0])
+        # JAX_PLATFORMS=cudaの場合、CPUデバイスが利用できないため
+        # CPUフォールバック処理を実装
+        try:
+            # CPUデバイスが利用可能かチェック
+            cpu_devices = jax.devices('cpu')
+            if len(cpu_devices) > 0:
+                # CPU環境が利用可能な場合（通常の実行）
+                with jax.default_device(cpu_devices[0]):
+                    self._initialize_on_cpu()
+            else:
+                # GPU専用環境の場合
+                self._initialize_on_gpu()
+        except:
+            # CPUバックエンドが存在しない場合（JAX_PLATFORMS=cuda時）
+            self._initialize_on_gpu()
+    
+    def _initialize_on_cpu(self):
+        """CPU上で重み初期化（安定性重視）"""
+        # 入力重みをランダムに初期化
+        key1, key2, self.key = random.split(self.key, 3)
+        
+        W_in_cpu = random.uniform(
+            key1, 
+            (self.n_reservoir, self.n_inputs), 
+            minval=-self.input_scaling, 
+            maxval=self.input_scaling,
+            dtype=jnp.float64
+        )
+        
+        # reservoir内部の重みを初期化
+        W_res_cpu = random.uniform(
+            key2, 
+            (self.n_reservoir, self.n_reservoir), 
+            minval=-1, 
+            maxval=1,
+            dtype=jnp.float64
+        )
+        
+        # NumPyで固有値計算（より安定）
+        W_res_np = np.array(W_res_cpu)
+        try:
+            eigenvalues = np.linalg.eigvals(W_res_np)
+            max_eigenvalue = np.max(np.abs(eigenvalues))
+            max_eigenvalue = max(max_eigenvalue, 1e-8)
+            W_res_scaled = (self.spectral_radius / max_eigenvalue) * W_res_np
+        except:
+            # 固有値計算が失敗した場合
+            frobenius_norm = np.linalg.norm(W_res_np, 'fro')
+            frobenius_norm = max(frobenius_norm, 1e-8)
+            W_res_scaled = (self.spectral_radius / frobenius_norm) * W_res_np
+        
+        # GPUに転送
+        self.W_in = device_put(jnp.array(W_in_cpu), jax.devices()[0])
+        self.W_res = device_put(jnp.array(W_res_scaled), jax.devices()[0])
+    
+    def _initialize_on_gpu(self):
+        """GPU上で重み初期化（GPU専用環境用）"""
+        # GPU上で直接初期化
+        key1, key2, self.key = random.split(self.key, 3)
+        
+        self.W_in = random.uniform(
+            key1, 
+            (self.n_reservoir, self.n_inputs), 
+            minval=-self.input_scaling, 
+            maxval=self.input_scaling,
+            dtype=jnp.float64
+        )
+        
+        # reservoir内部の重みを初期化
+        W_res = random.uniform(
+            key2, 
+            (self.n_reservoir, self.n_reservoir), 
+            minval=-1, 
+            maxval=1,
+            dtype=jnp.float64
+        )
+        
+        # GPU上で固有値計算（安定性に注意）
+        try:
+            eigenvalues = jnp.linalg.eigvals(W_res)
+            max_eigenvalue = jnp.max(jnp.abs(eigenvalues))
+            max_eigenvalue = jnp.maximum(max_eigenvalue, 1e-8)
+            self.W_res = (self.spectral_radius / max_eigenvalue) * W_res
+        except:
+            # GPU固有値計算が失敗した場合、Frobenius normで代替
+            frobenius_norm = jnp.linalg.norm(W_res, 'fro')
+            frobenius_norm = jnp.maximum(frobenius_norm, 1e-8)
+            self.W_res = (self.spectral_radius / frobenius_norm) * W_res
         
 
 
@@ -169,7 +219,22 @@ class ReservoirComputer:
         X = jnp.concatenate([reservoir_states, bias_column], axis=1) # (time_steps-1, n_reservoir+1)
         
         # ②訓練：reservoir状態から目標データへの線形写像（W_out）を学習
-        # CPUで線形代数演算を実行（GPU問題回避）
+        # CPU/GPU環境に応じて適応的に処理
+        try:
+            # CPUデバイスが利用可能かチェック
+            cpu_devices = jax.devices('cpu')
+            if len(cpu_devices) > 0:
+                # CPU環境が利用可能な場合（通常の実行）
+                self._train_on_cpu(X, target_data, reg_param)
+            else:
+                # GPU専用環境の場合
+                self._train_on_gpu(X, target_data, reg_param)
+        except:
+            # CPUバックエンドが存在しない場合（JAX_PLATFORMS=cuda時）
+            self._train_on_gpu(X, target_data, reg_param)
+    
+    def _train_on_cpu(self, X, target_data, reg_param):
+        """CPU上でRidge回帰を実行（安定性重視）"""
         with jax.default_device(jax.devices('cpu')[0]):
             X_cpu = jax.device_get(X)
             target_cpu = jax.device_get(target_data)
@@ -188,6 +253,21 @@ class ReservoirComputer:
             
             # GPUに転送
             self.W_out = device_put(jnp.array(W_out_cpu), jax.devices()[0])
+    
+    def _train_on_gpu(self, X, target_data, reg_param):
+        """GPU上でRidge回帰を実行（GPU専用環境用）"""
+        # GPU上で直接Ridge回帰
+        XTX = X.T @ X  # X^T X (グラム行列)
+        XTY = X.T @ target_data  # X^T Y
+        
+        # 正則化項を追加
+        A = XTX + reg_param * jnp.eye(XTX.shape[0], dtype=jnp.float64)
+        
+        try:
+            self.W_out = jnp.linalg.solve(A, XTY)
+        except:
+            # GPU上でも失敗する場合は擬似逆行列を使用
+            self.W_out = jnp.linalg.pinv(A) @ XTY
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """

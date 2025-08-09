@@ -58,8 +58,8 @@ def plot_prediction_results(ground_truth, predictions, time_steps, title, filena
         plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f'png/{filename}', dpi=300, bbox_inches='tight')
-    print(f"結果を 'png/{filename}' に保存しました。")
+    plt.savefig(f'outputs/{filename}', dpi=300, bbox_inches='tight')
+    print(f"結果を 'outputs/{filename}' に保存しました。")
     plt.show()
 
 
@@ -238,7 +238,7 @@ def main():
         lorenz_results = demo_lorenz_prediction()
         
         print("\n" + "=" * 60)
-        print("すべてのデモンストレーションが完了しました！")
+        print("すべてのデモンストレーションが完了しました")
         print("=" * 60)
         
         # 結果サマリー

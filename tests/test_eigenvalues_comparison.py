@@ -20,7 +20,7 @@ def test_eigenvals_gpu_vs_cpu(matrix_sizes=[50, 100, 200, 500], num_trials=3):
     results = {}
     
     for size in matrix_sizes:
-        print(f"\n📐 行列サイズ: {size}x{size}")
+        print(f"\n 行列サイズ: {size}x{size}")
         print("-" * 40)
         
         gpu_times = []
@@ -98,13 +98,13 @@ def test_eigenvals_gpu_vs_cpu(matrix_sizes=[50, 100, 200, 500], num_trials=3):
         if results[size]['gpu'] and results[size].get('cpu'):
             speedup = results[size]['gpu'] / results[size]['total']
             if speedup > 1:
-                print(f"  🏆 ハイブリッド(CPU+転送)が {speedup:.2f}x 高速")
+                print(f"   ハイブリッド(CPU+転送)が {speedup:.2f}x 高速")
             else:
-                print(f"  🏆 GPUが {1/speedup:.2f}x 高速")
+                print(f"   GPUが {1/speedup:.2f}x 高速")
         elif results[size]['gpu']:
-            print(f"  ✅ GPUのみ成功")
+            print(f"   GPUのみ成功")
         elif results[size].get('cpu'):
-            print(f"  ✅ CPUのみ成功")
+            print(f"   CPUのみ成功")
     
     return results
 
@@ -163,7 +163,7 @@ def test_reservoir_specific_case():
 
 def test_memory_usage():
     """メモリ使用量の比較"""
-    print("\n💾 メモリ使用量比較")
+    print("\n メモリ使用量比較")
     print("=" * 30)
     
     size = 1000  # 大きな行列
@@ -174,23 +174,23 @@ def test_memory_usage():
     # GPU版
     try:
         W_gpu = random.uniform(key, (size, size), dtype=jnp.float64)
-        print("✅ GPU: メモリ確保成功")
+        print(" GPU: メモリ確保成功")
         eigenvals = jnp.linalg.eigvals(W_gpu)
-        print("✅ GPU: 固有値計算成功")
+        print(" GPU: 固有値計算成功")
     except Exception as e:
-        print(f"❌ GPU: {e}")
+        print(f" GPU: {e}")
     
     # CPU版
     try:
         with jax.default_device(jax.devices('cpu')[0]):
             W_cpu = random.uniform(key, (size, size), dtype=jnp.float64)
-        print("✅ CPU: メモリ確保成功")
+        print(" CPU: メモリ確保成功")
         
         W_np = np.array(W_cpu)
         eigenvals = np.linalg.eigvals(W_np)
-        print("✅ CPU: 固有値計算成功")
+        print(" CPU: 固有値計算成功")
     except Exception as e:
-        print(f"❌ CPU: {e}")
+        print(f" CPU: {e}")
 
 def main():
     print("🔍 固有値計算：GPU vs CPU 詳細分析")
@@ -209,7 +209,7 @@ def main():
     test_memory_usage()
     
     print("\n" + "=" * 50)
-    print("📊 総合結論:")
+    print(" 総合結論:")
     
     # 結果分析
     gpu_wins = 0
@@ -223,18 +223,18 @@ def main():
                 hybrid_wins += 1
     
     if hybrid_wins > gpu_wins:
-        print("🏆 ハイブリッドアプローチが優勢")
-        print("💡 推奨: 固有値計算もCPUで実行")
-        print("📋 理由:")
+        print(" ハイブリッドアプローチが優勢")
+        print(" 推奨: 固有値計算もCPUで実行")
+        print(" 理由:")
         print("   - より高速")
         print("   - より安定")
         print("   - GPU計算リソースを他の処理に節約")
     elif gpu_wins > hybrid_wins:
-        print("🏆 GPU固有値計算が優勢")
-        print("💡 推奨: 固有値計算もGPUで実行")
+        print(" GPU固有値計算が優勢")
+        print(" 推奨: 固有値計算もGPUで実行")
     else:
-        print("🤝 GPU・ハイブリッド互角")
-        print("💡 推奨: 安定性重視でハイブリッド")
+        print(" GPU・ハイブリッド互角")
+        print(" 推奨: 安定性重視でハイブリッド")
 
 if __name__ == "__main__":
     main() 

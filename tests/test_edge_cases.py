@@ -22,18 +22,18 @@ def test_problematic_operations():
     try:
         W = random.uniform(key, (500, 500), minval=-1, maxval=1, dtype=jnp.float64)
         eigenvals = jnp.linalg.eigvals(W)
-        print("   ✅ 成功")
+        print("    成功")
     except Exception as e:
-        print(f"   ❌ 失敗: {e}")
+        print(f"    失敗: {e}")
     
     # SVD分解
     print("2. SVD分解...")
     try:
         W = random.uniform(key, (200, 200), minval=-1, maxval=1, dtype=jnp.float64)
         U, s, Vh = jnp.linalg.svd(W)
-        print("   ✅ 成功")
+        print("    成功")
     except Exception as e:
-        print(f"   ❌ 失敗: {e}")
+        print(f"    失敗: {e}")
     
     # Cholesky分解
     print("3. Cholesky分解...")
@@ -41,18 +41,18 @@ def test_problematic_operations():
         A = random.uniform(key, (100, 100), dtype=jnp.float64)
         A = A @ A.T + 1e-6 * jnp.eye(100)  # 正定値行列にする
         L = jnp.linalg.cholesky(A)
-        print("   ✅ 成功")
+        print("    成功")
     except Exception as e:
-        print(f"   ❌ 失敗: {e}")
+        print(f"    失敗: {e}")
     
     # QR分解
     print("4. QR分解...")
     try:
         W = random.uniform(key, (200, 200), dtype=jnp.float64)
         Q, R = jnp.linalg.qr(W)
-        print("   ✅ 成功")
+        print("    成功")
     except Exception as e:
-        print(f"   ❌ 失敗: {e}")
+        print(f"    失敗: {e}")
 
 def test_matrix_solve():
     """線形方程式求解のテスト"""
@@ -75,11 +75,11 @@ def test_matrix_solve():
         
         # solve実行
         result = jnp.linalg.solve(A, XTy)
-        print("✅ 線形方程式求解成功")
-        print(f"   解の形状: {result.shape}")
+        print(" 線形方程式求解成功")
+        print(f" 解の形状: {result.shape}")
         
     except Exception as e:
-        print(f"❌ 線形方程式求解失敗: {e}")
+        print(f" 線形方程式求解失敗: {e}")
 
 def simulate_reservoir_init():
     """実際のReservoir初期化をGPUで実行"""
@@ -108,13 +108,13 @@ def simulate_reservoir_init():
         max_eigenvalue = jnp.maximum(max_eigenvalue, 1e-8)
         W_res_scaled = (spectral_radius / max_eigenvalue) * W_res
         
-        print("✅ GPU版Reservoir初期化成功")
+        print(" GPU版Reservoir初期化成功")
         print(f"   最大固有値: {float(max_eigenvalue):.6f}")
         
         return True
         
     except Exception as e:
-        print(f"❌ GPU版Reservoir初期化失敗: {e}")
+        print(f" GPU版Reservoir初期化失敗: {e}")
         return False
 
 def main():
@@ -132,14 +132,14 @@ def main():
     print("\n" + "=" * 50)
     print("📊 結論:")
     if gpu_init_success:
-        print("🎉 この環境ではGPU版Reservoir初期化が可能")
-        print("💡 ただし、ハイブリッドアプローチの方が:")
+        print(" この環境ではGPU版Reservoir初期化が可能")
+        print(" ただし、ハイブリッドアプローチの方が:")
         print("   - より安定（環境依存性が少ない）")
         print("   - より高速（前回のテスト結果）")
         print("   - より互換性が高い")
     else:
-        print("⚠️  この環境ではGPU版に問題があります")
-        print("✅ ハイブリッドアプローチが必要です")
+        print(" この環境ではGPU版に問題があります")
+        print(" ハイブリッドアプローチが必要です")
 
 if __name__ == "__main__":
     main() 

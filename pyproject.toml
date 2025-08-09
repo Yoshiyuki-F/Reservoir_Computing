@@ -1,7 +1,7 @@
 [project]
 name = "reservoir"
 version = "0.1.0"
-description = "reservoir description"
+description = "JAX-based Reservoir Computing with GPU acceleration"
 authors = [
     {name = "yoshi",email = "yossyf1147@gmail.com"}
 ]
@@ -9,15 +9,20 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [ 
     "numpy (>=2.2.6,<3.0.0)",
-    "jax[cuda12] (>=0.6.1,<0.7.0)",
-    "matplotlib (>=3.10.3,<4.0.0)"
+    "matplotlib (>=3.10.3,<4.0.0)",
+    "pytest (>=8.4.1,<9.0.0)",
+    "jax[cuda12] (>=0.7.0,<0.8.0)",
+    "jax-cuda12-plugin (>=0.7.0,<0.8.0)",
+    "jax-cuda12-pjrt (>=0.7.0,<0.8.0)"
 ]
 
 [tool.poetry] 
-package-mode = false
+package-mode = true
 
-[tool.poetry.virtualenvs]
-in-project = true
+[tool.poetry.scripts]
+reservoir-gpu = "reservoir.scripts:run_with_gpu"
+demo-gpu = "reservoir.scripts:run_demo_gpu"
+test-gpu = "reservoir.scripts:run_tests_gpu"
 
 
 [build-system]

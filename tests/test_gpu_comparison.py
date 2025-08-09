@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """
-GPU vs ハイブリッド実装の比較テスト
+GPU vs ハイブリッド実装の比較テスト - GPU専用動作
 """
+import os
+import sys
+
+# GPU専用設定
+os.environ['CUDA_HOME'] = '/usr/local/cuda'
+os.environ['LD_LIBRARY_PATH'] = '/usr/local/cuda/targets/x86_64-linux/lib:' + os.environ.get('LD_LIBRARY_PATH', '')
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+os.environ['JAX_PLATFORMS'] = 'cuda'
 
 import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
 import time
-import sys
-import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_gpu_only_eigenvals():
@@ -28,12 +35,12 @@ def test_gpu_only_eigenvals():
         max_eigenval = jnp.max(jnp.abs(eigenvals))
         gpu_time = time.time() - start_time
         
-        print(f"✅ GPU固有値計算成功: {gpu_time:.6f}秒")
+        print(f" GPU固有値計算成功: {gpu_time:.6f}秒")
         print(f"   最大固有値: {max_eigenval:.6f}")
         return True, gpu_time
         
     except Exception as e:
-        print(f"❌ GPU固有値計算失敗: {e}")
+        print(f" GPU固有値計算失敗: {e}")
         return False, None
 
 def test_hybrid_approach():
@@ -61,7 +68,7 @@ def test_hybrid_approach():
         
         total_time = cpu_time + transfer_time
         
-        print(f"✅ ハイブリッド計算成功: {total_time:.6f}秒")
+        print(f" ハイブリッド計算成功: {total_time:.6f}秒")
         print(f"   CPU計算時間: {cpu_time:.6f}秒")
         print(f"   転送時間: {transfer_time:.6f}秒")
         print(f"   最大固有値: {max_eigenval:.6f}")
@@ -69,7 +76,7 @@ def test_hybrid_approach():
         return True, total_time
         
     except Exception as e:
-        print(f"❌ ハイブリッド計算失敗: {e}")
+        print(f" ハイブリッド計算失敗: {e}")
         return False, None
 
 def test_reservoir_performance():
@@ -90,45 +97,70 @@ def test_reservoir_performance():
     states = rc.run_reservoir(input_data)
     reservoir_time = time.time() - start_time
     
-    print(f"✅ Reservoir実行時間: {reservoir_time:.6f}秒")
+    print(f" Reservoir実行時間: {reservoir_time:.6f}秒")
     print(f"   使用デバイス: {jax.devices()[0]}")
     print(f"   状態形状: {states.shape}")
     
     return reservoir_time
 
+def check_gpu_devices():
+    """GPU専用デバイス確認"""
+    devices = jax.devices()
+    cpu_devices = [d for d in devices if d.device_kind == 'cpu']
+    gpu_devices = [d for d in devices if d.device_kind == 'gpu']
+    
+    if len(devices) == 0:
+        raise RuntimeError(" ERROR: No devices found!")
+    
+    if len(cpu_devices) > 0:
+        raise RuntimeError(f" ERROR: CPU fallback detected! {cpu_devices}")
+    
+    if len(gpu_devices) == 0:
+        raise RuntimeError(" ERROR: No GPU devices found!")
+    
+    return gpu_devices
+
 def main():
-    """メイン実行関数"""
-    print("GPU vs ハイブリッド実装の比較テスト")
-    print("=" * 50)
+    """メイン実行関数 - GPU専用"""
+    print("GPU vs ハイブリッド実装の比較テスト - GPU専用動作")
+    print("=" * 60)
     print(f"JAXバージョン: {jax.__version__}")
-    print(f"利用可能なデバイス: {jax.devices()}")
-    print("=" * 50)
     
-    # GPU単体テスト
-    gpu_success, gpu_time = test_gpu_only_eigenvals()
-    
-    # ハイブリッドテスト
-    hybrid_success, hybrid_time = test_hybrid_approach()
-    
-    # 実際のReservoir計算テスト
-    reservoir_time = test_reservoir_performance()
-    
-    print("\n" + "=" * 50)
-    print("📊 結果サマリー:")
-    
-    if gpu_success and hybrid_success:
-        print(f"⚡ GPU固有値計算: {gpu_time:.6f}秒")
-        print(f"🔄 ハイブリッド計算: {hybrid_time:.6f}秒")
-        if gpu_time < hybrid_time:
-            print("🏆 GPU単体が高速")
-        else:
-            print("🏆 ハイブリッドが同等またはより安定")
-    elif hybrid_success:
-        print("✅ ハイブリッドアプローチのみ成功")
-        print("❌ GPU単体は環境問題で失敗")
-        print("🎯 結論: ハイブリッドアプローチが必要")
-    
-    print(f"🚀 Reservoir計算: {reservoir_time:.6f}秒 (GPU実行)")
+    try:
+        gpu_devices = check_gpu_devices()
+        print(f" GPU専用動作確認: {gpu_devices}")
+        print("=" * 60)
+        
+        # GPU単体テスト
+        gpu_success, gpu_time = test_gpu_only_eigenvals()
+        
+        # ハイブリッドテスト
+        hybrid_success, hybrid_time = test_hybrid_approach()
+        
+        # 実際のReservoir計算テスト
+        reservoir_time = test_reservoir_performance()
+        
+        print("\n" + "=" * 60)
+        print(" 結果サマリー (GPU専用):")
+        
+        if gpu_success and hybrid_success:
+            print(f" GPU固有値計算: {gpu_time:.6f}秒")
+            print(f" ハイブリッド計算: {hybrid_time:.6f}秒")
+            if gpu_time < hybrid_time:
+                print(" GPU単体が高速")
+            else:
+                print(" ハイブリッドが同等またはより安定")
+        elif hybrid_success:
+            print(" ハイブリッドアプローチのみ成功")
+            print(" GPU単体は環境問題で失敗")
+            print(" 結論: ハイブリッドアプローチが必要")
+        
+        print(f" Reservoir計算: {reservoir_time:.6f}秒 (GPU専用実行)")
+        
+    except RuntimeError as e:
+        print(f" {e}")
+        print(" 解決方法: ./install_cuda.sh を実行してGPU環境を修正してください")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main() 
