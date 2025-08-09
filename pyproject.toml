@@ -1,0 +1,30 @@
+[project]
+name = "reservoir"
+version = "0.1.0"
+description = "reservoir description"
+authors = [
+    {name = "yoshi",email = "yossyf1147@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [ 
+    "numpy (>=2.2.6,<3.0.0)",
+    "jax[cuda12] (>=0.6.1,<0.7.0)",
+    "matplotlib (>=3.10.3,<4.0.0)"
+]
+
+[tool.poetry] 
+package-mode = false
+
+[tool.poetry.virtualenvs]
+in-project = true
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[[tool.poetry.source]]
+name = "jax_cuda_releases"
+url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+priority = "supplemental"
