@@ -9,10 +9,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from reservoir import ReservoirComputer
 from reservoir.utils import generate_sine_data, calculate_mse
+from tests.gpu_test_utils import require_gpu, print_gpu_info
 
+@require_gpu()
 def test_basic_functionality():
     """基本機能のテスト"""
     print("=== Reservoir Computing基本機能テスト ===")
+    print_gpu_info()
     
     # 小さなデータセットでテスト
     input_data, target_data = generate_sine_data(time_steps=200)

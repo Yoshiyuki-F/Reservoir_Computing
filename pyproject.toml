@@ -16,20 +16,18 @@ dependencies = [
     "jax-cuda12-pjrt (>=0.7.0,<0.8.0)"
 ]
 
-[tool.poetry] 
-package-mode = true
+[tool.uv]
+dev-dependencies = []
 
-[tool.poetry.scripts]
+[project.scripts]
 reservoir-gpu = "reservoir.scripts:run_with_gpu"
 demo-gpu = "reservoir.scripts:run_demo_gpu"
 test-gpu = "reservoir.scripts:run_tests_gpu"
 
-
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[[tool.poetry.source]]
+[[tool.uv.index]]
 name = "jax_cuda_releases"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-priority = "supplemental"

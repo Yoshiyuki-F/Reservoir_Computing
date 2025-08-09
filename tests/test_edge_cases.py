@@ -3,17 +3,24 @@
 GPU環境での問題を再現するテスト
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
+from tests.gpu_test_utils import require_gpu, print_gpu_info
 
 # 強制的にfloat64を有効化
 jax.config.update("jax_enable_x64", True)
 
+@require_gpu()
 def test_problematic_operations():
     """問題を起こしやすい演算のテスト"""
     print("=== 問題を起こしやすいGPU演算テスト ===")
+    print_gpu_info()
     
     key = random.PRNGKey(42)
     

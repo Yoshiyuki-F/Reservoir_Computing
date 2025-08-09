@@ -15,16 +15,17 @@ nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader,no
 echo "CUDA バージョン確認:"
 nvcc --version || { echo "❌ CUDA未インストール"; exit 1; }
 
-# 2. Poetry環境確認
+# 2. uv環境確認
 echo ""
-echo "=== 2. Poetry環境確認 ==="
-if ! command -v poetry &> /dev/null; then
-    echo "⚠️ Poetry未インストール - 自動インストールを実行"
-    curl -sSL https://install.python-poetry.org | python3 -
+echo "=== 2. uv環境確認 ==="
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv &> /dev/null; then
+    echo "⚠️ uv未インストール - 自動インストールを実行"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
-poetry --version || { echo "❌ Poetry インストール失敗"; exit 1; }
+uv --version || { echo "❌ uv インストール失敗"; exit 1; }
 
 # 3. GPU環境セットアップテスト
 echo ""
@@ -38,11 +39,11 @@ unset LD_LIBRARY_PATH
 export JAX_PLATFORMS=cuda
 
 echo "基本GPU動作テスト:"
-python tests/test_cuda.py || { echo "❌ 基本GPU動作テスト失敗"; exit 1; }
+uv run python tests/test_cuda.py || { echo "❌ 基本GPU動作テスト失敗"; exit 1; }
 
 echo ""
 echo "GPU強制実行テスト:"
-python -c "
+uv run python -c "
 import jax
 import jax.numpy as jnp
 devices = jax.devices()
@@ -58,7 +59,7 @@ print('✅ GPU計算成功:', float(result))
 # 5. Reservoirライブラリテスト
 echo ""
 echo "=== 5. Reservoirライブラリテスト ==="
-python -c "
+uv run python -c "
 from reservoir import ReservoirComputer
 from reservoir.utils import generate_sine_data
 import jax.numpy as jnp

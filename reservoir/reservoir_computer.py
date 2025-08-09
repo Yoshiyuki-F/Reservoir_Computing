@@ -5,7 +5,6 @@ Reservoir Computer implementation using JAX.
 import jax
 import jax.numpy as jnp
 from jax import random, lax, device_put
-from typing import Tuple, Optional
 import numpy as np
 
 # JAXの設定

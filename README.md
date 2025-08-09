@@ -24,61 +24,30 @@ Reservoir Computingは、固定されたランダムなリカレント層（rese
 
 ## インストール
 
-### 自動セットアップ（推奨）
+### uv環境セットアップ
 
 ```bash
 # プロジェクトディレクトリに移動
 cd /path/to/reservoir
 
-# GPU対応JAX環境の自動セットアップ
-./scripts/install_cuda.sh
-```
+# uvで依存関係インストール
+uv sync
 
-### 手動セットアップ
-
-```bash
-# Poetry環境での依存関係インストール
-poetry install
-
-# または pip での直接インストール
-pip install -e .
+# 仮想環境のアクティベート（オプション）
+source .venv/bin/activate
 ```
 
 ## 使用方法
 
-### 基本的な使用例
-
-```python
-from reservoir import ReservoirComputer
-from reservoir.utils import generate_sine_data, normalize_data
-
-# データ生成
-input_data, target_data = generate_sine_data(time_steps=1000)
-
-# データ正規化
-input_norm, input_mean, input_std = normalize_data(input_data)
-target_norm, target_mean, target_std = normalize_data(target_data)
-
-# Reservoir Computer初期化
-rc = ReservoirComputer(
-    n_inputs=1,
-    n_reservoir=100,
-    n_outputs=1,
-    spectral_radius=0.95,
-    input_scaling=1.0
-)
-
-# 訓練
-rc.train(input_norm, target_norm)
-
-# 予測
-predictions = rc.predict(input_norm)
-```
-
 ### デモンストレーション実行
 
 ```bash
-python examples/demo.py
+# 方法1: uv経由で実行（推奨）
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python examples/demo.py
+
+# 方法2: 仮想環境アクティベート後に実行
+source .venv/bin/activate
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python examples/demo.py
 ```
 
 このコマンドで以下の2つのデモンストレーションが実行されます：
@@ -118,20 +87,12 @@ reservoir/
 ## テスト実行
 
 ```bash
-# 基本機能テスト
-python tests/test_simple.py
-
-# GPU動作確認テスト
-python tests/test_cuda.py
-
-# GPU vs CPU 比較テスト
-python tests/test_gpu_comparison.py
-
-# 固有値計算詳細比較
-python tests/test_eigenvalues_comparison.py
-
-# エッジケーステスト
-python tests/test_edge_cases.py
+# uv環境でのテスト実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_simple.py
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_cuda.py
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_comparison.py
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_eigenvalues_comparison.py
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_edge_cases.py
 ```
 
 ## ReservoirComputerクラスのパラメータ
@@ -165,26 +126,6 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 3. **input_scaling**: 入力データの特性に応じて調整
 4. **reg_param**: 過学習を防ぐ正則化パラメータ
 
-## 例：カスタムデータでの使用
-
-```python
-import jax.numpy as jnp
-from reservoir import ReservoirComputer
-
-# カスタムデータの準備
-# input_data: (time_steps, n_inputs)
-# target_data: (time_steps, n_outputs)
-
-rc = ReservoirComputer(
-    n_inputs=input_data.shape[1],
-    n_reservoir=200,
-    n_outputs=target_data.shape[1],
-    spectral_radius=0.9
-)
-
-rc.train(input_data, target_data)
-predictions = rc.predict(input_data)
-```
 
 ## GPU環境トラブルシューティング
 
@@ -203,11 +144,10 @@ predictions = rc.predict(input_data)
    ```bash
    cd /path/to/reservoir
    
-   # Poetry の再インストール（必要に応じて）
-   curl -sSL https://install.python-poetry.org | python3 -
-   
-   # GPU環境の自動セットアップ
-   ./scripts/install_cuda.sh
+   # uv環境セットアップ
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   export PATH="$HOME/.local/bin:$PATH"
+   uv sync
    ```
 
 ### 一般的なGPU問題と解決策
@@ -221,9 +161,8 @@ RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(
 
 **解決策:**
 ```bash
-# LD_LIBRARY_PATHの競合を解決
-unset LD_LIBRARY_PATH
-JAX_PLATFORMS=cuda python your_script.py
+# uv環境での実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python your_script.py
 ```
 
 **原因:** JAX 0.7.0+ はbundled CUDA librariesを使用するため、システムのLD_LIBRARY_PATH設定が競合を引き起こします。
@@ -252,8 +191,8 @@ WARNING: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib
 
 **解決策:**
 ```bash
-# JAX CUDA12 の再インストール
-poetry run pip install --upgrade "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# uv環境での再インストール
+uv add "jax[cuda12]" --index https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 # 環境変数のクリア
 unset LD_LIBRARY_PATH
@@ -264,30 +203,30 @@ unset LD_LIBRARY_PATH
 すべてのJAXスクリプトは以下の方法で実行してください：
 
 ```bash
-# GPU強制実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python your_script.py
+# uv環境での実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python your_script.py
 
-# または
+# または環境変数を分けて設定
 export JAX_PLATFORMS=cuda
 unset LD_LIBRARY_PATH
-python your_script.py
+uv run python your_script.py
 ```
 
 ### GPU動作確認テスト
 
 ```bash
-# 基本的なGPU動作確認
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python tests/test_cuda.py
+# uv環境での基本的なGPU動作確認
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_cuda.py
 
-# 詳細なGPU性能テスト
-unset LD_LIBRARY_PATH && python tests/test_gpu_comparison.py
+# uv環境での詳細なGPU性能テスト
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_comparison.py
 ```
 
 ### Linux Mint 特有の注意点
 
 - **NVIDIA ドライバー:** Linux Mint では Driver Manager を使用してNVIDIA ドライバーをインストールすることを推奨
 - **CUDA 互換性:** RTX 3060 では CUDA 12.x and driver 550.xx+ が必要
-- **Poetry 環境:** システムの Python 環境との競合を避けるため Poetry の使用を強く推奨
+- **uv 環境:** システムの Python 環境との競合を避けるため uv の使用を強く推奨
 
 ### 簡単実行方法（推奨）
 
@@ -303,18 +242,18 @@ unset LD_LIBRARY_PATH && python tests/test_gpu_comparison.py
 ./scripts/run_gpu.sh examples/demo.py
 ```
 
-#### 2. Poetry スクリプト使用
+#### 2. uv スクリプト使用（推奨）
 ```bash
-# Poetry環境でGPUスクリプト実行
-poetry run demo-gpu          # examples/demo.py をGPUで実行
-poetry run test-gpu           # GPU動作テスト実行
-poetry run reservoir-gpu examples/demo.py  # 任意のスクリプトをGPUで実行
+# uv環境でGPUスクリプト実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run demo-gpu          # examples/demo.py をGPUで実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run test-gpu           # GPU動作テスト実行
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-gpu examples/demo.py  # 任意のスクリプトをGPUで実行
 ```
 
 #### 3. 従来の手動方式
 ```bash
 # 毎回手動で設定する場合
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python examples/demo.py
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python examples/demo.py
 ```
 
 **推奨:** 方法1または2を使用してください。システム全体への影響を避けられます。
@@ -331,15 +270,13 @@ PyCharmの実行ボタン（▶️）でGPU環境を使用するための設定�
 **基本設定:**
 - **Name:** `Reservoir GPU Demo` (任意)
 - **Script path:** `/path/to/reservoir/examples/demo.py`
-- **Python interpreter:** Poetry環境のPython (`/.venv/bin/python`)
+- **Python interpreter:** uv環境のPython (`/.venv/bin/python`)
 
 **環境変数:**
-- **Environment variables** をクリック
-- 以下を追加：
+- **Environment variables** 
   - `JAX_PLATFORMS=cuda`
   - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
-- **Include system environment variables** にチェック
-- **Include parent environment variables** にチェック
+
 
 **重要:** `LD_LIBRARY_PATH`が設定されている場合は空に設定するか削除
 

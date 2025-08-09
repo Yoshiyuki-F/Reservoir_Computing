@@ -4,24 +4,21 @@ GPU vs ハイブリッド実装の比較テスト - GPU専用動作
 """
 import os
 import sys
+import time
 
-# GPU専用設定
-os.environ['CUDA_HOME'] = '/usr/local/cuda'
-os.environ['LD_LIBRARY_PATH'] = '/usr/local/cuda/targets/x86_64-linux/lib:' + os.environ.get('LD_LIBRARY_PATH', '')
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-os.environ['JAX_PLATFORMS'] = 'cuda'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
-import time
+from tests.gpu_test_utils import require_gpu, print_gpu_info
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+@require_gpu()
 def test_gpu_only_eigenvals():
     """GPU単体での固有値計算テスト"""
     print("=== GPU単体での固有値計算テスト ===")
+    print_gpu_info()
     
     key = random.PRNGKey(42)
     

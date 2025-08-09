@@ -28,10 +28,11 @@ export LD_LIBRARY_PATH="$TEMP_LD_LIBRARY_PATH"
 ldconfig -p | grep cusparse || { echo "❌ cuSPARSE not found"; exit 1; }
 echo "✅ cuSPARSE found"
 
-# Poetry経由での依存関係インストール
+# uv経由での依存関係インストール
 echo ""
-echo "=== Poetry依存関係インストール ==="
-poetry install || { echo "❌ Poetry install failed"; exit 1; }
+echo "=== uv依存関係インストール ==="
+export PATH="$HOME/.local/bin:$PATH"
+uv sync || { echo "❌ uv sync failed"; exit 1; }
 
 # CRITICAL: LD_LIBRARY_PATHをunsetしてJAXテスト実行
 echo ""
@@ -45,7 +46,7 @@ echo "  CUDA_HOME: $CUDA_HOME"
 echo "  LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-'(unset)'}"
 echo "  JAX_PLATFORMS: $JAX_PLATFORMS"
 
-python -c "
+uv run python -c "
 import os
 import jax
 import jax.numpy as jnp
@@ -87,7 +88,7 @@ echo "   JAXを実行する際は必ず以下を実行してください："
 echo "   export JAX_PLATFORMS=cuda"
 echo "   unset LD_LIBRARY_PATH"
 echo ""
-echo "   または一行で："
-echo "   unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python your_script.py"
+echo "   または一行で（uv推奨）："
+echo "   unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python your_script.py"
 echo ""
 echo "📖 詳細なトラブルシューティングはREADME.mdを参照してください。"
