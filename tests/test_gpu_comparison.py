@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
-from tests.gpu_test_utils import require_gpu, print_gpu_info
+from reservoir.utils import require_gpu, print_gpu_info
 
 @require_gpu()
 def test_gpu_only_eigenvals():
@@ -100,22 +100,7 @@ def test_reservoir_performance():
     
     return reservoir_time
 
-def check_gpu_devices():
-    """GPU専用デバイス確認"""
-    devices = jax.devices()
-    cpu_devices = [d for d in devices if d.device_kind == 'cpu']
-    gpu_devices = [d for d in devices if d.device_kind == 'gpu']
-    
-    if len(devices) == 0:
-        raise RuntimeError(" ERROR: No devices found!")
-    
-    if len(cpu_devices) > 0:
-        raise RuntimeError(f" ERROR: CPU fallback detected! {cpu_devices}")
-    
-    if len(gpu_devices) == 0:
-        raise RuntimeError(" ERROR: No GPU devices found!")
-    
-    return gpu_devices
+
 
 def main():
     """メイン実行関数 - GPU専用"""
@@ -124,8 +109,9 @@ def main():
     print(f"JAXバージョン: {jax.__version__}")
     
     try:
-        gpu_devices = check_gpu_devices()
-        print(f" GPU専用動作確認: {gpu_devices}")
+        from reservoir.utils import check_gpu_available
+        check_gpu_available()  # Use standard GPU check
+        print(" GPU専用動作確認完了")
         print("=" * 60)
         
         # GPU単体テスト

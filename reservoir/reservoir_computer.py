@@ -11,6 +11,9 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 
+from typing import Optional
+from .config import ReservoirConfig
+
 class ReservoirComputer:
     """
     JAXを使ったReservoir Computingの実装クラス。
@@ -19,40 +22,24 @@ class ReservoirComputer:
     訓練可能な出力層から構成されるニューラルネットワークです。
     """
     
-    def __init__(
-        self,
-        n_inputs: int,
-        n_reservoir: int,
-        n_outputs: int,
-        spectral_radius: float = 0.95,
-        input_scaling: float = 1.0,
-        noise_level: float = 0.001,
-        alpha: float = 1.0,
-        random_seed: int = 42
-    ):
+    def __init__(self, config: ReservoirConfig):
         """
         Reservoir Computerを初期化します。
         
         Args:
-            n_inputs: 入力次元数
-            n_reservoir: reservoir内のニューロン数
-            n_outputs: 出力次元数
-            spectral_radius: reservoirの固有値の最大絶対値
-            input_scaling: 入力のスケーリング係数
-            noise_level: reservoirに加えるノイズレベル
-            alpha: leaky integrator parameter
-            random_seed: 乱数シード
+            config: ReservoirConfigオブジェクト
         """
-        self.n_inputs = n_inputs
-        self.n_reservoir = n_reservoir
-        self.n_outputs = n_outputs
-        self.spectral_radius = spectral_radius
-        self.input_scaling = input_scaling
-        self.noise_level = noise_level
-        self.alpha = alpha
+        self.config = config
+        self.n_inputs = config.n_inputs
+        self.n_reservoir = config.n_reservoir
+        self.n_outputs = config.n_outputs
+        self.spectral_radius = config.spectral_radius
+        self.input_scaling = config.input_scaling
+        self.noise_level = config.noise_level
+        self.alpha = config.alpha
         
         # 乱数キーの初期化
-        self.key = random.PRNGKey(random_seed)
+        self.key = random.PRNGKey(config.random_seed)
         
         # reservoirの重みを初期化
         self._initialize_weights()
@@ -62,21 +49,17 @@ class ReservoirComputer:
         
     def _initialize_weights(self):
         """reservoir内部の重みを初期化します。"""
-        # JAX_PLATFORMS=cudaの場合、CPUデバイスが利用できないため
-        # CPUフォールバック処理を実装
-        try:
-            # CPUデバイスが利用可能かチェック
-            cpu_devices = jax.devices('cpu')
-            if len(cpu_devices) > 0:
-                # CPU環境が利用可能な場合（通常の実行）
-                with jax.default_device(cpu_devices[0]):
-                    self._initialize_on_cpu()
-            else:
-                # GPU専用環境の場合
-                self._initialize_on_gpu()
-        except:
-            # CPUバックエンドが存在しない場合（JAX_PLATFORMS=cuda時）
+        from .utils import print_gpu_info
+        
+        devices = jax.devices()
+        gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
+        
+        if gpu_devices:
+            print_gpu_info()
             self._initialize_on_gpu()
+        else:
+            # CPU環境で実行
+            self._initialize_on_cpu()
     
     def _initialize_on_cpu(self):
         """CPU上で重み初期化（安定性重視）"""
@@ -218,19 +201,13 @@ class ReservoirComputer:
         X = jnp.concatenate([reservoir_states, bias_column], axis=1) # (time_steps-1, n_reservoir+1)
         
         # ②訓練：reservoir状態から目標データへの線形写像（W_out）を学習
-        # CPU/GPU環境に応じて適応的に処理
-        try:
-            # CPUデバイスが利用可能かチェック
-            cpu_devices = jax.devices('cpu')
-            if len(cpu_devices) > 0:
-                # CPU環境が利用可能な場合（通常の実行）
-                self._train_on_cpu(X, target_data, reg_param)
-            else:
-                # GPU専用環境の場合
-                self._train_on_gpu(X, target_data, reg_param)
-        except:
-            # CPUバックエンドが存在しない場合（JAX_PLATFORMS=cuda時）
+        devices = jax.devices()
+        gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
+        
+        if gpu_devices:
             self._train_on_gpu(X, target_data, reg_param)
+        else:
+            self._train_on_cpu(X, target_data, reg_param)
     
     def _train_on_cpu(self, X, target_data, reg_param):
         """CPU上でRidge回帰を実行（安定性重視）"""
@@ -298,12 +275,6 @@ class ReservoirComputer:
     def get_reservoir_info(self) -> dict:
         """reservoirの情報を返します。"""
         return {
-            "n_inputs": self.n_inputs,
-            "n_reservoir": self.n_reservoir,
-            "n_outputs": self.n_outputs,
-            "spectral_radius": self.spectral_radius,
-            "input_scaling": self.input_scaling,
-            "noise_level": self.noise_level,
-            "alpha": self.alpha,
+            **self.config.to_dict(),
             "trained": self.W_out is not None
         } 

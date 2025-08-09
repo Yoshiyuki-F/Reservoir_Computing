@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
-from tests.gpu_test_utils import require_gpu, print_gpu_info
+from reservoir.utils import require_gpu, print_gpu_info
 
 # 強制的にfloat64を有効化
 jax.config.update("jax_enable_x64", True)

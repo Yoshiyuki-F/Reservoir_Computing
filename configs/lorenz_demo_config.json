@@ -1,0 +1,28 @@
+{
+  "data_generation": {
+    "time_steps": 3000,
+    "dt": 0.01,
+    "sigma": 10.0,
+    "rho": 28.0,
+    "beta": 2.666667
+  },
+  "reservoir": {
+    "n_inputs": 1,
+    "n_reservoir": 200,
+    "n_outputs": 1,
+    "spectral_radius": 0.9,
+    "input_scaling": 0.5,
+    "noise_level": 0.001,
+    "alpha": 0.8,
+    "random_seed": 42
+  },
+  "training": {
+    "train_size": 2000,
+    "reg_param": 1e-6
+  },
+  "demo": {
+    "title": "Lorenz Attractor (X-coordinate) Prediction Results",
+    "filename": "lorenz_prediction.png",
+    "show_training": false
+  }
+}

@@ -4,11 +4,16 @@ JAXを使ったReservoir Computingのデモンストレーション。
 この例では、サイン波の時系列予測を行います。
 """
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-from reservoir import ReservoirComputer
+from reservoir import ReservoirComputer, DemoConfig
 from reservoir.utils import (
+    check_gpu_available,
     generate_sine_data,
     generate_lorenz_data,
     normalize_data,
@@ -63,7 +68,7 @@ def plot_prediction_results(ground_truth, predictions, time_steps, title, filena
     plt.show()
 
 
-def run_reservoir_demo(input_data, target_data, train_size, rc_params, reg_param, 
+def run_reservoir_demo(input_data, target_data, train_size, config, reg_param, 
                        title, filename, show_training=False):
     """
     Reservoir Computingのデモを実行する共通関数
@@ -72,7 +77,7 @@ def run_reservoir_demo(input_data, target_data, train_size, rc_params, reg_param
         input_data: 入力データ
         target_data: 目標データ
         train_size: 訓練データサイズ
-        rc_params: ReservoirComputerのパラメータ辞書
+        config: ReservoirConfigオブジェクト
         reg_param: 正則化パラメータ
         title: プロットのタイトル
         filename: 保存ファイル名
@@ -94,7 +99,7 @@ def run_reservoir_demo(input_data, target_data, train_size, rc_params, reg_param
     test_target = target_norm[train_size:]
     
     # Reservoir Computerを初期化
-    rc = ReservoirComputer(**rc_params)
+    rc = ReservoirComputer(config=config)
     
     print(f"Reservoir情報: {rc.get_reservoir_info()}")
     
@@ -146,71 +151,49 @@ def run_reservoir_demo(input_data, target_data, train_size, rc_params, reg_param
 
 def demo_sine_wave_prediction():
     """サイン波予測のデモンストレーション。"""
-    # データ生成
-    input_data, target_data = generate_sine_data(
-        time_steps=2000,
-        dt=0.01,
-        frequencies=[1.0, 2.0, 0.5],
-        noise_level=0.05
-    )
+    # 設定ファイルから全パラメータを読み込み
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'sine_wave_demo_config.json')
+    demo_config = DemoConfig.from_json(config_path)
     
-    # ReservoirComputerのパラメータ
-    rc_params = {
-        'n_inputs': 1,
-        'n_reservoir': 100,
-        'n_outputs': 1,
-        'spectral_radius': 0.95,
-        'input_scaling': 1.0,
-        'noise_level': 0.001,
-        'alpha': 1.0,
-        'random_seed': 42
-    }
+    # データ生成（辞書として展開）
+    data_params = demo_config.get_data_params()
+    input_data, target_data = generate_sine_data(**data_params)
     
     # デモ実行
     return run_reservoir_demo(
         input_data, target_data, 
-        train_size=1500,
-        rc_params=rc_params,
-        reg_param=1e-8,
-        title='サイン波予測のデモンストレーション',
-        filename='sine_wave_prediction.png',
-        show_training=True
+        train_size=demo_config.training.train_size,
+        config=demo_config.reservoir,
+        reg_param=demo_config.training.reg_param,
+        title=demo_config.demo.title,
+        filename=demo_config.demo.filename,
+        show_training=demo_config.demo.show_training
     )
 
 
 def demo_lorenz_prediction():
     """Lorenzアトラクターの予測デモンストレーション。"""
-    # データ生成
-    input_data, target_data = generate_lorenz_data(
-        time_steps=3000,
-        dt=0.01
-    )
+    # 設定ファイルから全パラメータを読み込み
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'lorenz_demo_config.json')
+    demo_config = DemoConfig.from_json(config_path)
+    
+    # データ生成（辞書として展開）
+    data_params = demo_config.get_data_params()
+    input_data, target_data = generate_lorenz_data(**data_params)
     
     # X座標のみを使用
     input_data = input_data[:, 0:1]  # X座標のみ
     target_data = target_data[:, 0:1]  # X座標のみ
     
-    # ReservoirComputerのパラメータ
-    rc_params = {
-        'n_inputs': 1,
-        'n_reservoir': 200,
-        'n_outputs': 1,
-        'spectral_radius': 0.9,
-        'input_scaling': 0.5,
-        'noise_level': 0.001,
-        'alpha': 0.8,
-        'random_seed': 123
-    }
-    
     # デモ実行
     return run_reservoir_demo(
         input_data, target_data,
-        train_size=2000,
-        rc_params=rc_params,
-        reg_param=1e-6,
-        title='Lorenz Attractor (X-coordinate) Prediction Results',
-        filename='lorenz_prediction.png',
-        show_training=False
+        train_size=demo_config.training.train_size,
+        config=demo_config.reservoir,
+        reg_param=demo_config.training.reg_param,
+        title=demo_config.demo.title,
+        filename=demo_config.demo.filename,
+        show_training=demo_config.demo.show_training
     )
 
 
@@ -219,15 +202,14 @@ def main():
     print("JAXを使ったReservoir Computingのデモンストレーション")
     print("=" * 60)
     
-    # JAXの設定確認
+    # GPU認識確認（JAX設定も含む）
     try:
-        import jax
-        print(f"JAXバージョン: {jax.__version__}")
-        print(f"利用可能なデバイス: {jax.devices()}")
+        check_gpu_available()
         print("=" * 60)
-    except Exception as e:
-        print(f"JAXの初期化エラー: {e}")
-        return
+    except RuntimeError as e:
+        print(f"GPU認識エラー: {e}")
+        print("GPU required for demo. Exiting...")
+        sys.exit(1)
     
     # デモンストレーション実行
     try:

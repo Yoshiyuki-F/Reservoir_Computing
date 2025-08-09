@@ -88,7 +88,6 @@ reservoir/
 
 ```bash
 # uv環境でのテスト実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_simple.py
 unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_cuda.py
 unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_comparison.py
 unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_eigenvalues_comparison.py
@@ -236,7 +235,6 @@ unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_compari
 ```bash
 # GPU環境で任意のPythonスクリプトを実行
 ./scripts/run_gpu.sh python examples/demo.py
-./scripts/run_gpu.sh python tests/test_simple.py
 
 # または直接実行
 ./scripts/run_gpu.sh examples/demo.py
