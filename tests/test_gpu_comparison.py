@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 import numpy as np
-from reservoir.utils import require_gpu, print_gpu_info
+from reservoir.gpu_utils import require_gpu, print_gpu_info
 
 @require_gpu()
 def test_gpu_only_eigenvals():
@@ -80,14 +80,26 @@ def test_reservoir_performance():
     """実際のReservoir計算でのパフォーマンス比較"""
     print("\n=== Reservoir計算パフォーマンステスト ===")
     
-    from reservoir import ReservoirComputer
-    from reservoir.utils import generate_sine_data
+    from reservoir import ReservoirComputer, ReservoirConfig
+    from reservoir.data import generate_sine_data
+    from reservoir.config import DataGenerationConfig
     
     # テストデータ生成
-    input_data, target_data = generate_sine_data(time_steps=1000)
+    data_config = DataGenerationConfig(
+        name="sine_wave",
+        time_steps=1000,
+        dt=0.01,
+        frequencies=[1.0, 2.0],
+        noise_level=0.05,
+        sigma=10.0,
+        rho=28.0,
+        beta=2.667
+    )
+    input_data, target_data = generate_sine_data(data_config)
     
     # Reservoir Computer初期化
-    rc = ReservoirComputer(n_inputs=1, n_reservoir=100, n_outputs=1)
+    config = ReservoirConfig(n_inputs=1, n_reservoir=100, n_outputs=1)
+    rc = ReservoirComputer(config)
     
     # Reservoir実行時間測定
     start_time = time.time()
@@ -109,7 +121,7 @@ def main():
     print(f"JAXバージョン: {jax.__version__}")
     
     try:
-        from reservoir.utils import check_gpu_available
+        from reservoir.gpu_utils import check_gpu_available
         check_gpu_available()  # Use standard GPU check
         print(" GPU専用動作確認完了")
         print("=" * 60)

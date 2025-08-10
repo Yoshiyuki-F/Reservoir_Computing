@@ -21,6 +21,7 @@ class ReservoirConfig(BaseModel):
     noise_level: float = Field(..., ge=0, description="ノイズレベル")
     alpha: float = Field(..., gt=0, le=1.0, description="リーク率")
     random_seed: int = Field(..., ge=0, description="乱数シード")
+    reservoir_weight_range: float = Field(..., gt=0, description="リザーバー重み初期化範囲 [-range, range]")
 
     class Config:
         extra = "forbid"
@@ -31,6 +32,7 @@ class DataGenerationConfig(BaseModel):
     サイン波やLorenz方程式などの時系列データ生成に使用される
     パラメータを定義します。デモやテストに使用されます。
     """
+    name: str = Field(..., description="データ生成関数の名前 ('sine_wave', 'lorenz', 'mackey_glass')")
     time_steps: int = Field(..., gt=0, description="時系列の長さ")
     dt: float = Field(..., gt=0, description="時間ステップ")
     frequencies: List[float] = Field(..., description="サイン波の周波数リスト")
@@ -43,6 +45,13 @@ class DataGenerationConfig(BaseModel):
     
     # Optional dimension filtering
     use_dimensions: Optional[List[int]] = Field(None, description="使用する次元のインデックス")
+
+    @validator('name')
+    def validate_name(cls, v):
+        valid_names = {'sine_wave', 'lorenz', 'mackey_glass'}
+        if v not in valid_names:
+            raise ValueError(f"name は {valid_names} のいずれかである必要があります")
+        return v
 
     @validator('frequencies')
     def validate_frequencies(cls, v):

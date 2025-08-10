@@ -36,13 +36,13 @@ source .venv/bin/activate
 
 ### デモンストレーション実行
 
-**推奨方法（uv scripts使用）:**
+**推奨方法（Poe the Poet使用）:**
 ```bash
-# サイン波デモ実行（JAX_PLATFORMS=cudaは自動設定）
-unset LD_LIBRARY_PATH && uv run demo-sine-gpu
+# サイン波デモ実行（環境変数は自動設定）
+uv run poe demo-sine-gpu
 
 # Lorenzアトラクターデモ実行
-unset LD_LIBRARY_PATH && uv run demo-lorenz-gpu
+uv run poe demo-lorenz-gpu
 ```
 detail in docs/TROUBLESHOOTING.md
 
@@ -50,6 +50,27 @@ detail in docs/TROUBLESHOOTING.md
 
 1. **サイン波予測**: 複数の周波数を含むサイン波の時系列予測
 2. **Lorenzアトラクター予測**: カオス時系列の予測
+
+## GPU要件
+
+**このプロジェクトはデフォルトでGPUを必須としています。**
+
+- GPU環境がない場合、ReservoirComputerは`RuntimeError`を発生させます
+- CPUでの実行を強制する場合は、CLI で `--force-cpu` フラグを使用してください：
+
+```bash
+# CPU強制実行の例
+uv run python -m reservoir.cli --config configs/sine_wave_demo_config.json --force-cpu
+```
+
+- プログラマティックに使用する場合は、ReservoirComputerのコンストラクタで `backend='cpu'` を明示的に指定してください：
+
+```python
+from reservoir import ReservoirComputer, ReservoirConfig
+
+config = ReservoirConfig(n_inputs=1, n_reservoir=100, n_outputs=1)
+rc = ReservoirComputer(config, backend='cpu')  # CPU強制使用
+```
 
 ## ファイル構成
 
@@ -77,16 +98,14 @@ detail in docs/TROUBLESHOOTING.md
 │   ├── lorenz_prediction.png
 │   └── sine_wave_prediction.png
 ├── scripts/                    # ユーティリティスクリプト
-│   ├── demo-gpu.sh
 │   ├── install_cuda.sh
 │   ├── rebuild_test.sh
-│   ├── run_gpu.sh
-│   └── test-gpu.sh
+│   └── run_gpu.sh
 ├── tests/                      # テストファイル
 │   ├── test_edge_cases.py
 │   ├── test_eigenvalues_comparison.py
 │   ├── test_gpu_comparison.py
-│   └── test_simple.py
+│   └── test_reservoir_computer.py
 ├── pyproject.toml              # プロジェクト設定
 └── README.md                   # このファイル
 ```
@@ -151,13 +170,13 @@ detail in docs/TROUBLESHOOTING.md
 
 ## テスト実行
 
-**推奨方法（uv scripts使用）:**
+**推奨方法（Poe the Poet使用）:**
 ```bash
 # GPU動作確認テスト
-unset LD_LIBRARY_PATH && uv run test-gpu
+uv run poe test-gpu
 
 # Reservoir Computing基本テスト
-unset LD_LIBRARY_PATH && uv run test-simple-gpu
+uv run poe test-simple-gpu
 ```
 
 ## ReservoirComputerクラスのパラメータ

@@ -70,12 +70,13 @@ class ReservoirComputer:
         self.input_scaling = config.input_scaling
         self.noise_level = config.noise_level
         self.alpha = config.alpha
+        self.reservoir_weight_range = config.reservoir_weight_range
         
         # 乱数キーの初期化
         self.key = random.PRNGKey(config.random_seed)
         
-        # バックエンドの設定
-        self.backend = self._select_backend(backend)
+        # バックエンドの設定（CLI層で確認済み）
+        self.backend = backend
         
         # reservoirの重みを初期化
         self._initialize_weights()
@@ -83,33 +84,6 @@ class ReservoirComputer:
         # 出力重みは後で訓練で設定
         self.W_out = None
 
-    def _select_backend(self, backend: Optional[str] = None) -> str:
-        """
-        利用可能なデバイスに基づいてバックエンドを選択または検証します。
-        デフォルトではGPUを要求し、利用できない場合はエラーを送出します。
-        """
-        if backend == 'cpu':
-            print("CPUバックエンドを明示的に使用します。")
-            return 'cpu'
-
-        # バックエンドが指定されていない場合、GPUの存在を確認
-        devices = jax.devices()
-        gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
-
-        if not gpu_devices:
-            raise RuntimeError(
-                "CUDA対応GPUが見つかりません。このプログラムはデフォルトでGPUを要求します。"
-                "CPUで実行するには、--force-cpu フラグを使用してください。"
-            )
-        
-        # GPUが利用可能な場合
-        if backend is None or backend == 'gpu':
-            from .gpu_utils import print_gpu_info
-            print_gpu_info()
-            return 'gpu'
-        
-        # backendに 'gpu' 以外が指定された場合
-        raise ValueError(f"サポートされていないバックエンド '{backend}' が指定されました。'cpu' または 'gpu' を使用してください。")
 
     def _initialize_weights(self):
         """reservoirの重みを初期化します。JAXのデフォルトデバイス配置を使用。"""
@@ -126,8 +100,8 @@ class ReservoirComputer:
         W_res = random.uniform(
             key2, 
             (self.n_reservoir, self.n_reservoir), 
-            minval=-1, 
-            maxval=1,
+            minval=-self.reservoir_weight_range,
+            maxval=self.reservoir_weight_range,
             dtype=jnp.float64
         )
         

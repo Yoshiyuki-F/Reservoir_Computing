@@ -15,6 +15,7 @@ dependencies = [
     "jax[cuda12] (>=0.7.0,<0.8.0)",
     "jax-cuda12-plugin (>=0.7.0,<0.8.0)",
     "jax-cuda12-pjrt (>=0.7.0,<0.8.0)",
+    "poethepoet>=0.36.0",
 ]
 
 [tool.uv]
@@ -23,15 +24,18 @@ dev-dependencies = []
 [project.scripts]
 reservoir-cli = "reservoir.cli:main"
 
-[tool.uv.scripts]
+[tool.poe.tasks]
 # GPU test execution (replaces scripts/test-gpu.sh)
-test-gpu = { cmd = ["python", "tests/test_cuda.py"], env = { JAX_PLATFORMS = "cuda", XLA_PYTHON_CLIENT_PREALLOCATE = "false" } }
+test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_cuda.py" }
 # GPU simple test execution
-test-simple-gpu = { cmd = ["python", "tests/test_simple.py"], env = { JAX_PLATFORMS = "cuda", XLA_PYTHON_CLIENT_PREALLOCATE = "false" } }
+test-simple-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_reservoir_computer.py" }
 # GPU CLI demo with sine wave config (replaces scripts/demo-gpu.sh)
-demo-sine-gpu = { cmd = ["python", "-m", "reservoir.cli", "--config", "configs/sine_wave_demo_config.json", "--no-gpu-check"], env = { JAX_PLATFORMS = "cuda", XLA_PYTHON_CLIENT_PREALLOCATE = "false" } }
+demo-sine-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.cli --config configs/sine_wave_demo_config.json --no-gpu-check" }
 # GPU CLI demo with lorenz config  
-demo-lorenz-gpu = { cmd = ["python", "-m", "reservoir.cli", "--lorenz", "--config", "configs/lorenz_demo_config.json", "--no-gpu-check"], env = { JAX_PLATFORMS = "cuda", XLA_PYTHON_CLIENT_PREALLOCATE = "false" } }
+demo-lorenz-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.cli --lorenz --config configs/lorenz_demo_config.json --no-gpu-check" }
+# GPU comparison test
+test-gpu-comparison = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_gpu_comparison.py" }
+
 
 [build-system]
 requires = ["hatchling"]
