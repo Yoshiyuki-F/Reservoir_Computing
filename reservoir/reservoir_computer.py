@@ -15,19 +15,52 @@ from typing import Optional
 from .config import ReservoirConfig
 
 class ReservoirComputer:
-    """
-    JAXを使ったReservoir Computingの実装クラス。
+    """JAXベースのEcho State Network (ESN) 実装。
     
     Reservoir Computingは、固定されたランダムなリカレント層（reservoir）と
-    訓練可能な出力層から構成されるニューラルネットワークです。
+    訓練可能な出力層から構成される効率的な機械学習手法です。
+    
+    この実装では以下の特徴があります：
+    - JAX JITコンパイルによる高性能計算
+    - CPU/GPU自動切り替えとstatic_argnames最適化
+    - 統合されたbackend処理による簡潔な設計
+    - 自動微分とメモリ効率的な実装
+    
+    Attributes:
+        config: リザーバーの設定パラメータ
+        backend: 計算バックエンド種別（'cpu' or 'gpu'）
+        W_in: 入力重み行列 (n_reservoir, n_inputs)
+        W_res: リザーバー重み行列 (n_reservoir, n_reservoir)
+        W_out: 出力重み行列 (n_reservoir+1, n_outputs) 訓練後に設定
+        
+    Examples:
+        基本的な使用例:
+        
+        >>> from reservoir import ReservoirConfig, ReservoirComputer
+        >>> import numpy as np
+        
+        >>> config = ReservoirConfig(
+        ...     n_inputs=1, n_reservoir=100, n_outputs=1
+        ... )
+        >>> rc = ReservoirComputer(config)
+        
+        >>> # 訓練データ準備
+        >>> time = np.linspace(0, 10, 1000)
+        >>> inputs = np.sin(time).reshape(-1, 1)
+        >>> targets = np.cos(time).reshape(-1, 1)
+        
+        >>> # 訓練と予測
+        >>> rc.train(inputs, targets, reg_param=1e-6)
+        >>> predictions = rc.predict(inputs)
     """
     
-    def __init__(self, config: ReservoirConfig):
+    def __init__(self, config: ReservoirConfig, backend: Optional[str] = None):
         """
         Reservoir Computerを初期化します。
         
         Args:
             config: ReservoirConfigオブジェクト
+            backend: 計算バックエンド ('cpu', 'gpu', または None で自動選択)
         """
         self.config = config
         self.n_inputs = config.n_inputs
@@ -41,32 +74,48 @@ class ReservoirComputer:
         # 乱数キーの初期化
         self.key = random.PRNGKey(config.random_seed)
         
+        # バックエンドの設定
+        self.backend = self._select_backend(backend)
+        
         # reservoirの重みを初期化
         self._initialize_weights()
         
         # 出力重みは後で訓練で設定
         self.W_out = None
-        
-    def _initialize_weights(self):
-        """reservoir内部の重みを初期化します。"""
-        from .utils import print_gpu_info
-        
+
+    def _select_backend(self, backend: Optional[str] = None) -> str:
+        """
+        利用可能なデバイスに基づいてバックエンドを選択または検証します。
+        デフォルトではGPUを要求し、利用できない場合はエラーを送出します。
+        """
+        if backend == 'cpu':
+            print("CPUバックエンドを明示的に使用します。")
+            return 'cpu'
+
+        # バックエンドが指定されていない場合、GPUの存在を確認
         devices = jax.devices()
         gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
+
+        if not gpu_devices:
+            raise RuntimeError(
+                "CUDA対応GPUが見つかりません。このプログラムはデフォルトでGPUを要求します。"
+                "CPUで実行するには、--force-cpu フラグを使用してください。"
+            )
         
-        if gpu_devices:
+        # GPUが利用可能な場合
+        if backend is None or backend == 'gpu':
+            from .gpu_utils import print_gpu_info
             print_gpu_info()
-            self._initialize_on_gpu()
-        else:
-            # CPU環境で実行
-            self._initialize_on_cpu()
-    
-    def _initialize_on_cpu(self):
-        """CPU上で重み初期化（安定性重視）"""
-        # 入力重みをランダムに初期化
-        key1, key2, self.key = random.split(self.key, 3)
+            return 'gpu'
         
-        W_in_cpu = random.uniform(
+        # backendに 'gpu' 以外が指定された場合
+        raise ValueError(f"サポートされていないバックエンド '{backend}' が指定されました。'cpu' または 'gpu' を使用してください。")
+
+    def _initialize_weights(self):
+        """reservoirの重みを初期化します。JAXのデフォルトデバイス配置を使用。"""
+        key1, key2, new_key = random.split(self.key, 3)
+        
+        W_in = random.uniform(
             key1, 
             (self.n_reservoir, self.n_inputs), 
             minval=-self.input_scaling, 
@@ -74,46 +123,6 @@ class ReservoirComputer:
             dtype=jnp.float64
         )
         
-        # reservoir内部の重みを初期化
-        W_res_cpu = random.uniform(
-            key2, 
-            (self.n_reservoir, self.n_reservoir), 
-            minval=-1, 
-            maxval=1,
-            dtype=jnp.float64
-        )
-        
-        # NumPyで固有値計算（より安定）
-        W_res_np = np.array(W_res_cpu)
-        try:
-            eigenvalues = np.linalg.eigvals(W_res_np)
-            max_eigenvalue = np.max(np.abs(eigenvalues))
-            max_eigenvalue = max(max_eigenvalue, 1e-8)
-            W_res_scaled = (self.spectral_radius / max_eigenvalue) * W_res_np
-        except:
-            # 固有値計算が失敗した場合
-            frobenius_norm = np.linalg.norm(W_res_np, 'fro')
-            frobenius_norm = max(frobenius_norm, 1e-8)
-            W_res_scaled = (self.spectral_radius / frobenius_norm) * W_res_np
-        
-        # GPUに転送
-        self.W_in = device_put(jnp.array(W_in_cpu), jax.devices()[0])
-        self.W_res = device_put(jnp.array(W_res_scaled), jax.devices()[0])
-    
-    def _initialize_on_gpu(self):
-        """GPU上で重み初期化（GPU専用環境用）"""
-        # GPU上で直接初期化
-        key1, key2, self.key = random.split(self.key, 3)
-        
-        self.W_in = random.uniform(
-            key1, 
-            (self.n_reservoir, self.n_inputs), 
-            minval=-self.input_scaling, 
-            maxval=self.input_scaling,
-            dtype=jnp.float64
-        )
-        
-        # reservoir内部の重みを初期化
         W_res = random.uniform(
             key2, 
             (self.n_reservoir, self.n_reservoir), 
@@ -122,22 +131,21 @@ class ReservoirComputer:
             dtype=jnp.float64
         )
         
-        # GPU上で固有値計算（安定性に注意）
+        # スペクトル半径の調整（NumPyで安定した計算を行う）
+        W_res_np = np.array(W_res)
         try:
-            eigenvalues = jnp.linalg.eigvals(W_res)
-            max_eigenvalue = jnp.max(jnp.abs(eigenvalues))
-            max_eigenvalue = jnp.maximum(max_eigenvalue, 1e-8)
-            self.W_res = (self.spectral_radius / max_eigenvalue) * W_res
+            eigenvalues = np.linalg.eigvals(W_res_np)
+            max_eigenvalue = np.max(np.abs(eigenvalues))
+            max_eigenvalue = max(max_eigenvalue, 1e-8)
+            W_res_scaled = (self.spectral_radius / max_eigenvalue) * W_res_np
         except:
-            # GPU固有値計算が失敗した場合、Frobenius normで代替
-            frobenius_norm = jnp.linalg.norm(W_res, 'fro')
-            frobenius_norm = jnp.maximum(frobenius_norm, 1e-8)
-            self.W_res = (self.spectral_radius / frobenius_norm) * W_res
+            frobenius_norm = np.linalg.norm(W_res_np, 'fro')
+            frobenius_norm = max(frobenius_norm, 1e-8)
+            W_res_scaled = (self.spectral_radius / frobenius_norm) * W_res_np
         
-
-
-
-
+        self.W_in = W_in
+        self.W_res = jnp.array(W_res_scaled)
+        self.key = new_key
         
     def _reservoir_step(self, carry, input_data):
         """reservoirの1ステップを実行します（JAX scan用）。"""
@@ -172,17 +180,31 @@ class ReservoirComputer:
         initial_state = jnp.zeros(self.n_reservoir, dtype=jnp.float64)
         initial_carry = (initial_state, self.key)
         
-        # JAXのscanを使用して効率的に計算 /reservoir状態 h(1) から h(n) まで連続的に計算
+        # JAXのscanを使用して効率的に計算
         carry, states = lax.scan(self._reservoir_step, initial_carry, input_sequence)
         
         # キーを更新
         _, self.key = carry
         
         return states
+
+    @staticmethod
+    @jax.jit
+    def _train_unified(X: jnp.ndarray, target_data: jnp.ndarray, reg_param: float) -> jnp.ndarray:
+        """統合されたRidge回帰訓練（JAXのデフォルトデバイス配置を使用）"""
+        XTX = X.T @ X
+        XTY = X.T @ target_data
         
-    def train(self, input_data: jnp.ndarray, target_data: jnp.ndarray, reg_param: float = 1e-8):
+        A = XTX + reg_param * jnp.eye(XTX.shape[0], dtype=jnp.float64)
+        
+        try:
+            return jnp.linalg.solve(A, XTY)
+        except:
+            return jnp.linalg.pinv(A) @ XTY
+
+    def train(self, input_data: jnp.ndarray, target_data: jnp.ndarray, reg_param: float):
         """
-        出力層を訓練します（Ridge回帰）。
+        出力層を訓練します（Ridge回帰）。JAXのデフォルトデバイス配置を使用。
         
         Args:
             input_data: 形状 (time_steps, n_inputs) の入力データ
@@ -193,57 +215,16 @@ class ReservoirComputer:
         input_data = input_data.astype(jnp.float64)
         target_data = target_data.astype(jnp.float64)
         
-        # ①【ここで実行】固定されたランダム重みを使ってreservoir状態を計算
-        reservoir_states = self.run_reservoir(input_data)  # h(1), h(2), ..., h(n)　(time_steps-1, n_reservoir)
+        # ①固定されたランダム重みを使ってreservoir状態を計算
+        reservoir_states = self.run_reservoir(input_data)
         
         # バイアス項を追加
         bias_column = jnp.ones((reservoir_states.shape[0], 1), dtype=jnp.float64)
-        X = jnp.concatenate([reservoir_states, bias_column], axis=1) # (time_steps-1, n_reservoir+1)
+        X = jnp.concatenate([reservoir_states, bias_column], axis=1)
         
         # ②訓練：reservoir状態から目標データへの線形写像（W_out）を学習
-        devices = jax.devices()
-        gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
-        
-        if gpu_devices:
-            self._train_on_gpu(X, target_data, reg_param)
-        else:
-            self._train_on_cpu(X, target_data, reg_param)
-    
-    def _train_on_cpu(self, X, target_data, reg_param):
-        """CPU上でRidge回帰を実行（安定性重視）"""
-        with jax.default_device(jax.devices('cpu')[0]):
-            X_cpu = jax.device_get(X)
-            target_cpu = jax.device_get(target_data)
-            
-            # NumPyでRidge回帰を実行
-            XTX = X_cpu.T @ X_cpu # X^T X (グラム行列)
-            XTY = X_cpu.T @ target_cpu # X^T Y  
-            
-            # 正則化項を追加　 # X^T X + λI
-            A = XTX + reg_param * np.eye(XTX.shape[0], dtype=np.float64)
-            
-            try:
-                W_out_cpu = np.linalg.solve(A, XTY)
-            except:
-                W_out_cpu = np.linalg.pinv(A) @ XTY
-            
-            # GPUに転送
-            self.W_out = device_put(jnp.array(W_out_cpu), jax.devices()[0])
-    
-    def _train_on_gpu(self, X, target_data, reg_param):
-        """GPU上でRidge回帰を実行（GPU専用環境用）"""
-        # GPU上で直接Ridge回帰
-        XTX = X.T @ X  # X^T X (グラム行列)
-        XTY = X.T @ target_data  # X^T Y
-        
-        # 正則化項を追加
-        A = XTX + reg_param * jnp.eye(XTX.shape[0], dtype=jnp.float64)
-        
-        try:
-            self.W_out = jnp.linalg.solve(A, XTY)
-        except:
-            # GPU上でも失敗する場合は擬似逆行列を使用
-            self.W_out = jnp.linalg.pinv(A) @ XTY
+        # JAXのデフォルトデバイス配置を使用
+        self.W_out = self._train_unified(X, target_data, reg_param)
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """
@@ -275,6 +256,7 @@ class ReservoirComputer:
     def get_reservoir_info(self) -> dict:
         """reservoirの情報を返します。"""
         return {
-            **self.config.to_dict(),
+            **self.config.model_dump(),
+            "backend": self.backend,
             "trained": self.W_out is not None
         } 

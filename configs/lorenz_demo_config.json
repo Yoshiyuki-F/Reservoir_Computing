@@ -2,9 +2,12 @@
   "data_generation": {
     "time_steps": 3000,
     "dt": 0.01,
+    "frequencies": [1.0],
+    "noise_level": 0.01,
     "sigma": 10.0,
     "rho": 28.0,
-    "beta": 2.666667
+    "beta": 2.666667,
+    "use_dimensions": [0]
   },
   "reservoir": {
     "n_inputs": 1,

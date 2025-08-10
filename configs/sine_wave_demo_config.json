@@ -3,7 +3,11 @@
     "time_steps": 2000,
     "dt": 0.01,
     "frequencies": [1.0, 2.0, 0.5],
-    "noise_level": 0.05
+    "noise_level": 0.05,
+    "sigma": 10.0,
+    "rho": 28.0,
+    "beta": 2.667,
+    "use_dimensions": null
   },
   "reservoir": {
     "n_inputs": 1,

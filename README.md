@@ -15,12 +15,7 @@ Reservoir Computingは、固定されたランダムなリカレント層（rese
 
 ## 依存関係
 
-プロジェクトには以下の依存関係が必要です：
-
-- Python 3.13+
-- JAX (CUDA版) >= 0.6.1
-- NumPy >= 2.2.6
-- Matplotlib >= 3.10.3
+pyproject.toml
 
 ## インストール
 
@@ -41,14 +36,15 @@ source .venv/bin/activate
 
 ### デモンストレーション実行
 
+**推奨方法（uv scripts使用）:**
 ```bash
-# 方法1: uv経由で実行（推奨）
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python examples/demo.py
+# サイン波デモ実行（JAX_PLATFORMS=cudaは自動設定）
+unset LD_LIBRARY_PATH && uv run demo-sine-gpu
 
-# 方法2: 仮想環境アクティベート後に実行
-source .venv/bin/activate
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python examples/demo.py
+# Lorenzアトラクターデモ実行
+unset LD_LIBRARY_PATH && uv run demo-lorenz-gpu
 ```
+detail in docs/TROUBLESHOOTING.md
 
 このコマンドで以下の2つのデモンストレーションが実行されます：
 
@@ -58,40 +54,110 @@ unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda python examples/demo.py
 ## ファイル構成
 
 ```
-reservoir/
+.
 ├── reservoir/                   # メインパッケージ
-│   ├── __init__.py              # パッケージ初期化
-│   ├── reservoir_computer.py    # メインのReservoirComputerクラス
-│   ├── utils.py                # ユーティリティ関数とデータ生成
-│   └── scripts.py              # Poetry実行スクリプト
-├── tests/                      # テストファイル
-│   ├── test_simple.py          # 基本機能テスト
-│   ├── test_cuda.py            # GPU動作確認テスト
-│   ├── test_gpu_comparison.py  # GPU vs ハイブリッド比較テスト
-│   ├── test_eigenvalues_comparison.py  # 固有値計算比較テスト
-│   └── test_edge_cases.py      # エッジケーステスト
-├── examples/                   # サンプル・デモ
-│   └── demo.py                 # メインデモンストレーション
-├── scripts/                    # セットアップ・ユーティリティスクリプト
-│   ├── install_cuda.sh         # GPU環境セットアップ
-│   ├── run_gpu.sh              # GPU実行ラッパー
-│   └── rebuild_test.sh         # 完全再構築テスト
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── cli.py                   # コマンドラインインターフェース
+│   ├── config.py                # 設定クラス
+│   ├── data.py                  # データ生成関数
+│   ├── gpu_utils.py             # GPUユーティリティ
+│   ├── metrics.py               # 評価指標
+│   ├── plotting.py              # 可視化機能
+│   ├── preprocessing.py         # データ前処理
+│   ├── reservoir_computer.py    # ReservoirComputerクラス
+│   └── runner.py                # 実験実行ロジック
+├── configs/                    # 設定ファイル
+│   ├── lorenz_demo_config.json
+│   └── sine_wave_demo_config.json
+├── docs/                       # ドキュメント
+│   ├── TODO.md
+│   └── TROUBLESHOOTING.md
 ├── outputs/                    # 生成ファイル
-│   ├── sine_wave_prediction.png
-│   └── lorenz_prediction.png
-├── docs/                       # ドキュメント（将来用）
-├── README.md                   # このファイル
-└── pyproject.toml              # プロジェクト設定
+│   ├── lorenz_prediction.png
+│   └── sine_wave_prediction.png
+├── scripts/                    # ユーティリティスクリプト
+│   ├── demo-gpu.sh
+│   ├── install_cuda.sh
+│   ├── rebuild_test.sh
+│   ├── run_gpu.sh
+│   └── test-gpu.sh
+├── tests/                      # テストファイル
+│   ├── test_edge_cases.py
+│   ├── test_eigenvalues_comparison.py
+│   ├── test_gpu_comparison.py
+│   └── test_simple.py
+├── pyproject.toml              # プロジェクト設定
+└── README.md                   # このファイル
 ```
+
+## モジュール構造詳細
+
+### コアモジュール
+
+#### `reservoir_computer.py`
+- **ReservoirComputer**: メインのReservoir Computingクラス
+- JAX JITコンパイルによる最適化されたCPU/GPU計算
+- 統合されたbackend処理による簡潔な設計
+- 各種リザーバー行列の生成・管理、状態更新、学習・予測機能を提供
+
+#### `config.py`
+- **ReservoirConfig**: リザーバーパラメータ設定クラス
+- **DataGenerationConfig**: データ生成パラメータ設定クラス
+- **TrainingConfig**: 学習パラメータ設定クラス
+- **ExperimentConfig**: 実験全体の統合設定クラス
+- **create_demo_config_template**: デモ設定テンプレート生成関数
+
+### データ処理モジュール
+
+#### `data.py`
+- **generate_sine_data**: サイン波時系列データ生成
+- **generate_lorenz_data**: Lorenzアトラクター時系列データ生成  
+- **generate_mackey_glass_data**: Mackey-Glassカオス時系列データ生成
+
+#### `preprocessing.py`
+- **normalize_data**: データ正規化（0-1スケーリング）
+- **denormalize_data**: 正規化解除
+
+### ユーティリティモジュール
+
+#### `gpu_utils.py`
+- **check_gpu_available**: GPU利用可能性確認
+- **require_gpu**: GPU必須環境の検証
+- **print_gpu_info**: GPU情報表示
+
+#### `metrics.py`
+- **calculate_mse**: 平均二乗誤差計算
+- **calculate_mae**: 平均絶対誤差計算
+
+#### `plotting.py`
+- **plot_prediction_results**: 予測結果可視化（時系列グラフ生成）
+
+### インターフェースと実行モジュール
+
+#### `runner.py`
+- **run_experiment**: 設定に基づき、データ生成、学習、評価、可視化までの一連の実験フローを実行するコアロジック。
+- `cli.py`から呼び出されることで、コマンドラインと実行ロジックを分離。
+
+#### `cli.py`
+- **main**: `argparse`を用いてコマンドライン引数を解析し、`runner.py`の関数を呼び出す薄いラッパー。
+- ユーザーが設定ファイルや実行オプションを簡単に指定できるようにする。
+
+#### `__main__.py`
+- `python -m reservoir`で実行された際のパッケージエントリーポイント。`cli.main()`を呼び出す。
+
+#### `__init__.py`
+- パッケージの初期化と、外部から利用される主要なクラスや関数をエクスポート。
 
 ## テスト実行
 
+**推奨方法（uv scripts使用）:**
 ```bash
-# uv環境でのテスト実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_cuda.py
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_comparison.py
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_eigenvalues_comparison.py
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_edge_cases.py
+# GPU動作確認テスト
+unset LD_LIBRARY_PATH && uv run test-gpu
+
+# Reservoir Computing基本テスト
+unset LD_LIBRARY_PATH && uv run test-simple-gpu
 ```
 
 ## ReservoirComputerクラスのパラメータ
@@ -125,183 +191,6 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 3. **input_scaling**: 入力データの特性に応じて調整
 4. **reg_param**: 過学習を防ぐ正則化パラメータ
 
-
-## GPU環境トラブルシューティング
-
-### システムクラッシュ後の完全再構築手順
-
-1. **基本環境の確認**
-   ```bash
-   # NVIDIA ドライバーの確認
-   nvidia-smi
-   
-   # CUDA バージョンの確認
-   nvcc --version
-   ```
-
-2. **プロジェクト環境の再構築**
-   ```bash
-   cd /path/to/reservoir
-   
-   # uv環境セットアップ
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   export PATH="$HOME/.local/bin:$PATH"
-   uv sync
-   ```
-
-### 一般的なGPU問題と解決策
-
-#### 問題1: "cuSPARSE library was not found" エラー
-
-**症状:**
-```
-RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found.
-```
-
-**解決策:**
-```bash
-# uv環境での実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python your_script.py
-```
-
-**原因:** JAX 0.7.0+ はbundled CUDA librariesを使用するため、システムのLD_LIBRARY_PATH設定が競合を引き起こします。
-
-#### 問題2: "Backend 'cuda' is not in the list of known backends" エラー
-
-**症状:**
-```
-RuntimeError: Backend 'cuda' is not in the list of known backends: ['cpu', 'tpu'].
-```
-
-**解決策:**
-```bash
-# 環境変数をクリアして再実行
-unset LD_LIBRARY_PATH
-unset JAX_PLATFORMS
-python your_script.py
-```
-
-#### 問題3: JAXがCPUにフォールバックする
-
-**症状:**
-```
-WARNING: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
-```
-
-**解決策:**
-```bash
-# uv環境での再インストール
-uv add "jax[cuda12]" --index https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# 環境変数のクリア
-unset LD_LIBRARY_PATH
-```
-
-### 推奨する実行方法
-
-すべてのJAXスクリプトは以下の方法で実行してください：
-
-```bash
-# uv環境での実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python your_script.py
-
-# または環境変数を分けて設定
-export JAX_PLATFORMS=cuda
-unset LD_LIBRARY_PATH
-uv run python your_script.py
-```
-
-### GPU動作確認テスト
-
-```bash
-# uv環境での基本的なGPU動作確認
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_cuda.py
-
-# uv環境での詳細なGPU性能テスト
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python tests/test_gpu_comparison.py
-```
-
-### Linux Mint 特有の注意点
-
-- **NVIDIA ドライバー:** Linux Mint では Driver Manager を使用してNVIDIA ドライバーをインストールすることを推奨
-- **CUDA 互換性:** RTX 3060 では CUDA 12.x and driver 550.xx+ が必要
-- **uv 環境:** システムの Python 環境との競合を避けるため uv の使用を強く推奨
-
-### 簡単実行方法（推奨）
-
-毎回環境変数を設定するのを避けるため、以下の方法を提供：
-
-#### 1. ラッパースクリプト使用
-```bash
-# GPU環境で任意のPythonスクリプトを実行
-./scripts/run_gpu.sh python examples/demo.py
-
-# または直接実行
-./scripts/run_gpu.sh examples/demo.py
-```
-
-#### 2. uv スクリプト使用（推奨）
-```bash
-# uv環境でGPUスクリプト実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run demo-gpu          # examples/demo.py をGPUで実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run test-gpu           # GPU動作テスト実行
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-gpu examples/demo.py  # 任意のスクリプトをGPUで実行
-```
-
-#### 3. 従来の手動方式
-```bash
-# 毎回手動で設定する場合
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run python examples/demo.py
-```
-
-**推奨:** 方法1または2を使用してください。システム全体への影響を避けられます。
-
-### PyCharm IDE での設定
-
-PyCharmの実行ボタン（▶️）でGPU環境を使用するための設定：
-
-#### 1. Run Configuration の作成
-1. **Run** → **Edit Configurations...** を開く
-2. **+** → **Python** を選択
-3. 以下のように設定：
-
-**基本設定:**
-- **Name:** `Reservoir GPU Demo` (任意)
-- **Script path:** `/path/to/reservoir/examples/demo.py`
-- **Python interpreter:** uv環境のPython (`/.venv/bin/python`)
-
-**環境変数:**
-- **Environment variables** 
-  - `JAX_PLATFORMS=cuda`
-  - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
-
-
-**重要:** `LD_LIBRARY_PATH`が設定されている場合は空に設定するか削除
-
-#### 2. デフォルトConfiguration テンプレート設定
-1. **Run** → **Edit Configurations...** 
-2. **Templates** → **Python** を選択
-3. **Environment variables** に以下を設定：
-   - `JAX_PLATFORMS=cuda`
-   - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
-
-これで新しいPython実行時に自動でGPU設定が適用されます。
-
-#### 3. 実行確認
-PyCharmの実行ボタン（▶️）で実行し、以下が表示されることを確認：
-```
-JAXバージョン: 0.7.0
-利用可能なデバイス: [CudaDevice(id=0)]
-```
-
-#### 4. トラブルシューティング（PyCharm）
-もしCPUで動作している場合：
-1. **Terminal** タブで確認：
-   ```bash
-   echo $LD_LIBRARY_PATH
-   ```
-2. もし何か表示される場合、Run ConfigurationでLD_LIBRARY_PATHを空に設定
-3. PyCharmを再起動
 
 ## 参考文献
 

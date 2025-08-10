@@ -7,9 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from reservoir import ReservoirComputer
-from reservoir.utils import generate_sine_data, calculate_mse
-from reservoir.utils import require_gpu, print_gpu_info
+from reservoir import ReservoirComputer, ReservoirConfig, generate_sine_data, calculate_mse, require_gpu, print_gpu_info
 
 @require_gpu()
 def test_basic_functionality():
@@ -18,23 +16,29 @@ def test_basic_functionality():
     print_gpu_info()
     
     # 小さなデータセットでテスト
-    input_data, target_data = generate_sine_data(time_steps=200)
+    input_data, target_data = generate_sine_data(
+        time_steps=200,
+        dt=0.01,
+        frequencies=[1.0, 2.5],
+        noise_level=0.05
+    )
     print(f"データ形状: input={input_data.shape}, target={target_data.shape}")
     
     # 小さなreservoirでテスト
-    rc = ReservoirComputer(
+    config = ReservoirConfig(
         n_inputs=1, 
         n_reservoir=50, 
         n_outputs=1,
         spectral_radius=0.9,
         random_seed=42
     )
+    rc = ReservoirComputer(config)
     
     print("Reservoir情報:", rc.get_reservoir_info())
     
     # 訓練
     print("訓練中...")
-    rc.train(input_data, target_data)
+    rc.train(input_data, target_data, reg_param=1e-6)
     
     # 予測
     print("予測中...")
