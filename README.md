@@ -44,7 +44,18 @@ uv run poe demo-sine-gpu
 # Lorenzアトラクターデモ実行
 uv run poe demo-lorenz-gpu
 ```
-detail in docs/TROUBLESHOOTING.md
+
+**その他の実行方法:**
+```bash
+# 全てのテスト実行
+uv run poe test-simple-gpu
+uv run poe test-gpu-comparison
+
+# カスタム設定での実行（環境変数なしの場合）
+uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-cpu
+```
+
+環境変数の詳細は docs/TROUBLESHOOTING.md を参照してください。
 
 このコマンドで以下の2つのデモンストレーションが実行されます：
 
@@ -59,17 +70,8 @@ detail in docs/TROUBLESHOOTING.md
 - CPUでの実行を強制する場合は、CLI で `--force-cpu` フラグを使用してください：
 
 ```bash
-# CPU強制実行の例
-uv run python -m reservoir.cli --config configs/sine_wave_demo_config.json --force-cpu
-```
-
-- プログラマティックに使用する場合は、ReservoirComputerのコンストラクタで `backend='cpu'` を明示的に指定してください：
-
-```python
-from reservoir import ReservoirComputer, ReservoirConfig
-
-config = ReservoirConfig(n_inputs=1, n_reservoir=100, n_outputs=1)
-rc = ReservoirComputer(config, backend='cpu')  # CPU強制使用
+# CPU強制実行の例（Poeタスクがない場合のみ直接実行）
+uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-cpu
 ```
 
 ## ファイル構成
@@ -167,17 +169,6 @@ rc = ReservoirComputer(config, backend='cpu')  # CPU強制使用
 
 #### `__init__.py`
 - パッケージの初期化と、外部から利用される主要なクラスや関数をエクスポート。
-
-## テスト実行
-
-**推奨方法（Poe the Poet使用）:**
-```bash
-# GPU動作確認テスト
-uv run poe test-gpu
-
-# Reservoir Computing基本テスト
-uv run poe test-simple-gpu
-```
 
 ## ReservoirComputerクラスのパラメータ
 

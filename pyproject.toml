@@ -29,10 +29,12 @@ reservoir-cli = "reservoir.cli:main"
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_cuda.py" }
 # GPU simple test execution
 test-simple-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_reservoir_computer.py" }
+
+demo-main-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__" }
 # GPU CLI demo with sine wave config (replaces scripts/demo-gpu.sh)
-demo-sine-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.cli --config configs/sine_wave_demo_config.json --no-gpu-check" }
+demo-sine-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --config configs/sine_wave_demo_config.json" }
 # GPU CLI demo with lorenz config  
-demo-lorenz-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.cli --lorenz --config configs/lorenz_demo_config.json --no-gpu-check" }
+demo-lorenz-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --lorenz --config configs/lorenz_demo_config.json" }
 # GPU comparison test
 test-gpu-comparison = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_gpu_comparison.py" }
 
