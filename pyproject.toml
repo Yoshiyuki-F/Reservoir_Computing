@@ -25,18 +25,15 @@ dev-dependencies = []
 reservoir-cli = "reservoir.cli:main"
 
 [tool.poe.tasks]
-# GPU test execution (replaces scripts/test-gpu.sh)
-test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_cuda.py" }
-# GPU simple test execution
-test-simple-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_reservoir_computer.py" }
+test = { shell = "uv run pytest -q" }
+# GPU smoke test (skips if no GPU)
+test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run pytest -q -k gpu_smoke" }
 
 demo-main-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__" }
 # GPU CLI demo with sine wave config (replaces scripts/demo-gpu.sh)
 demo-sine-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --config configs/sine_wave_demo_config.json" }
 # GPU CLI demo with lorenz config  
 demo-lorenz-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --lorenz --config configs/lorenz_demo_config.json" }
-# GPU comparison test
-test-gpu-comparison = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python tests/test_gpu_comparison.py" }
 
 
 [build-system]

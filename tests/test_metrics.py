@@ -2,10 +2,9 @@
 """
 評価指標ユーティリティのテスト
 """
-import numpy as np
 import jax.numpy as jnp
 import pytest
-from reservoir.metrics import calculate_mse, calculate_mae
+from utils.metrics import calculate_mse, calculate_mae
 
 
 class TestCalculateMSE:

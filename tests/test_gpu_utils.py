@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import sys
 from io import StringIO
-from reservoir.gpu_utils import check_gpu_available, require_gpu, print_gpu_info
+from utils.gpu_utils import check_gpu_available, require_gpu, print_gpu_info
 
 
 class TestCheckGPUAvailable:
@@ -23,7 +23,7 @@ class TestCheckGPUAvailable:
         """GPU利用可能な場合の成功テスト"""
         # GPUデバイスをモック
         mock_gpu_device = MagicMock()
-        mock_gpu_device.__str__ = lambda: "CUDA device 0"
+        mock_gpu_device.__str__.return_value = "CUDA device 0"
         mock_devices.return_value = [mock_gpu_device]
         
         # JAX配列と計算をモック
@@ -48,7 +48,7 @@ class TestCheckGPUAvailable:
         """GPU デバイスが見つからない場合のテスト"""
         # CPUデバイスのみをモック
         mock_cpu_device = MagicMock()
-        mock_cpu_device.__str__ = lambda: "CPU device 0"
+        mock_cpu_device.__str__.return_value = "CPU device 0"
         mock_devices.return_value = [mock_cpu_device]
         
         # 標準出力をキャプチャ
@@ -75,7 +75,7 @@ class TestCheckGPUAvailable:
         """GPU計算テストが失敗する場合のテスト"""
         # GPUデバイスはあるがJAX計算で例外が発生
         mock_gpu_device = MagicMock()
-        mock_gpu_device.__str__ = lambda: "CUDA device 0"
+        mock_gpu_device.__str__.return_value = "CUDA device 0"
         mock_devices.return_value = [mock_gpu_device]
         
         # JAX配列作成で例外を発生させる
@@ -93,7 +93,7 @@ class TestCheckGPUAvailable:
 class TestRequireGPU:
     """require_gpu デコレータのテスト"""
     
-    @patch('reservoir.gpu_utils.check_gpu_available')
+    @patch('utils.gpu_utils.check_gpu_available')
     def test_gpu_available_decorator_success(self, mock_check_gpu):
         """GPU利用可能時のデコレータ成功テスト"""
         # check_gpu_available が成功すると仮定
@@ -109,7 +109,7 @@ class TestRequireGPU:
         assert result == "GPU test passed"
         mock_check_gpu.assert_called_once()
     
-    @patch('reservoir.gpu_utils.check_gpu_available')
+    @patch('utils.gpu_utils.check_gpu_available')
     @patch('sys.exit')
     def test_gpu_unavailable_decorator_exit(self, mock_exit, mock_check_gpu):
         """GPU利用不可時のデコレータ終了テスト"""
@@ -132,7 +132,7 @@ class TestRequireGPU:
         assert "GPU REQUIREMENT FAILED:" in output
         assert "Exiting test due to GPU requirement..." in output
     
-    @patch('reservoir.gpu_utils.check_gpu_available')
+    @patch('utils.gpu_utils.check_gpu_available')
     def test_decorated_function_with_args(self, mock_check_gpu):
         """引数付き関数のデコレータテスト"""
         mock_check_gpu.return_value = True
@@ -153,7 +153,7 @@ class TestPrintGPUInfo:
     def test_gpu_info_with_gpu(self, mock_devices):
         """GPU存在時の情報表示テスト"""
         mock_gpu_device = MagicMock()
-        mock_gpu_device.__str__ = lambda: "CUDA device 0 (Tesla T4)"
+        mock_gpu_device.__str__.return_value = "CUDA device 0 (Tesla T4)"
         mock_devices.return_value = [mock_gpu_device]
         
         captured_output = StringIO()
@@ -168,7 +168,7 @@ class TestPrintGPUInfo:
     def test_gpu_info_no_gpu(self, mock_devices):
         """GPU非存在時の情報表示テスト"""
         mock_cpu_device = MagicMock()
-        mock_cpu_device.__str__ = lambda: "CPU device 0"
+        mock_cpu_device.__str__.return_value = "CPU device 0"
         mock_devices.return_value = [mock_cpu_device]
         
         captured_output = StringIO()
@@ -195,9 +195,9 @@ class TestPrintGPUInfo:
     def test_gpu_info_mixed_devices(self, mock_devices):
         """CPU・GPU混在時の情報表示テスト"""
         mock_cpu_device = MagicMock()
-        mock_cpu_device.__str__ = lambda: "CPU device 0"
+        mock_cpu_device.__str__.return_value = "CPU device 0"
         mock_gpu_device = MagicMock()
-        mock_gpu_device.__str__ = lambda: "GPU device 0"
+        mock_gpu_device.__str__.return_value = "GPU device 0"
         
         mock_devices.return_value = [mock_cpu_device, mock_gpu_device]
         

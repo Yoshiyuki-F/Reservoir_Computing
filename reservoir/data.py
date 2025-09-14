@@ -32,9 +32,8 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
         ...     name="sine_wave",
         ...     time_steps=1000,
         ...     dt=0.01,
-        ...     frequencies=[1.0],
         ...     noise_level=0.05,
-        ...     sigma=10.0, rho=28.0, beta=2.667
+        ...     params={"frequencies": [1.0]}
         ... )
         >>> inputs, targets = generate_sine_data(config)
         >>> print(inputs.shape)
@@ -44,7 +43,11 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
     
     # 複数の周波数のサインwave合成
     signal = np.zeros(config.time_steps, dtype=np.float64)
-    for freq in config.frequencies:
+    frequencies = config.get_param('frequencies')
+    if not frequencies:
+        raise ValueError("sine_wave requires 'frequencies' parameter in config.params")
+    
+    for freq in frequencies:
         signal += np.sin(2 * np.pi * freq * t)
     
     # ノイズを追加
@@ -86,11 +89,12 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
         ...     name="lorenz",
         ...     time_steps=5000,
         ...     dt=0.01,
-        ...     frequencies=[1.0],
         ...     noise_level=0.01,
-        ...     sigma=10.0,
-        ...     rho=28.0,
-        ...     beta=8.0/3.0
+        ...     params={
+        ...         "sigma": 10.0,
+        ...         "rho": 28.0,
+        ...         "beta": 8.0/3.0
+        ...     }
         ... )
         >>> inputs, targets = generate_lorenz_data(config)
         >>> print(inputs.shape)
@@ -100,16 +104,25 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
         数値積分にはオイラー法を使用。より高精度が必要な場合は
         Runge-Kutta法の実装を検討してください。
     """
-    # 初期値
-    x, y, z = 1.0, 1.0, 1.0
+    # 初期値（互換性のためオプショナル）
+    x = config.get_param('initial_x', 1.0)
+    y = config.get_param('initial_y', 1.0) 
+    z = config.get_param('initial_z', 1.0)
     
     data = np.zeros((config.time_steps, 3), dtype=np.float64)
     
     for i in range(config.time_steps):
         # Lorenz方程式の数値積分（オイラー法）
-        dx = config.sigma * (y - x)
-        dy = x * (config.rho - z) - y
-        dz = x * y - config.beta * z
+        sigma = config.get_param('sigma')
+        rho = config.get_param('rho')
+        beta = config.get_param('beta')
+        
+        if sigma is None or rho is None or beta is None:
+            raise ValueError("lorenz requires 'sigma', 'rho', 'beta' parameters in config.params")
+            
+        dx = sigma * (y - x)
+        dy = x * (rho - z) - y
+        dz = x * y - beta * z
         
         x += dx * config.dt
         y += dy * config.dt
@@ -139,19 +152,23 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
         tau=17, beta=0.2, gamma=0.1, n=10
         これらはconfigに含まれていない場合のデフォルト値として使用されます。
     """
-    # Mackey-Glassの標準パラメータ（configにない場合のデフォルト）
-    tau = 17
-    beta = 0.2
-    gamma = 0.1 
-    n = 10
+    # Mackey-Glassのパラメータ（configから取得）
+    tau = config.get_param('tau')
+    beta = config.get_param('beta')
+    gamma = config.get_param('gamma')
+    n = config.get_param('n')
+    
+    if any(param is None for param in [tau, beta, gamma, n]):
+        raise ValueError("mackey_glass requires 'tau', 'beta', 'gamma', 'n' parameters in config.params")
     
     # 初期化
-    history_length = max(tau, 1) + 1
+    history_length = max(int(tau), 1) + 1
     x = np.zeros(config.time_steps + history_length, dtype=np.float64)
-    x[0] = 1.2  # 初期値
+    initial_value = config.get_param('initial_value', 1.2)
+    x[0] = initial_value
     
     for i in range(history_length, config.time_steps + history_length):
-        x_tau = x[i - tau] if i >= tau else x[0]
+        x_tau = x[i - int(tau)] if i >= int(tau) else x[0]
         dx = (beta * x_tau) / (1 + x_tau**n) - gamma * x[i-1]
         x[i] = x[i-1] + dx * config.dt
     
