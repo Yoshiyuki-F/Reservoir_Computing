@@ -27,13 +27,15 @@ reservoir-cli = "reservoir.cli:main"
 [tool.poe.tasks]
 test = { shell = "uv run pytest -q" }
 # GPU smoke test (skips if no GPU)
-test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run pytest -q -k gpu_smoke" }
+test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
-demo-main-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__" }
+main = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__" }
 # GPU CLI demo with sine wave config (replaces scripts/demo-gpu.sh)
-demo-sine-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --config configs/sine_wave_demo_config.json" }
-# GPU CLI demo with lorenz config  
-demo-lorenz-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && export XLA_PYTHON_CLIENT_PREALLOCATE=false && uv run python -m reservoir.__main__ --lorenz --config configs/lorenz_demo_config.json" }
+sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/sine_wave_demo_config.json" }
+# GPU CLI demo with lorenz config
+lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/lorenz_demo_config.json" }
+# GPU CLI demo with mackey-glass config
+mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/mackey_glass_demo_config.json" }
 
 
 [build-system]

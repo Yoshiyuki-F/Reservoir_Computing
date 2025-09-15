@@ -27,37 +27,49 @@ def check_gpu_available() -> bool:
     import jax.numpy as jnp
     
     print("=== GPU認識確認 ===")
-    
+
     try:
         devices = jax.devices()
         print(f"JAXバージョン: {jax.__version__}")
-        print(f"利用可能なデバイス: {devices}")
-        
+
         # GPU利用可能性チェック
         gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
-        
+
         if not gpu_devices:
             print("ERROR: GPU not detected!")
             print("Available devices:", devices)
-            
+
             # CPU専用デバイスのチェック
             if devices and all('cpu' in str(d).lower() for d in devices):
                 print("Only CPU devices detected - GPU initialization failed")
-            
+
             raise RuntimeError(
                 "GPU not detected. This is a GPU-required test.\n"
                 "詳細なトラブルシューティングは docs/TROUBLESHOOTING.md を参照してください\n"
                 "または --force-cpu オプションでCPU実行も可能です"
             )
-        
-        print(f"GPU detected: {gpu_devices}")
-        
+
         # 簡単なGPU計算テスト
         try:
             x = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
             result = jnp.sum(x ** 2)
-            print(f"GPU計算テスト成功: {float(result)}")
-            print(f"計算デバイス: {x.devices()}")
+
+            # GPU名を取得（利用可能な場合）
+            device = gpu_devices[0]
+            device_name = "Unknown"
+            try:
+                # nvidia-mlまたはpynvmlを使ってGPU名を取得
+                import subprocess
+                nvidia_smi_output = subprocess.check_output(
+                    ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits"],
+                    universal_newlines=True
+                ).strip().split('\n')[0]
+                device_name = nvidia_smi_output
+            except:
+                # nvidia-smiが失敗した場合はデバイスIDのみ表示
+                device_name = f"CUDA Device {device.id}"
+
+            print(f"GPU detected: {device_name} (テスト成功: {float(result)})")
         except Exception as e:
             print(f"GPU計算テスト失敗: {e}")
             raise RuntimeError(f"GPU computation test failed: {e}")

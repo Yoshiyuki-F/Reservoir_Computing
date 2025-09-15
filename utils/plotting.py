@@ -101,4 +101,3 @@ def plot_prediction_results(
     plt.tight_layout()
     plt.savefig(PROJECT_ROOT/ f'outputs/{filename}', dpi=300, bbox_inches='tight')
     print(f"結果を 'outputs/{filename}' に保存しました。")
-    plt.show()

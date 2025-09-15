@@ -21,7 +21,7 @@
     "reservoir_weight_range": 1.0
   },
   "training": {
-    "train_size": 1500,
+    "train_size": 0.75,
     "reg_param": 1e-8
   },
   "demo": {

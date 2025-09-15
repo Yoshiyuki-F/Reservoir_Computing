@@ -4,14 +4,12 @@ Allows running: python -m reservoir.cli
 """
 
 import argparse
-import sys
 import os
+import sys
 from pathlib import Path
 
 from reservoir.runner import run_experiment_from_config
 
-# このファイルの場所を基準にプロジェクトルートを決定
-PROJECT_ROOT = Path(__file__).parent.parent
 
 def main():
     """メイン関数。"""
@@ -19,16 +17,17 @@ def main():
         description="JAXを使ったReservoir Computingのデモンストレーション",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用例:
-  # 設定ファイルを指定してデモを実行
-  python -m reservoir.cli --config configs/sine_wave_demo_config.json
+        使用例:
+          # 設定ファイルを指定してデモを実行
+          python -m reservoir.__main__ --config configs/sine_wave_demo_config.json
 
-  # 複数の設定ファイルを一度に実行
-  python -m reservoir.cli --config configs/sine_wave_demo_config.json configs/lorenz_demo_config.json
+          # 複数の設定ファイルを一度に実行
+          python -m reservoir.__main__ --config configs/sine_wave_demo_config.json configs/lorenz_demo_config.json
 
-  # すべてのデフォルトデモを実行
-  python -m reservoir.cli --all
-        """)
+          # すべてのデフォルトデモを実行（デフォルト動作）
+          python -m reservoir.__main__
+        """
+    )
 
     parser.add_argument(
         '--config', '-c',
@@ -80,13 +79,14 @@ def main():
 
             config_files_to_run = [
                 'configs/sine_wave_demo_config.json',
-                'configs/lorenz_demo_config.json'
+                'configs/lorenz_demo_config.json',
+                'configs/mackey_glass_demo_config.json'
             ]
 
         results = []
         for config_file in config_files_to_run:
             # 絶対パスに変換
-            abs_config_path = PROJECT_ROOT / config_file
+            abs_config_path = Path(__file__).parent.parent / config_file
             if not abs_config_path.exists():
                 print(f"エラー: 設定ファイルが見つかりません: {abs_config_path}")
                 sys.exit(1)

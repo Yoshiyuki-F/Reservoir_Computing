@@ -63,7 +63,7 @@ def run_experiment_from_config(config_path: str, backend: Optional[str] = None) 
     target_norm, target_mean, target_std = normalize_data(target_data)
 
     # 訓練データとテストデータに分割
-    train_size = demo_config.training.train_size
+    train_size = int(len(input_norm) * demo_config.training.train_size)
     train_input = input_norm[:train_size]
     train_target = target_norm[:train_size]
     test_input = input_norm[train_size:]

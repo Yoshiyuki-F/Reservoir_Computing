@@ -38,11 +38,13 @@ source .venv/bin/activate
 
 **推奨方法（Poe the Poet使用）:**
 ```bash
+# all datas
+uv run poe main
 # サイン波デモ実行（環境変数は自動設定）
-uv run poe demo-sine-gpu
+uv run poe sine
 
 # Lorenzアトラクターデモ実行
-uv run poe demo-lorenz-gpu
+uv run poe lorenz
 ```
 
 **その他の実行方法:**

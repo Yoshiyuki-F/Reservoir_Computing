@@ -73,11 +73,12 @@ class DataGenerationConfig(BaseModel):
                     raise ValueError(f"{param} は正の値である必要があります")
                     
         elif name == 'mackey_glass':
-            defaults = {'tau': 17.0, 'n': 10.0, 'beta': 0.2, 'gamma': 0.1}
-            for param, default in defaults.items():
-                if param not in v:
-                    v[param] = default
-                elif v[param] <= 0:
+            required = ['tau', 'beta', 'gamma', 'n']
+            missing = [param for param in required if param not in v]
+            if missing:
+                raise ValueError(f"mackey_glass には {missing} パラメータが必要です")
+            for param in required:
+                if v[param] <= 0:
                     raise ValueError(f"{param} は正の値である必要があります")
         
         return v
@@ -92,10 +93,10 @@ class DataGenerationConfig(BaseModel):
 
 class TrainingConfig(BaseModel):
     """Reservoir Computerの訓練に関する設定。
-    
+
     Ridge回帰による出力層の学習に使用されるパラメータを定義します。
     """
-    train_size: int = Field(..., gt=0, description="訓練データサイズ")
+    train_size: float = Field(..., gt=0, description="訓練データサイズ（割合: 0.0-1.0）")
     reg_param: float = Field(..., gt=0, description="正則化パラメータ")
 
     model_config = ConfigDict(extra="forbid")

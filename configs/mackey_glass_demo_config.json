@@ -1,14 +1,16 @@
 {
   "data_generation": {
-    "name": "lorenz",
-    "time_steps": 3000,
-    "dt": 0.01,
+    "name": "mackey_glass",
+    "time_steps": 1000,
+    "dt": 0.1,
     "noise_level": 0.01,
-    "use_dimensions": [0],
+    "use_dimensions": null,
     "params": {
-      "sigma": 10.0,
-      "rho": 28.0,
-      "beta": 2.666667
+      "tau": 17,
+      "beta": 0.2,
+      "gamma": 0.1,
+      "n": 10,
+      "initial_value": 1.2
     }
   },
   "reservoir": {
@@ -27,8 +29,8 @@
     "reg_param": 1e-6
   },
   "demo": {
-    "title": "Lorenz Attractor (X-coordinate) Prediction Results",
-    "filename": "lorenz_prediction.png",
+    "title": "Mackey-Glass Chaotic Time Series Prediction",
+    "filename": "mackey_glass_prediction.png",
     "show_training": false
   }
 }
