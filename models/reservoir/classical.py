@@ -1,31 +1,24 @@
 """
-Reservoir Computer implementation using JAX.
+Classical Reservoir Computer implementation using JAX.
 """
 
 import jax
-import jax.numpy as jnp
-from jax import random, lax, device_put
 import numpy as np
 
-# JAXの設定
-jax.config.update("jax_enable_x64", True)
+from typing import Optional, Dict, Any
 
+from pipelines.jax_config import ensure_x64_enabled
 
-from typing import Optional
+ensure_x64_enabled()
+
+import jax.numpy as jnp
+from jax import random, lax, device_put
+
 from .config import ReservoirConfig
+from .base_reservoir import BaseReservoirComputer
 
-class ReservoirComputer:
+class ReservoirComputer(BaseReservoirComputer):
     """JAXベースのEcho State Network (ESN) 実装。
-    
-    Reservoir Computingは、固定されたランダムなリカレント層（reservoir）と
-    訓練可能な出力層から構成される効率的な機械学習手法です。
-    
-    この実装では以下の特徴があります：
-    - JAX JITコンパイルによる高性能計算
-    - CPU/GPU自動切り替えとstatic_argnames最適化
-    - 統合されたbackend処理による簡潔な設計
-    - 自動微分とメモリ効率的な実装
-    
     Attributes:
         config: リザーバーの設定パラメータ
         backend: 計算バックエンド種別（'cpu' or 'gpu'）
@@ -57,23 +50,47 @@ class ReservoirComputer:
     def __init__(self, config: ReservoirConfig, backend: Optional[str] = None):
         """
         Reservoir Computerを初期化します。
-        
+
         Args:
             config: ReservoirConfigオブジェクト
             backend: 計算バックエンド ('cpu', 'gpu', または None で自動選択)
         """
+        super().__init__()  # Initialize base class
         self.config = config
-        self.n_inputs = config.n_inputs
-        self.n_reservoir = config.n_reservoir
-        self.n_outputs = config.n_outputs
-        self.spectral_radius = config.spectral_radius
-        self.input_scaling = config.input_scaling
-        self.noise_level = config.noise_level
-        self.alpha = config.alpha
-        self.reservoir_weight_range = config.reservoir_weight_range
-        
+
+        # Handle both dict and config object formats
+        if isinstance(config, dict):
+            self.n_inputs = config.get('n_inputs', 1)
+            self.n_reservoir = config.get('n_reservoir', 100)
+            self.n_outputs = config.get('n_outputs', 1)
+            self.spectral_radius = config.get('spectral_radius', 0.95)
+            self.input_scaling = config.get('input_scaling', 1.0)
+        else:
+            self.n_inputs = config.n_inputs
+            self.n_reservoir = config.n_reservoir
+            self.n_outputs = config.n_outputs
+            self.spectral_radius = config.spectral_radius
+            self.input_scaling = config.input_scaling
+        # Handle both dict and config object formats for remaining parameters
+        if isinstance(config, dict):
+            self.noise_level = config.get('noise_level', 0.001)
+            self.alpha = config.get('alpha', 1.0)
+            self.reservoir_weight_range = config.get('reservoir_weight_range', 1.0)
+            self.sparsity = config.get('sparsity', 1.0)
+            self.input_bias = config.get('input_bias', 0.0)
+            self.nonlinearity = config.get('nonlinearity', 'tanh')
+            random_seed = config.get('random_seed', 42)
+        else:
+            self.noise_level = config.noise_level
+            self.alpha = config.alpha
+            self.reservoir_weight_range = config.reservoir_weight_range
+            self.sparsity = getattr(config, 'sparsity', 1.0)
+            self.input_bias = getattr(config, 'input_bias', 0.0)
+            self.nonlinearity = getattr(config, 'nonlinearity', 'tanh')
+            random_seed = config.random_seed
+
         # 乱数キーの初期化
-        self.key = random.PRNGKey(config.random_seed)
+        self.key = random.PRNGKey(random_seed)
         
         # バックエンドの設定（CLI層で確認済み）
         self.backend = backend
@@ -199,38 +216,50 @@ class ReservoirComputer:
         # ②訓練：reservoir状態から目標データへの線形写像（W_out）を学習
         # JAXのデフォルトデバイス配置を使用
         self.W_out = self._train_unified(X, target_data, reg_param)
+        self.trained = True  # Mark as trained
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """
         入力データに対して予測を行います。
-        
+
         Args:
             input_data: 形状 (time_steps, n_inputs) の入力データ
-            
+
         Returns:
             予測結果 (time_steps, n_outputs)
         """
+        # Use base class validation
+        super().predict(input_data)
+
         if self.W_out is None:
             raise ValueError("モデルが訓練されていません。先にtrain()を呼び出してください。")
-            
+
         # 入力データをfloat64に変換
         input_data = input_data.astype(jnp.float64)
-            
+
         # reservoirを実行
         reservoir_states = self.run_reservoir(input_data)
-        
+
         # バイアス項を追加
         bias_column = jnp.ones((reservoir_states.shape[0], 1), dtype=jnp.float64)
         X = jnp.concatenate([reservoir_states, bias_column], axis=1)
-        
+
         # 予測を計算（単純な行列積）
         predictions = jnp.dot(X, self.W_out)
         return predictions
-        
-    def get_reservoir_info(self) -> dict:
+
+    def reset_state(self) -> None:
+        """Reset the reservoir to initial state."""
+        super().reset_state()  # Reset base class state
+        self.W_out = None
+        # Reinitialize weights with new random seed
+        self.key = random.PRNGKey(self.config.random_seed)
+        self._initialize_weights()
+
+    def get_reservoir_info(self) -> Dict[str, Any]:
         """reservoirの情報を返します。"""
         return {
-            **self.config.model_dump(),
+            **(self.config.model_dump() if hasattr(self.config, 'model_dump') else self.config),
             "backend": self.backend,
-            "trained": self.W_out is not None
+            "trained": self.trained
         } 

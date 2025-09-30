@@ -4,7 +4,7 @@
 """
 import jax.numpy as jnp
 import pytest
-from utils.metrics import calculate_mse, calculate_mae
+from pipelines.metrics import calculate_mse, calculate_mae
 
 
 class TestCalculateMSE:

@@ -2,11 +2,17 @@
 Reservoir Computing用のデータ生成関数。
 """
 
-import jax.numpy as jnp
-import numpy as np
 from typing import Tuple
 
-from .config import DataGenerationConfig
+import numpy as np
+
+from .jax_config import ensure_x64_enabled
+
+ensure_x64_enabled()
+
+import jax.numpy as jnp
+
+from configs.core import DataGenerationConfig
 
 
 def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -27,7 +33,7 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
     Examples:
         単一周波数のサイン波:
         
-        >>> from reservoir.config import DataGenerationConfig
+        >>> from configs.core import DataGenerationConfig
         >>> config = DataGenerationConfig(
         ...     name="sine_wave",
         ...     time_steps=1000,
@@ -84,7 +90,7 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
     Examples:
         標準的なLorenzパラメータでカオス時系列生成:
         
-        >>> from reservoir.config import DataGenerationConfig
+        >>> from configs.core import DataGenerationConfig
         >>> config = DataGenerationConfig(
         ...     name="lorenz",
         ...     time_steps=5000,

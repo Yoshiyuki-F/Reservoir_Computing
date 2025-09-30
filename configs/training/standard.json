@@ -1,0 +1,6 @@
+{
+  "name": "standard",
+  "description": "Standard training configuration",
+  "train_size": 0.75,
+  "reg_param": 1e-8
+}

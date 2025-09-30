@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import sys
 from io import StringIO
-from utils.gpu_utils import check_gpu_available, require_gpu, print_gpu_info
+from pipelines.gpu_utils import check_gpu_available, require_gpu, print_gpu_info
 
 
 class TestCheckGPUAvailable:

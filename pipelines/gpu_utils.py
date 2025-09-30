@@ -2,7 +2,10 @@
 Reservoir Computing用のGPUユーティリティ関数。
 """
 from typing import Callable, Any
+import re
+import shutil
 
+from .jax_config import ensure_x64_enabled
 def check_gpu_available() -> bool:
     """JAXがGPUを認識し、利用可能かを確認。
     
@@ -15,15 +18,11 @@ def check_gpu_available() -> bool:
     
     Raises:
         RuntimeError: GPUが検出されない、または計算テストに失敗した場合
-        
-    Examples:
-        >>> try:
-        ...     if check_gpu_available():
-        ...         print("GPU is ready.")
-        ... except RuntimeError as e:
-        ...     print(e)
     """
     import jax
+
+    ensure_x64_enabled()
+
     import jax.numpy as jnp
     
     print("=== GPU認識確認 ===")
@@ -56,20 +55,54 @@ def check_gpu_available() -> bool:
 
             # GPU名を取得（利用可能な場合）
             device = gpu_devices[0]
-            device_name = "Unknown"
+            driver_version = None
+            cuda_version = None
+            nvcc_version = None
             try:
-                # nvidia-mlまたはpynvmlを使ってGPU名を取得
+                # nvidia-mlまたはpynvmlを使ってGPU名とバージョン情報を取得
                 import subprocess
-                nvidia_smi_output = subprocess.check_output(
-                    ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits"],
-                    universal_newlines=True
-                ).strip().split('\n')[0]
-                device_name = nvidia_smi_output
-            except:
+
+                if shutil.which("nvidia-smi"):
+                    # GPU名
+                    nvidia_smi_output = subprocess.check_output(
+                        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits"],
+                        universal_newlines=True
+                    ).strip().split('\n')[0]
+                    device_name = nvidia_smi_output
+
+                    # Driver / CUDA version を取得
+                    smi_full_output = subprocess.check_output(
+                        ["nvidia-smi"],
+                        universal_newlines=True
+                    )
+                    version_match = re.search(
+                        r"Driver Version:\s*([\d.]+)\s+CUDA Version:\s*([\d.]+)",
+                        smi_full_output
+                    )
+                    if version_match:
+                        driver_version, cuda_version = version_match.groups()
+                    if shutil.which("nvcc"):
+                        nvcc_output = subprocess.check_output(
+                            ["nvcc", "--version"],
+                            universal_newlines=True
+                        )
+                        nvcc_match = re.search(r"release\s+([\d.]+)", nvcc_output)
+                        if nvcc_match:
+                            nvcc_version = nvcc_match.group(1)
+                else:
+                    device_name = f"CUDA Device {device.id}"
+            except Exception:
                 # nvidia-smiが失敗した場合はデバイスIDのみ表示
                 device_name = f"CUDA Device {device.id}"
 
-            print(f"GPU detected: {device_name} (テスト成功: {float(result)})")
+            print(f"GPU detected: {device_name}")
+            if driver_version:
+                print(f"Driver Version: {driver_version}")
+            if cuda_version:
+                print(f"CUDA Version: {cuda_version}")
+            if nvcc_version:
+                print(f"nvcc CUDA Toolkit: {nvcc_version}")
+            print(f"GPU計算テスト成功: {float(result)}")
         except Exception as e:
             print(f"GPU計算テスト失敗: {e}")
             raise RuntimeError(f"GPU computation test failed: {e}")

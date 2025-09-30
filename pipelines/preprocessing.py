@@ -2,8 +2,15 @@
 Reservoir Computing用のデータ前処理関数。
 """
 
-import jax.numpy as jnp
 from typing import Tuple
+
+import numpy as np
+
+from .jax_config import ensure_x64_enabled
+
+ensure_x64_enabled()
+
+import jax.numpy as jnp
 
 
 def normalize_data(data: jnp.ndarray) -> Tuple[jnp.ndarray, float, float]:
@@ -60,3 +67,58 @@ def denormalize_data(normalized_data: jnp.ndarray, mean: float, std: float) -> j
     """
     normalized_data = normalized_data.astype(jnp.float64)
     return normalized_data * std + mean
+
+
+def create_sliding_windows(
+    input_data: jnp.ndarray,
+    target_data: jnp.ndarray,
+    window_size: int,
+    horizon: int = 1,
+    stride: int = 1,
+    target: str = "next",
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Generate sliding-window datasets for sequence prediction."""
+    if window_size <= 0:
+        raise ValueError("window_size must be positive")
+    if horizon <= 0:
+        raise ValueError("horizon must be positive")
+    if stride <= 0:
+        raise ValueError("stride must be positive")
+
+    if input_data.ndim != 2 or target_data.ndim != 2:
+        raise ValueError("input_data and target_data must be 2D arrays")
+
+    if input_data.shape[0] != target_data.shape[0]:
+        raise ValueError("input_data and target_data must share the same number of timesteps")
+
+    total_steps = input_data.shape[0]
+    max_start = total_steps - (window_size + horizon - 1)
+    if max_start < 0:
+        raise ValueError(
+            "window_size and horizon exceed available timesteps"
+        )
+
+    if target not in {"next", "last"}:
+        raise ValueError("target must be either 'next' or 'last'")
+
+    windows: list[np.ndarray] = []
+    targets: list[np.ndarray] = []
+
+    for start in range(0, max_start + 1, stride):
+        end = start + window_size
+        window_slice = np.asarray(input_data[start:end])
+
+        if target == "next":
+            target_index = end - 1 + (horizon - 1)
+        else:  # target == "last"
+            target_index = end - 1
+
+        window_target = np.asarray(target_data[target_index])
+
+        windows.append(window_slice.reshape(-1))
+        targets.append(window_target)
+
+    window_array = jnp.array(windows, dtype=jnp.float64)
+    target_array = jnp.array(targets, dtype=jnp.float64)
+
+    return window_array, target_array

@@ -1,0 +1,11 @@
+{
+  "name": "robust",
+  "description": "Robust training with validation and advanced features",
+  "val_size": 0.1,
+  "train_size": 0.75,
+  "reg_param": 1e-6,
+  "washout": 100,
+  "shuffle_windows": true,
+  "metrics": ["MSE", "NMSE", "MAE"],
+  "rollout_steps": 50
+}

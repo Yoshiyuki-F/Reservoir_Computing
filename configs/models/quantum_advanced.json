@@ -1,0 +1,17 @@
+{
+  "name": "quantum_advanced",
+  "description": "Advanced Quantum Reservoir Computer with windowing",
+  "n_qubits": 6,
+  "circuit_depth": 3,
+  "n_inputs": 48,
+  "n_outputs": 1,
+  "backend": "default.qubit",
+  "random_seed": 42,
+  "entanglement": "circular",
+  "measurement_basis": "pauli-z",
+  "encoding_scheme": "amplitude",
+  "pairwise_obs": true,
+  "zero_pad_to": 64,
+  "jit": true,
+  "vmap_time": true
+}

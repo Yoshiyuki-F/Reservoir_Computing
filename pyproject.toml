@@ -12,35 +12,72 @@ dependencies = [
     "matplotlib (>=3.10.3,<4.0.0)",
     "pytest (>=8.4.1,<9.0.0)",
     "pydantic>=2.0.0,<3.0.0",
-    "jax[cuda12] (>=0.7.0,<0.8.0)",
-    "jax-cuda12-plugin (>=0.7.0,<0.8.0)",
-    "jax-cuda12-pjrt (>=0.7.0,<0.8.0)",
     "poethepoet>=0.36.0",
+
+    #ML
+    "jax[cuda12]==0.6.2",
+    "jaxlib==0.6.2",
+     #this is the latest for pennylane https://docs.pennylane.ai/en/stable/development/release_notes.html
+
+    #Quantum
+    "pennylane>=0.42.3,<0.43.0",#the latest for now
 ]
+
+[project.scripts]
+reservoir-cli = "cli:main"
 
 [tool.uv]
 dev-dependencies = []
 
-[project.scripts]
-reservoir-cli = "reservoir.cli:main"
+# Sources now in root directory
+
 
 [tool.poe.tasks]
 test = { shell = "uv run pytest -q" }
+
 # GPU smoke test (skips if no GPU)
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
-main = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__" }
-# GPU CLI demo with sine wave config (replaces scripts/demo-gpu.sh)
-sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/sine_wave_demo_config.json" }
-# GPU CLI demo with lorenz config
-lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/lorenz_demo_config.json" }
-# GPU CLI demo with mackey-glass config
-mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run python -m reservoir.__main__ --config configs/mackey_glass_demo_config.json" }
+# Demo helpers -------------------------------------------------------------
+demo-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
+demo-sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
+demo-lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz" }
+demo-mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass" }
+
+# Quantum demos ------------------------------------------------------------
+demo-sine-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model quantum_standard" }
+demo-lorenz-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model quantum_standard" }
+demo-mackey-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model quantum_standard" }
+
+# CPU fallbacks ------------------------------------------------------------
+demo-main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
+demo-sine-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
 
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "models",
+    "pipelines",
+    "experiments"
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"__main__.py" = "__main__.py"
+"cli.py" = "cli.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "__main__.py",
+    "cli.py",
+    "models",
+    "pipelines",
+    "experiments",
+    "configs"
+]
 
 [[tool.uv.index]]
 name = "jax_cuda_releases"

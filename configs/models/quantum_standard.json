@@ -1,0 +1,13 @@
+{
+  "name": "quantum_standard",
+  "description": "Standard Quantum Reservoir Computer",
+  "n_qubits": 4,
+  "circuit_depth": 2,
+  "n_inputs": 1,
+  "n_outputs": 1,
+  "backend": "default.qubit",
+  "random_seed": 42,
+  "entanglement": "circular",
+  "measurement_basis": "pauli-z",
+  "encoding_scheme": "amplitude"
+}

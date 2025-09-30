@@ -2,6 +2,10 @@
 Reservoir Computing用の評価メトリクス。
 """
 
+from .jax_config import ensure_x64_enabled
+
+ensure_x64_enabled()
+
 import jax.numpy as jnp
 
 
