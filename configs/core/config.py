@@ -19,6 +19,7 @@ class DataGenerationConfig(BaseModel):
     dt: float = Field(..., gt=0, description="Time step size")
     noise_level: float = Field(0.0, ge=0, description="Noise level to add to data")
     use_dimensions: Optional[List[int]] = Field(None, description="Which dimensions to use (None = all)")
+    warmup_steps: Optional[int] = Field(None, ge=0, description="Number of transient steps to discard before returning data")
     params: Dict[str, Any] = Field(default_factory=dict, description="Dataset-specific parameters")
 
     def get_param(self, param_name: str, default=None):
@@ -30,8 +31,11 @@ class DataGenerationConfig(BaseModel):
 
 class TrainingConfig(BaseModel):
     """Model training configuration."""
-    reg_param: float = Field(..., ge=0, description="Regularization parameter")
     name: str = Field(..., description="Training configuration name")
+    ridge_lambdas: Optional[List[float]] = Field(
+        None,
+        description="Candidate ridge regularization strengths for grid search (log scale recommended)"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -50,6 +54,12 @@ class DemoConfig(BaseModel):
     title: str = Field(..., description="Title for the experiment")
     filename: str = Field(..., description="Output filename for results")
     show_training: bool = Field(False, description="Whether to show training data in plots")
+    y_axis_label: str = Field("Value", description="Label to display on the plot y-axis")
+    add_test_zoom: bool = Field(False, description="Include zoomed-in subplot of test region")
+    zoom_range: Optional[List[int]] = Field(
+        None,
+        description="Optional [start, end] indices (in time steps) for the test zoom subplot"
+    )
 
     model_config = ConfigDict(extra="forbid")
 

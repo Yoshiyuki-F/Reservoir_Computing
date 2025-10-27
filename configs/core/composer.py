@@ -45,7 +45,7 @@ class ConfigComposer:
             return json.load(f)
 
     def load_from_category(self, category: str, name: str) -> Dict[str, Any]:
-        """Load config from a specific category directory.
+        """Load config from a specific category directory or aggregated file.
 
         Args:
             category: Category directory (datasets, models, training, etc.)
@@ -54,12 +54,46 @@ class ConfigComposer:
         Returns:
             Config dictionary
         """
-        config_path = self.config_root / category / f"{name}.json"
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+        category_dir = self.config_root / category
+        if category_dir.is_dir():
+            config_path = category_dir / f"{name}.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    return json.load(f)
 
-        with open(config_path, 'r') as f:
-            return json.load(f)
+            aggregated_dir_path = category_dir / f"{category}.json"
+            if aggregated_dir_path.exists():
+                with open(aggregated_dir_path, "r") as f:
+                    aggregated_data = json.load(f)
+
+                if isinstance(aggregated_data, dict):
+                    if name in aggregated_data:
+                        return aggregated_data[name]
+                    if category in aggregated_data and isinstance(aggregated_data[category], dict):
+                        category_data = aggregated_data[category]
+                        if name in category_data:
+                            return category_data[name]
+
+        aggregated_path = self.config_root / f"{category}.json"
+        if aggregated_path.exists():
+            with open(aggregated_path, "r") as f:
+                aggregated_data = json.load(f)
+
+            if isinstance(aggregated_data, dict):
+                if name in aggregated_data:
+                    return aggregated_data[name]
+                if category in aggregated_data and isinstance(aggregated_data[category], dict):
+                    category_data = aggregated_data[category]
+                    if name in category_data:
+                        return category_data[name]
+
+            raise KeyError(
+                f"Config '{name}' not found in aggregated {category} config: {aggregated_path}"
+            )
+
+        raise FileNotFoundError(
+            f"Config file not found for category '{category}' and name '{name}'"
+        )
 
     def compose_experiment(self, experiment_config: Union[str, Dict[str, Any]]) -> ComposedConfig:
         """Compose a complete experiment configuration.
@@ -79,6 +113,15 @@ class ConfigComposer:
         dataset_config = self.load_from_category("datasets", exp_config["dataset"])
         model_config = self.load_from_category("models", exp_config["model"])
         training_config = self.load_from_category("training", exp_config["training"])
+
+        # Merge basic_reservoir properties with model config
+        try:
+            basic_config = self.load_from_category("models", "basic_reservoir")
+            # Basic properties go first, then specific model properties override
+            model_config = {**basic_config, **model_config}
+        except (FileNotFoundError, KeyError):
+            # basic_reservoir.json doesn't exist, use model_config as-is
+            pass
 
         # Visualization is now in experiment config
         visualization_config = exp_config.get("visualization", {})
@@ -112,7 +155,15 @@ class ConfigComposer:
         }
 
         # Add model config to appropriate section based on model type
-        model_params = composed.model.get("params", {})
+        reserved_model_keys = {"name", "description", "model_type", "type", "params"}
+        explicit_params = composed.model.get("params")
+        if explicit_params is not None:
+            model_params = explicit_params.copy()
+        else:
+            model_params = {
+                k: v for k, v in composed.model.items()
+                if k not in reserved_model_keys
+            }
         model_type = composed.model.get("model_type", composed.model.get("type", "reservoir"))
 
         if "quantum" in model_name or model_type == "quantum":
@@ -175,6 +226,10 @@ class ConfigComposer:
 
         demo_config["title"] = auto_title
         demo_config["filename"] = auto_filename
+        demo_config.setdefault("y_axis_label", "Value")
+        demo_config.setdefault("add_test_zoom", False)
+        if "zoom_range" not in demo_config:
+            demo_config["zoom_range"] = None
         legacy_config["demo"] = demo_config
 
         return legacy_config

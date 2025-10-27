@@ -1,13 +1,10 @@
 {
   "name": "reservoir_standard",
   "description": "Standard Echo State Network configuration",
-  "n_inputs": 1,
-  "n_reservoir": 100,
-  "n_outputs": 1,
+  "n_reservoir": 18,
   "spectral_radius": 0.95,
   "input_scaling": 1.0,
   "noise_level": 0.001,
   "alpha": 1.0,
-  "random_seed": 42,
   "reservoir_weight_range": 1.0
 }

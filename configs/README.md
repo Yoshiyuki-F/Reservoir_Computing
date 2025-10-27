@@ -6,10 +6,7 @@ This directory contains a modular configuration system that separates concerns i
 
 ```
 configs/
-├── datasets/           # Dataset generation parameters
-│   ├── lorenz.json
-│   ├── mackey_glass.json
-│   └── sine_wave.json
+├── datasets.json       # Dataset generation parameters
 ├── models/             # Model architecture configurations
 │   ├── quantum_advanced.json
 │   ├── quantum_standard.json
@@ -49,7 +46,7 @@ from models.reservoir.config import load_composed_config
 config = load_composed_config('sine_wave_standard')
 
 # The config is automatically composed from:
-# - datasets/sine_wave.json
+# - datasets.json (sine_wave entry)
 # - models/reservoir_standard.json
 # - training/standard.json
 # - visualization/sine_wave.json
@@ -68,7 +65,7 @@ python __main__.py --dataset sine --quantum  # Uses sine_wave_quantum
 
 ## Creating New Configurations
 
-1. **Add a new dataset**: Create `datasets/my_dataset.json`
+1. **Add a new dataset**: Add a new entry to `datasets.json`
 2. **Add a new model**: Create `models/my_model.json`
 3. **Add a new training setup**: Create `training/my_training.json`
 4. **Compose an experiment**: Create `experiments/my_experiment.json` referencing the above

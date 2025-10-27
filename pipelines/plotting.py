@@ -4,26 +4,30 @@ Reservoir Computing用の可視化ユーティリティ。
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional
+from typing import Optional, Dict, Any, Sequence, Tuple
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 def plot_prediction_results(
-    ground_truth: np.ndarray, 
-    predictions: np.ndarray, 
-    time_steps: np.ndarray, 
-    title: str, 
+    ground_truth: np.ndarray,
+    predictions: np.ndarray,
+    time_steps: np.ndarray,
+    title: str,
     filename: str,
-    train_data: Optional[np.ndarray] = None, 
-    train_predictions: Optional[np.ndarray] = None, 
-    train_size: Optional[int] = None
+    train_data: Optional[np.ndarray] = None,
+    train_predictions: Optional[np.ndarray] = None,
+    train_size: Optional[int] = None,
+    y_axis_label: str = "Value",
+    metrics_info: Optional[Dict[str, Any]] = None,
+    add_test_zoom: bool = False,
+    zoom_range: Optional[Sequence[int]] = None,
 ) -> None:
     """Reservoir Computingの予測結果を可視化して保存。
     
-    訓練データとテストデータの予測結果を比較プロットとして表示し、
-    高解像度画像として保存します。訓練データが提供された場合は
-    2段構成、テストデータのみの場合は1段構成でプロットします。
+    訓練データとテストデータの予測結果を一続きの時間軸で表示し、
+    高解像度画像として保存します。訓練データが提供されない場合は、
+    テストデータのみを単独でプロットします。
     
     Args:
         ground_truth: 実際の目標値の配列
@@ -34,6 +38,7 @@ def plot_prediction_results(
         train_data: 訓練データの実際の値（オプション）
         train_predictions: 訓練データの予測値（オプション）
         train_size: 訓練データのサイズ（オプション、テスト時刻軸調整用）
+        y_axis_label: 縦軸に表示するラベル
         
     Examples:
         テストデータのみをプロット:
@@ -62,42 +67,159 @@ def plot_prediction_results(
         - outputs/ディレクトリが存在しない場合は事前に作成してください
         - プロット完了後にmatplotlibのshow()が呼ばれます
     """
-    if train_data is not None and train_predictions is not None:
-        # 訓練+テストデータの場合（2つのサブプロット）
-        plt.figure(figsize=(15, 8))
-        
-        # 訓練データプロット
-        plt.subplot(2, 1, 1)
-        time_train = np.arange(len(train_data))
-        plt.plot(time_train, train_data, 'b-', label='Ground Truth', alpha=0.7)
-        plt.plot(time_train, train_predictions, 'r--', label='Prediction', alpha=0.7)
-        plt.title('Training Data Prediction Results')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # テストデータプロット
-        plt.subplot(2, 1, 2)
-        time_test = time_steps + train_size if train_size is not None else time_steps
-        plt.plot(time_test, ground_truth, 'b-', label='Ground Truth', alpha=0.7)
-        plt.plot(time_test, predictions, 'r--', label='Prediction', alpha=0.7)
-        plt.title('Test Data Prediction Results')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+    def _to_numpy(array: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        """Convert to numpy array and squeeze trailing singleton dims."""
+        if array is None:
+            return None
+
+        np_array = np.asarray(array, dtype=np.float64)
+
+        # 単一特徴量の場合は余分な次元を削除
+        if np_array.ndim > 1 and np_array.shape[-1] == 1:
+            np_array = np_array.reshape(np_array.shape[0], -1)
+            if np_array.shape[1] == 1:
+                np_array = np_array.squeeze(-1)
+
+        return np_array
+
+    ground_truth = _to_numpy(ground_truth)
+    predictions = _to_numpy(predictions)
+    train_data = _to_numpy(train_data)
+    train_predictions = _to_numpy(train_predictions)
+
+    # Prepare figure/axes
+    if add_test_zoom and train_size is not None:
+        fig, (ax_main, ax_zoom) = plt.subplots(
+            2,
+            1,
+            figsize=(12, 8),
+            gridspec_kw={'height_ratios': [3, 1], 'hspace': 0.25},
+        )
     else:
-        # テストデータのみの場合（1つのプロット）
-        plt.figure(figsize=(12, 6))
-        plt.plot(time_steps, ground_truth, 'b-', label='Ground Truth', alpha=0.7)
-        plt.plot(time_steps, predictions, 'r--', label='Prediction', alpha=0.7)
-        plt.title(title)
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(PROJECT_ROOT/ f'outputs/{filename}', dpi=300, bbox_inches='tight')
+        fig, ax_main = plt.subplots(figsize=(12, 6))
+        ax_zoom = None
+
+    if train_data is not None and train_predictions is not None:
+        train_steps = len(train_data)
+        offset = train_size if train_size is not None else train_steps
+        time_train = np.arange(train_steps)
+        time_test = np.arange(len(ground_truth)) + offset
+
+        ax_main.plot(
+            time_train,
+            train_data,
+            label='Ground Truth',
+            color='tab:blue',
+            alpha=0.85,
+        )
+        ax_main.plot(
+            time_test,
+            ground_truth,
+            color='tab:blue',
+            alpha=0.85,
+        )
+
+        ax_main.plot(
+            time_train,
+            train_predictions,
+            label='Train Prediction',
+            color='tab:orange',
+            linestyle='--',
+            alpha=0.9,
+        )
+        ax_main.plot(
+            time_test,
+            predictions,
+            label='Test Prediction',
+            color='tab:red',
+            linestyle='--',
+            alpha=0.85,
+        )
+
+        if train_size is not None:
+            boundary_x = offset - 0.5
+            ax_main.axvline(
+                boundary_x,
+                color='k',
+                linestyle=':',
+                alpha=0.7,
+                label='Train/Test Split',
+            )
+
+        if ax_zoom is not None:
+            zoom_time = time_test
+            zoom_truth = ground_truth
+            zoom_pred = predictions
+
+            if zoom_range is not None and len(zoom_range) == 2:
+                start, end = zoom_range
+            else:
+                start = max(int(zoom_time[-1] - 200), int(boundary_x)) if len(zoom_time) > 0 else 0
+                end = int(zoom_time[-1]) if len(zoom_time) > 0 else start + 1
+
+            mask = (zoom_time >= start) & (zoom_time <= end)
+            if not np.any(mask):
+                mask = np.ones_like(zoom_time, dtype=bool)
+
+            ax_zoom.plot(zoom_time[mask], zoom_truth[mask], color='tab:blue', alpha=0.85)
+            ax_zoom.plot(
+                zoom_time[mask],
+                zoom_pred[mask],
+                color='tab:red',
+                linestyle='--',
+                alpha=0.8,
+            )
+            ax_zoom.set_title('Zoomed Test Region', fontsize=11)
+            ax_zoom.set_xlabel('Sequence Steps')
+            ax_zoom.set_ylabel(y_axis_label)
+            ax_zoom.grid(True, alpha=0.3)
+    else:
+        time_offset = train_size if train_size is not None else 0
+        time_axis = time_steps + time_offset
+        ax_main.plot(time_axis, ground_truth, 'b-', label='Ground Truth', alpha=0.85)
+        ax_main.plot(time_axis, predictions, 'r--', label='Test Prediction', alpha=0.8)
+
+        if train_size is not None:
+            boundary_x = train_size - 0.5
+            ax_main.axvline(
+                boundary_x,
+                color='k',
+                linestyle=':',
+                alpha=0.7,
+                label='Train/Test Split',
+            )
+
+        if ax_zoom is not None:
+            start = max(int(time_axis[-1] - 200), int(boundary_x)) if len(time_axis) > 0 else 0
+            end = int(time_axis[-1]) if len(time_axis) > 0 else start + 1
+            mask = (time_axis >= start) & (time_axis <= end)
+            if not np.any(mask):
+                mask = np.ones_like(time_axis, dtype=bool)
+            ax_zoom.plot(time_axis[mask], ground_truth[mask], color='tab:blue', alpha=0.85)
+            ax_zoom.plot(time_axis[mask], predictions[mask], 'r--', alpha=0.8)
+            ax_zoom.set_title('Zoomed Test Region', fontsize=11)
+            ax_zoom.set_xlabel('Sequence Steps')
+            ax_zoom.set_ylabel(y_axis_label)
+            ax_zoom.grid(True, alpha=0.3)
+
+    ax_main.set_title(title)
+    ax_main.set_xlabel('Sequence Steps')
+    ax_main.set_ylabel(y_axis_label)
+    ax_main.legend(loc='upper left')
+    ax_main.grid(True, alpha=0.3)
+
+    if metrics_info:
+        caption_lines = []
+        for key, value in metrics_info.items():
+            if isinstance(value, float):
+                caption_lines.append(f"{key}: {value:.6f}")
+            else:
+                caption_lines.append(f"{key}: {value}")
+        caption_text = "\n".join(caption_lines)
+        fig.text(0.02, 0.02 if ax_zoom is not None else 0.05, caption_text, fontsize=10, family='monospace')
+
+    fig.tight_layout()
+    output_path = PROJECT_ROOT / f'outputs/{filename}'
+    fig.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
     print(f"結果を 'outputs/{filename}' に保存しました。")

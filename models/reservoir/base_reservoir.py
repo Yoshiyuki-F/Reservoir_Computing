@@ -6,7 +6,7 @@ reservoir computers, enabling unified usage and experimentation.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional, Sequence
 
 from pipelines.jax_config import ensure_x64_enabled
 
@@ -31,14 +31,18 @@ class BaseReservoirComputer(ABC):
         self.trained = False
 
     @abstractmethod
-    def train(self, input_data: jnp.ndarray, target_data: jnp.ndarray,
-              reg_param: float = 1e-6) -> None:
+    def train(
+        self,
+        input_data: jnp.ndarray,
+        target_data: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+    ) -> None:
         """Train the reservoir computer on the given data.
 
         Args:
             input_data: Input time series data of shape (time_steps, n_inputs)
             target_data: Target time series data of shape (time_steps, n_outputs)
-            reg_param: Regularization parameter for ridge regression
+            ridge_lambdas: Candidate ridge regularization strengths
 
         Raises:
             NotImplementedError: Must be implemented by subclasses

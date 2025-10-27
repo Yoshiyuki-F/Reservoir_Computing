@@ -5,7 +5,7 @@ Classical Reservoir Computer implementation using JAX.
 import jax
 import numpy as np
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Sequence
 
 from pipelines.jax_config import ensure_x64_enabled
 
@@ -43,7 +43,7 @@ class ReservoirComputer(BaseReservoirComputer):
         >>> targets = np.cos(time).reshape(-1, 1)
         
         >>> # 訓練と予測
-        >>> rc.train(inputs, targets, reg_param=1e-6)
+        >>> rc.train(inputs, targets)
         >>> predictions = rc.predict(inputs)
     """
     
@@ -100,6 +100,9 @@ class ReservoirComputer(BaseReservoirComputer):
         
         # 出力重みは後で訓練で設定
         self.W_out = None
+        self.best_ridge_lambda: Optional[float] = None
+        self.ridge_search_log: list[Dict[str, float]] = []
+        self.last_training_mse: Optional[float] = None
 
 
     def _initialize_weights(self):
@@ -181,26 +184,31 @@ class ReservoirComputer(BaseReservoirComputer):
 
     @staticmethod
     @jax.jit
-    def _train_unified(X: jnp.ndarray, target_data: jnp.ndarray, reg_param: float) -> jnp.ndarray:
+    def _train_unified(X: jnp.ndarray, target_data: jnp.ndarray, ridge_lambda: float) -> jnp.ndarray:
         """統合されたRidge回帰訓練（JAXのデフォルトデバイス配置を使用）"""
         XTX = X.T @ X
         XTY = X.T @ target_data
-        
-        A = XTX + reg_param * jnp.eye(XTX.shape[0], dtype=jnp.float64)
+
+        A = XTX + ridge_lambda * jnp.eye(XTX.shape[0], dtype=jnp.float64)
         
         try:
             return jnp.linalg.solve(A, XTY)
         except:
             return jnp.linalg.pinv(A) @ XTY
 
-    def train(self, input_data: jnp.ndarray, target_data: jnp.ndarray, reg_param: float):
+    def train(
+        self,
+        input_data: jnp.ndarray,
+        target_data: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+    ) -> None:
         """
         出力層を訓練します（Ridge回帰）。JAXのデフォルトデバイス配置を使用。
-        
+
         Args:
             input_data: 形状 (time_steps, n_inputs) の入力データ
             target_data: 形状 (time_steps, n_outputs) の目標データ
-            reg_param: 正則化パラメータ
+            ridge_lambdas: 正則化パラメータ候補リスト
         """
         # データをfloat64に変換
         input_data = input_data.astype(jnp.float64)
@@ -213,9 +221,41 @@ class ReservoirComputer(BaseReservoirComputer):
         bias_column = jnp.ones((reservoir_states.shape[0], 1), dtype=jnp.float64)
         X = jnp.concatenate([reservoir_states, bias_column], axis=1)
         
-        # ②訓練：reservoir状態から目標データへの線形写像（W_out）を学習
-        # JAXのデフォルトデバイス配置を使用
-        self.W_out = self._train_unified(X, target_data, reg_param)
+        lambda_candidates = []
+        if ridge_lambdas:
+            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
+        if not lambda_candidates:
+            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
+
+        seen = set()
+        ordered_lambdas = []
+        for lam in lambda_candidates:
+            if lam < 0:
+                continue
+            if lam not in seen:
+                ordered_lambdas.append(lam)
+                seen.add(lam)
+
+        best_lambda = None
+        best_mse = float("inf")
+        best_weights = None
+        ridge_log: list[Dict[str, float]] = []
+
+        for lam in ordered_lambdas:
+            weights = self._train_unified(X, target_data, lam)
+            preds = X @ weights
+            mse = float(jnp.mean((preds - target_data) ** 2))
+            ridge_log.append({"lambda": float(lam), "train_mse": mse})
+
+            if mse < best_mse:
+                best_mse = mse
+                best_lambda = float(lam)
+                best_weights = weights
+
+        self.W_out = best_weights
+        self.best_ridge_lambda = best_lambda
+        self.ridge_search_log = ridge_log
+        self.last_training_mse = best_mse
         self.trained = True  # Mark as trained
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
@@ -252,6 +292,9 @@ class ReservoirComputer(BaseReservoirComputer):
         """Reset the reservoir to initial state."""
         super().reset_state()  # Reset base class state
         self.W_out = None
+        self.best_ridge_lambda = None
+        self.ridge_search_log = []
+        self.last_training_mse = None
         # Reinitialize weights with new random seed
         self.key = random.PRNGKey(self.config.random_seed)
         self._initialize_weights()

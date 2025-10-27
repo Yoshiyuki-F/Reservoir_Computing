@@ -154,32 +154,52 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
         (input_data, target_data): 入力データとターゲットデータのタプル
         
     Note:
-        Mackey-Glass方程式の標準的なパラメータ:
-        tau=17, beta=0.2, gamma=0.1, n=10
-        これらはconfigに含まれていない場合のデフォルト値として使用されます。
+        トランジェント除去が不要な場合は`warmup_steps`を省略（または0）できます。
+        tauは連続時間の遅延として解釈され、離散化ステップdtで割ることでサンプル遅延数に変換されます。
     """
     # Mackey-Glassのパラメータ（configから取得）
     tau = config.get_param('tau')
     beta = config.get_param('beta')
     gamma = config.get_param('gamma')
     n = config.get_param('n')
-    
+
     if any(param is None for param in [tau, beta, gamma, n]):
         raise ValueError("mackey_glass requires 'tau', 'beta', 'gamma', 'n' parameters in config.params")
-    
-    # 初期化
-    history_length = max(int(tau), 1) + 1
-    x = np.zeros(config.time_steps + history_length, dtype=np.float64)
+
+    dt = float(config.dt)
+    if dt <= 0:
+        raise ValueError("dt must be positive for Mackey-Glass generation")
+
+    # tauの単位をdtに合わせた遅延ステップ数へ変換
+    delay_steps = int(np.round(float(tau) / dt))
+    if delay_steps < 1:
+        delay_steps = 1
+
+    # 初期化とトランジェント除去用のウォームアップ（省略可）
+    history_length = delay_steps + 1
+    warmup_source = config.warmup_steps
+    if warmup_source is None:
+        warmup_source = config.get_param('warmup_steps', 0)
+
+    warmup_steps = max(int(warmup_source), 0)
+    total_steps = config.time_steps + history_length + warmup_steps
+
+    x = np.full(total_steps, fill_value=0.0, dtype=np.float64)
     initial_value = config.get_param('initial_value', 1.2)
-    x[0] = initial_value
-    
-    for i in range(history_length, config.time_steps + history_length):
-        x_tau = x[i - int(tau)] if i >= int(tau) else x[0]
-        dx = (beta * x_tau) / (1 + x_tau**n) - gamma * x[i-1]
-        x[i] = x[i-1] + dx * config.dt
-    
-    # 履歴部分を除去
-    x = x[history_length:]
+    x[:history_length] = initial_value
+
+    for i in range(history_length, total_steps):
+        x_prev = x[i - 1]
+        x_tau = x[i - delay_steps]
+        dx = (beta * x_tau) / (1 + x_tau**n) - gamma * x_prev
+        x[i] = x_prev + dt * dx
+
+    # トランジェント除去
+    start_idx = history_length + warmup_steps
+    end_idx = start_idx + config.time_steps
+    if end_idx > len(x):
+        raise ValueError("Warmup and history exceed generated sequence length")
+    x = x[start_idx:end_idx]
     
     # ノイズを追加
     if config.noise_level > 0:

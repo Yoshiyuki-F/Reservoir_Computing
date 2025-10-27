@@ -1,0 +1,7 @@
+{
+  "name": "basic_reservoir",
+  "description": "Base configuration properties shared by all reservoir types",
+  "n_inputs": 1,
+  "n_outputs": 1,
+  "random_seed": 42
+}
