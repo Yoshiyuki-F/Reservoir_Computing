@@ -190,7 +190,7 @@ class ConfigComposer:
         # Add training config
         legacy_config["training"] = {
             k: v for k, v in composed.training.items()
-            if k not in ["description", "preprocessing", "train_size"]  # Filter out invalid fields
+            if k not in ["description", "preprocessing"]  # Filter out invalid fields
         }
         # Ensure training has required name field
         if "name" not in legacy_config["training"]:

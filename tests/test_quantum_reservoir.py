@@ -72,3 +72,29 @@ def test_ridge_lambda_grid_search(monkeypatch):
     # Ensure the best lambda is one of the provided candidates
     provided = (1e-6, 1e-3, 1e-2)
     assert any(abs(qrc.best_ridge_lambda - candidate) < 1e-12 for candidate in provided)
+
+
+def test_classification_training(monkeypatch):
+    cfg = _base_config(measurement_basis="pauli-z", state_aggregation="last")
+    qrc = QuantumReservoirComputer(cfg)
+
+    features = jnp.array(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    monkeypatch.setattr(qrc, "_encode_sequences", lambda seqs, desc=None: features)
+
+    sequences = jnp.zeros((4, 1, 1), dtype=jnp.float64)
+    labels = jnp.array([0, 1, 0, 1], dtype=jnp.int32)
+
+    qrc.train_classification(sequences, labels, ridge_lambdas=[1e-6], num_classes=2)
+
+    assert qrc.classification_mode
+    logits = qrc.predict_classification(sequences)
+    assert logits.shape == (4, 2)

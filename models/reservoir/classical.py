@@ -4,8 +4,11 @@ Classical Reservoir Computer implementation using JAX.
 
 import jax
 import numpy as np
+import json
+from pathlib import Path
+from functools import lru_cache
 
-from typing import Optional, Dict, Any, Sequence
+from typing import Optional, Dict, Any, Sequence, Iterable
 
 from pipelines.jax_config import ensure_x64_enabled
 
@@ -14,8 +17,20 @@ ensure_x64_enabled()
 import jax.numpy as jnp
 from jax import random, lax, device_put
 
-from .config import ReservoirConfig
+try:  # pragma: no cover - optional dependency
+    from tqdm.auto import tqdm
+except ImportError:  # pragma: no cover - fallback when tqdm not installed
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
+
 from .base_reservoir import BaseReservoirComputer
+
+
+@lru_cache()
+def _load_basic_defaults() -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[2] / "configs/models/basic_reservoir.json"
+    data = json.loads(path.read_text())
+    return dict(data.get("params", {}))
 
 class ReservoirComputer(BaseReservoirComputer):
     """JAXベースのEcho State Network (ESN) 実装。
@@ -47,7 +62,7 @@ class ReservoirComputer(BaseReservoirComputer):
         >>> predictions = rc.predict(inputs)
     """
     
-    def __init__(self, config: ReservoirConfig, backend: Optional[str] = None):
+    def __init__(self, config: Sequence[Dict[str, Any]], backend: Optional[str] = None):
         """
         Reservoir Computerを初期化します。
 
@@ -56,38 +71,29 @@ class ReservoirComputer(BaseReservoirComputer):
             backend: 計算バックエンド ('cpu', 'gpu', または None で自動選択)
         """
         super().__init__()  # Initialize base class
-        self.config = config
 
-        # Handle both dict and config object formats
-        if isinstance(config, dict):
-            self.n_inputs = config.get('n_inputs', 1)
-            self.n_reservoir = config.get('n_reservoir', 100)
-            self.n_outputs = config.get('n_outputs', 1)
-            self.spectral_radius = config.get('spectral_radius', 0.95)
-            self.input_scaling = config.get('input_scaling', 1.0)
-        else:
-            self.n_inputs = config.n_inputs
-            self.n_reservoir = config.n_reservoir
-            self.n_outputs = config.n_outputs
-            self.spectral_radius = config.spectral_radius
-            self.input_scaling = config.input_scaling
-        # Handle both dict and config object formats for remaining parameters
-        if isinstance(config, dict):
-            self.noise_level = config.get('noise_level', 0.001)
-            self.alpha = config.get('alpha', 1.0)
-            self.reservoir_weight_range = config.get('reservoir_weight_range', 1.0)
-            self.sparsity = config.get('sparsity', 1.0)
-            self.input_bias = config.get('input_bias', 0.0)
-            self.nonlinearity = config.get('nonlinearity', 'tanh')
-            random_seed = config.get('random_seed', 42)
-        else:
-            self.noise_level = config.noise_level
-            self.alpha = config.alpha
-            self.reservoir_weight_range = config.reservoir_weight_range
-            self.sparsity = getattr(config, 'sparsity', 1.0)
-            self.input_bias = getattr(config, 'input_bias', 0.0)
-            self.nonlinearity = getattr(config, 'nonlinearity', 'tanh')
-            random_seed = config.random_seed
+        merged: Dict[str, Any] = _load_basic_defaults().copy()
+        config_sequence: Iterable[Dict[str, Any]] = [config] if isinstance(config, dict) else config  # type: ignore[arg-type]
+        for cfg in config_sequence:
+            cfg_dict = dict(cfg)
+            merged.update({k: v for k, v in cfg_dict.items() if k not in {'name', 'description', 'params'}})
+            params = cfg_dict.get('params', {}) or {}
+            merged.update(params)
+
+        self.config = merged
+
+        self.n_inputs = merged['n_inputs']
+        self.n_reservoir = merged['n_reservoir']
+        self.n_outputs = merged['n_outputs']
+        self.spectral_radius = merged['spectral_radius']
+        self.input_scaling = merged['input_scaling']
+        self.noise_level = merged['noise_level']
+        self.alpha = merged['alpha']
+        self.reservoir_weight_range = merged['reservoir_weight_range']
+        self.sparsity = merged['sparsity']
+        self.input_bias = merged['input_bias']
+        self.nonlinearity = merged['nonlinearity']
+        random_seed = merged['random_seed']
 
         # 乱数キーの初期化
         self.key = random.PRNGKey(random_seed)
@@ -103,6 +109,13 @@ class ReservoirComputer(BaseReservoirComputer):
         self.best_ridge_lambda: Optional[float] = None
         self.ridge_search_log: list[Dict[str, float]] = []
         self.last_training_mse: Optional[float] = None
+        self.classification_mode: bool = False
+        self.num_classes: Optional[int] = None
+        self.state_aggregation = str(merged.get('state_aggregation', 'last')).lower()
+        if self.state_aggregation not in {'last', 'mean', 'concat'}:
+            raise ValueError("state_aggregation must be 'last', 'mean', or 'concat'")
+
+        self.initial_random_seed = random_seed
 
 
     def _initialize_weights(self):
@@ -190,11 +203,124 @@ class ReservoirComputer(BaseReservoirComputer):
         XTY = X.T @ target_data
 
         A = XTX + ridge_lambda * jnp.eye(XTX.shape[0], dtype=jnp.float64)
-        
+
         try:
             return jnp.linalg.solve(A, XTY)
         except:
             return jnp.linalg.pinv(A) @ XTY
+
+    def _fit_ridge_with_grid(
+        self,
+        X: jnp.ndarray,
+        target_data: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+    ) -> None:
+        lambda_candidates = []
+        if ridge_lambdas:
+            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
+        if not lambda_candidates:
+            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
+
+        seen = set()
+        ordered_lambdas = []
+        for lam in lambda_candidates:
+            if lam < 0:
+                continue
+            if lam not in seen:
+                ordered_lambdas.append(lam)
+                seen.add(lam)
+
+        best_lambda = None
+        best_mse = float("inf")
+        best_weights = None
+        ridge_log: list[Dict[str, float]] = []
+
+        lambda_iter = tqdm(
+            ordered_lambdas,
+            desc="Ridge λ search",
+            leave=False,
+            unit="λ",
+        )
+        for lam in lambda_iter:
+            weights = self._train_unified(X, target_data, lam)
+            preds = X @ weights
+            mse = float(jnp.mean((preds - target_data) ** 2))
+            ridge_log.append({"lambda": float(lam), "train_mse": mse})
+
+            if mse < best_mse:
+                best_mse = mse
+                best_lambda = float(lam)
+                best_weights = weights
+
+        self.W_out = best_weights
+        self.best_ridge_lambda = best_lambda
+        self.ridge_search_log = ridge_log
+        self.last_training_mse = best_mse
+
+    def _encode_sequences(
+        self,
+        sequences: jnp.ndarray,
+        desc: Optional[str] = None,
+    ) -> jnp.ndarray:
+        """Run reservoir on sequences and collect final states."""
+        encoded_states = []
+        try:
+            total = int(sequences.shape[0])
+        except Exception:  # pragma: no cover - dynamic shapes
+            total = None
+
+        iterator = tqdm(
+            sequences,
+            desc=desc or "Encoding sequences",
+            total=total,
+            leave=False,
+            unit="seq",
+        )
+        for seq in iterator:
+            seq_arr = jnp.array(seq, dtype=jnp.float64)
+            states = self.run_reservoir(seq_arr)
+            encoded_states.append(self._aggregate_states(states))
+        return jnp.stack(encoded_states, axis=0)
+
+    def _aggregate_states(self, states: jnp.ndarray) -> jnp.ndarray:
+        if self.state_aggregation == 'last':
+            return states[-1]
+        if self.state_aggregation == 'mean':
+            return jnp.mean(states, axis=0)
+        # concat
+        return states.reshape(-1)
+
+    def train_classification(
+        self,
+        sequences: jnp.ndarray,
+        labels: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+        num_classes: int = 10,
+    ) -> None:
+        features = self._encode_sequences(sequences, desc="Encoding train sequences")
+        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
+        X = jnp.concatenate([features, bias_column], axis=1)
+
+        labels = labels.astype(jnp.int32)
+        targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
+        targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
+
+        self._fit_ridge_with_grid(X, targets, ridge_lambdas)
+        self.classification_mode = True
+        self.num_classes = num_classes
+        self.trained = True
+
+    def predict_classification(self, sequences: jnp.ndarray) -> jnp.ndarray:
+        if not self.classification_mode or self.num_classes is None:
+            raise ValueError("Classification mode not enabled. Call train_classification first.")
+        if self.W_out is None:
+            raise ValueError("Model has not been trained.")
+
+        features = self._encode_sequences(sequences, desc="Encoding eval sequences")
+        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
+        X = jnp.concatenate([features, bias_column], axis=1)
+        logits = X @ self.W_out
+        return logits
 
     def train(
         self,
@@ -220,42 +346,10 @@ class ReservoirComputer(BaseReservoirComputer):
         # バイアス項を追加
         bias_column = jnp.ones((reservoir_states.shape[0], 1), dtype=jnp.float64)
         X = jnp.concatenate([reservoir_states, bias_column], axis=1)
-        
-        lambda_candidates = []
-        if ridge_lambdas:
-            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
-        if not lambda_candidates:
-            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
 
-        seen = set()
-        ordered_lambdas = []
-        for lam in lambda_candidates:
-            if lam < 0:
-                continue
-            if lam not in seen:
-                ordered_lambdas.append(lam)
-                seen.add(lam)
-
-        best_lambda = None
-        best_mse = float("inf")
-        best_weights = None
-        ridge_log: list[Dict[str, float]] = []
-
-        for lam in ordered_lambdas:
-            weights = self._train_unified(X, target_data, lam)
-            preds = X @ weights
-            mse = float(jnp.mean((preds - target_data) ** 2))
-            ridge_log.append({"lambda": float(lam), "train_mse": mse})
-
-            if mse < best_mse:
-                best_mse = mse
-                best_lambda = float(lam)
-                best_weights = weights
-
-        self.W_out = best_weights
-        self.best_ridge_lambda = best_lambda
-        self.ridge_search_log = ridge_log
-        self.last_training_mse = best_mse
+        self._fit_ridge_with_grid(X, target_data, ridge_lambdas)
+        self.classification_mode = False
+        self.num_classes = None
         self.trained = True  # Mark as trained
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
@@ -295,8 +389,10 @@ class ReservoirComputer(BaseReservoirComputer):
         self.best_ridge_lambda = None
         self.ridge_search_log = []
         self.last_training_mse = None
+        self.classification_mode = False
+        self.num_classes = None
         # Reinitialize weights with new random seed
-        self.key = random.PRNGKey(self.config.random_seed)
+        self.key = random.PRNGKey(self.initial_random_seed)
         self._initialize_weights()
 
     def get_reservoir_info(self) -> Dict[str, Any]:

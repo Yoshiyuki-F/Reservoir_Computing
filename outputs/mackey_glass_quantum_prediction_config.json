@@ -16,22 +16,21 @@
   },
   "model": {
     "name": "quantum_standard",
-    "model_type": "quantum",
+    "model_type": "reservoir",
     "params": {
-      "n_inputs": 1,
-      "n_outputs": 1,
-      "random_seed": 42,
       "n_qubits": 4,
       "circuit_depth": 4,
       "backend": "default.qubit",
       "entanglement": "full",
       "measurement_basis": "multi-pauli",
       "encoding_scheme": "detuning",
-      "detuning_scale": 1.0
+      "detuning_scale": 1.0,
+      "state_aggregation": "last"
     }
   },
   "training": {
     "name": "standard",
+    "train_size": 0.75,
     "ridge_lambdas": [
       1e-13,
       1e-12,
@@ -61,73 +60,71 @@
     "n_outputs": 1
   },
   "quantum_reservoir": {
-    "n_inputs": 1,
-    "n_outputs": 1,
-    "random_seed": 42,
     "n_qubits": 4,
     "circuit_depth": 4,
     "backend": "default.qubit",
     "entanglement": "full",
     "measurement_basis": "multi-pauli",
     "encoding_scheme": "detuning",
-    "detuning_scale": 1.0
+    "detuning_scale": 1.0,
+    "state_aggregation": "last"
   },
   "results": {
     "metrics": {
-      "train_mse": 7.740880115835926e-06,
-      "train_mae": 0.0022465989775939817,
-      "test_mse": 3.7618192899824916e-05,
-      "test_mae": 0.005911887705004131,
+      "train_mse": 8.245900286328809e-06,
+      "train_mae": 0.0023830491815814963,
+      "test_mse": 0.07739394827901126,
+      "test_mae": 0.1230418622561288,
       "best_ridge_lambda": 1e-13
     },
     "ridge_search": [
       {
         "lambda": 1e-13,
-        "train_mse": 0.00014932477775199925
+        "train_mse": 0.00015906682418194426
       },
       {
         "lambda": 1e-12,
-        "train_mse": 0.00014932485847907702
+        "train_mse": 0.00015906705840815
       },
       {
         "lambda": 1e-11,
-        "train_mse": 0.00014933009273030654
+        "train_mse": 0.0001590704583888398
       },
       {
         "lambda": 1e-10,
-        "train_mse": 0.00014938556710889417
+        "train_mse": 0.0001591104043707146
       },
       {
         "lambda": 1e-09,
-        "train_mse": 0.00014942957019375877
+        "train_mse": 0.0001592406294843521
       },
       {
         "lambda": 1e-08,
-        "train_mse": 0.00014943937408681485
+        "train_mse": 0.00015928550554271306
       },
       {
         "lambda": 1e-07,
-        "train_mse": 0.00014944711259363175
+        "train_mse": 0.0001592949342416847
       },
       {
         "lambda": 1e-06,
-        "train_mse": 0.000149470387097261
+        "train_mse": 0.00015930055737096337
       },
       {
         "lambda": 1e-05,
-        "train_mse": 0.0001495751790509501
+        "train_mse": 0.0001594097755700163
       },
       {
         "lambda": 0.0001,
-        "train_mse": 0.00015039849668400175
+        "train_mse": 0.00015987367604557363
       },
       {
         "lambda": 0.001,
-        "train_mse": 0.0001542221574198187
+        "train_mse": 0.00016321179690193734
       },
       {
         "lambda": 0.01,
-        "train_mse": 0.00016451022416826092
+        "train_mse": 0.0001759555226862566
       }
     ]
   }

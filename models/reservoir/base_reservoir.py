@@ -147,7 +147,7 @@ class ReservoirComputerFactory:
 
     @staticmethod
     def create_reservoir(reservoir_type: str,
-                        config: Union[Dict[str, Any], Any],
+                        config: Union[Dict[str, Any], Sequence[Dict[str, Any]]],
                         backend: str = 'cpu') -> BaseReservoirComputer:
         """Create a reservoir computer instance.
 

@@ -32,6 +32,13 @@ class DataGenerationConfig(BaseModel):
 class TrainingConfig(BaseModel):
     """Model training configuration."""
     name: str = Field(..., description="Training configuration name")
+    task_type: Literal["classification", "timeseries"] = Field(
+        "timeseries",
+        description="Primary task type handled by the pipeline"
+    )
+    train_size: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Optional train split fraction"
+    )
     ridge_lambdas: Optional[List[float]] = Field(
         None,
         description="Candidate ridge regularization strengths for grid search (log scale recommended)"

@@ -223,3 +223,134 @@ def plot_prediction_results(
     fig.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
     print(f"結果を 'outputs/{filename}' に保存しました。")
+
+
+def plot_classification_results(
+    train_labels: np.ndarray,
+    test_labels: np.ndarray,
+    train_predictions: np.ndarray,
+    test_predictions: np.ndarray,
+    title: str,
+    filename: str,
+    metrics_info: Optional[Dict[str, Any]] = None,
+    class_names: Optional[Sequence[str]] = None,
+) -> None:
+    """可視化: 分類タスク用の混同行列と精度バーを描画して保存。"""
+
+    def _to_numpy(array: np.ndarray, dtype: Optional[np.dtype] = None) -> np.ndarray:
+        """Convert JAX/NumPy arraylikes to numpy ndarray."""
+        if dtype is None:
+            return np.asarray(array)
+        return np.asarray(array, dtype=dtype)
+
+    train_labels_np = _to_numpy(train_labels, dtype=np.int32)
+    test_labels_np = _to_numpy(test_labels, dtype=np.int32)
+    train_predictions_np = _to_numpy(train_predictions, dtype=np.int32)
+    test_predictions_np = _to_numpy(test_predictions, dtype=np.int32)
+
+    def _safe_max(array: np.ndarray) -> int:
+        return int(array.max()) if array.size > 0 else -1
+
+    if class_names is None:
+        inferred_max = max(
+            _safe_max(train_labels_np),
+            _safe_max(test_labels_np),
+            _safe_max(train_predictions_np),
+            _safe_max(test_predictions_np),
+        )
+        num_classes = max(inferred_max + 1, 1)
+        class_names = [str(idx) for idx in range(num_classes)]
+    else:
+        num_classes = len(class_names)
+
+    confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
+    valid_mask = (
+        (test_labels_np >= 0)
+        & (test_labels_np < num_classes)
+        & (test_predictions_np >= 0)
+        & (test_predictions_np < num_classes)
+    )
+    np.add.at(
+        confusion_matrix,
+        (test_labels_np[valid_mask], test_predictions_np[valid_mask]),
+        1,
+    )
+
+    train_accuracy = (
+        float(np.mean(train_predictions_np == train_labels_np))
+        if train_labels_np.size > 0
+        else 0.0
+    )
+    test_accuracy = (
+        float(np.mean(test_predictions_np == test_labels_np))
+        if test_labels_np.size > 0
+        else 0.0
+    )
+
+    fig, (ax_conf, ax_bar) = plt.subplots(1, 2, figsize=(12, 6))
+
+    im = ax_conf.imshow(confusion_matrix, interpolation='nearest', cmap='Blues')
+    cbar = fig.colorbar(im, ax=ax_conf, fraction=0.046, pad=0.04)
+    cbar.ax.set_ylabel('Count', rotation=-90, va='bottom')
+
+    ax_conf.set_title('Test Confusion Matrix')
+    ax_conf.set_xlabel('Predicted Label')
+    ax_conf.set_ylabel('True Label')
+    ax_conf.set_xticks(range(num_classes))
+    ax_conf.set_yticks(range(num_classes))
+    ax_conf.set_xticklabels(class_names, rotation=45, ha='right')
+    ax_conf.set_yticklabels(class_names)
+
+    if confusion_matrix.max() > 0:
+        threshold = confusion_matrix.max() / 2.0
+    else:
+        threshold = 0.5
+
+    for i in range(num_classes):
+        for j in range(num_classes):
+            value = confusion_matrix[i, j]
+            color = 'white' if value > threshold else 'black'
+            ax_conf.text(
+                j,
+                i,
+                str(value),
+                ha='center',
+                va='center',
+                color=color,
+                fontsize=9,
+            )
+
+    accuracy_values = np.array([train_accuracy * 100.0, test_accuracy * 100.0])
+    bars = ax_bar.barh(['Train', 'Test'], accuracy_values, color=['tab:green', 'tab:orange'])
+    ax_bar.set_xlim(0, 100)
+    ax_bar.set_xlabel('Accuracy (%)')
+    ax_bar.set_title('Accuracy Overview')
+    ax_bar.grid(True, axis='x', alpha=0.3, linestyle='--')
+
+    for bar, accuracy in zip(bars, accuracy_values):
+        display_value = min(accuracy + 1.0, 99.9)
+        ax_bar.text(
+            display_value,
+            bar.get_y() + bar.get_height() / 2,
+            f"{accuracy:.2f}%",
+            va='center',
+            fontsize=10,
+        )
+
+    fig.suptitle(title, fontsize=16)
+
+    if metrics_info:
+        caption_lines = []
+        for key, value in metrics_info.items():
+            if isinstance(value, float):
+                caption_lines.append(f"{key}: {value:.6f}")
+            else:
+                caption_lines.append(f"{key}: {value}")
+        caption_text = "\n".join(caption_lines)
+        fig.text(0.02, 0.02, caption_text, fontsize=10, family='monospace')
+
+    fig.tight_layout(rect=[0, 0.05, 1, 0.97])
+    output_path = PROJECT_ROOT / f'outputs/{filename}'
+    fig.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"分類結果を 'outputs/{filename}' に保存しました。")

@@ -5,10 +5,13 @@ This module implements a quantum version of reservoir computing using
 parameterized quantum circuits and variational optimization.
 """
 
-from typing import Optional, Dict, Any, Union, Sequence
+from typing import Optional, Dict, Any, Sequence
 
 import numpy as np
 import pennylane as qml
+import json
+from pathlib import Path
+from functools import lru_cache
 
 from pipelines.jax_config import ensure_x64_enabled
 
@@ -17,6 +20,23 @@ ensure_x64_enabled()
 import jax.numpy as jnp
 
 from .base_reservoir import BaseReservoirComputer
+
+
+@lru_cache()
+def _load_basic_defaults() -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[2] / "configs/models/basic_reservoir.json"
+    data = json.loads(path.read_text())
+    return dict(data.get("params", {}))
+
+
+@lru_cache()
+def _load_quantum_defaults() -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[2] / "configs/models/quantum_standard.json"
+    data = json.loads(path.read_text())
+    params = data.get('params', {}) or {}
+    base = _load_basic_defaults()
+    merged = {**base, **params}
+    return merged
 
 
 class QuantumReservoirComputer(BaseReservoirComputer):
@@ -45,7 +65,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         >>> predictions = qrc.predict(test_data)
     """
 
-    def __init__(self, config: Union[Dict[str, Any], Any], backend: Optional[str] = 'cpu'):
+    def __init__(self, config: Sequence[Dict[str, Any]], backend: Optional[str] = 'cpu'):
         """Initialize the Quantum Reservoir Computer.
 
         Args:
@@ -58,31 +78,27 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         super().__init__()
 
-        # Handle both dict and object configs
-        if isinstance(config, dict):
-            self.config = config
-            self.n_qubits = config['n_qubits']
-            self.circuit_depth = config['circuit_depth']
-            self.n_inputs = config['n_inputs']
-            self.n_outputs = config['n_outputs']
-            self.backend_type = config.get('backend', 'default.qubit')
-            self.random_seed = config.get('random_seed', 42)
-            self.measurement_basis = config.get('measurement_basis', 'pauli-z').lower()
-            self.encoding_scheme = config.get('encoding_scheme', 'amplitude').lower()
-            self.entanglement = config.get('entanglement', 'circular').lower()
-            self.detuning_scale = float(config.get('detuning_scale', 1.0))
-        else:
-            self.config = config
-            self.n_qubits = config.n_qubits
-            self.circuit_depth = config.circuit_depth
-            self.n_inputs = config.n_inputs
-            self.n_outputs = config.n_outputs
-            self.backend_type = getattr(config, 'backend', 'default.qubit')
-            self.random_seed = getattr(config, 'random_seed', 42)
-            self.measurement_basis = getattr(config, 'measurement_basis', 'pauli-z').lower()
-            self.encoding_scheme = getattr(config, 'encoding_scheme', 'amplitude').lower()
-            self.entanglement = getattr(config, 'entanglement', 'circular').lower()
-            self.detuning_scale = float(getattr(config, 'detuning_scale', 1.0))
+        # Normalize config to dictionary form
+        merged: Dict[str, Any] = _load_quantum_defaults().copy()
+        config_sequence: Iterable[Dict[str, Any]] = [config] if isinstance(config, dict) else config  # type: ignore[arg-type]
+        for cfg in config_sequence:
+            cfg_dict = dict(cfg)
+            merged.update({k: v for k, v in cfg_dict.items() if k not in {'name', 'description', 'params'}})
+            params = cfg_dict.get('params', {}) or {}
+            merged.update(params)
+
+        self.config = merged
+        self.n_qubits = merged['n_qubits']
+        self.circuit_depth = merged['circuit_depth']
+        self.n_inputs = merged['n_inputs']
+        self.n_outputs = merged['n_outputs']
+        self.backend_type = merged['backend']
+        self.random_seed = merged['random_seed']
+        self.measurement_basis = str(merged['measurement_basis']).lower()
+        self.encoding_scheme = str(merged['encoding_scheme']).lower()
+        self.entanglement = str(merged['entanglement']).lower()
+        self.detuning_scale = float(merged['detuning_scale'])
+        self.state_aggregation = str(merged['state_aggregation']).lower()
 
         self.backend = backend
 
@@ -103,6 +119,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             )
         if self.entanglement not in {"circular", "full"}:
             raise ValueError("entanglement must be either 'circular' or 'full'")
+        if self.state_aggregation not in {"last", "mean", "concat"}:
+            raise ValueError("state_aggregation must be 'last', 'mean', or 'concat'")
 
         # Initialize quantum device
         self._initialize_quantum_device()
@@ -115,6 +133,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.best_ridge_lambda: Optional[float] = None
         self.ridge_search_log: list[Dict[str, float]] = []
         self.last_training_mse: Optional[float] = None
+        self.classification_mode: bool = False
+        self.num_classes: Optional[int] = None
 
     def _initialize_quantum_device(self) -> None:
         """Initialize the PennyLane quantum device."""
@@ -289,6 +309,104 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         return jnp.array(reservoir_states)
 
+    def _aggregate_states(self, states: jnp.ndarray) -> jnp.ndarray:
+        if self.state_aggregation == 'last':
+            return states[-1]
+        if self.state_aggregation == 'mean':
+            return jnp.mean(states, axis=0)
+        return states.reshape(-1)
+
+    def _encode_sequences(self, sequences: jnp.ndarray) -> jnp.ndarray:
+        encoded_states = []
+        for seq in sequences:
+            seq_arr = jnp.array(seq, dtype=jnp.float64)
+            states = self._run_quantum_reservoir(seq_arr)
+            encoded_states.append(self._aggregate_states(states))
+        return jnp.stack(encoded_states, axis=0)
+
+    def _fit_ridge_with_grid(
+        self,
+        X: jnp.ndarray,
+        target_data: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+    ) -> None:
+        lambda_candidates = []
+        if ridge_lambdas:
+            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
+        if not lambda_candidates:
+            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
+
+        seen = set()
+        ordered_lambdas = []
+        for lam in lambda_candidates:
+            if lam < 0:
+                continue
+            if lam not in seen:
+                ordered_lambdas.append(lam)
+                seen.add(lam)
+
+        best_lambda = None
+        best_mse = float("inf")
+        best_weights = None
+        ridge_log: list[Dict[str, float]] = []
+
+        XTX = X.T @ X
+        XTY = X.T @ target_data
+
+        for lam in ordered_lambdas:
+            lam_val = float(lam)
+            A = XTX + lam_val * jnp.eye(X.shape[1], dtype=X.dtype)
+            try:
+                weights = jnp.linalg.solve(A, XTY)
+            except Exception:
+                weights = jnp.linalg.pinv(A) @ XTY
+
+            preds = X @ weights
+            mse = float(jnp.mean((preds - target_data) ** 2))
+            ridge_log.append({"lambda": lam_val, "train_mse": mse})
+
+            if mse < best_mse:
+                best_mse = mse
+                best_lambda = lam_val
+                best_weights = weights
+
+        self.W_out = best_weights
+        self.best_ridge_lambda = best_lambda
+        self.ridge_search_log = ridge_log
+        self.last_training_mse = best_mse
+
+    def train_classification(
+        self,
+        sequences: jnp.ndarray,
+        labels: jnp.ndarray,
+        ridge_lambdas: Optional[Sequence[float]] = None,
+        num_classes: int = 10,
+    ) -> None:
+        features = self._encode_sequences(sequences)
+        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
+        X = jnp.concatenate([features, bias_column], axis=1)
+
+        labels = labels.astype(jnp.int32)
+        targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
+        targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
+
+        self._fit_ridge_with_grid(X, targets, ridge_lambdas)
+        self.classification_mode = True
+        self.num_classes = num_classes
+        self.trained = True
+
+    def predict_classification(self, sequences: jnp.ndarray) -> jnp.ndarray:
+        if not self.classification_mode or self.num_classes is None:
+            raise ValueError("Classification mode not enabled. Call train_classification first.")
+        if self.W_out is None:
+            raise ValueError("Model has not been trained.")
+
+        features = self._encode_sequences(sequences)
+        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
+        X = jnp.concatenate([features, bias_column], axis=1)
+        logits = X @ self.W_out
+        return logits
+
     def train(
         self,
         input_data: jnp.ndarray,
@@ -322,57 +440,11 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         bias_column = jnp.ones((quantum_states.shape[0], 1))
         X = jnp.concatenate([quantum_states, bias_column], axis=1)
 
-        # Train classical readout layer using Ridge regression (with grid search)
-        lambda_candidates = []
-        if ridge_lambdas:
-            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
-        if not lambda_candidates:
-            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
-
-        # Deduplicate while preserving order
-        seen = set()
-        ordered_lambdas = []
-        for lam in lambda_candidates:
-            if lam < 0:
-                continue
-            if lam not in seen:
-                ordered_lambdas.append(lam)
-                seen.add(lam)
-
-        XTX = X.T @ X
-        XTY = X.T @ target_data
-
-        best_lambda = None
-        best_mse = float("inf")
-        best_weights = None
-        ridge_log: list[Dict[str, float]] = []
-
-        identity = jnp.eye(XTX.shape[0])
-
-        for lam in ordered_lambdas:
-            lam_val = float(lam)
-            A = XTX + lam_val * identity
-            try:
-                weights = jnp.linalg.solve(A, XTY)
-            except Exception:
-                weights = jnp.linalg.pinv(A) @ XTY
-
-            preds = X @ weights
-            mse = float(jnp.mean((preds - target_data) ** 2))
-
-            ridge_log.append({"lambda": lam_val, "train_mse": mse})
-
-            if mse < best_mse:
-                best_mse = mse
-                best_lambda = lam_val
-                best_weights = weights
-
-        self.W_out = best_weights
-        self.best_ridge_lambda = best_lambda
-        self.ridge_search_log = ridge_log
-        self.last_training_mse = best_mse
+        self._fit_ridge_with_grid(X, target_data, ridge_lambdas)
 
         # Mark as trained
+        self.classification_mode = False
+        self.num_classes = None
         self.trained = True
 
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
@@ -413,6 +485,11 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.best_ridge_lambda = None
         self.ridge_search_log = []
         self.last_training_mse = None
+        self.classification_mode = False
+        self.num_classes = None
+        self.best_ridge_lambda = None
+        self.ridge_search_log = []
+        self.last_training_mse = None
 
     def get_reservoir_info(self) -> Dict[str, Any]:
         """Get information about the quantum reservoir configuration."""
@@ -428,6 +505,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             "reservoir_type": "quantum",
             "measurement_basis": self.measurement_basis,
             "encoding_scheme": self.encoding_scheme,
+            "state_aggregation": self.state_aggregation,
         }
 
         # Add config info if available
@@ -448,6 +526,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             "entangling_pattern": self.entanglement,
             "measurement_basis": self.measurement_basis,
             "encoding_scheme": self.encoding_scheme,
+            "state_aggregation": self.state_aggregation,
         }
 
     def visualize_circuit(self, sample_input: Optional[jnp.ndarray] = None) -> str:
@@ -468,7 +547,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         return qml.draw(circuit)(self.quantum_params)
 
 # Convenience function for backward compatibility
-def create_quantum_reservoir(config: Union[Dict[str, Any], Any],
+def create_quantum_reservoir(config: Dict[str, Any],
                            backend: str = 'cpu') -> QuantumReservoirComputer:
     """Create a quantum reservoir computer instance.
 

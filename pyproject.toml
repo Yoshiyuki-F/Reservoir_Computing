@@ -13,14 +13,15 @@ dependencies = [
     "pytest (>=8.4.1,<9.0.0)",
     "pydantic>=2.0.0,<3.0.0",
     "poethepoet>=0.36.0",
-
     #ML
     "jax[cuda12]==0.6.2",
     "jaxlib==0.6.2",
-     #this is the latest for pennylane https://docs.pennylane.ai/en/stable/development/release_notes.html
-
+    #this is the latest for pennylane https://docs.pennylane.ai/en/stable/development/release_notes.html
     #Quantum
-    "pennylane>=0.42.3,<0.43.0",#the latest for now
+    "pennylane>=0.42.3,<0.43.0", #the latest for now
+    "torch>=2.9.0",
+    "torchvision>=0.24.0",
+    "tqdm>=4.67.1,<5.0.0",
 ]
 
 [project.scripts]
@@ -39,19 +40,21 @@ test = { shell = "uv run pytest -q" }
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
 # Demo helpers -------------------------------------------------------------
-demo-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
-demo-sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
-demo-lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz" }
-demo-mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass" }
+sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
+lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz" }
+mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass" }
+mnist = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard" }
 
 # Quantum demos ------------------------------------------------------------
-demo-sine-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model quantum_standard" }
-demo-lorenz-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model quantum_standard" }
-demo-mackey-quantum = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model quantum_standard" }
+sine-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model quantum_standard" }
+lorenz-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model quantum_standard" }
+mackey-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model quantum_standard" }
+mnist-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model quantum_standard" }
 
 # CPU fallbacks ------------------------------------------------------------
-demo-main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
-demo-sine-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
+main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
+sine-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
+mnist-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset mnist --model classic_standard" }
 
 
 [build-system]

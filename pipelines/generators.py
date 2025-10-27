@@ -2,15 +2,25 @@
 Reservoir Computing用のデータ生成関数。
 """
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
+import jax.numpy as jnp
+
+try:
+    import torch
+    from pipelines.datasets.mnist_loader import (
+        get_mnist_datasets,
+        image_to_sequence,
+    )
+except ModuleNotFoundError:  # pragma: no cover - torch optional
+    torch = None
+    get_mnist_datasets = None  # type: ignore
+    image_to_sequence = None  # type: ignore
 
 from .jax_config import ensure_x64_enabled
 
 ensure_x64_enabled()
-
-import jax.numpy as jnp
 
 from configs.core import DataGenerationConfig
 
@@ -211,3 +221,56 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
     target_data = jnp.array(x[1:].reshape(-1, 1), dtype=jnp.float64)
 
     return input_data, target_data
+
+
+def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Generate MNIST-based sequence data by scanning images as time series.
+
+    Args:
+        config: DataGenerationConfig with params:
+            - limit: Optional[int], number of samples to load (default 1000)
+            - split: str, 'train' or 'test' (default 'train')
+            - encoding: str, 'cols' or 'flat' (default 'cols')
+
+    Returns:
+        Tuple (input_sequences, labels) where sequences are float64 JAX arrays.
+
+    Raises:
+        ImportError: If torch/torchvision are not available.
+    """
+    if get_mnist_datasets is None or image_to_sequence is None or torch is None:
+        raise ImportError(
+            "MNIST generation requires torch and torchvision. "
+            "Install them to enable this feature."
+        )
+
+    limit = config.get_param("limit")
+    split = config.get_param("split", "train")
+    encoding = config.get_param("sequence_encoding", config.get_param("encoding", "cols"))
+
+    train_set, test_set = get_mnist_datasets()
+    dataset = train_set if split == "train" else test_set
+
+    max_available = len(dataset)
+    if limit is None:
+        limit = max_available
+    else:
+        limit = int(limit)
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        limit = min(limit, max_available)
+
+    sequences = []
+    labels = []
+
+    for idx in range(limit):
+        img_tensor, label = dataset[idx]
+        img_np = img_tensor.numpy()
+        seq = image_to_sequence(img_np, mode=encoding)
+        sequences.append(seq.astype(np.float64))
+        labels.append(label)
+
+    input_data = jnp.array(sequences, dtype=jnp.float64)
+    target_labels = jnp.array(labels, dtype=jnp.int32)
+    return input_data, target_labels

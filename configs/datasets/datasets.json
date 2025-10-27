@@ -38,5 +38,20 @@
       "n": 10,
       "initial_value": 1.2
     }
+  },
+  "mnist": {
+    "name": "mnist",
+    "description": "MNIST digit classification",
+    "time_steps": 28,
+    "dt": 1.0,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "params": {
+      "split": "train",
+      "sequence_encoding": "cols",
+      "encoding": "cols",
+      "use_columns_as_time": true,
+      "limit": 100
+    }
   }
 }

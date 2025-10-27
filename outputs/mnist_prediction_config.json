@@ -1,0 +1,155 @@
+{
+  "data_generation": {
+    "name": "mnist",
+    "time_steps": 28,
+    "dt": 1.0,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": null,
+    "params": {
+      "split": "train",
+      "sequence_encoding": "cols",
+      "encoding": "cols",
+      "use_columns_as_time": true,
+      "limit": 100
+    }
+  },
+  "model": {
+    "name": "classic_standard",
+    "model_type": "reservoir",
+    "params": {
+      "n_reservoir": 18
+    }
+  },
+  "training": {
+    "name": "standard",
+    "task_type": "classification",
+    "train_size": 0.8,
+    "ridge_lambdas": [
+      1e-13,
+      1e-12,
+      1e-11,
+      1e-10,
+      1e-09,
+      1e-08,
+      1e-07,
+      1e-06,
+      1e-05,
+      0.0001,
+      0.001,
+      0.01
+    ]
+  },
+  "demo": {
+    "title": "Mnist Prediction",
+    "filename": "mnist_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_reservoir": 18,
+    "n_inputs": 28,
+    "n_outputs": 10,
+    "state_aggregation": "mean"
+  },
+  "quantum_reservoir": null,
+  "results": {
+    "metrics": {
+      "train_mse": 0.04616226789034924,
+      "test_mse": 0.0699566103996858,
+      "train_accuracy": 0.8375000357627869,
+      "test_accuracy": 0.800000011920929,
+      "best_ridge_lambda": 1e-12
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-13,
+        "train_mse": 0.046157009475021604
+      },
+      {
+        "lambda": 1e-12,
+        "train_mse": 0.0461570094750216
+      },
+      {
+        "lambda": 1e-11,
+        "train_mse": 0.046157009475021604
+      },
+      {
+        "lambda": 1e-10,
+        "train_mse": 0.046157009475021604
+      },
+      {
+        "lambda": 1e-09,
+        "train_mse": 0.046157009475021604
+      },
+      {
+        "lambda": 1e-08,
+        "train_mse": 0.046157009475021625
+      },
+      {
+        "lambda": 1e-07,
+        "train_mse": 0.046157009475024026
+      },
+      {
+        "lambda": 1e-06,
+        "train_mse": 0.04615700947526362
+      },
+      {
+        "lambda": 1e-05,
+        "train_mse": 0.0461570094992204
+      },
+      {
+        "lambda": 0.0001,
+        "train_mse": 0.04615701189197335
+      },
+      {
+        "lambda": 0.001,
+        "train_mse": 0.0461572482757591
+      },
+      {
+        "lambda": 0.01,
+        "train_mse": 0.04617829527677184
+      }
+    ],
+    "classification": {
+      "train_accuracy": 0.8375000357627869,
+      "test_accuracy": 0.800000011920929,
+      "reservoir_info": {
+        "n_inputs": 28,
+        "n_outputs": 10,
+        "random_seed": 42,
+        "spectral_radius": 0.95,
+        "input_scaling": 1.0,
+        "noise_level": 0.001,
+        "alpha": 1.0,
+        "reservoir_weight_range": 1.0,
+        "sparsity": 1.0,
+        "input_bias": 0.0,
+        "nonlinearity": "tanh",
+        "state_aggregation": "mean",
+        "name": "basic_reservoir",
+        "description": "Base configuration properties shared by all reservoir types",
+        "params": {
+          "n_inputs": 1,
+          "n_outputs": 1,
+          "random_seed": 42,
+          "spectral_radius": 0.95,
+          "input_scaling": 1.0,
+          "noise_level": 0.001,
+          "alpha": 1.0,
+          "reservoir_weight_range": 1.0,
+          "sparsity": 1.0,
+          "input_bias": 0.0,
+          "nonlinearity": "tanh",
+          "state_aggregation": "last"
+        },
+        "n_reservoir": 18,
+        "backend": "gpu",
+        "trained": false
+      }
+    }
+  }
+}

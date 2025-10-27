@@ -11,24 +11,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Usage examples:
-            reservoir-cli --dataset sine_wave --model reservoir_standard
+            reservoir-cli --dataset sine_wave --model classic_standard
             reservoir-cli --dataset lorenz --model quantum_standard --show-training
             reservoir-cli --dataset mackey_glass --model reservoir_large --training windowed
+            reservoir-cli --dataset mnist --model classic_standard --force-cpu
         """
     )
 
     parser.add_argument(
         '--model',
         type=str,
-        choices=['reservoir_standard', 'reservoir_large', 'reservoir_complex', 'quantum_standard', 'quantum_advanced'],
-        default='reservoir_standard',
-        help='Model configuration to use (default: reservoir_standard)'
+        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'quantum_standard', 'quantum_advanced'],
+        default='classic_standard',
+        help='Model configuration to use (default: classic_standard)'
     )
 
     parser.add_argument(
         '-d', '--dataset',
         type=str,
-        choices=['sine_wave', 'lorenz', 'mackey_glass'],
+        choices=['sine_wave', 'lorenz', 'mackey_glass', 'mnist'],
         required=True,
         help='Dataset to use for the experiment'
     )
@@ -54,6 +55,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.dataset == 'mnist':
+        print("ℹ️ MNIST dataset detected; classification mode will be applied automatically.")
 
     print(f"Multi-model ML Framework")
     print("=" * 60)

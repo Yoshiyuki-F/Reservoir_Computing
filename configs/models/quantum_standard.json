@@ -1,12 +1,14 @@
 {
   "name": "quantum_standard",
   "description": "Standard Quantum Reservoir Computer",
-  "model_type": "quantum",
-  "n_qubits": 4,
-  "circuit_depth": 4,
-  "backend": "default.qubit",
-  "entanglement": "full",
-  "measurement_basis": "multi-pauli",
-  "encoding_scheme": "detuning",
-  "detuning_scale": 1.0
+  "params": {
+    "n_qubits": 4,
+    "circuit_depth": 4,
+    "backend": "default.qubit",
+    "entanglement": "full",
+    "measurement_basis": "multi-pauli",
+    "encoding_scheme": "detuning",
+    "detuning_scale": 1.0,
+    "state_aggregation": "last"
+  }
 }
