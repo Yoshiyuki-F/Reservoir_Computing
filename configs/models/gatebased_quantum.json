@@ -1,6 +1,6 @@
 {
-  "name": "quantum_standard",
-  "description": "Standard Quantum Reservoir Computer",
+  "name": "gatebased_quantum",
+  "description": "Gate-based Quantum Reservoir Computer",
   "params": {
     "n_qubits": 4,
     "circuit_depth": 4,

@@ -22,6 +22,7 @@ dependencies = [
     "torch>=2.9.0",
     "torchvision>=0.24.0",
     "tqdm>=4.67.1,<5.0.0",
+    "qutip>=5.2.1",
 ]
 
 [project.scripts]
@@ -46,10 +47,10 @@ mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run
 mnist = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard" }
 
 # Quantum demos ------------------------------------------------------------
-sine-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model quantum_standard" }
-lorenz-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model quantum_standard" }
-mackey-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model quantum_standard" }
-mnist-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model quantum_standard" }
+sine-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model gatebased_quantum" }
+lorenz-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model gatebased_quantum" }
+mackey-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
+mnist-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
 
 # CPU fallbacks ------------------------------------------------------------
 main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }

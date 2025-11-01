@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from models.reservoir.quantum import QuantumReservoirComputer
+from models.reservoir.gatebased_quantum import QuantumReservoirComputer
 
 
 def _base_config(**overrides):

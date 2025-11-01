@@ -15,7 +15,7 @@ def main():
         epilog="""
         Usage examples:
             reservoir-cli --dataset sine_wave --model classic_standard
-            reservoir-cli --dataset lorenz --model quantum_standard --show-training
+            reservoir-cli --dataset lorenz --model gatebased_quantum --show-training
             reservoir-cli --dataset mackey_glass --model reservoir_large --training windowed
         """
     )
@@ -23,7 +23,7 @@ def main():
     parser.add_argument(
         '--model',
         type=str,
-        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'quantum_standard', 'quantum_advanced'],
+        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'gatebased_quantum', 'quantum_advanced'],
         default='classic_standard',
         help='Model configuration to use (default: classic_standard)'
     )

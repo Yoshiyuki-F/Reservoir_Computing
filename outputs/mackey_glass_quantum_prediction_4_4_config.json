@@ -15,7 +15,7 @@
     }
   },
   "model": {
-    "name": "quantum_standard",
+    "name": "gatebased_quantum",
     "model_type": "reservoir",
     "params": {
       "n_qubits": 4,
@@ -30,7 +30,8 @@
   },
   "training": {
     "name": "standard",
-    "train_size": 0.75,
+    "task_type": "timeseries",
+    "train_size": 0.8,
     "ridge_lambdas": [
       1e-13,
       1e-12,
@@ -71,60 +72,60 @@
   },
   "results": {
     "metrics": {
-      "train_mse": 8.245900286328809e-06,
-      "train_mae": 0.0023830491815814963,
-      "test_mse": 0.07739394827901126,
-      "test_mae": 0.1230418622561288,
+      "train_mse": 7.740880115835926e-06,
+      "train_mae": 0.0022465989775939817,
+      "test_mse": 3.7618192899824916e-05,
+      "test_mae": 0.005911887705004131,
       "best_ridge_lambda": 1e-13
     },
     "ridge_search": [
       {
         "lambda": 1e-13,
-        "train_mse": 0.00015906682418194426
+        "train_mse": 0.00014932477775199925
       },
       {
         "lambda": 1e-12,
-        "train_mse": 0.00015906705840815
+        "train_mse": 0.00014932485847907702
       },
       {
         "lambda": 1e-11,
-        "train_mse": 0.0001590704583888398
+        "train_mse": 0.00014933009273030654
       },
       {
         "lambda": 1e-10,
-        "train_mse": 0.0001591104043707146
+        "train_mse": 0.00014938556710889417
       },
       {
         "lambda": 1e-09,
-        "train_mse": 0.0001592406294843521
+        "train_mse": 0.00014942957019375877
       },
       {
         "lambda": 1e-08,
-        "train_mse": 0.00015928550554271306
+        "train_mse": 0.00014943937408681485
       },
       {
         "lambda": 1e-07,
-        "train_mse": 0.0001592949342416847
+        "train_mse": 0.00014944711259363175
       },
       {
         "lambda": 1e-06,
-        "train_mse": 0.00015930055737096337
+        "train_mse": 0.000149470387097261
       },
       {
         "lambda": 1e-05,
-        "train_mse": 0.0001594097755700163
+        "train_mse": 0.0001495751790509501
       },
       {
         "lambda": 0.0001,
-        "train_mse": 0.00015987367604557363
+        "train_mse": 0.00015039849668400175
       },
       {
         "lambda": 0.001,
-        "train_mse": 0.00016321179690193734
+        "train_mse": 0.0001542221574198187
       },
       {
         "lambda": 0.01,
-        "train_mse": 0.0001759555226862566
+        "train_mse": 0.00016451022416826092
       }
     ]
   }

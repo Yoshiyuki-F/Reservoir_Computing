@@ -31,7 +31,7 @@ def _load_basic_defaults() -> Dict[str, Any]:
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "configs/models/quantum_standard.json"
+    path = Path(__file__).resolve().parents[2] / "configs/models/gatebased_quantum.json"
     data = json.loads(path.read_text())
     params = data.get('params', {}) or {}
     base = _load_basic_defaults()

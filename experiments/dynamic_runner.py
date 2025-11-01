@@ -30,8 +30,8 @@ def _load_basic_reservoir_config() -> Dict[str, Any]:
 
 
 @lru_cache()
-def _load_quantum_standard_config() -> Dict[str, Any]:
-    return _load_config_json('configs/models/quantum_standard.json')
+def _load_gatebased_quantum_config() -> Dict[str, Any]:
+    return _load_config_json('configs/models/gatebased_quantum.json')
 
 
 def get_model_factory(model_type: str):
@@ -96,7 +96,7 @@ def run_dynamic_experiment(
 
     Args:
         dataset_name: Name of dataset config (e.g., 'sine_wave', 'lorenz')
-        model_name: Name of model config (e.g., 'classic_standard', 'quantum_standard')
+        model_name: Name of model config (e.g., 'classic_standard', 'gatebased_quantum')
         training_name: Name of training config (default: 'standard')
         show_training: Whether to show training data in visualization
         backend: Compute backend ('cpu' or 'gpu')
@@ -189,7 +189,7 @@ def run_experiment(
     if quantum_mode or "quantum" in model_type:
         if demo_config.quantum_reservoir is None:
             raise ValueError("Quantum mode enabled but quantum_reservoir config is missing")
-        quantum_base = _load_quantum_standard_config().get('params', {})
+        quantum_base = _load_gatebased_quantum_config().get('params', {})
         basic_base = _load_basic_reservoir_config()
         config_sequence = [
             {'params': basic_base},
@@ -214,14 +214,109 @@ def run_experiment(
     reservoir_info = rc.get_reservoir_info()
     print(f"Reservoir情報: {reservoir_info}")
 
+    is_quantum_model = quantum_mode or ("quantum" in (model_type or ""))
+    n_reservoir: Optional[int] = None
+    if not is_quantum_model:
+        candidates: list[Any] = []
+        if isinstance(reservoir_info, dict):
+            candidates.append(reservoir_info.get("n_reservoir"))
+        if hasattr(rc, "n_reservoir"):
+            candidates.append(getattr(rc, "n_reservoir"))
+        if demo_config.reservoir:
+            candidates.append(demo_config.reservoir.get("n_reservoir"))
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            try:
+                n_reservoir = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
+
+    resolved_filename = demo_config.demo.filename
+    if n_reservoir is not None and not is_quantum_model:
+        filename_path = Path(resolved_filename)
+        suffix = filename_path.suffix or ""
+        resolved_filename = f"{filename_path.stem}_{n_reservoir}{suffix}"
+
+    plot_title = demo_config.demo.title
+
     if quantum_mode or "quantum" in model_type:
-        n_qubits = reservoir_info.get("n_qubits")
+        qubit_candidates: list[Any] = []
+        depth_candidates: list[Any] = []
+
+        if isinstance(reservoir_info, dict):
+            qubit_candidates.append(reservoir_info.get("n_qubits"))
+            depth_candidates.append(reservoir_info.get("circuit_depth"))
+
+        if hasattr(rc, "n_qubits"):
+            qubit_candidates.append(getattr(rc, "n_qubits"))
+        if hasattr(rc, "circuit_depth"):
+            depth_candidates.append(getattr(rc, "circuit_depth"))
+
+        if getattr(demo_config, "quantum_reservoir", None):
+            quantum_cfg = demo_config.quantum_reservoir
+            if isinstance(quantum_cfg, dict):
+                qubit_candidates.append(quantum_cfg.get("n_qubits"))
+                depth_candidates.append(quantum_cfg.get("circuit_depth"))
+
+        n_qubits: Optional[int] = None
+        for candidate in qubit_candidates:
+            if candidate is None:
+                continue
+            try:
+                n_qubits = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
+
+        circuit_depth: Optional[int] = None
+        for candidate in depth_candidates:
+            if candidate is None:
+                continue
+            try:
+                circuit_depth = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
+
         measurement_basis = reservoir_info.get("measurement_basis", "pauli-z")
         if measurement_basis == "multi-pauli" and n_qubits is not None:
             from math import comb
 
             feature_dim = 3 * int(n_qubits) + comb(int(n_qubits), 2)
             print(f"🧮 Quantum feature dimension: {feature_dim} (3×{n_qubits} one-body + {comb(int(n_qubits),2)} two-body)")
+
+        if n_qubits is not None or circuit_depth is not None:
+            filename_path = Path(resolved_filename)
+            suffix = filename_path.suffix or ""
+            stem = filename_path.stem
+            if n_qubits is not None and circuit_depth is not None:
+                resolved_filename = f"{stem}_{n_qubits}_{circuit_depth}{suffix}"
+            elif n_qubits is not None:
+                resolved_filename = f"{stem}_{n_qubits}{suffix}"
+            elif circuit_depth is not None:
+                resolved_filename = f"{stem}_{circuit_depth}{suffix}"
+    else:
+        n_qubits = None
+
+    data_limit: Optional[int] = None
+    try:
+        limit_value = demo_config.data_generation.get_param("limit")
+    except AttributeError:
+        limit_value = getattr(demo_config.data_generation, "params", {}).get("limit") if hasattr(demo_config.data_generation, "params") else None
+    if limit_value is not None:
+        try:
+            data_limit = int(limit_value)
+        except (TypeError, ValueError):
+            data_limit = None
+    if data_limit is not None:
+        filename_path = Path(resolved_filename)
+        suffix = filename_path.suffix or ""
+        resolved_filename = f"{filename_path.stem}_{data_limit}{suffix}"
+
+    output_filename = resolved_filename
 
     lambda_candidates = list(demo_config.training.ridge_lambdas or [])
     if not lambda_candidates:
@@ -304,8 +399,8 @@ def run_experiment(
             dataset.test_labels,
             train_pred,
             test_pred,
-            demo_config.demo.title,
-            demo_config.demo.filename,
+            plot_title,
+            output_filename,
             metrics_info=metrics_caption,
             class_names=class_names,
         )
@@ -319,7 +414,7 @@ def run_experiment(
         }
         _save_config_snapshot(
             demo_config,
-            demo_config.demo.filename,
+            output_filename,
             metrics_snapshot,
             ridge_log,
             extra=extra_results,
@@ -380,8 +475,6 @@ def run_experiment(
 
     print(f"テスト MSE: {test_mse:.6f}, MAE: {test_mae:.6f}")
 
-    output_filename = demo_config.demo.filename
-
     time_indices = np.arange(test_target_orig.shape[0])
 
     metrics_caption = {}
@@ -408,7 +501,7 @@ def run_experiment(
         test_target_orig,
         test_predictions,
         time_indices,
-        demo_config.demo.title,
+        plot_title,
         output_filename,
         train_target_orig,
         train_predictions_orig,

@@ -3,7 +3,7 @@
 from .base_reservoir import BaseReservoirComputer, ReservoirComputerFactory
 from .classical import ReservoirComputer
 try:
-    from .quantum import QuantumReservoirComputer
+    from .gatebased_quantum import QuantumReservoirComputer
     QUANTUM_AVAILABLE = True
 except ImportError:
     QuantumReservoirComputer = None

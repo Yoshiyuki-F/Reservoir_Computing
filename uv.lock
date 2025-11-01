@@ -992,6 +992,23 @@ wheels = [
 ]
 
 [[package]]
+name = "qutip"
+version = "5.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0a/dc/d728d8bac25055940ed178569b5d5947ae5987f59146a9de42db00d4988f/qutip-5.2.1.tar.gz", hash = "sha256:9fd02d52ddbc1611c6a6dcc92b69f09cabdd9c3252772619fb6208d2dbbcbba0", size = 7204873, upload-time = "2025-08-27T13:53:20.567Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/21/95e56bf864db38a7d4cc6305ccc6232db7b12cdc89ea2d89635f25119f7d/qutip-5.2.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:893f7c523a75b09c5438269e710f4ada8621ba6da9f51fe3ed28d3399e41c1f3", size = 10948493, upload-time = "2025-08-27T13:53:11.758Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/f4/c4e7218314e2b407d8104979432527998045e6edd9defeae4b2279714166/qutip-5.2.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:8549a1e14756e376b74eaa8be3ec68596667d25f17ebaad564c592bb36acc47c", size = 10637481, upload-time = "2025-08-27T13:53:13.445Z" },
+    { url = "https://files.pythonhosted.org/packages/03/df/4d440518a192372f743bf14572bf0af84b257d2be8f60d7ac6235ee8f121/qutip-5.2.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e920862b26f104f85a2e493d5cd2210b40aa97e4a6edfb763027ef830ea53ffa", size = 31526090, upload-time = "2025-08-27T13:53:15.859Z" },
+    { url = "https://files.pythonhosted.org/packages/39/78/2ca50711cf5b6102311f8ba4076521abbbf219543f8d5f97da62df1c19b7/qutip-5.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:a108fb89e077bf44368b27eede3914591ec71840bf6619debba437a59802c4fe", size = 10481599, upload-time = "2025-08-27T13:53:18.406Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.32.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1019,6 +1036,7 @@ dependencies = [
     { name = "poethepoet" },
     { name = "pydantic" },
     { name = "pytest" },
+    { name = "qutip" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
@@ -1034,6 +1052,7 @@ requires-dist = [
     { name = "poethepoet", specifier = ">=0.36.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pytest", specifier = ">=8.4.1,<9.0.0" },
+    { name = "qutip", specifier = ">=5.2.1" },
     { name = "torch", specifier = ">=2.9.0" },
     { name = "torchvision", specifier = ">=0.24.0" },
     { name = "tqdm", specifier = ">=4.67.1,<5.0.0" },

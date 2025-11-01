@@ -2,6 +2,6 @@
   "name": "classic_standard",
   "description": "Standard Echo State Network configuration",
   "params": {
-    "n_reservoir": 18
+    "n_reservoir": 16
   }
 }

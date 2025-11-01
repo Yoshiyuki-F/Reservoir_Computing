@@ -18,7 +18,7 @@
     "name": "classic_standard",
     "model_type": "reservoir",
     "params": {
-      "n_reservoir": 18
+      "n_reservoir": 28
     }
   },
   "training": {
@@ -50,7 +50,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_reservoir": 18,
+    "n_reservoir": 28,
     "n_inputs": 28,
     "n_outputs": 10,
     "state_aggregation": "mean"
@@ -58,65 +58,65 @@
   "quantum_reservoir": null,
   "results": {
     "metrics": {
-      "train_mse": 0.04616226789034924,
-      "test_mse": 0.0699566103996858,
-      "train_accuracy": 0.8375000357627869,
-      "test_accuracy": 0.800000011920929,
-      "best_ridge_lambda": 1e-12
+      "train_mse": 0.033541716989033805,
+      "test_mse": 0.07944220895919951,
+      "train_accuracy": 0.925000011920929,
+      "test_accuracy": 0.699999988079071,
+      "best_ridge_lambda": 1e-13
     },
     "ridge_search": [
       {
         "lambda": 1e-13,
-        "train_mse": 0.046157009475021604
+        "train_mse": 0.03354556991693576
       },
       {
         "lambda": 1e-12,
-        "train_mse": 0.0461570094750216
+        "train_mse": 0.03354556991693576
       },
       {
         "lambda": 1e-11,
-        "train_mse": 0.046157009475021604
+        "train_mse": 0.03354556991693576
       },
       {
         "lambda": 1e-10,
-        "train_mse": 0.046157009475021604
+        "train_mse": 0.03354556991693577
       },
       {
         "lambda": 1e-09,
-        "train_mse": 0.046157009475021604
+        "train_mse": 0.03354556991693576
       },
       {
         "lambda": 1e-08,
-        "train_mse": 0.046157009475021625
+        "train_mse": 0.033545569916935816
       },
       {
         "lambda": 1e-07,
-        "train_mse": 0.046157009475024026
+        "train_mse": 0.03354556991694061
       },
       {
         "lambda": 1e-06,
-        "train_mse": 0.04615700947526362
+        "train_mse": 0.03354556991742055
       },
       {
         "lambda": 1e-05,
-        "train_mse": 0.0461570094992204
+        "train_mse": 0.03354556996540617
       },
       {
         "lambda": 0.0001,
-        "train_mse": 0.04615701189197335
+        "train_mse": 0.033545574756805294
       },
       {
         "lambda": 0.001,
-        "train_mse": 0.0461572482757591
+        "train_mse": 0.03354604683565856
       },
       {
         "lambda": 0.01,
-        "train_mse": 0.04617829527677184
+        "train_mse": 0.0335870925762015
       }
     ],
     "classification": {
-      "train_accuracy": 0.8375000357627869,
-      "test_accuracy": 0.800000011920929,
+      "train_accuracy": 0.925000011920929,
+      "test_accuracy": 0.699999988079071,
       "reservoir_info": {
         "n_inputs": 28,
         "n_outputs": 10,
@@ -146,7 +146,7 @@
           "nonlinearity": "tanh",
           "state_aggregation": "last"
         },
-        "n_reservoir": 18,
+        "n_reservoir": 28,
         "backend": "gpu",
         "trained": false
       }

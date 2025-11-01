@@ -1,0 +1,115 @@
+{
+  "data_generation": {
+    "name": "mackey_glass",
+    "time_steps": 1000,
+    "dt": 0.1,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": 100,
+    "params": {
+      "tau": 17,
+      "beta": 0.2,
+      "gamma": 0.1,
+      "n": 10,
+      "initial_value": 1.2
+    }
+  },
+  "model": {
+    "name": "classic_standard",
+    "model_type": "reservoir",
+    "params": {
+      "n_reservoir": 18
+    }
+  },
+  "training": {
+    "name": "standard",
+    "task_type": "timeseries",
+    "train_size": 0.8,
+    "ridge_lambdas": [
+      1e-13,
+      1e-12,
+      1e-11,
+      1e-10,
+      1e-09,
+      1e-08,
+      1e-07,
+      1e-06,
+      1e-05,
+      0.0001,
+      0.001,
+      0.01
+    ]
+  },
+  "demo": {
+    "title": "Mackey-Glass Prediction",
+    "filename": "mackey_glass_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_reservoir": 18
+  },
+  "quantum_reservoir": null,
+  "results": {
+    "metrics": {
+      "train_mse": 2.4530559975749713e-06,
+      "train_mae": 0.001163737436921827,
+      "test_mse": 5.149380626574066e-06,
+      "test_mae": 0.0018155896243946046,
+      "best_ridge_lambda": 1e-13
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-13,
+        "train_mse": 4.5542759408364716e-05
+      },
+      {
+        "lambda": 1e-12,
+        "train_mse": 4.554275940836495e-05
+      },
+      {
+        "lambda": 1e-11,
+        "train_mse": 4.554275940836486e-05
+      },
+      {
+        "lambda": 1e-10,
+        "train_mse": 4.554275940836512e-05
+      },
+      {
+        "lambda": 1e-09,
+        "train_mse": 4.554275940838e-05
+      },
+      {
+        "lambda": 1e-08,
+        "train_mse": 4.554275940987484e-05
+      },
+      {
+        "lambda": 1e-07,
+        "train_mse": 4.55427595593434e-05
+      },
+      {
+        "lambda": 1e-06,
+        "train_mse": 4.554277448107125e-05
+      },
+      {
+        "lambda": 1e-05,
+        "train_mse": 4.554424196471269e-05
+      },
+      {
+        "lambda": 0.0001,
+        "train_mse": 4.567045641311276e-05
+      },
+      {
+        "lambda": 0.001,
+        "train_mse": 5.1124169839314576e-05
+      },
+      {
+        "lambda": 0.01,
+        "train_mse": 9.687341053049325e-05
+      }
+    ]
+  }
+}

@@ -169,7 +169,7 @@ class ReservoirComputerFactory:
 
         elif reservoir_type.lower() == 'quantum':
             try:
-                from .quantum import QuantumReservoirComputer
+                from .gatebased_quantum import QuantumReservoirComputer
                 return QuantumReservoirComputer(config=config, backend=backend)
             except ImportError as e:
                 raise ImportError(

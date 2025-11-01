@@ -26,7 +26,7 @@ def generate_variants(
         model_cfg = deepcopy(base_composed.model)
         model_cfg["n_qubits"] = n_qubits
         model_cfg["circuit_depth"] = circuit_depth
-        model_cfg.setdefault("name", "quantum_standard")
+        model_cfg.setdefault("name", "gatebased_quantum")
 
         viz_cfg = deepcopy(base_composed.visualization)
         viz_cfg["title"] = f"Quantum MG q={n_qubits} d={circuit_depth}"
@@ -49,7 +49,7 @@ def main() -> None:
         "name": "mg_quantum_sweep",
         "description": "Quantum Mackey-Glass sweep",
         "dataset": "mackey_glass",
-        "model": "quantum_standard",
+        "model": "gatebased_quantum",
         "training": "standard",
         "visualization": {
             "show_training": False,

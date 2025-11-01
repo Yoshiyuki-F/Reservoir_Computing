@@ -168,7 +168,7 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
 
     dt = float(config.dt)
     if dt <= 0:
-        raise ValueError("dt must be positive for Mackey-Glass generation")
+        raise ValueError("dt must be p ositive for Mackey-Glass generation")
 
     # tauの単位をdtに合わせた遅延ステップ数へ変換
     delay_steps = int(np.round(float(tau) / dt))

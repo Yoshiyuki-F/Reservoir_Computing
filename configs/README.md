@@ -9,7 +9,7 @@ configs/
 ├── datasets.json       # Dataset generation parameters
 ├── models/             # Model architecture configurations
 │   ├── quantum_advanced.json
-│   ├── quantum_standard.json
+│   ├── gatebased_quantum.json
 │   ├── reservoir_complex.json
 │   ├── reservoir_large.json
 │   └── reservoir_standard.json
