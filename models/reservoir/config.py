@@ -54,3 +54,40 @@ class QuantumReservoirConfig(ModelConfig):
         data['params'] = params
 
         super().__init__(**data)
+
+
+class AnalogQuantumReservoirConfig(ModelConfig):
+    """Analog quantum reservoir configuration."""
+
+    def __init__(self, **data):
+        if 'model_type' not in data:
+            data['model_type'] = 'analog_quantum'
+        if 'name' not in data and 'model_type' in data:
+            data['name'] = f"{data['model_type']}_config"
+
+        analog_fields = {
+            'n_qubits',
+            'positions',
+            'C6',
+            'Omega',
+            'Delta_g',
+            'Delta_l',
+            't_final',
+            'dt',
+            'encoding_scheme',
+            'measurement_basis',
+            'state_aggregation',
+            'reupload_layers',
+            'input_mode',
+            'detuning_scale',
+            'random_seed',
+            'ridge_lambdas',
+        }
+
+        params = data.get('params', {})
+        for field in list(data.keys()):
+            if field in analog_fields:
+                params[field] = data.pop(field)
+        data['params'] = params
+
+        super().__init__(**data)

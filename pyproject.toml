@@ -40,17 +40,22 @@ test = { shell = "uv run pytest -q" }
 # GPU smoke test (skips if no GPU)
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
-# Demo helpers -------------------------------------------------------------
-sine = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave" }
-lorenz = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz" }
-mackey = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass" }
-mnist = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard" }
+# Model variants -----------------------------------------------------------
+sine-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model classic_standard" }
+sine-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model gatebased_quantum" }
+sine-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model analog_quantum" }
 
-# Quantum demos ------------------------------------------------------------
-sine-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model gatebased_quantum" }
-lorenz-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model gatebased_quantum" }
-mackey-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
-mnist-q = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
+lorenz-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model classic_standard" }
+lorenz-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model gatebased_quantum" }
+lorenz-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model analog_quantum" }
+
+mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model classic_standard" }
+mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
+mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
+
+mnist-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard" }
+mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
+mnist-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model analog_quantum" }
 
 # CPU fallbacks ------------------------------------------------------------
 main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }

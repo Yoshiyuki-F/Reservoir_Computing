@@ -25,13 +25,18 @@ def _load_config_json(relative_path: str) -> Dict[str, Any]:
 
 
 @lru_cache()
-def _load_basic_reservoir_config() -> Dict[str, Any]:
-    return _load_config_json('configs/models/basic_reservoir.json')
+def _load_shared_reservoir_config() -> Dict[str, Any]:
+    return _load_config_json('configs/models/shared_reservoir_params.json')
 
 
 @lru_cache()
 def _load_gatebased_quantum_config() -> Dict[str, Any]:
     return _load_config_json('configs/models/gatebased_quantum.json')
+
+
+@lru_cache()
+def _load_analog_quantum_config() -> Dict[str, Any]:
+    return _load_config_json('configs/models/analog_quantum.json')
 
 
 def get_model_factory(model_type: str):
@@ -170,6 +175,10 @@ def run_experiment(
     # Get the appropriate factory for this model type
     ModelFactory = get_model_factory(model_type)
 
+    data_params = dict(demo_config.data_generation.params or {})
+    data_input_dim = data_params.get("input_dim")
+    data_output_dim = data_params.get("output_dim")
+
     if isinstance(dataset, ExperimentDatasetClassification):
         input_dim = int(dataset.train_sequences.shape[-1])
         combined_labels = jnp.concatenate(
@@ -185,24 +194,53 @@ def run_experiment(
         demo_config.reservoir['n_inputs'] = input_dim
         demo_config.reservoir.setdefault('n_outputs', num_classes)
         demo_config.reservoir.setdefault('state_aggregation', 'mean')
+    else:
+        if demo_config.reservoir is None:
+            demo_config.reservoir = {}
+        if data_input_dim is not None:
+            demo_config.reservoir.setdefault('n_inputs', int(data_input_dim))
+        if data_output_dim is not None:
+            demo_config.reservoir.setdefault('n_outputs', int(data_output_dim))
 
-    if quantum_mode or "quantum" in model_type:
+    dataset_name = demo_config.data_generation.name
+    model_name = demo_config.model.name
+    is_analog_model = "analog" in model_name or model_type == "analog_quantum"
+
+    if is_analog_model:
+        if demo_config.quantum_reservoir is None:
+            raise ValueError("Analog quantum mode requires quantum_reservoir config")
+        analog_base = _load_analog_quantum_config().get('params', {})
+        config_dict: Dict[str, Any] = {"model_type": "analog_quantum"}
+        config_dict.update(analog_base)
+        config_dict.update(demo_config.quantum_reservoir)
+        if data_input_dim is not None:
+            config_dict["n_inputs"] = int(data_input_dim)
+        if data_output_dim is not None:
+            config_dict["n_outputs"] = int(data_output_dim)
+        rc = ModelFactory.create_reservoir(
+            'analog', config_dict, backend
+        )
+    elif quantum_mode or "quantum" in model_type:
         if demo_config.quantum_reservoir is None:
             raise ValueError("Quantum mode enabled but quantum_reservoir config is missing")
         quantum_base = _load_gatebased_quantum_config().get('params', {})
-        basic_base = _load_basic_reservoir_config()
+        basic_base = _load_shared_reservoir_config()
         config_sequence = [
             {'params': basic_base},
             {'params': quantum_base},
             demo_config.quantum_reservoir,
         ]
+        if data_input_dim is not None:
+            demo_config.quantum_reservoir['n_inputs'] = int(data_input_dim)
+        if data_output_dim is not None:
+            demo_config.quantum_reservoir['n_outputs'] = int(data_output_dim)
         rc = ModelFactory.create_reservoir(
             'quantum', config_sequence, backend
         )
     else:
         if demo_config.reservoir is None:
             raise ValueError("Classical mode requires reservoir config")
-        basic_base = _load_basic_reservoir_config()
+        basic_base = _load_shared_reservoir_config()
         config_sequence = [
             {'params': basic_base},
             demo_config.reservoir,
@@ -235,6 +273,13 @@ def run_experiment(
                 continue
 
     resolved_filename = demo_config.demo.filename
+    if is_analog_model:
+        suffix = Path(resolved_filename).suffix or ".png"
+        resolved_filename = f"{dataset_name}_aq_prediction{suffix}"
+    elif quantum_mode or "quantum" in model_type:
+        suffix = Path(resolved_filename).suffix or ".png"
+        resolved_filename = f"{dataset_name}_gq_prediction{suffix}"
+
     if n_reservoir is not None and not is_quantum_model:
         filename_path = Path(resolved_filename)
         suffix = filename_path.suffix or ""
@@ -282,11 +327,38 @@ def run_experiment(
                 continue
 
         measurement_basis = reservoir_info.get("measurement_basis", "pauli-z")
-        if measurement_basis == "multi-pauli" and n_qubits is not None:
+        readout_features = reservoir_info.get("readout_feature_dim")
+        readout_observables = reservoir_info.get("readout_observables")
+        state_agg = str(reservoir_info.get("state_aggregation", "")).lower()
+
+        if n_qubits is not None and readout_observables:
             from math import comb
 
-            feature_dim = 3 * int(n_qubits) + comb(int(n_qubits), 2)
-            print(f"🧮 Quantum feature dimension: {feature_dim} (3×{n_qubits} one-body + {comb(int(n_qubits),2)} two-body)")
+            components: list[str] = []
+            calculated_dim = 0
+            for observable in readout_observables:
+                obs = observable.upper()
+                if obs in {"X", "Y", "Z"}:
+                    calculated_dim += n_qubits
+                    components.append(f"{n_qubits} {obs}")
+                elif obs == "ZZ":
+                    pairs = comb(int(n_qubits), 2)
+                    calculated_dim += pairs
+                    components.append(f"{pairs} ZZ")
+
+            base_dim = readout_features or calculated_dim
+            components_str = " + ".join(components) if components else f"{base_dim}"
+
+            aggregated_dim = reservoir_info.get("feature_dim", base_dim)
+            agg_note = ""
+            if aggregated_dim != base_dim:
+                agg_note = f"; after '{state_agg}' aggregation → {aggregated_dim}"
+
+            print(
+                f"🧮 Quantum feature dimension: {base_dim} ({components_str}){agg_note}"
+            )
+        elif n_qubits is not None and readout_features:
+            print(f"🧮 Quantum feature dimension: {readout_features}")
 
         if n_qubits is not None or circuit_depth is not None:
             filename_path = Path(resolved_filename)
@@ -318,8 +390,15 @@ def run_experiment(
 
     output_filename = resolved_filename
 
-    lambda_candidates = list(demo_config.training.ridge_lambdas or [])
-    if not lambda_candidates:
+    # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
+    ridge_cfg = demo_config.training.ridge_lambdas
+    if ridge_cfg and isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
+        # Format: [start, stop, num] or (start, stop, num)
+        start, stop, num = ridge_cfg
+        lambda_candidates = list(np.logspace(start, stop, int(num)))
+    elif ridge_cfg:
+        lambda_candidates = list(ridge_cfg)
+    else:
         lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
 
     if isinstance(dataset, ExperimentDatasetClassification):

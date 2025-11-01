@@ -1,0 +1,216 @@
+{
+  "data_generation": {
+    "name": "mackey_glass",
+    "time_steps": 1000,
+    "dt": 0.1,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": 100,
+    "params": {
+      "tau": 17,
+      "beta": 0.2,
+      "gamma": 0.1,
+      "n": 10,
+      "initial_value": 1.2,
+      "input_dim": 1,
+      "output_dim": 1
+    }
+  },
+  "model": {
+    "name": "gatebased_quantum",
+    "model_type": "reservoir",
+    "params": {
+      "n_qubits": 4,
+      "circuit_depth": 4,
+      "backend": "default.qubit",
+      "entanglement": "full",
+      "measurement_basis": "multi-pauli",
+      "readout_observables": [
+        "X",
+        "Y",
+        "Z",
+        "ZZ"
+      ],
+      "encoding_scheme": "detuning",
+      "detuning_scale": 1.0,
+      "state_aggregation": "last"
+    }
+  },
+  "training": {
+    "name": "standard",
+    "task_type": "timeseries",
+    "train_size": 0.8,
+    "ridge_lambdas": [
+      -14.0,
+      2.0,
+      25.0
+    ]
+  },
+  "demo": {
+    "title": "Quantum Mackey-Glass Prediction",
+    "filename": "mackey_glass_quantum_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_inputs": 1,
+    "n_outputs": 1
+  },
+  "quantum_reservoir": {
+    "n_qubits": 4,
+    "circuit_depth": 4,
+    "backend": "default.qubit",
+    "entanglement": "full",
+    "measurement_basis": "multi-pauli",
+    "readout_observables": [
+      "X",
+      "Y",
+      "Z",
+      "ZZ"
+    ],
+    "encoding_scheme": "detuning",
+    "detuning_scale": 1.0,
+    "state_aggregation": "last",
+    "n_inputs": 1,
+    "n_outputs": 1
+  },
+  "results": {
+    "metrics": {
+      "train_mse": 8.176141359871235e-06,
+      "train_mae": 0.0023874779788336333,
+      "test_mse": 5.002359307843672e-05,
+      "test_mae": 0.00652335669553563,
+      "best_ridge_lambda": 0.0001
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-14,
+        "train_mse": 0.00016442570240774115,
+        "val_mse": 0.7997593460813844
+      },
+      {
+        "lambda": 4.6415888336127726e-14,
+        "train_mse": 0.00016442570240950377,
+        "val_mse": 0.7988938774746196
+      },
+      {
+        "lambda": 2.1544346900318868e-13,
+        "train_mse": 0.00016442570244573854,
+        "val_mse": 0.7948893604224873
+      },
+      {
+        "lambda": 1e-12,
+        "train_mse": 0.0001644257032168918,
+        "val_mse": 0.776571085725469
+      },
+      {
+        "lambda": 4.6415888336127725e-12,
+        "train_mse": 0.00016442571889806602,
+        "val_mse": 0.6970450607417104
+      },
+      {
+        "lambda": 2.1544346900318777e-11,
+        "train_mse": 0.00016442598209636674,
+        "val_mse": 0.4222467014570291
+      },
+      {
+        "lambda": 1e-10,
+        "train_mse": 0.00016442831432048567,
+        "val_mse": 0.029784601203972232
+      },
+      {
+        "lambda": 4.6415888336127727e-10,
+        "train_mse": 0.00016443477893415958,
+        "val_mse": 0.2457255106173184
+      },
+      {
+        "lambda": 2.154434690031878e-09,
+        "train_mse": 0.00016444935364337345,
+        "val_mse": 0.7303706199583587
+      },
+      {
+        "lambda": 1e-08,
+        "train_mse": 0.0001645004159397288,
+        "val_mse": 0.9428123436734627
+      },
+      {
+        "lambda": 4.641588833612773e-08,
+        "train_mse": 0.00016456648992325986,
+        "val_mse": 0.416564005806028
+      },
+      {
+        "lambda": 2.1544346900318822e-07,
+        "train_mse": 0.00016460965392885851,
+        "val_mse": 0.04628893606880704
+      },
+      {
+        "lambda": 1e-06,
+        "train_mse": 0.00016462659687350607,
+        "val_mse": 0.0007004106534636383
+      },
+      {
+        "lambda": 4.641588833612773e-06,
+        "train_mse": 0.00016463123201629863,
+        "val_mse": 0.0010071853399733766
+      },
+      {
+        "lambda": 2.154434690031878e-05,
+        "train_mse": 0.00016463292378569137,
+        "val_mse": 0.0009111864172686992
+      },
+      {
+        "lambda": 0.0001,
+        "train_mse": 0.0001646373610993514,
+        "val_mse": 9.556172502705828e-05
+      },
+      {
+        "lambda": 0.00046415888336127724,
+        "train_mse": 0.00016466277748825614,
+        "val_mse": 0.000552122819490797
+      },
+      {
+        "lambda": 0.0021544346900318778,
+        "train_mse": 0.0001647779683696679,
+        "val_mse": 0.0011920870024682549
+      },
+      {
+        "lambda": 0.01,
+        "train_mse": 0.00016542890998741543,
+        "val_mse": 0.0007178745689951947
+      },
+      {
+        "lambda": 0.046415888336127725,
+        "train_mse": 0.00016761050569444344,
+        "val_mse": 0.003336005692837278
+      },
+      {
+        "lambda": 0.21544346900318778,
+        "train_mse": 0.0001716240860503998,
+        "val_mse": 0.010740621149379561
+      },
+      {
+        "lambda": 1.0,
+        "train_mse": 0.0001999911506985863,
+        "val_mse": 0.02576340787939594
+      },
+      {
+        "lambda": 4.641588833612772,
+        "train_mse": 0.00048273520071646014,
+        "val_mse": 0.09567607389929497
+      },
+      {
+        "lambda": 21.54434690031878,
+        "train_mse": 0.0017948487826857113,
+        "val_mse": 0.30540307233223435
+      },
+      {
+        "lambda": 100.0,
+        "train_mse": 0.006646060642487481,
+        "val_mse": 0.6356581058277795
+      }
+    ]
+  }
+}

@@ -1,9 +1,7 @@
 {
-  "name": "basic_reservoir",
-  "description": "Base configuration properties shared by all reservoir types",
+  "name": "shared_reservoir_params",
+  "description": "Shared parameters common to all reservoir computer variants",
   "params": {
-    "n_inputs": 1,
-    "n_outputs": 1,
     "random_seed": 42,
     "spectral_radius": 0.95,
     "input_scaling": 1.0,
@@ -12,7 +10,6 @@
     "reservoir_weight_range": 1.0,
     "sparsity": 1.0,
     "input_bias": 0.0,
-    "nonlinearity": "tanh",
-    "state_aggregation": "last"
+    "nonlinearity": "tanh"
   }
 }

@@ -5,7 +5,8 @@ This module implements a quantum version of reservoir computing using
 parameterized quantum circuits and variational optimization.
 """
 
-from typing import Optional, Dict, Any, Sequence
+from math import comb
+from typing import Optional, Dict, Any, Sequence, Iterable, List, Tuple
 
 import numpy as np
 import pennylane as qml
@@ -23,8 +24,8 @@ from .base_reservoir import BaseReservoirComputer
 
 
 @lru_cache()
-def _load_basic_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "configs/models/basic_reservoir.json"
+def _load_shared_defaults() -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[2] / "configs/models/shared_reservoir_params.json"
     data = json.loads(path.read_text())
     return dict(data.get("params", {}))
 
@@ -34,9 +35,25 @@ def _load_quantum_defaults() -> Dict[str, Any]:
     path = Path(__file__).resolve().parents[2] / "configs/models/gatebased_quantum.json"
     data = json.loads(path.read_text())
     params = data.get('params', {}) or {}
-    base = _load_basic_defaults()
+    base = _load_shared_defaults()
     merged = {**base, **params}
     return merged
+
+
+def compute_feature_dim(
+    n_qubits: int,
+    observables: Sequence[str],
+    aggregation: str,
+) -> int:
+    """Compute aggregated feature dimensionality for given observables/aggregation."""
+    obs_set = {obs.upper() for obs in observables}
+    one_body = sum(1 for axis in ("X", "Y", "Z") if axis in obs_set) * n_qubits
+    zz_terms = comb(n_qubits, 2) if "ZZ" in obs_set else 0
+    base_dim = one_body + zz_terms
+    agg = aggregation.lower()
+    if agg == "last_mean":
+        return base_dim * 2
+    return base_dim
 
 
 class QuantumReservoirComputer(BaseReservoirComputer):
@@ -80,12 +97,36 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         # Normalize config to dictionary form
         merged: Dict[str, Any] = _load_quantum_defaults().copy()
+        required_keys = {
+            "n_qubits",
+            "circuit_depth",
+            "n_inputs",
+            "n_outputs",
+            "backend",
+            "random_seed",
+            "measurement_basis",
+            "encoding_scheme",
+            "entanglement",
+            "detuning_scale",
+            "state_aggregation",
+        }
+        user_defined_readouts = False
         config_sequence: Iterable[Dict[str, Any]] = [config] if isinstance(config, dict) else config  # type: ignore[arg-type]
         for cfg in config_sequence:
             cfg_dict = dict(cfg)
-            merged.update({k: v for k, v in cfg_dict.items() if k not in {'name', 'description', 'params'}})
             params = cfg_dict.get('params', {}) or {}
+            if 'readout_observables' in cfg_dict or 'readout_observables' in params:
+                user_defined_readouts = True
+            merged.update({k: v for k, v in cfg_dict.items() if k not in {'name', 'description', 'params'}})
             merged.update(params)
+
+        missing_keys = [key for key in required_keys if key not in merged]
+        if missing_keys:
+            formatted = ", ".join(sorted(missing_keys))
+            raise ValueError(
+                "Gate-based quantum reservoir configuration missing required keys: "
+                f"{formatted}"
+            )
 
         self.config = merged
         self.n_qubits = merged['n_qubits']
@@ -97,6 +138,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.measurement_basis = str(merged['measurement_basis']).lower()
         self.encoding_scheme = str(merged['encoding_scheme']).lower()
         self.entanglement = str(merged['entanglement']).lower()
+        if self.entanglement == "ring":
+            self.entanglement = "circular"
         self.detuning_scale = float(merged['detuning_scale'])
         self.state_aggregation = str(merged['state_aggregation']).lower()
 
@@ -110,7 +153,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         if self.n_inputs < 1:
             raise ValueError("Number of inputs must be at least 1")
         if self.measurement_basis not in {"pauli-z", "multi-pauli"}:
-            raise ValueError(
+            raise NotImplementedError(
                 "measurement_basis must be either 'pauli-z' or 'multi-pauli'"
             )
         if self.encoding_scheme not in {"amplitude", "angle", "detuning"}:
@@ -119,8 +162,71 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             )
         if self.entanglement not in {"circular", "full"}:
             raise ValueError("entanglement must be either 'circular' or 'full'")
-        if self.state_aggregation not in {"last", "mean", "concat"}:
-            raise ValueError("state_aggregation must be 'last', 'mean', or 'concat'")
+        if self.state_aggregation not in {"last", "mean", "concat", "last_mean"}:
+            raise ValueError("state_aggregation must be 'last', 'mean', 'concat', or 'last_mean'")
+
+        if self.measurement_basis == "multi-pauli":
+            default_readouts = ["X", "Y", "Z", "ZZ"]
+            allowed_readouts = {"X", "Y", "Z", "ZZ"}
+        else:
+            default_readouts = ["Z"]
+            allowed_readouts = {"Z", "ZZ"}
+
+        raw_readouts = merged.get("readout_observables")
+        if raw_readouts is None:
+            candidate_readouts = list(default_readouts)
+        elif isinstance(raw_readouts, (list, tuple, set)):
+            candidate_readouts = [str(entry).upper() for entry in raw_readouts]
+        else:
+            candidate_readouts = [str(raw_readouts).upper()]
+
+        readout_sequence: List[str] = []
+        for name in candidate_readouts:
+            if name not in allowed_readouts:
+                continue
+            if name not in readout_sequence:
+                readout_sequence.append(name)
+
+        if not readout_sequence:
+            if user_defined_readouts:
+                raise ValueError(
+                    f"readout_observables contained no supported entries for "
+                    f"measurement_basis='{self.measurement_basis}'. "
+                    f"Allowed values: {sorted(allowed_readouts)}"
+                )
+            readout_sequence = list(default_readouts)
+
+        self.readout_observables: Tuple[str, ...] = tuple(readout_sequence)
+        self.base_feature_dim = self._compute_base_feature_dim()
+        self.expected_feature_dim = compute_feature_dim(
+            self.n_qubits,
+            self.readout_observables,
+            self.state_aggregation,
+        )
+        self.readout_feature_dim = self.base_feature_dim
+        self.feature_dim_: Optional[int] = None
+
+        self.selected_lambda_: Optional[float] = None
+        self.train_mse_by_lambda_: Dict[float, float] = {}
+        self._feature_mu_: Optional[np.ndarray] = None
+        self._feature_sigma_: Optional[np.ndarray] = None
+        self._feature_keep_mask_: Optional[np.ndarray] = None
+
+        # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
+        ridge_cfg = merged.get("ridge_lambdas", [-14, 2, 25])
+        if isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
+            # Format: [start, stop, num] or (start, stop, num)
+            start, stop, num = ridge_cfg
+            self.ridge_lambdas: Sequence[float] = tuple(np.logspace(start, stop, int(num)))
+        elif isinstance(ridge_cfg, dict):
+            # Format: {"start": -14, "stop": 2, "num": 25}
+            start = ridge_cfg.get("start", -14)
+            stop = ridge_cfg.get("stop", 2)
+            num = ridge_cfg.get("num", 25)
+            self.ridge_lambdas = tuple(np.logspace(start, stop, int(num)))
+        else:
+            # Explicit list of lambda values
+            self.ridge_lambdas = tuple(float(l) for l in ridge_cfg)
 
         # Initialize quantum device
         self._initialize_quantum_device()
@@ -238,28 +344,90 @@ class QuantumReservoirComputer(BaseReservoirComputer):
                 for j in range(i + 1, self.n_qubits):
                     qml.CZ(wires=[i, j])
 
+    def _compute_base_feature_dim(self) -> int:
+        """Return the base number of measured features per time step."""
+        dim = 0
+        for observable in self.readout_observables:
+            if observable in {"X", "Y", "Z"}:
+                dim += self.n_qubits
+            elif observable == "ZZ":
+                dim += (self.n_qubits * (self.n_qubits - 1)) // 2
+        return dim
+
+    def _prepare_design_matrix(
+        self,
+        feature_matrix: jnp.ndarray,
+        fit: bool = False,
+    ) -> jnp.ndarray:
+        features_np = np.asarray(feature_matrix, dtype=np.float64)
+
+        if features_np.ndim != 2:
+            features_np = features_np.reshape(features_np.shape[0], -1)
+
+        if fit or self._feature_mu_ is None or self._feature_sigma_ is None:
+            mu = features_np.mean(axis=0)
+            sigma = features_np.std(axis=0)
+            keep = sigma >= 1e-12
+            if not np.any(keep):
+                keep = np.ones_like(sigma, dtype=bool)
+            sigma_adj = sigma.copy()
+            sigma_adj[~keep] = 1.0
+            self._feature_mu_ = mu
+            self._feature_sigma_ = sigma_adj
+            self._feature_keep_mask_ = keep
+
+            kept_sigma = sigma_adj[keep]
+            print(
+                f"[gatebased-qrc] feature std range (kept) -> min={float(kept_sigma.min()):.3e}, max={float(kept_sigma.max()):.3e}"
+            )
+        else:
+            if self._feature_mu_ is None or self._feature_sigma_ is None or self._feature_keep_mask_ is None:
+                raise RuntimeError("Feature scaler has not been fitted. Call train() before predict().")
+            mu = self._feature_mu_
+            sigma_adj = self._feature_sigma_
+            keep = self._feature_keep_mask_
+
+        centered = (features_np - mu) / sigma_adj
+        centered = centered[:, keep]
+
+        bias = np.ones((centered.shape[0], 1), dtype=np.float64)
+        design = np.concatenate([centered, bias], axis=1)
+        return jnp.array(design, dtype=jnp.float64)
+
     def _measure_quantum_state(self):
         """Return measurement observables based on selected basis."""
+        measurements: List[Any] = []
+
         if self.measurement_basis == "multi-pauli":
-            measurements = []
-            # One-body terms
-            for wire in range(self.n_qubits):
-                measurements.append(qml.expval(qml.PauliX(wires=wire)))
-            for wire in range(self.n_qubits):
-                measurements.append(qml.expval(qml.PauliY(wires=wire)))
-            for wire in range(self.n_qubits):
-                measurements.append(qml.expval(qml.PauliZ(wires=wire)))
+            for observable in self.readout_observables:
+                if observable == "X":
+                    for wire in range(self.n_qubits):
+                        measurements.append(qml.expval(qml.PauliX(wires=wire)))
+                elif observable == "Y":
+                    for wire in range(self.n_qubits):
+                        measurements.append(qml.expval(qml.PauliY(wires=wire)))
+                elif observable == "Z":
+                    for wire in range(self.n_qubits):
+                        measurements.append(qml.expval(qml.PauliZ(wires=wire)))
+                elif observable == "ZZ":
+                    for i in range(self.n_qubits):
+                        for j in range(i + 1, self.n_qubits):
+                            measurements.append(
+                                qml.expval(qml.PauliZ(wires=i) @ qml.PauliZ(wires=j))
+                            )
+        else:  # 'pauli-z'
+            for observable in self.readout_observables:
+                if observable == "Z":
+                    for wire in range(self.n_qubits):
+                        measurements.append(qml.expval(qml.PauliZ(wires=wire)))
+                elif observable == "ZZ":
+                    for i in range(self.n_qubits):
+                        for j in range(i + 1, self.n_qubits):
+                            measurements.append(
+                                qml.expval(qml.PauliZ(wires=i) @ qml.PauliZ(wires=j))
+                            )
 
-            # Two-body ZZ correlations
-            for i in range(self.n_qubits):
-                for j in range(i + 1, self.n_qubits):
-                    measurements.append(
-                        qml.expval(qml.PauliZ(wires=i) @ qml.PauliZ(wires=j))
-                    )
-            return measurements
-
-        # Default single Pauli-Z measurements
-        return [qml.expval(qml.PauliZ(wires=i)) for i in range(self.n_qubits)]
+        return measurements
 
     def _create_quantum_circuit(self, classical_input: jnp.ndarray) -> callable:
         """Create the quantum circuit for reservoir computation.
@@ -292,7 +460,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             input_sequence: Input time series, shape (time_steps, n_inputs)
 
         Returns:
-            Quantum reservoir states, shape (time_steps, n_qubits)
+            Quantum reservoir features, shape (time_steps, feature_dim)
         """
         reservoir_states = []
 
@@ -314,6 +482,10 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             return states[-1]
         if self.state_aggregation == 'mean':
             return jnp.mean(states, axis=0)
+        if self.state_aggregation == 'last_mean':
+            last = states[-1]
+            mean = jnp.mean(states, axis=0)
+            return jnp.concatenate([last, mean], axis=0)
         return states.reshape(-1)
 
     def _encode_sequences(self, sequences: jnp.ndarray) -> jnp.ndarray:
@@ -330,50 +502,88 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         target_data: jnp.ndarray,
         ridge_lambdas: Optional[Sequence[float]] = None,
     ) -> None:
-        lambda_candidates = []
-        if ridge_lambdas:
-            lambda_candidates.extend([float(l) for l in ridge_lambdas if l is not None])
+        X_np = np.asarray(X, dtype=np.float64)
+        y_np = np.asarray(target_data, dtype=np.float64)
+
+        lambdas = ridge_lambdas or self.ridge_lambdas
+        lambda_candidates = [float(lam) for lam in lambdas if lam is not None and lam > 0]
+
         if not lambda_candidates:
-            lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
+            lambda_candidates = list(self.ridge_lambdas)
 
-        seen = set()
-        ordered_lambdas = []
-        for lam in lambda_candidates:
-            if lam < 0:
-                continue
-            if lam not in seen:
-                ordered_lambdas.append(lam)
-                seen.add(lam)
+        lambda_candidates = sorted(set(lambda_candidates))
 
-        best_lambda = None
-        best_mse = float("inf")
-        best_weights = None
-        ridge_log: list[Dict[str, float]] = []
+        n_samples = X_np.shape[0]
+        if n_samples < 2:
+            raise ValueError("Not enough samples to perform ridge regression")
 
-        XTX = X.T @ X
-        XTY = X.T @ target_data
+        split_idx = int(0.9 * n_samples)
+        split_idx = max(1, min(split_idx, n_samples - 1))
 
-        for lam in ordered_lambdas:
-            lam_val = float(lam)
-            A = XTX + lam_val * jnp.eye(X.shape[1], dtype=X.dtype)
+        X_train, X_val = X_np[:split_idx], X_np[split_idx:]
+        y_train, y_val = y_np[:split_idx], y_np[split_idx:]
+
+        feature_part = X_train[:, :-1]
+        if feature_part.size:
+            sigma = feature_part.std(axis=0)
+            print(
+                f"[gatebased-qrc] feature std range (train) -> min={float(sigma.min()):.3e}, max={float(sigma.max()):.3e}"
+            )
             try:
-                weights = jnp.linalg.solve(A, XTY)
-            except Exception:
-                weights = jnp.linalg.pinv(A) @ XTY
+                sv = np.linalg.svd(feature_part, compute_uv=False)
+                cond_number = float(sv.max() / max(sv.min(), 1e-12))
+                print(f"[gatebased-qrc] design matrix cond -> {cond_number:.3e}")
+            except np.linalg.LinAlgError:
+                print("[gatebased-qrc] SVD failed; skipping condition number log.")
 
-            preds = X @ weights
-            mse = float(jnp.mean((preds - target_data) ** 2))
-            ridge_log.append({"lambda": lam_val, "train_mse": mse})
+        def ridge_via_svd(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
+            U, s, Vt = np.linalg.svd(design, full_matrices=False)
+            UT_y = U.T @ targets
+            denom = s ** 2 + lam
+            coeff = (s / denom)[:, None]
+            scaled = coeff * UT_y
+            return Vt.T @ scaled
 
-            if mse < best_mse:
-                best_mse = mse
-                best_lambda = lam_val
-                best_weights = weights
+        train_mse_list: List[float] = []
+        val_mse_list: List[float] = []
+        weights_by_lambda: Dict[float, np.ndarray] = {}
 
-        self.W_out = best_weights
+        for lam in lambda_candidates:
+            weights = ridge_via_svd(X_train, y_train, lam)
+            yhat_tr = X_train @ weights
+            train_mse = float(np.mean((y_train - yhat_tr) ** 2))
+
+            if X_val.size > 0:
+                yhat_val = X_val @ weights
+                val_mse = float(np.mean((y_val - yhat_val) ** 2))
+            else:
+                val_mse = train_mse
+
+            train_mse_list.append(train_mse)
+            val_mse_list.append(val_mse)
+            weights_by_lambda[lam] = weights
+
+        best_index = int(np.argmin(val_mse_list))
+        best_lambda = lambda_candidates[best_index]
+        best_weights_np = weights_by_lambda[best_lambda]
+
+        print("🔍 Ridge λ grid search (VAL)")
+        for lam, val_mse in zip(lambda_candidates, val_mse_list):
+            print(f"  λ={lam:.2e} -> val MSE={val_mse:.6e}")
+
+        self.W_out = jnp.array(best_weights_np, dtype=jnp.float64)
         self.best_ridge_lambda = best_lambda
-        self.ridge_search_log = ridge_log
-        self.last_training_mse = best_mse
+        self.selected_lambda_ = best_lambda
+        self.last_training_mse = float(train_mse_list[best_index])
+        self.train_mse_by_lambda_ = {lam: val for lam, val in zip(lambda_candidates, val_mse_list)}
+        self.ridge_search_log = [
+            {
+                "lambda": lam,
+                "train_mse": tr,
+                "val_mse": val,
+            }
+            for lam, tr, val in zip(lambda_candidates, train_mse_list, val_mse_list)
+        ]
 
     def train_classification(
         self,
@@ -383,14 +593,14 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
     ) -> None:
         features = self._encode_sequences(sequences)
-        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
-        X = jnp.concatenate([features, bias_column], axis=1)
+        design_matrix = self._prepare_design_matrix(features, fit=True)
+        self.feature_dim_ = design_matrix.shape[1] - 1
 
         labels = labels.astype(jnp.int32)
         targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
         targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
 
-        self._fit_ridge_with_grid(X, targets, ridge_lambdas)
+        self._fit_ridge_with_grid(design_matrix, targets, ridge_lambdas)
         self.classification_mode = True
         self.num_classes = num_classes
         self.trained = True
@@ -402,9 +612,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             raise ValueError("Model has not been trained.")
 
         features = self._encode_sequences(sequences)
-        bias_column = jnp.ones((features.shape[0], 1), dtype=jnp.float64)
-        X = jnp.concatenate([features, bias_column], axis=1)
-        logits = X @ self.W_out
+        design_matrix = self._prepare_design_matrix(features, fit=False)
+        logits = design_matrix @ self.W_out
         return logits
 
     def train(
@@ -435,12 +644,10 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         # Run quantum reservoir to get quantum states
         quantum_states = self._run_quantum_reservoir(input_data)
+        design_matrix = self._prepare_design_matrix(quantum_states, fit=True)
+        self.feature_dim_ = design_matrix.shape[1] - 1
 
-        # Add bias term for classical readout
-        bias_column = jnp.ones((quantum_states.shape[0], 1))
-        X = jnp.concatenate([quantum_states, bias_column], axis=1)
-
-        self._fit_ridge_with_grid(X, target_data, ridge_lambdas)
+        self._fit_ridge_with_grid(design_matrix, target_data, ridge_lambdas)
 
         # Mark as trained
         self.classification_mode = False
@@ -467,13 +674,9 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         # Run quantum reservoir
         quantum_states = self._run_quantum_reservoir(input_data)
+        design_matrix = self._prepare_design_matrix(quantum_states, fit=False)
 
-        # Add bias term
-        bias_column = jnp.ones((quantum_states.shape[0], 1))
-        X = jnp.concatenate([quantum_states, bias_column], axis=1)
-
-        # Generate predictions using trained readout
-        predictions = X @ self.W_out
+        predictions = design_matrix @ self.W_out
         return predictions
 
     def reset_state(self) -> None:
@@ -487,9 +690,12 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.last_training_mse = None
         self.classification_mode = False
         self.num_classes = None
-        self.best_ridge_lambda = None
-        self.ridge_search_log = []
-        self.last_training_mse = None
+        self.selected_lambda_ = None
+        self.train_mse_by_lambda_.clear()
+        self.feature_dim_ = None
+        self._feature_mu_ = None
+        self._feature_sigma_ = None
+        self._feature_keep_mask_ = None
 
     def get_reservoir_info(self) -> Dict[str, Any]:
         """Get information about the quantum reservoir configuration."""
@@ -506,6 +712,12 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             "measurement_basis": self.measurement_basis,
             "encoding_scheme": self.encoding_scheme,
             "state_aggregation": self.state_aggregation,
+            "readout_observables": list(self.readout_observables),
+            "readout_feature_dim": self.readout_feature_dim,
+            "expected_feature_dim": self.expected_feature_dim,
+            "feature_dim": self.feature_dim_ if self.feature_dim_ is not None else self.expected_feature_dim,
+            "selected_lambda": self.selected_lambda_,
+            "train_mse_by_lambda": self.train_mse_by_lambda_,
         }
 
         # Add config info if available

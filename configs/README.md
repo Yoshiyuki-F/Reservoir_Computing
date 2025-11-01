@@ -8,8 +8,10 @@ This directory contains a modular configuration system that separates concerns i
 configs/
 ├── datasets.json       # Dataset generation parameters
 ├── models/             # Model architecture configurations
+│   ├── shared_reservoir_params.json
 │   ├── quantum_advanced.json
 │   ├── gatebased_quantum.json
+│   ├── analog_quantum.json
 │   ├── reservoir_complex.json
 │   ├── reservoir_large.json
 │   └── reservoir_standard.json

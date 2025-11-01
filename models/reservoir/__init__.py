@@ -9,6 +9,13 @@ except ImportError:
     QuantumReservoirComputer = None
     QUANTUM_AVAILABLE = False
 
+try:
+    from .analog_quantum import AnalogQuantumReservoir
+    ANALOG_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    AnalogQuantumReservoir = None
+    ANALOG_AVAILABLE = False
+
 from configs.core import (
     ExperimentConfig,
     DataGenerationConfig,
@@ -19,6 +26,7 @@ from configs.core import (
 from .config import (
     ReservoirConfig,
     QuantumReservoirConfig,
+    AnalogQuantumReservoirConfig,
 )
 
 # Data preparation is now model-agnostic and in pipelines
@@ -35,10 +43,13 @@ __all__ = [
     "ReservoirComputerFactory",
     "ReservoirComputer",
     "QuantumReservoirComputer",
+    "AnalogQuantumReservoir",
     "QUANTUM_AVAILABLE",
+    "ANALOG_AVAILABLE",
     "ExperimentConfig",
     "ReservoirConfig",
     "QuantumReservoirConfig",
+    "AnalogQuantumReservoirConfig",
     "DataGenerationConfig",
     "TrainingConfig",
     "DemoConfig",

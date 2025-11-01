@@ -177,8 +177,18 @@ class ReservoirComputerFactory:
                     "Install with: uv add pennylane pennylane-jax"
                 ) from e
 
+        elif reservoir_type.lower() in {'analog', 'analog_quantum'}:
+            try:
+                from .analog_quantum import AnalogQuantumReservoir
+                return AnalogQuantumReservoir(config=config)
+            except ImportError as e:
+                raise ImportError(
+                    "Analog reservoir requires QuTiP. "
+                    "Install with: pip install qutip"
+                ) from e
+
         else:
             raise ValueError(
                 f"Unknown reservoir type '{reservoir_type}'. "
-                "Supported types: 'classical', 'quantum'"
+                "Supported types: 'classical', 'gatebased_quantum', 'analog_quantum'"
             )

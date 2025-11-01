@@ -7,6 +7,7 @@
     "backend": "default.qubit",
     "entanglement": "full",
     "measurement_basis": "multi-pauli",
+    "readout_observables": ["X", "Y", "Z", "ZZ"],
     "encoding_scheme": "detuning",
     "detuning_scale": 1.0,
     "state_aggregation": "last"

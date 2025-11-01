@@ -13,6 +13,7 @@ def main():
         Usage examples:
             reservoir-cli --dataset sine_wave --model classic_standard
             reservoir-cli --dataset lorenz --model gatebased_quantum --show-training
+            reservoir-cli --dataset mnist --model analog_quantum --force-cpu
             reservoir-cli --dataset mackey_glass --model reservoir_large --training windowed
             reservoir-cli --dataset mnist --model classic_standard --force-cpu
         """
@@ -21,7 +22,7 @@ def main():
     parser.add_argument(
         '--model',
         type=str,
-        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'gatebased_quantum', 'quantum_advanced'],
+        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'gatebased_quantum', 'analog_quantum', 'quantum_advanced'],
         default='classic_standard',
         help='Model configuration to use (default: classic_standard)'
     )

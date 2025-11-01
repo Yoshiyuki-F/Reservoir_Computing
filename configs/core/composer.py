@@ -114,13 +114,13 @@ class ConfigComposer:
         model_config = self.load_from_category("models", exp_config["model"])
         training_config = self.load_from_category("training", exp_config["training"])
 
-        # Merge basic_reservoir properties with model config
+        # Merge shared reservoir properties with model config
         try:
-            basic_config = self.load_from_category("models", "basic_reservoir")
-            # Basic properties go first, then specific model properties override
+            basic_config = self.load_from_category("models", "shared_reservoir_params")
+            # Shared properties go first, then specific model properties override
             model_config = {**basic_config, **model_config}
         except (FileNotFoundError, KeyError):
-            # basic_reservoir.json doesn't exist, use model_config as-is
+            # shared_reservoir_params.json doesn't exist, use model_config as-is
             pass
 
         # Visualization is now in experiment config

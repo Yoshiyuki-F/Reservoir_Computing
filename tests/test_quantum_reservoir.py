@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import pytest
 
 from models.reservoir.gatebased_quantum import QuantumReservoirComputer
 
@@ -25,7 +26,9 @@ def test_pauli_z_measurement_dimension():
     inputs = jnp.ones((5, 1), dtype=jnp.float32)
     states = qrc._run_quantum_reservoir(inputs)
 
-    assert states.shape == (5, cfg["n_qubits"])
+    n_q = cfg["n_qubits"]
+    expected = n_q + (n_q * (n_q - 1)) // 2
+    assert states.shape == (5, expected)
 
 
 def test_multi_pauli_measurement_dimension():
@@ -41,12 +44,38 @@ def test_multi_pauli_measurement_dimension():
     assert states.shape == (5, expected_features)
 
 
+def test_multi_pauli_custom_readout_observables():
+    cfg = _base_config(measurement_basis="multi-pauli")
+    cfg["readout_observables"] = ["Z", "ZZ"]
+    qrc = QuantumReservoirComputer(cfg)
+
+    inputs = jnp.ones((3, 1), dtype=jnp.float32)
+    states = qrc._run_quantum_reservoir(inputs)
+
+    n_q = cfg["n_qubits"]
+    expected_features = n_q + (n_q * (n_q - 1)) // 2
+
+    assert states.shape == (3, expected_features)
+    info = qrc.get_reservoir_info()
+    assert info["readout_observables"] == ["Z", "ZZ"]
+    assert info["readout_feature_dim"] == expected_features
+
+
+def test_invalid_readout_for_pauli_z():
+    cfg = _base_config(measurement_basis="pauli-z")
+    cfg["readout_observables"] = ["X"]
+    with pytest.raises(ValueError):
+        QuantumReservoirComputer(cfg)
+
+
 def test_full_entanglement_runs():
     cfg = _base_config(entanglement="full")
     qrc = QuantumReservoirComputer(cfg)
     inputs = jnp.ones((3, 1), dtype=jnp.float32)
     states = qrc._run_quantum_reservoir(inputs)
-    assert states.shape == (3, cfg["n_qubits"])
+    n_q = cfg["n_qubits"]
+    expected = n_q + (n_q * (n_q - 1)) // 2
+    assert states.shape == (3, expected)
 
 
 def test_ridge_lambda_grid_search(monkeypatch):
