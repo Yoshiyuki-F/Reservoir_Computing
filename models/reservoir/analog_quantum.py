@@ -606,7 +606,8 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
                 self.ridge_search_log.append({"lambda": lam, "train_accuracy": train_accuracy, "val_accuracy": val_accuracy})
             else:
                 train_mse = float(np.mean((y_train - preds_tr) ** 2))
-                val_mse = float(np.mean((y_val if X_val.size > 0 else y_train - preds_val) ** 2))
+                y_ref = y_val if X_val.size > 0 else y_train
+                val_mse = float(np.mean((y_ref - preds_val) ** 2))
 
                 train_metric_list.append(train_mse)
                 val_metric_list.append(val_mse)
@@ -629,8 +630,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         best_weights = weights_by_lambda[best_lambda]
         self.best_ridge_lambda = best_lambda
 
-        return best_weights
-
+        return best_weights, best_lambda
     # ------------------------------------------------------------------ #
     # Training / prediction (regression)                                #
     # ------------------------------------------------------------------ #
@@ -654,9 +654,22 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         design_matrix = self._prepare_design_matrix(features, fit=True)
 
         lambdas = ridge_lambdas or self.ridge_lambdas
-        weights = self._select_ridge_lambda(design_matrix, targets, lambdas, classification=False)
 
-        self.W_out = weights
+        weights, best_lam = self._select_ridge_lambda(
+                design_matrix, targets, lambdas, classification=False
+        )
+
+        def _ridge_svd_full(X, Y, lam):
+            # 正: W = V^T * diag(s/(s^2+λ)) * U^T * Y
+            U, s, Vt = np.linalg.svd(X, full_matrices=False)
+            UTY = U.T @ Y  # (r, out)
+            coef = (s / (s * s + lam))[:, None]  # (r, 1)
+            scaled = coef * UTY  # (r, out)
+            return Vt.T @ scaled  # (D, out)
+        
+        
+        self.W_out = _ridge_svd_full(design_matrix, targets, best_lam)
+
         preds = design_matrix @ self.W_out
         self.last_training_mse = float(np.mean((preds - targets) ** 2))
         self.classification_mode = False
