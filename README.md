@@ -209,3 +209,7 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 - Jaeger, H. (2001). The "echo state" approach to analysing and training recurrent neural networks.
 - Lukoševičius, M., & Jaeger, H. (2009). Reservoir computing approaches to recurrent neural network training.
 - [JAX CUDA Installation Guide](https://jax.readthedocs.io/en/latest/installation.html)
+
+
+TODO
+ab wie viel bits kann es gut rechnen? literatur fastforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? sequenzmnist  728px andere Reservoir ansat

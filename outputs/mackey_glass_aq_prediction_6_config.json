@@ -12,8 +12,8 @@
       "gamma": 0.1,
       "n": 10,
       "initial_value": 1.2,
-      "input_dim": 1,
-      "output_dim": 1
+      "n_input": 1,
+      "n_output": 1
     }
   },
   "model": {
@@ -79,7 +79,12 @@
     "state_aggregation": "last_mean",
     "reupload_layers": 1,
     "input_mode": "scalar",
-    "detuning_scale": 0.3
+    "detuning_scale": 0.3,
+    "ridge_lambdas": [
+      -14.0,
+      2.0,
+      25.0
+    ]
   },
   "results": {
     "metrics": {

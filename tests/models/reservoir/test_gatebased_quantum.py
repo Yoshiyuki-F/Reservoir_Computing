@@ -58,19 +58,20 @@ def test_feature_dim_multi_pauli_last_and_last_mean():
     expected = compute_feature_dim(cfg["n_qubits"], cfg["readout_observables"], cfg["state_aggregation"])
     assert qrc.feature_dim_ == expected
 
-    cfg_lm = base_config(state_aggregation="last_mean")
-    qrc_lm = QuantumReservoirComputer(cfg_lm)
-    seq = np.sin(np.linspace(0, 4 * np.pi, 60), dtype=np.float32).reshape(-1, 1)
-    sequences = np.stack([seq[i : i + 20] for i in range(0, 40, 10)], axis=0)
-    labels = np.arange(sequences.shape[0], dtype=np.int32) % 2
-    qrc_lm.train_classification(
-        jnp.array(sequences),
-        jnp.array(labels),
-        ridge_lambdas=[1e-3],
-        num_classes=2,
-    )
-    expected_lm = compute_feature_dim(cfg_lm["n_qubits"], cfg_lm["readout_observables"], cfg_lm["state_aggregation"])
-    assert qrc_lm.feature_dim_ == expected_lm
+    for agg in ("last_mean", "mts"):
+        cfg_lm = base_config(state_aggregation=agg)
+        qrc_lm = QuantumReservoirComputer(cfg_lm)
+        seq = np.sin(np.linspace(0, 4 * np.pi, 60), dtype=np.float32).reshape(-1, 1)
+        sequences = np.stack([seq[i : i + 20] for i in range(0, 40, 10)], axis=0)
+        labels = np.arange(sequences.shape[0], dtype=np.int32) % 2
+        qrc_lm.train_classification(
+            jnp.array(sequences),
+            jnp.array(labels),
+            ridge_lambdas=[1e-3],
+            num_classes=2,
+        )
+        expected_lm = compute_feature_dim(cfg_lm["n_qubits"], cfg_lm["readout_observables"], cfg_lm["state_aggregation"])
+        assert qrc_lm.feature_dim_ == expected_lm
 
 
 def test_feature_dim_z_zz_only():
@@ -117,8 +118,9 @@ def test_detuning_scale_affects_mse():
     assert not np.isclose(model_high.last_training_mse, model_low.last_training_mse)
 
 
-def test_state_aggregation_last_mean_doubles_dimension():
-    cfg = base_config(state_aggregation="last_mean")
+@pytest.mark.parametrize("agg", ["last_mean", "mts"])
+def test_state_aggregation_last_mean_doubles_dimension(agg):
+    cfg = base_config(state_aggregation=agg)
     qrc = QuantumReservoirComputer(cfg)
     seq = np.sin(np.linspace(0, 6 * np.pi, 80), dtype=np.float32).reshape(-1, 1)
     sequences = np.stack([seq[i : i + 20] for i in range(0, 40, 10)], axis=0)

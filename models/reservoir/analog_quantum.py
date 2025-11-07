@@ -8,18 +8,13 @@ trained with ridge regression on expectation values of Pauli observables.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-
 import numpy as np
-
-try:  # pragma: no cover - optional dependency
-    import qutip as qt
-except ImportError as exc:  # pragma: no cover - handled upstream
-    raise ImportError("AnalogQRC requires QuTiP. pip install qutip") from exc
+import qutip as qt
 
 from .base_reservoir import BaseReservoirComputer
+from .config import AnalogQuantumReservoirConfig, parse_ridge_lambdas
 
 # --------------------------------------------------------------------------- #
 # Helper dataclasses / utilities                                             #
@@ -58,131 +53,55 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
     SUPPORTED_ENCODING = {"detuning"}
     SUPPORTED_MEASUREMENTS = {"multi-pauli"}
     SUPPORTED_INPUT_MODES = {"scalar", "sequence", "block"}
-    SUPPORTED_STATE_AGG = {"last", "mean", "last_mean"}
+    SUPPORTED_STATE_AGG = {"last", "mean", "last_mean", "mts"}
 
     def __init__(self, config: Dict[str, Any]) -> None:
         super().__init__()
 
-        cfg = dict(config)
-        model_type = cfg.get("model_type", "analog_quantum")
-        if model_type != "analog_quantum":
-            raise ValueError("AnalogQuantumReservoir expects model_type='analog_quantum'")
+        # Create config object - this performs all validation
+        cfg = AnalogQuantumReservoirConfig(**config)
 
         self.backend = "qutip"
         self.config = cfg
 
-        # Core hyperparameters with defaults
-        required_keys = {
-            "n_qubits",
-            "C6",
-            "Omega",
-            "Delta_g",
-            "Delta_l",
-            "t_final",
-            "dt",
-            "encoding_scheme",
-            "measurement_basis",
-            "readout_observables",
-            "state_aggregation",
-            "reupload_layers",
-            "input_mode",
-            "detuning_scale",
-        }
-        missing_keys = [key for key in required_keys if key not in cfg]
-        if missing_keys:
-            formatted = ", ".join(sorted(missing_keys))
-            raise ValueError(
-                "AnalogQuantumReservoir missing required configuration keys: "
-                f"{formatted}"
-            )
+        # Extract validated parameters
+        params = cfg.params
 
-        self.n_qubits: int = int(cfg["n_qubits"])
-        if self.n_qubits < 1:
-            raise ValueError("n_qubits must be positive")
+        self.n_qubits: int = params["n_qubits"]
 
+        # Handle positions
         self.positions: Optional[np.ndarray] = None
-        raw_positions = cfg.get("positions")
+        raw_positions = params.get("positions")
         if raw_positions is not None:
             self.positions = np.asarray(raw_positions, dtype=np.float64)
-            if self.positions.shape[0] != self.n_qubits:
-                raise ValueError("positions must specify coordinates for each qubit")
 
-        self.C6: float = float(cfg["C6"])
-        self.Omega: float = float(cfg["Omega"])
-        self.Delta_g: float = float(cfg["Delta_g"])
-        self.Delta_l: float = float(cfg["Delta_l"])
-        self.t_final: float = float(cfg["t_final"])
-        self.dt: float = float(cfg["dt"])
+        self.C6: float = float(params["C6"])
+        self.Omega: float = float(params["Omega"])
+        self.Delta_g: float = float(params["Delta_g"])
+        self.Delta_l: float = float(params["Delta_l"])
+        self.t_final: float = float(params["t_final"])
+        self.dt: float = float(params["dt"])
 
-        if self.dt <= 0 or self.t_final <= 0:
-            raise ValueError("t_final and dt must be positive")
+        self.encoding_scheme: str = str(params["encoding_scheme"]).lower()
+        self.measurement_basis: str = str(params["measurement_basis"]).lower()
 
-        self.encoding_scheme: str = str(cfg["encoding_scheme"]).lower()
-        if self.encoding_scheme not in self.SUPPORTED_ENCODING:
-            raise NotImplementedError(
-                f"encoding_scheme '{self.encoding_scheme}' not supported"
-            )
-
-        self.measurement_basis: str = str(cfg["measurement_basis"]).lower()
-        if self.measurement_basis not in self.SUPPORTED_MEASUREMENTS:
-            raise NotImplementedError(
-                f"measurement_basis '{self.measurement_basis}' not supported"
-            )
-
-        raw_readouts = cfg["readout_observables"]
-        if not isinstance(raw_readouts, (list, tuple)):
-            raise ValueError("readout_observables must be a sequence of observables")
-        if not raw_readouts:
-            raise ValueError("readout_observables must contain at least one entry")
-        allowed_readouts = {"X", "Y", "Z", "ZZ"}
+        # Process readout_observables (de-duplicate)
+        raw_readouts = params["readout_observables"]
         readout_seq: List[str] = []
         for entry in raw_readouts:
             name = str(entry).upper()
-            if name not in allowed_readouts:
-                raise ValueError(
-                    f"Unsupported readout observable '{entry}'. "
-                    f"Supported values: {sorted(allowed_readouts)}"
-                )
             if name not in readout_seq:
                 readout_seq.append(name)
         self.readout_observables: Tuple[str, ...] = tuple(readout_seq)
 
-        self.state_aggregation: str = str(
-            cfg["state_aggregation"]
-        ).lower()
-        if self.state_aggregation not in self.SUPPORTED_STATE_AGG:
-            raise ValueError(
-                f"state_aggregation must be one of {sorted(self.SUPPORTED_STATE_AGG)}"
-            )
+        self.state_aggregation: str = str(params["state_aggregation"]).lower()
+        self.reupload_layers: int = params["reupload_layers"]
+        self.input_mode: str = str(params["input_mode"]).lower()
+        self.detuning_scale: float = float(params["detuning_scale"])
+        self.random_seed: int = int(params.get("random_seed", 42))
 
-        self.reupload_layers: int = int(cfg["reupload_layers"])
-        if self.reupload_layers < 1:
-            raise ValueError("reupload_layers must be >= 1")
-
-        self.input_mode: str = str(cfg["input_mode"]).lower()
-        if self.input_mode not in self.SUPPORTED_INPUT_MODES:
-            raise ValueError(
-                f"input_mode must be one of {sorted(self.SUPPORTED_INPUT_MODES)}"
-            )
-
-        self.detuning_scale: float = float(cfg["detuning_scale"])
-        self.random_seed: int = int(cfg.get("random_seed", 42))
-
-        # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
-        ridge_cfg = cfg.get("ridge_lambdas", [-14, 2, 25])
-        if isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
-            # Format: [start, stop, num] or (start, stop, num)
-            start, stop, num = ridge_cfg
-            self.ridge_lambdas: Sequence[float] = tuple(np.logspace(start, stop, int(num)))
-        elif isinstance(ridge_cfg, dict):
-            # Format: {"start": -14, "stop": 2, "num": 25}
-            start = ridge_cfg.get("start", -14)
-            stop = ridge_cfg.get("stop", 2)
-            num = ridge_cfg.get("num", 25)
-            self.ridge_lambdas = tuple(np.logspace(start, stop, int(num)))
-        else:
-            # Explicit list of lambda values
-            self.ridge_lambdas = tuple(float(l) for l in ridge_cfg)
+        # Parse ridge_lambdas
+        self.ridge_lambdas: Sequence[float] = parse_ridge_lambdas(params)
 
         # Training state
         self.W_out: Optional[np.ndarray] = None
@@ -194,7 +113,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
 
         # Normalization statistics (fit during train)
         self._norm_stats: Optional[_NormalizationStats] = None
-        self.input_dim_: Optional[int] = None
+        self.n_input_: Optional[int] = None
         self.feature_dim_: Optional[int] = None
 
         # Feature normalization state for design matrix
@@ -232,11 +151,10 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
                 self.zz_pairs[(i, j)] = self.sz_ops[i] * self.sz_ops[j]
 
         self.base_feature_dim = self._compute_base_feature_dim()
-        self.single_feature_dim = (
-            self.base_feature_dim
-            if self.state_aggregation != "last_mean"
-            else 2 * self.base_feature_dim
-        )
+        if self.state_aggregation in {"last_mean", "mts"}:
+            self.single_feature_dim = 2 * self.base_feature_dim
+        else:
+            self.single_feature_dim = self.base_feature_dim
 
     # ------------------------------------------------------------------ #
     # Operator construction                                              #
@@ -438,7 +356,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         mean = stacked.mean(axis=0)
         if self.state_aggregation == "mean":
             return mean
-        if self.state_aggregation == "last_mean":
+        if self.state_aggregation in {"last_mean", "mts"}:
             return np.concatenate([last, mean], axis=0)
 
         raise ValueError(f"Unsupported state_aggregation '{self.state_aggregation}'")
@@ -648,7 +566,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             raise ValueError("input_data and target_data length mismatch")
 
         self._fit_normalizer(inputs)
-        self.input_dim_ = inputs.shape[-1] if inputs.ndim > 1 else 1
+        self.n_input_ = inputs.shape[-1] if inputs.ndim > 1 else 1
 
         features = self._build_feature_matrix(inputs, mode="scalar")
         design_matrix = self._prepare_design_matrix(features, fit=True)
@@ -703,12 +621,12 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             raise ValueError("Sequence/label length mismatch")
 
         self._fit_normalizer(data)
-        self.input_dim_ = data.shape[-1]
+        self.n_input_ = data.shape[-1]
 
         capacity = self.n_qubits * self.reupload_layers
-        if self.input_mode in {"sequence", "block"} and capacity < self.input_dim_:
+        if self.input_mode in {"sequence", "block"} and capacity < self.n_input_:
             raise ValueError(
-                f"Input dimensionality {self.input_dim_} exceeds capacity "
+                f"Input dimensionality {self.n_input_} exceeds capacity "
                 f"{self.n_qubits}×{self.reupload_layers}"
             )
 
@@ -776,9 +694,9 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             "feature_dim": self.feature_dim_
             if self.feature_dim_ is not None
             else (
-                self.base_feature_dim
-                if self.state_aggregation != "last_mean"
-                else 2 * self.base_feature_dim
+                2 * self.base_feature_dim
+                if self.state_aggregation in {"last_mean", "mts"}
+                else self.base_feature_dim
             ),
             "Omega": self.Omega,
             "Delta_g": self.Delta_g,

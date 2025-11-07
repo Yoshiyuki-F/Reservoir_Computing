@@ -175,12 +175,17 @@ def run_experiment(
     # Get the appropriate factory for this model type
     ModelFactory = get_model_factory(model_type)
 
-    data_params = dict(demo_config.data_generation.params or {})
-    data_input_dim = data_params.get("input_dim")
-    data_output_dim = data_params.get("output_dim")
+    data_config = demo_config.data_generation
+    data_params = dict(data_config.params or {})
+    data_n_input = data_config.n_input
+    if data_n_input is None:
+        data_n_input = data_params.get("n_input")
+    data_n_output = data_config.n_output
+    if data_n_output is None:
+        data_n_output = data_params.get("n_output")
 
     if isinstance(dataset, ExperimentDatasetClassification):
-        input_dim = int(dataset.train_sequences.shape[-1])
+        n_input = int(dataset.train_sequences.shape[-1])
         combined_labels = jnp.concatenate(
             [dataset.train_labels, dataset.test_labels]
         )
@@ -191,38 +196,43 @@ def run_experiment(
 
         if demo_config.reservoir is None:
             demo_config.reservoir = {}
-        demo_config.reservoir['n_inputs'] = input_dim
+        demo_config.reservoir['n_inputs'] = n_input
         demo_config.reservoir.setdefault('n_outputs', num_classes)
         demo_config.reservoir.setdefault('state_aggregation', 'mean')
     else:
         if demo_config.reservoir is None:
             demo_config.reservoir = {}
-        if data_input_dim is not None:
-            demo_config.reservoir.setdefault('n_inputs', int(data_input_dim))
-        if data_output_dim is not None:
-            demo_config.reservoir.setdefault('n_outputs', int(data_output_dim))
+        if data_n_input is not None:
+            demo_config.reservoir.setdefault('n_inputs', int(data_n_input))
+        if data_n_output is not None:
+            demo_config.reservoir.setdefault('n_outputs', int(data_n_output))
 
     dataset_name = demo_config.data_generation.name
     model_name = demo_config.model.name
     is_analog_model = "analog" in model_name or model_type == "analog_quantum"
 
+    ridge_cfg = getattr(demo_config.training, "ridge_lambdas", None)
+    ridge_defaults = list(ridge_cfg) if ridge_cfg else [1e-6, 1e-5, 1e-4, 1e-3]
+
     if is_analog_model:
         if demo_config.quantum_reservoir is None:
             raise ValueError("Analog quantum mode requires quantum_reservoir config")
+        demo_config.quantum_reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
         analog_base = _load_analog_quantum_config().get('params', {})
         config_dict: Dict[str, Any] = {"model_type": "analog_quantum"}
         config_dict.update(analog_base)
         config_dict.update(demo_config.quantum_reservoir)
-        if data_input_dim is not None:
-            config_dict["n_inputs"] = int(data_input_dim)
-        if data_output_dim is not None:
-            config_dict["n_outputs"] = int(data_output_dim)
+        if data_n_input is not None:
+            config_dict["n_inputs"] = int(data_n_input)
+        if data_n_output is not None:
+            config_dict["n_outputs"] = int(data_n_output)
         rc = ModelFactory.create_reservoir(
             'analog', config_dict, backend
         )
     elif quantum_mode or "quantum" in model_type:
         if demo_config.quantum_reservoir is None:
             raise ValueError("Quantum mode enabled but quantum_reservoir config is missing")
+        demo_config.quantum_reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
         quantum_base = _load_gatebased_quantum_config().get('params', {})
         basic_base = _load_shared_reservoir_config()
         config_sequence = [
@@ -230,16 +240,17 @@ def run_experiment(
             {'params': quantum_base},
             demo_config.quantum_reservoir,
         ]
-        if data_input_dim is not None:
-            demo_config.quantum_reservoir['n_inputs'] = int(data_input_dim)
-        if data_output_dim is not None:
-            demo_config.quantum_reservoir['n_outputs'] = int(data_output_dim)
+        if data_n_input is not None:
+            demo_config.quantum_reservoir['n_inputs'] = int(data_n_input)
+        if data_n_output is not None:
+            demo_config.quantum_reservoir['n_outputs'] = int(data_n_output)
         rc = ModelFactory.create_reservoir(
             'quantum', config_sequence, backend
         )
     else:
         if demo_config.reservoir is None:
             raise ValueError("Classical mode requires reservoir config")
+        demo_config.reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
         basic_base = _load_shared_reservoir_config()
         config_sequence = [
             {'params': basic_base},
@@ -254,6 +265,7 @@ def run_experiment(
 
     is_quantum_model = quantum_mode or ("quantum" in (model_type or ""))
     n_reservoir: Optional[int] = None
+    n_inputs_value: Optional[int] = None
     if not is_quantum_model:
         candidates: list[Any] = []
         if isinstance(reservoir_info, dict):
@@ -271,7 +283,40 @@ def run_experiment(
                 break
             except (TypeError, ValueError):
                 continue
+        input_candidates: list[Any] = []
+        if isinstance(reservoir_info, dict):
+            input_candidates.append(reservoir_info.get("n_inputs"))
+        if hasattr(rc, "n_inputs"):
+            input_candidates.append(getattr(rc, "n_inputs"))
+        if demo_config.reservoir:
+            input_candidates.append(demo_config.reservoir.get("n_inputs"))
 
+        for candidate in input_candidates:
+            if candidate is None:
+                continue
+            try:
+                n_inputs_value = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
+    else:
+        candidates: list[Any] = []
+        if isinstance(reservoir_info, dict):
+            candidates.append(reservoir_info.get("n_inputs"))
+        if hasattr(rc, "n_inputs"):
+            candidates.append(getattr(rc, "n_inputs"))
+        if getattr(demo_config, "quantum_reservoir", None):
+            input_cfg = demo_config.quantum_reservoir
+            if isinstance(input_cfg, dict):
+                candidates.append(input_cfg.get("n_inputs"))
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            try:
+                n_inputs_value = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
     resolved_filename = demo_config.demo.filename
     if is_analog_model:
         suffix = Path(resolved_filename).suffix or ".png"
@@ -283,7 +328,7 @@ def run_experiment(
     if n_reservoir is not None and not is_quantum_model:
         filename_path = Path(resolved_filename)
         suffix = filename_path.suffix or ""
-        resolved_filename = f"{filename_path.stem}_{n_reservoir}{suffix}"
+        resolved_filename = f"{filename_path.stem}_nr{n_reservoir}{suffix}"
 
     plot_title = demo_config.demo.title
 
@@ -373,6 +418,11 @@ def run_experiment(
     else:
         n_qubits = None
 
+    if n_inputs_value is not None:
+        filename_path = Path(resolved_filename)
+        suffix = filename_path.suffix or ""
+        resolved_filename = f"{filename_path.stem}_in{n_inputs_value}{suffix}"
+
     data_limit: Optional[int] = None
     try:
         limit_value = demo_config.data_generation.get_param("limit")
@@ -386,7 +436,7 @@ def run_experiment(
     if data_limit is not None:
         filename_path = Path(resolved_filename)
         suffix = filename_path.suffix or ""
-        resolved_filename = f"{filename_path.stem}_{data_limit}{suffix}"
+        resolved_filename = f"{filename_path.stem}_l{data_limit}{suffix}"
 
     output_filename = resolved_filename
 
@@ -417,8 +467,12 @@ def run_experiment(
             print("🔍 Ridge λ grid search")
             for entry in rc.ridge_search_log:
                 lam = entry["lambda"]
-                mse = entry["train_mse"]
-                print(f"  λ={lam:.2e} -> train MSE={mse:.6f}")
+                metric_label = "train_accuracy" if "train_accuracy" in entry else "train_mse"
+                metric_value = entry.get("train_accuracy", entry.get("train_mse"))
+                if metric_label == "train_accuracy":
+                    print(f"  λ={lam:.2e} -> train Acc={metric_value:.4f}")
+                else:
+                    print(f"  λ={lam:.2e} -> train MSE={metric_value:.6f}")
             if rc.best_ridge_lambda is not None:
                 print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
 
@@ -512,8 +566,12 @@ def run_experiment(
         print("🔍 Ridge λ grid search")
         for entry in rc.ridge_search_log:
             lam = entry["lambda"]
-            mse = entry["train_mse"]
-            print(f"  λ={lam:.2e} -> train MSE={mse:.6f}")
+            metric_label = "train_accuracy" if "train_accuracy" in entry else "train_mse"
+            metric_value = entry.get("train_accuracy", entry.get("train_mse"))
+            if metric_label == "train_accuracy":
+                print(f"  λ={lam:.2e} -> train Acc={metric_value:.4f}")
+            else:
+                print(f"  λ={lam:.2e} -> train MSE={metric_value:.6f}")
         if rc.best_ridge_lambda is not None:
             print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
 

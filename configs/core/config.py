@@ -5,7 +5,7 @@ Model-agnostic configuration system for ML experiments.
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union, Literal
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 
 
 class DataGenerationConfig(BaseModel):
@@ -20,11 +20,25 @@ class DataGenerationConfig(BaseModel):
     noise_level: float = Field(0.0, ge=0, description="Noise level to add to data")
     use_dimensions: Optional[List[int]] = Field(None, description="Which dimensions to use (None = all)")
     warmup_steps: Optional[int] = Field(None, ge=0, description="Number of transient steps to discard before returning data")
+    n_input: Optional[int] = Field(None, ge=1, description="Input feature dimension")
+    n_output: Optional[int] = Field(None, ge=1, description="Output/target dimension")
     params: Dict[str, Any] = Field(default_factory=dict, description="Dataset-specific parameters")
 
     def get_param(self, param_name: str, default=None):
         """Get a parameter from the params dictionary."""
         return self.params.get(param_name, default)
+
+    @model_validator(mode="after")
+    def _validate_mnist_dimensions(self) -> 'DataGenerationConfig':
+        if self.name == "mnist":
+            if self.n_input is None or self.time_steps is None:
+                raise ValueError("MNIST dataset requires n_input and time_steps to be set")
+            total = self.n_input * self.time_steps
+            if total != 28 * 28:
+                raise ValueError(
+                    f"MNIST dataset requires n_input * time_steps == 784, got {self.n_input} * {self.time_steps} = {total}"
+                )
+        return self
 
     model_config = ConfigDict(extra="forbid")
 

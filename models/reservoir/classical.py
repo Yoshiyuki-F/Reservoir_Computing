@@ -17,13 +17,13 @@ ensure_x64_enabled()
 import jax.numpy as jnp
 from jax import random, lax, device_put
 
-try:  # pragma: no cover - optional dependency
-    from tqdm.auto import tqdm
-except ImportError:  # pragma: no cover - fallback when tqdm not installed
-    def tqdm(iterable, *args, **kwargs):
-        return iterable
+from tqdm.auto import tqdm
+
+def tqdm(iterable, *args, **kwargs):
+    return iterable
 
 from .base_reservoir import BaseReservoirComputer
+from .config import ReservoirConfig, parse_ridge_lambdas
 
 
 @lru_cache()
@@ -40,26 +40,6 @@ class ReservoirComputer(BaseReservoirComputer):
         W_in: 入力重み行列 (n_reservoir, n_inputs)
         W_res: リザーバー重み行列 (n_reservoir, n_reservoir)
         W_out: 出力重み行列 (n_reservoir+1, n_outputs) 訓練後に設定
-        
-    Examples:
-        基本的な使用例:
-        
-        >>> from reservoir import ReservoirConfig, ReservoirComputer
-        >>> import numpy as np
-        
-        >>> config = ReservoirConfig(
-        ...     n_inputs=1, n_reservoir=100, n_outputs=1
-        ... )
-        >>> rc = ReservoirComputer(config)
-        
-        >>> # 訓練データ準備
-        >>> time = np.linspace(0, 10, 1000)
-        >>> inputs = np.sin(time).reshape(-1, 1)
-        >>> targets = np.cos(time).reshape(-1, 1)
-        
-        >>> # 訓練と予測
-        >>> rc.train(inputs, targets)
-        >>> predictions = rc.predict(inputs)
     """
     
     def __init__(self, config: Sequence[Dict[str, Any]], backend: Optional[str] = None):
@@ -72,22 +52,8 @@ class ReservoirComputer(BaseReservoirComputer):
         """
         super().__init__()  # Initialize base class
 
+        # Merge shared defaults with user config
         merged: Dict[str, Any] = _load_shared_defaults().copy()
-        required_keys = {
-            "n_inputs",
-            "n_reservoir",
-            "n_outputs",
-            "spectral_radius",
-            "input_scaling",
-            "noise_level",
-            "alpha",
-            "reservoir_weight_range",
-            "sparsity",
-            "input_bias",
-            "nonlinearity",
-            "random_seed",
-            "state_aggregation",
-        }
         config_sequence: Iterable[Dict[str, Any]] = [config] if isinstance(config, dict) else config  # type: ignore[arg-type]
         for cfg in config_sequence:
             cfg_dict = dict(cfg)
@@ -95,38 +61,37 @@ class ReservoirComputer(BaseReservoirComputer):
             params = cfg_dict.get('params', {}) or {}
             merged.update(params)
 
-        missing_core = [key for key in required_keys if key not in merged]
-        if missing_core:
-            formatted = ", ".join(sorted(missing_core))
-            raise ValueError(
-                "Classical reservoir configuration missing required keys: "
-                f"{formatted}"
-            )
+        # Create config object - this performs all validation
+        cfg = ReservoirConfig(**merged)
 
-        self.config = merged
+        self.config = cfg
 
-        self.n_inputs = merged['n_inputs']
-        self.n_reservoir = merged['n_reservoir']
-        self.n_outputs = merged['n_outputs']
-        self.spectral_radius = merged['spectral_radius']
-        self.input_scaling = merged['input_scaling']
-        self.noise_level = merged['noise_level']
-        self.alpha = merged['alpha']
-        self.reservoir_weight_range = merged['reservoir_weight_range']
-        self.sparsity = merged['sparsity']
-        self.input_bias = merged['input_bias']
-        self.nonlinearity = merged['nonlinearity']
-        random_seed = merged['random_seed']
+        # Extract validated parameters
+        params = cfg.params
+
+        self.n_inputs: int = params['n_inputs']
+        self.n_reservoir: int = params['n_reservoir']
+        self.n_outputs: int = params['n_outputs']
+        self.spectral_radius: float = float(params['spectral_radius'])
+        self.input_scaling: float = float(params['input_scaling'])
+        self.noise_level: float = float(params['noise_level'])
+        self.alpha: float = float(params['alpha'])
+        self.reservoir_weight_range: float = float(params['reservoir_weight_range'])
+        self.sparsity: float = float(params['sparsity'])
+        self.input_bias: float = float(params['input_bias'])
+        self.nonlinearity: str = str(params['nonlinearity'])
+        random_seed: int = int(params['random_seed'])
+        self.state_aggregation: str = str(params.get('state_aggregation', 'last')).lower()
 
         # 乱数キーの初期化
         self.key = random.PRNGKey(random_seed)
-        
+
         # バックエンドの設定（CLI層で確認済み）
         self.backend = backend
-        
+
         # reservoirの重みを初期化
         self._initialize_weights()
-        
+
         # 出力重みは後で訓練で設定
         self.W_out = None
         self.best_ridge_lambda: Optional[float] = None
@@ -134,32 +99,18 @@ class ReservoirComputer(BaseReservoirComputer):
         self.last_training_mse: Optional[float] = None
         self.classification_mode: bool = False
         self.num_classes: Optional[int] = None
-        self.state_aggregation = str(merged.get('state_aggregation', 'last')).lower()
-        if self.state_aggregation not in {'last', 'mean', 'concat'}:
-            raise ValueError("state_aggregation must be 'last', 'mean', or 'concat'")
 
         self.initial_random_seed = random_seed
+        self.washout_steps: int = 3
 
-        # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
-        ridge_cfg = merged.get("ridge_lambdas", [-14, 2, 25])
-        if isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
-            # Format: [start, stop, num] or (start, stop, num)
-            start, stop, num = ridge_cfg
-            self.ridge_lambdas: Sequence[float] = tuple(np.logspace(start, stop, int(num)))
-        elif isinstance(ridge_cfg, dict):
-            # Format: {"start": -14, "stop": 2, "num": 25}
-            start = ridge_cfg.get("start", -14)
-            stop = ridge_cfg.get("stop", 2)
-            num = ridge_cfg.get("num", 25)
-            self.ridge_lambdas = tuple(np.logspace(start, stop, int(num)))
-        else:
-            # Explicit list of lambda values
-            self.ridge_lambdas = tuple(float(l) for l in ridge_cfg)
+        # Parse ridge_lambdas using common validation function
+        self.ridge_lambdas: Sequence[float] = parse_ridge_lambdas(params)
 
         # Feature normalization state
         self._feature_mu_: Optional[np.ndarray] = None
         self._feature_sigma_: Optional[np.ndarray] = None
         self._feature_keep_mask_: Optional[np.ndarray] = None
+        self._design_keep_mask_: Optional[np.ndarray] = None
 
 
     def _initialize_weights(self):
@@ -257,6 +208,7 @@ class ReservoirComputer(BaseReservoirComputer):
         self,
         feature_matrix: jnp.ndarray,
         fit: bool = False,
+        washout: bool = False,
     ) -> jnp.ndarray:
         """Standardize features and filter zero-variance columns."""
         features_np = np.asarray(feature_matrix, dtype=np.float64)
@@ -264,14 +216,15 @@ class ReservoirComputer(BaseReservoirComputer):
         if features_np.ndim != 2:
             features_np = features_np.reshape(features_np.shape[0], -1)
 
+        if washout and features_np.shape[0] > getattr(self, "washout_steps", 0):
+            features_np = features_np[self.washout_steps :, ...]
+
+        eps = 1e-8
         if fit or self._feature_mu_ is None or self._feature_sigma_ is None:
             mu = features_np.mean(axis=0)
             sigma = features_np.std(axis=0)
-            keep = sigma >= 1e-12
-            if not np.any(keep):
-                keep = np.ones_like(sigma, dtype=bool)
-            sigma_adj = sigma.copy()
-            sigma_adj[~keep] = 1.0
+            sigma_adj = sigma + eps
+            keep = np.ones_like(sigma_adj, dtype=bool)
             self._feature_mu_ = mu
             self._feature_sigma_ = sigma_adj
             self._feature_keep_mask_ = keep
@@ -290,8 +243,23 @@ class ReservoirComputer(BaseReservoirComputer):
         centered = (features_np - mu) / sigma_adj
         centered = centered[:, keep]
 
-        bias = np.ones((centered.shape[0], 1), dtype=np.float64)
-        design = np.concatenate([centered, bias], axis=1)
+        expanded = np.concatenate([centered, centered**2], axis=1)
+        bias = np.ones((expanded.shape[0], 1), dtype=np.float64)
+        design = np.concatenate([expanded, bias], axis=1)
+
+        if fit or self._design_keep_mask_ is None:
+            col_std = design.std(axis=0)
+            design_keep = np.ones(design.shape[1], dtype=bool)
+            if design.shape[1] > 1:
+                design_keep[:-1] = col_std[:-1] > 1e-3
+            design_keep[-1] = True
+            self._design_keep_mask_ = design_keep
+        else:
+            if self._design_keep_mask_ is None:
+                raise RuntimeError("Design matrix filter has not been fitted. Call train() before predict().")
+            design_keep = self._design_keep_mask_
+
+        design = design[:, design_keep]
         return jnp.array(design, dtype=jnp.float64)
 
     def _fit_ridge_with_grid(
@@ -301,6 +269,7 @@ class ReservoirComputer(BaseReservoirComputer):
         ridge_lambdas: Optional[Sequence[float]] = None,
         use_kfold: bool = False,
         n_folds: int = 5,
+        classification_mode: bool = False,
     ) -> None:
         X_np = np.asarray(X, dtype=np.float64)
         y_np = np.asarray(target_data, dtype=np.float64)
@@ -327,17 +296,40 @@ class ReservoirComputer(BaseReservoirComputer):
             try:
                 sv = np.linalg.svd(feature_part, compute_uv=False)
                 cond_number = float(sv.max() / max(sv.min(), 1e-12))
+                print(f"[classical-rc] design matrix singular values -> {sv}")
                 print(f"[classical-rc] design matrix cond -> {cond_number:.3e}")
             except np.linalg.LinAlgError:
                 print("[classical-rc] SVD failed; skipping condition number log.")
 
-        def ridge_via_svd(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
-            U, s, Vt = np.linalg.svd(design, full_matrices=False)
+        def ridge_with_bias(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
+            if design.shape[1] == 0:
+                raise ValueError("Design matrix must have at least one column (bias term expected).")
+
+            features = design[:, :-1]
+            if features.size == 0:
+                bias = targets.mean(axis=0, keepdims=False, dtype=np.float64)
+                return np.vstack([np.zeros((0, targets.shape[1]), dtype=np.float64), bias])
+
+            U, s, Vt = np.linalg.svd(features, full_matrices=False)
             UT_y = U.T @ targets
-            denom = s ** 2 + lam
-            coeff = (s / denom)[:, None]
-            scaled = coeff * UT_y
-            return Vt.T @ scaled
+            denom = s * s + lam
+            filt = (s / denom)[:, None]
+            weights = Vt.T @ (filt * UT_y)
+            bias = (targets - features @ weights).mean(axis=0, keepdims=False, dtype=np.float64)
+            return np.vstack([weights, bias])
+
+        metric_name = "accuracy" if classification_mode else "MSE"
+        metric_fmt = ".4f" if classification_mode else ".6e"
+
+        def compute_metric(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+            if classification_mode:
+                true_labels = np.argmax(y_true, axis=1)
+                pred_labels = np.argmax(y_pred, axis=1)
+                return float(np.mean(true_labels == pred_labels))
+            diff = y_true - y_pred
+            return float(np.mean(diff * diff))
+
+        choose_best = np.argmax if classification_mode else np.argmin
 
         if use_kfold and n_samples >= n_folds:
             # K-Fold Cross Validation
@@ -364,25 +356,25 @@ class ReservoirComputer(BaseReservoirComputer):
                     X_fold_val = X_np[val_indices]
                     y_fold_val = y_np[val_indices]
 
-                    weights = ridge_via_svd(X_fold_train, y_fold_train, lam)
+                    weights = ridge_with_bias(X_fold_train, y_fold_train, lam)
                     y_pred = X_fold_val @ weights
-                    fold_mse = float(np.mean((y_fold_val - y_pred) ** 2))
-                    cv_scores[lam].append(fold_mse)
+                    fold_score = compute_metric(y_fold_val, y_pred)
+                    cv_scores[lam].append(fold_score)
 
             # Average CV scores
-            val_mse_list = [float(np.mean(cv_scores[lam])) for lam in lambda_candidates]
-            train_mse_list = val_mse_list.copy()  # Placeholder
+            val_scores = [float(np.mean(cv_scores[lam])) for lam in lambda_candidates]
+            train_scores = val_scores.copy()  # Placeholder
 
-            best_index = int(np.argmin(val_mse_list))
+            best_index = int(choose_best(val_scores))
             best_lambda = lambda_candidates[best_index]
 
             print(f"🔍 Ridge λ grid search ({n_folds}-Fold CV)")
-            for lam, cv_mse in zip(lambda_candidates, val_mse_list):
-                print(f"  λ={lam:.2e} -> CV MSE={cv_mse:.6e}")
+            for lam, cv_score in zip(lambda_candidates, val_scores):
+                print(f"  λ={lam:.2e} -> CV {metric_name}={cv_score:{metric_fmt}}")
 
             # Retrain on full data with best lambda
             print(f"[classical-rc] Retraining on full data with λ*={best_lambda:.2e}")
-            best_weights_np = ridge_via_svd(X_np, y_np, best_lambda)
+            best_weights_np = ridge_with_bias(X_np, y_np, best_lambda)
 
         else:
             # Simple 90/10 split
@@ -392,8 +384,8 @@ class ReservoirComputer(BaseReservoirComputer):
             X_train, X_val = X_np[:split_idx], X_np[split_idx:]
             y_train, y_val = y_np[:split_idx], y_np[split_idx:]
 
-            train_mse_list: list[float] = []
-            val_mse_list: list[float] = []
+            train_scores: list[float] = []
+            val_scores: list[float] = []
             weights_by_lambda: Dict[float, np.ndarray] = {}
 
             lambda_iter = tqdm(
@@ -403,43 +395,53 @@ class ReservoirComputer(BaseReservoirComputer):
                 unit="λ",
             )
             for lam in lambda_iter:
-                weights = ridge_via_svd(X_train, y_train, lam)
+                weights = ridge_with_bias(X_train, y_train, lam)
                 yhat_tr = X_train @ weights
-                train_mse = float(np.mean((y_train - yhat_tr) ** 2))
+                train_score = compute_metric(y_train, yhat_tr)
 
                 if X_val.size > 0:
                     yhat_val = X_val @ weights
-                    val_mse = float(np.mean((y_val - yhat_val) ** 2))
+                    val_score = compute_metric(y_val, yhat_val)
                 else:
-                    val_mse = train_mse
+                    val_score = train_score
 
-                train_mse_list.append(train_mse)
-                val_mse_list.append(val_mse)
+                train_scores.append(train_score)
+                val_scores.append(val_score)
                 weights_by_lambda[lam] = weights
 
-            best_index = int(np.argmin(val_mse_list))
+            best_index = int(choose_best(val_scores))
             best_lambda = lambda_candidates[best_index]
             best_weights_np = weights_by_lambda[best_lambda]
 
             print("🔍 Ridge λ grid search (VAL)")
-            for lam, val_mse in zip(lambda_candidates, val_mse_list):
-                print(f"  λ={lam:.2e} -> val MSE={val_mse:.6e}")
+            for lam, val_score in zip(lambda_candidates, val_scores):
+                print(f"  λ={lam:.2e} -> val {metric_name}={val_score:{metric_fmt}}")
 
             # Retrain on full train+val with best lambda
             print(f"[classical-rc] Retraining on train+val with λ*={best_lambda:.2e}")
-            best_weights_np = ridge_via_svd(X_np, y_np, best_lambda)
+            best_weights_np = ridge_with_bias(X_np, y_np, best_lambda)
 
         self.W_out = jnp.array(best_weights_np, dtype=jnp.float64)
         self.best_ridge_lambda = best_lambda
-        self.last_training_mse = float(val_mse_list[best_index])
-        self.ridge_search_log = [
-            {
+        self.last_training_mse = float(val_scores[best_index])
+
+        metric_key_train = "train_accuracy" if classification_mode else "train_mse"
+        metric_key_val = "val_accuracy" if classification_mode else "val_mse"
+
+        self.ridge_search_log = []
+        for i, lam in enumerate(lambda_candidates):
+            if i >= len(val_scores):
+                break
+            train_val_score = train_scores[i] if i < len(train_scores) else val_scores[i]
+            entry = {
                 "lambda": lam,
-                "train_mse": train_mse_list[i] if i < len(train_mse_list) else val_mse_list[i],
-                "val_mse": val,
+                metric_key_train: train_val_score,
+                metric_key_val: val_scores[i],
             }
-            for i, (lam, val) in enumerate(zip(lambda_candidates, val_mse_list))
-        ]
+            if classification_mode:
+                entry["train_mse"] = train_val_score
+                entry["val_mse"] = val_scores[i]
+            self.ridge_search_log.append(entry)
 
     def _encode_sequences(
         self,
@@ -471,6 +473,10 @@ class ReservoirComputer(BaseReservoirComputer):
             return states[-1]
         if self.state_aggregation == 'mean':
             return jnp.mean(states, axis=0)
+        if self.state_aggregation in {'last_mean', 'mts'}:
+            last = states[-1]
+            mean = jnp.mean(states, axis=0)
+            return jnp.concatenate([last, mean], axis=0)
         # concat
         return states.reshape(-1)
 
@@ -488,7 +494,12 @@ class ReservoirComputer(BaseReservoirComputer):
         targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
         targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
 
-        self._fit_ridge_with_grid(design_matrix, targets, ridge_lambdas)
+        self._fit_ridge_with_grid(
+            design_matrix,
+            targets,
+            ridge_lambdas,
+            classification_mode=True,
+        )
         self.classification_mode = True
         self.num_classes = num_classes
         self.trained = True
@@ -526,9 +537,14 @@ class ReservoirComputer(BaseReservoirComputer):
         reservoir_states = self.run_reservoir(input_data)
 
         # Feature standardization and zero-variance filtering
-        design_matrix = self._prepare_design_matrix(reservoir_states, fit=True)
+        design_matrix = self._prepare_design_matrix(reservoir_states, fit=True, washout=True)
 
-        self._fit_ridge_with_grid(design_matrix, target_data, ridge_lambdas)
+        self._fit_ridge_with_grid(
+            design_matrix,
+            target_data,
+            ridge_lambdas,
+            classification_mode=False,
+        )
         self.classification_mode = False
         self.num_classes = None
         self.trained = True  # Mark as trained
@@ -556,7 +572,7 @@ class ReservoirComputer(BaseReservoirComputer):
         reservoir_states = self.run_reservoir(input_data)
 
         # Feature standardization and zero-variance filtering
-        design_matrix = self._prepare_design_matrix(reservoir_states, fit=False)
+        design_matrix = self._prepare_design_matrix(reservoir_states, fit=False, washout=True)
 
         # 予測を計算（単純な行列積）
         predictions = jnp.dot(design_matrix, self.W_out)
@@ -574,6 +590,7 @@ class ReservoirComputer(BaseReservoirComputer):
         self._feature_mu_ = None
         self._feature_sigma_ = None
         self._feature_keep_mask_ = None
+        self._design_keep_mask_ = None
         # Reinitialize weights with new random seed
         self.key = random.PRNGKey(self.initial_random_seed)
         self._initialize_weights()

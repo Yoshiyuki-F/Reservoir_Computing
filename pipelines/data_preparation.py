@@ -73,10 +73,6 @@ def prepare_experiment_data(
         if generate_mnist_sequence_data is None:
             raise ImportError("MNIST dataset generation requires torch/torchvision to be installed.")
 
-        encoding_pref = config.data_generation.get_param("sequence_encoding")
-        if encoding_pref is not None:
-            config.data_generation.params.setdefault("encoding", encoding_pref)
-
         sequences, labels = generate_mnist_sequence_data(config.data_generation)
         sequences = jnp.array(sequences, dtype=jnp.float64)
         labels = jnp.array(labels, dtype=jnp.int32)

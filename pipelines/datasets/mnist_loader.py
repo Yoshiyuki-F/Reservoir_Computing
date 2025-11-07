@@ -44,15 +44,15 @@ def get_mnist_datasets() -> Tuple[datasets.MNIST, datasets.MNIST]:
 
 def image_to_sequence(
     image: np.ndarray,
-    mode: str = "cols",
+    *,
+    n_steps: int,
 ) -> np.ndarray:
     """
     Convert a single MNIST image into a 2D time-series array.
 
     Args:
         image: Input image array of shape (28, 28) or (1, 28, 28).
-        mode: Encoding mode. \"cols\" scans column-wise (sequence length 28,
-              features 28). \"flat\" flattens to 784 steps with scalar inputs.
+        n_steps: Desired number of time steps; must evenly divide 784 pixels.
 
     Returns:
         Array with shape (time_steps, features).
@@ -66,15 +66,18 @@ def image_to_sequence(
     if image.shape != (28, 28):
         raise ValueError(f"Expected image shape (28,28), got {image.shape}")
 
-    if mode == "cols":
-        sequence = np.stack([image[:, col] for col in range(28)], axis=0)
-        return sequence.astype(np.float32)
-
-    if mode == "flat":
-        flat = image.reshape(-1, 1)
-        return flat.astype(np.float32)
-
-    raise ValueError("mode must be either 'cols' or 'flat'")
+    total_pixels = 28 * 28
+    n_steps = int(n_steps)
+    if n_steps <= 0:
+        raise ValueError(f"n_steps must be positive, got {n_steps}")
+    if total_pixels % n_steps != 0:
+        raise ValueError(
+            f"n_steps={n_steps} must evenly divide total pixels ({total_pixels})"
+        )
+    features_per_step = total_pixels // n_steps
+    flat = image.reshape(total_pixels)
+    sequence = flat.reshape(n_steps, features_per_step).astype(np.float32)
+    return sequence
 
 
 def get_mnist_dataloaders(

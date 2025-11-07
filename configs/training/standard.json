@@ -3,5 +3,5 @@
   "description": "Standard training configuration",
   "task_type": "timeseries",
   "train_size": 0.8,
-  "ridge_lambdas": [-14, 2, 25]
+  "ridge_lambdas": [-7, 7, 15]
 }

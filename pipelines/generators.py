@@ -231,7 +231,8 @@ def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndar
         config: DataGenerationConfig with params:
             - limit: Optional[int], number of samples to load (default 1000)
             - split: str, 'train' or 'test' (default 'train')
-            - encoding: str, 'cols' or 'flat' (default 'cols')
+        and fields:
+            - time_steps: Number of time steps to reshape each image into.
 
     Returns:
         Tuple (input_sequences, labels) where sequences are float64 JAX arrays.
@@ -247,7 +248,18 @@ def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndar
 
     limit = config.get_param("limit")
     split = config.get_param("split", "train")
-    encoding = config.get_param("sequence_encoding", config.get_param("encoding", "cols"))
+
+    total_pixels = 28 * 28
+    time_steps = getattr(config, "time_steps", None)
+    if time_steps is None:
+        raise ValueError("MNIST configuration must specify time_steps")
+    n_steps = int(time_steps)
+    if n_steps <= 0:
+        raise ValueError(f"time_steps must be positive, got {n_steps}")
+    if total_pixels % n_steps != 0:
+        raise ValueError(
+            f"time_steps={n_steps} must evenly divide {total_pixels} to reshape MNIST images"
+        )
 
     train_set, test_set = get_mnist_datasets()
     dataset = train_set if split == "train" else test_set
@@ -267,7 +279,7 @@ def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndar
     for idx in range(limit):
         img_tensor, label = dataset[idx]
         img_np = img_tensor.numpy()
-        seq = image_to_sequence(img_np, mode=encoding)
+        seq = image_to_sequence(img_np, n_steps=n_steps)
         sequences.append(seq.astype(np.float64))
         labels.append(label)
 

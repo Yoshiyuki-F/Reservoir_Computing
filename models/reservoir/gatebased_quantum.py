@@ -21,6 +21,7 @@ ensure_x64_enabled()
 import jax.numpy as jnp
 
 from .base_reservoir import BaseReservoirComputer
+from .config import QuantumReservoirConfig, parse_ridge_lambdas
 
 
 @lru_cache()
@@ -51,7 +52,7 @@ def compute_feature_dim(
     zz_terms = comb(n_qubits, 2) if "ZZ" in obs_set else 0
     base_dim = one_body + zz_terms
     agg = aggregation.lower()
-    if agg == "last_mean":
+    if agg in {"last_mean", "mts"}:
         return base_dim * 2
     return base_dim
 
@@ -95,21 +96,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         super().__init__()
 
-        # Normalize config to dictionary form
+        # Merge quantum defaults with user config
         merged: Dict[str, Any] = _load_quantum_defaults().copy()
-        required_keys = {
-            "n_qubits",
-            "circuit_depth",
-            "n_inputs",
-            "n_outputs",
-            "backend",
-            "random_seed",
-            "measurement_basis",
-            "encoding_scheme",
-            "entanglement",
-            "detuning_scale",
-            "state_aggregation",
-        }
         user_defined_readouts = False
         config_sequence: Iterable[Dict[str, Any]] = [config] if isinstance(config, dict) else config  # type: ignore[arg-type]
         for cfg in config_sequence:
@@ -120,51 +108,29 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             merged.update({k: v for k, v in cfg_dict.items() if k not in {'name', 'description', 'params'}})
             merged.update(params)
 
-        missing_keys = [key for key in required_keys if key not in merged]
-        if missing_keys:
-            formatted = ", ".join(sorted(missing_keys))
-            raise ValueError(
-                "Gate-based quantum reservoir configuration missing required keys: "
-                f"{formatted}"
-            )
+        # Create config object - this performs all validation
+        cfg = QuantumReservoirConfig(**merged)
 
-        self.config = merged
-        self.n_qubits = merged['n_qubits']
-        self.circuit_depth = merged['circuit_depth']
-        self.n_inputs = merged['n_inputs']
-        self.n_outputs = merged['n_outputs']
-        self.backend_type = merged['backend']
-        self.random_seed = merged['random_seed']
-        self.measurement_basis = str(merged['measurement_basis']).lower()
-        self.encoding_scheme = str(merged['encoding_scheme']).lower()
-        self.entanglement = str(merged['entanglement']).lower()
-        if self.entanglement == "ring":
-            self.entanglement = "circular"
-        self.detuning_scale = float(merged['detuning_scale'])
-        self.state_aggregation = str(merged['state_aggregation']).lower()
+        self.config = cfg
+
+        # Extract validated parameters
+        params = cfg.params
+
+        self.n_qubits: int = params['n_qubits']
+        self.circuit_depth: int = params['circuit_depth']
+        self.n_inputs: int = params['n_inputs']
+        self.n_outputs: int = params['n_outputs']
+        self.backend_type: str = str(params['backend'])
+        self.random_seed: int = int(params['random_seed'])
+        self.measurement_basis: str = str(params['measurement_basis']).lower()
+        self.encoding_scheme: str = str(params['encoding_scheme']).lower()
+        self.entanglement: str = str(params['entanglement']).lower()
+        self.detuning_scale: float = float(params['detuning_scale'])
+        self.state_aggregation: str = str(params['state_aggregation']).lower()
 
         self.backend = backend
 
-        # Validate quantum parameters
-        if self.n_qubits < 1:
-            raise ValueError("Number of qubits must be at least 1")
-        if self.circuit_depth < 1:
-            raise ValueError("Circuit depth must be at least 1")
-        if self.n_inputs < 1:
-            raise ValueError("Number of inputs must be at least 1")
-        if self.measurement_basis not in {"pauli-z", "multi-pauli"}:
-            raise NotImplementedError(
-                "measurement_basis must be either 'pauli-z' or 'multi-pauli'"
-            )
-        if self.encoding_scheme not in {"amplitude", "angle", "detuning"}:
-            raise ValueError(
-                "encoding_scheme must be one of {'amplitude', 'angle', 'detuning'}"
-            )
-        if self.entanglement not in {"circular", "full"}:
-            raise ValueError("entanglement must be either 'circular' or 'full'")
-        if self.state_aggregation not in {"last", "mean", "concat", "last_mean"}:
-            raise ValueError("state_aggregation must be 'last', 'mean', 'concat', or 'last_mean'")
-
+        # Handle readout_observables based on measurement_basis
         if self.measurement_basis == "multi-pauli":
             default_readouts = ["X", "Y", "Z", "ZZ"]
             allowed_readouts = {"X", "Y", "Z", "ZZ"}
@@ -172,7 +138,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             default_readouts = ["Z"]
             allowed_readouts = {"Z", "ZZ"}
 
-        raw_readouts = merged.get("readout_observables")
+        raw_readouts = params.get("readout_observables")
         if raw_readouts is None:
             candidate_readouts = list(default_readouts)
         elif isinstance(raw_readouts, (list, tuple, set)):
@@ -212,21 +178,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self._feature_sigma_: Optional[np.ndarray] = None
         self._feature_keep_mask_: Optional[np.ndarray] = None
 
-        # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
-        ridge_cfg = merged.get("ridge_lambdas", [-14, 2, 25])
-        if isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
-            # Format: [start, stop, num] or (start, stop, num)
-            start, stop, num = ridge_cfg
-            self.ridge_lambdas: Sequence[float] = tuple(np.logspace(start, stop, int(num)))
-        elif isinstance(ridge_cfg, dict):
-            # Format: {"start": -14, "stop": 2, "num": 25}
-            start = ridge_cfg.get("start", -14)
-            stop = ridge_cfg.get("stop", 2)
-            num = ridge_cfg.get("num", 25)
-            self.ridge_lambdas = tuple(np.logspace(start, stop, int(num)))
-        else:
-            # Explicit list of lambda values
-            self.ridge_lambdas = tuple(float(l) for l in ridge_cfg)
+        # Parse ridge_lambdas using common validation function
+        self.ridge_lambdas: Sequence[float] = parse_ridge_lambdas(params)
 
         # Initialize quantum device
         self._initialize_quantum_device()
@@ -244,18 +197,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
     def _initialize_quantum_device(self) -> None:
         """Initialize the PennyLane quantum device."""
-        # Choose backend based on preference and availability
         if self.backend_type == 'jax' and self.backend == 'gpu':
-            try:
-                self.device = qml.device('jax.qubit', wires=self.n_qubits)
-            except:
-                # Fallback to default if JAX device fails
-                self.device = qml.device('default.qubit', wires=self.n_qubits)
-        elif self.backend_type == 'jax':
-            try:
-                self.device = qml.device('jax.qubit', wires=self.n_qubits)
-            except:
-                self.device = qml.device('default.qubit', wires=self.n_qubits)
+            self.device = qml.device('jax.qubit', wires=self.n_qubits)
         else:
             self.device = qml.device('default.qubit', wires=self.n_qubits)
 
@@ -482,7 +425,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             return states[-1]
         if self.state_aggregation == 'mean':
             return jnp.mean(states, axis=0)
-        if self.state_aggregation == 'last_mean':
+        if self.state_aggregation in {'last_mean', 'mts'}:
             last = states[-1]
             mean = jnp.mean(states, axis=0)
             return jnp.concatenate([last, mean], axis=0)
