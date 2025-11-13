@@ -6,15 +6,14 @@ import json
 from pathlib import Path
 from functools import lru_cache
 
-from typing import Optional, Dict, Any, Sequence, Iterable
+from typing import Optional, Dict, Any, Sequence, Iterable, Tuple
 
 from pipelines.jax_config import ensure_x64_enabled
 
 ensure_x64_enabled()
 
 import jax.numpy as jnp
-from jax import random, lax
-
+from jax import random, lax, vmap
 from tqdm.auto import tqdm
 
 from reservoirs.preprocess import FeatureScaler, DesignMatrixBuilder, aggregate_states
@@ -84,6 +83,7 @@ class ReservoirComputer(BaseReservoirComputer):
         self.sparsity: float = float(params['sparsity'])
         self.input_bias: float = float(params['input_bias'])
         self.nonlinearity: str = str(params['nonlinearity'])
+        self.encode_batch_size: int = max(1, int(params.get('encode_batch_size', 1024)))
         random_seed: int = int(params['random_seed'])
         self.state_aggregation: str = str(params.get('state_aggregation', 'last')).lower()
 
@@ -173,29 +173,27 @@ class ReservoirComputer(BaseReservoirComputer):
         
         return (new_state, key), new_state  # h(t)を返す
         
+    def _run_sequence_with_key(
+        self,
+        input_sequence: jnp.ndarray,
+        key: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """
+        Run reservoir for a single sequence with the provided key.
+        """
+        input_sequence = input_sequence.astype(jnp.float64)
+        initial_state = jnp.zeros(self.n_reservoir, dtype=jnp.float64)
+        initial_carry = (initial_state, key)
+        carry, states = lax.scan(self._reservoir_step, initial_carry, input_sequence)
+        return states
+        
     def run_reservoir(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
         """
         入力シーケンスに対してreservoirを実行します。
-        
-        Args:
-            input_sequence: 形状 (time_steps, n_inputs) の入力データ
-            
-        Returns:
-            reservoir状態のシーケンス (time_steps, n_reservoir)
         """
-        # 入力データをfloat64に変換
-        input_sequence = input_sequence.astype(jnp.float64)
-        
-        # 初期状態
-        initial_state = jnp.zeros(self.n_reservoir, dtype=jnp.float64)
-        initial_carry = (initial_state, self.key)
-        
-        # JAXのscanを使用して効率的に計算
-        carry, states = lax.scan(self._reservoir_step, initial_carry, input_sequence)
-        
-        # キーを更新
-        _, self.key = carry
-        
+        seq_key, new_master = random.split(self.key)
+        states = self._run_sequence_with_key(input_sequence, seq_key)
+        self.key = new_master
         return states
 
     def _encode_sequences(
@@ -205,31 +203,47 @@ class ReservoirComputer(BaseReservoirComputer):
         *,
         leave: bool = False,
         position: int = 0,
+        batch_size: Optional[int] = None,
     ) -> jnp.ndarray:
-        """Run reservoir on sequences and collect final states."""
-        encoded_states = []
-        try:
-            total = int(sequences.shape[0])
-        except Exception:  # pragma: no cover - dynamic shapes
-            total = None
+        """Run reservoir on sequences (batched) and collect aggregated features."""
+        sequences = jnp.asarray(sequences, dtype=jnp.float64)
+        total = sequences.shape[0]
+        if total == 0:
+            raise ValueError("Cannot encode empty sequence batch.")
 
+        batch = int(batch_size or self.encode_batch_size)
+        batch = max(1, batch)
+
+        run_vmapped = vmap(self._run_sequence_with_key, in_axes=(0, 0))
+        agg_fn = lambda st: aggregate_states(st, self.state_aggregation)
+        aggregate_batch = vmap(agg_fn, in_axes=0)
+
+        features_list = []
+        master_key = self.key
         iterator = tqdm(
-            sequences,
-            desc=desc or "Encoding sequences",
-            total=total,
+            range(0, total, batch),
+            desc=desc or "Encoding sequences (batched)",
             leave=leave,
             position=position,
-            unit="seq",
+            unit="batch",
         )
-        for seq in iterator:
-            seq_arr = jnp.array(seq, dtype=jnp.float64)
-            states = self.run_reservoir(seq_arr)
-            aggregated = aggregate_states(states, self.state_aggregation)
-            encoded_states.append(jnp.asarray(aggregated, dtype=jnp.float64))
-        iterator.close()
+
+        for start in iterator:
+            end = min(start + batch, total)
+            batch_sequences = sequences[start:end]
+            split_keys = random.split(master_key, batch_sequences.shape[0] + 1)
+            seq_keys = split_keys[:-1]
+            master_key = split_keys[-1]
+
+            batch_states = run_vmapped(batch_sequences, seq_keys)
+            batch_features = aggregate_batch(batch_states)
+            features_list.append(batch_features)
+
+        self.key = master_key
+        concatenated = jnp.concatenate(features_list, axis=0)
         if leave:
             print("")
-        return jnp.stack(encoded_states, axis=0)
+        return concatenated
 
     def _build_design_matrix(
         self,

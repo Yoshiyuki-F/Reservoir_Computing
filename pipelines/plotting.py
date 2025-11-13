@@ -320,8 +320,27 @@ def plot_classification_results(
                 fontsize=9,
             )
 
-    accuracy_values = np.array([train_accuracy * 100.0, test_accuracy * 100.0])
-    bars = ax_bar.barh(['Train', 'Test'], accuracy_values, color=['tab:green', 'tab:orange'])
+    accuracy_labels = ['Train', 'Test']
+    accuracy_values = [train_accuracy * 100.0, test_accuracy * 100.0]
+    bar_colors = ['tab:green', 'tab:orange']
+
+    val_accuracy = None
+    if metrics_info:
+        val_entry = metrics_info.get("Val Acc")
+        if val_entry is not None:
+            try:
+                val_accuracy = float(val_entry)
+            except (ValueError, TypeError):
+                val_accuracy = None
+    if val_accuracy is not None:
+        accuracy_labels.append('Val')
+        accuracy_values.append(
+            val_accuracy * 100.0 if val_accuracy <= 1.0 else val_accuracy
+        )
+        bar_colors.append('tab:purple')
+
+    accuracy_values = np.array(accuracy_values)
+    bars = ax_bar.barh(accuracy_labels, accuracy_values, color=bar_colors)
     ax_bar.set_xlim(0, 100)
     ax_bar.set_xlabel('Accuracy (%)')
     ax_bar.set_title('Accuracy Overview')
@@ -339,15 +358,7 @@ def plot_classification_results(
 
     fig.suptitle(title, fontsize=16)
 
-    if metrics_info:
-        caption_lines = []
-        for key, value in metrics_info.items():
-            if isinstance(value, float):
-                caption_lines.append(f"{key}: {value:.6f}")
-            else:
-                caption_lines.append(f"{key}: {value}")
-        caption_text = "\n".join(caption_lines)
-        fig.text(0.02, 0.02, caption_text, fontsize=10, family='monospace')
+    # Metrics caption removed per design request
 
     fig.tight_layout(rect=[0, 0.05, 1, 0.97])
     output_path = PROJECT_ROOT / f'outputs/{filename}'

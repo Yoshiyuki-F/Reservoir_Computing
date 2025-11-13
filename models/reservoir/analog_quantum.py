@@ -527,7 +527,13 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             weights_by_lambda[lam] = weights
 
         if classification:
-            best_index = int(np.argmax(val_metric_list))
+            best_value = max(val_metric_list)
+            best_candidates = [
+                lam
+                for lam, score in zip(lambda_candidates, val_metric_list)
+                if np.isclose(score, best_value)
+            ]
+            best_lambda = max(best_candidates) if best_candidates else lambda_candidates[0]
             print("🔍 Ridge λ grid search (VAL - Accuracy)")
             for lam, val_acc in zip(lambda_candidates, val_metric_list):
                 print(f"  λ={lam:.2e} -> val Acc={val_acc:.6f}")
@@ -536,8 +542,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             print("🔍 Ridge λ grid search (VAL - MSE)")
             for lam, val_mse in zip(lambda_candidates, val_metric_list):
                 print(f"  λ={lam:.2e} -> val MSE={val_mse:.6e}")
-
-        best_lambda = lambda_candidates[best_index]
+            best_lambda = lambda_candidates[best_index]
         best_weights = weights_by_lambda[best_lambda]
         self.best_ridge_lambda = best_lambda
 

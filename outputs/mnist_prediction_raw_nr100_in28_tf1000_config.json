@@ -1,0 +1,170 @@
+{
+  "data_generation": {
+    "name": "mnist",
+    "time_steps": 28,
+    "dt": 1.0,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": null,
+    "n_input": 28,
+    "n_output": 10,
+    "params": {
+      "split": "train",
+      "train_fraction": 1,
+      "test_fraction": 1
+    }
+  },
+  "model": {
+    "name": "classic_standard",
+    "model_type": "reservoir",
+    "params": {
+      "n_reservoir": 100
+    }
+  },
+  "training": {
+    "name": "raw_standard",
+    "task_type": "classification",
+    "train_size": null,
+    "val_size": 0.1,
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ],
+    "state_aggregation": "mean",
+    "preprocessing": null,
+    "readout": null
+  },
+  "demo": {
+    "title": "Mnist Prediction",
+    "filename": "mnist_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_reservoir": 100,
+    "n_inputs": 28,
+    "n_outputs": 10,
+    "state_aggregation": "mean",
+    "use_preprocessing": false,
+    "include_bias": false,
+    "washout_steps": 0,
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ]
+  },
+  "quantum_reservoir": null,
+  "results": {
+    "metrics": {
+      "train_mse": 0.0491294728254023,
+      "test_mse": 0.04891263337773613,
+      "train_accuracy": 0.7842592597007751,
+      "test_accuracy": 0.7874999642372131,
+      "val_mse": 0.047255270668288024,
+      "val_accuracy": 0.809666633605957,
+      "best_ridge_lambda": 100.0
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-07,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 1e-06,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 1e-05,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 0.0001,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 0.001,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 0.01,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 0.1,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 1.0,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 10.0,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 100.0,
+        "val_accuracy": 0.772777795791626
+      },
+      {
+        "lambda": 1000.0,
+        "val_accuracy": 0.7709259390830994
+      },
+      {
+        "lambda": 10000.0,
+        "val_accuracy": 0.7274073958396912
+      },
+      {
+        "lambda": 100000.0,
+        "val_accuracy": 0.601111114025116
+      },
+      {
+        "lambda": 1000000.0,
+        "val_accuracy": 0.48314815759658813
+      },
+      {
+        "lambda": 10000000.0,
+        "val_accuracy": 0.3879629671573639
+      }
+    ],
+    "classification": {
+      "train_accuracy": 0.7842592597007751,
+      "val_accuracy": 0.809666633605957,
+      "test_accuracy": 0.7874999642372131,
+      "reservoir_info": {
+        "name": "shared_reservoir_params",
+        "model_type": "reservoir",
+        "params": {
+          "random_seed": 42,
+          "spectral_radius": 1.3,
+          "input_scaling": 1.0,
+          "noise_level": 0.001,
+          "alpha": 0.2,
+          "reservoir_weight_range": 1.0,
+          "sparsity": 0.1,
+          "input_bias": 0.0,
+          "nonlinearity": "tanh",
+          "n_reservoir": 100,
+          "n_inputs": 28,
+          "n_outputs": 10,
+          "state_aggregation": "mean",
+          "use_preprocessing": false,
+          "include_bias": false,
+          "washout_steps": 0,
+          "ridge_lambdas": [
+            -7.0,
+            7.0,
+            15.0
+          ]
+        },
+        "description": "Shared parameters common to all reservoir computer variants",
+        "backend": "gpu",
+        "trained": false
+      }
+    }
+  }
+}

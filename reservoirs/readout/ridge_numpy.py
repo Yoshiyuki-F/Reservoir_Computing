@@ -68,7 +68,6 @@ class RidgeReadoutNumpy(BaseReadout):
         folds = n_folds or self.default_n_folds
         metric = _default_metric(classification)
         score_name = "accuracy" if classification else "MSE"
-        pick_best = jnp.argmax if classification else jnp.argmin
         metric_key_val = "val_accuracy" if classification else "val_mse"
         include_train_metric = not classification
         metric_key_train = "train_mse" if include_train_metric else None
@@ -99,9 +98,18 @@ class RidgeReadoutNumpy(BaseReadout):
                     }
                 )
                 scores.append(mean_score)
-            best_idx = int(pick_best(jnp.array(scores)))
-            best_lambda = lambda_candidates[best_idx]
-            best_score = scores[best_idx]
+            scores_arr = jnp.array(scores)
+            if classification:
+                best_score = float(jnp.max(scores_arr))
+                best_lambda = max(
+                    lam
+                    for lam, score in zip(lambda_candidates, scores)
+                    if float(score) >= best_score - 1e-12
+                )
+            else:
+                best_idx = int(jnp.argmin(scores_arr))
+                best_lambda = lambda_candidates[best_idx]
+                best_score = scores[best_idx]
             final_weights = self._solve(X_np, Y_np, best_lambda)
         else:
             split = int(0.9 * X_np.shape[0])
@@ -131,9 +139,18 @@ class RidgeReadoutNumpy(BaseReadout):
                     log_entry[metric_key_train] = train_score
                 logs.append(log_entry)
                 scores.append(val_score)
-            best_idx = int(pick_best(jnp.array(scores)))
-            best_lambda = lambda_candidates[best_idx]
-            best_score = scores[best_idx]
+            scores_arr = jnp.array(scores)
+            if classification:
+                best_score = float(jnp.max(scores_arr))
+                best_lambda = max(
+                    lam
+                    for lam, score in zip(lambda_candidates, scores)
+                    if float(score) >= best_score - 1e-12
+                )
+            else:
+                best_idx = int(jnp.argmin(scores_arr))
+                best_lambda = lambda_candidates[best_idx]
+                best_score = scores[best_idx]
             final_weights = self._solve(X_np, Y_np, best_lambda)
 
         self.weights = final_weights

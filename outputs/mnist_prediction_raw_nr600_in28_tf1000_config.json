@@ -10,20 +10,22 @@
     "n_output": 10,
     "params": {
       "split": "train",
-      "limit": 6000
+      "train_fraction": 1,
+      "test_fraction": 1
     }
   },
   "model": {
     "name": "classic_standard",
     "model_type": "reservoir",
     "params": {
-      "n_reservoir": 1200
+      "n_reservoir": 600
     }
   },
   "training": {
     "name": "raw_standard",
     "task_type": "classification",
-    "train_size": 0.8,
+    "train_size": null,
+    "val_size": 0.1,
     "ridge_lambdas": [
       -7.0,
       7.0,
@@ -43,7 +45,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_reservoir": 1200,
+    "n_reservoir": 600,
     "n_inputs": 28,
     "n_outputs": 10,
     "state_aggregation": "mean",
@@ -59,92 +61,80 @@
   "quantum_reservoir": null,
   "results": {
     "metrics": {
-      "train_mse": 0.021011282468029687,
-      "test_mse": 0.03248866236340764,
-      "train_accuracy": 0.9620833396911621,
-      "test_accuracy": 0.8808333277702332,
-      "best_ridge_lambda": 1000.0
+      "train_mse": 0.02799281959532192,
+      "test_mse": 0.029154117652136827,
+      "train_accuracy": 0.9229074120521545,
+      "test_accuracy": 0.9193999767303467,
+      "val_mse": 0.027434402742244197,
+      "val_accuracy": 0.9315000176429749,
+      "best_ridge_lambda": 1.0
     },
     "ridge_search": [
       {
         "lambda": 1e-07,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 1e-06,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 1e-05,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 0.0001,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 0.001,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 0.01,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 0.1,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8562500476837158
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 1.0,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8583333492279053
+        "val_accuracy": 0.9087036848068237
       },
       {
         "lambda": 10.0,
-        "train_accuracy": 0.9993055462837219,
-        "val_accuracy": 0.8812500238418579
+        "val_accuracy": 0.9081481695175171
       },
       {
         "lambda": 100.0,
-        "train_accuracy": 0.9949073791503906,
-        "val_accuracy": 0.88958340883255
+        "val_accuracy": 0.9070370197296143
       },
       {
         "lambda": 1000.0,
-        "train_accuracy": 0.9629629254341125,
-        "val_accuracy": 0.8958333730697632
+        "val_accuracy": 0.898888885974884
       },
       {
         "lambda": 10000.0,
-        "train_accuracy": 0.8752314448356628,
-        "val_accuracy": 0.8229166865348816
+        "val_accuracy": 0.8653703927993774
       },
       {
         "lambda": 100000.0,
-        "train_accuracy": 0.7027777433395386,
-        "val_accuracy": 0.6625000238418579
+        "val_accuracy": 0.7811111211776733
       },
       {
         "lambda": 1000000.0,
-        "train_accuracy": 0.5148147940635681,
-        "val_accuracy": 0.4958333671092987
+        "val_accuracy": 0.6020370125770569
       },
       {
         "lambda": 10000000.0,
-        "train_accuracy": 0.38587963581085205,
-        "val_accuracy": 0.37708336114883423
+        "val_accuracy": 0.4770370423793793
       }
     ],
     "classification": {
-      "train_accuracy": 0.9620833396911621,
-      "test_accuracy": 0.8808333277702332,
+      "train_accuracy": 0.9229074120521545,
+      "val_accuracy": 0.9315000176429749,
+      "test_accuracy": 0.9193999767303467,
       "reservoir_info": {
         "name": "shared_reservoir_params",
         "model_type": "reservoir",
@@ -158,7 +148,8 @@
           "sparsity": 0.1,
           "input_bias": 0.0,
           "nonlinearity": "tanh",
-          "n_reservoir": 1200,
+          "encode_batch_size": 4096,
+          "n_reservoir": 600,
           "n_inputs": 28,
           "n_outputs": 10,
           "state_aggregation": "mean",
@@ -171,6 +162,7 @@
             15.0
           ]
         },
+        "encode_batch_size": 4096,
         "description": "Shared parameters common to all reservoir computer variants",
         "backend": "gpu",
         "trained": false

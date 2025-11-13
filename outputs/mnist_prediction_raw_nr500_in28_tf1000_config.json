@@ -10,15 +10,15 @@
     "n_output": 10,
     "params": {
       "split": "train",
-      "train_fraction": 0.001,
-      "test_fraction": 0.001
+      "train_fraction": 1,
+      "test_fraction": 1
     }
   },
   "model": {
     "name": "classic_standard",
     "model_type": "reservoir",
     "params": {
-      "n_reservoir": 600
+      "n_reservoir": 500
     }
   },
   "training": {
@@ -45,7 +45,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_reservoir": 600,
+    "n_reservoir": 500,
     "n_inputs": 28,
     "n_outputs": 10,
     "state_aggregation": "mean",
@@ -61,80 +61,80 @@
   "quantum_reservoir": null,
   "results": {
     "metrics": {
-      "train_mse": 9.441121661212236e-21,
-      "test_mse": 0.17911596581600708,
-      "train_accuracy": 1.0,
-      "test_accuracy": 0.20000000298023224,
-      "val_mse": 0.13961914703064707,
-      "val_accuracy": 0.5,
-      "best_ridge_lambda": 1e-07
+      "train_mse": 0.029857480384213774,
+      "test_mse": 0.030592617769616748,
+      "train_accuracy": 0.9139258861541748,
+      "test_accuracy": 0.9098999500274658,
+      "val_mse": 0.0288481888895467,
+      "val_accuracy": 0.921999990940094,
+      "best_ridge_lambda": 100.0
     },
     "ridge_search": [
       {
         "lambda": 1e-07,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 1e-06,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 1e-05,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 0.0001,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 0.001,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 0.01,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 0.1,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.8996296525001526
       },
       {
         "lambda": 1.0,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.899814784526825
       },
       {
         "lambda": 10.0,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.899814784526825
       },
       {
         "lambda": 100.0,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.9007407426834106
       },
       {
         "lambda": 1000.0,
-        "val_accuracy": 0.3333333432674408
+        "val_accuracy": 0.8937036991119385
       },
       {
         "lambda": 10000.0,
-        "val_accuracy": 0.5
+        "val_accuracy": 0.855555534362793
       },
       {
         "lambda": 100000.0,
-        "val_accuracy": 0.1666666716337204
+        "val_accuracy": 0.7666666507720947
       },
       {
         "lambda": 1000000.0,
-        "val_accuracy": 0.0
+        "val_accuracy": 0.5812963247299194
       },
       {
         "lambda": 10000000.0,
-        "val_accuracy": 0.0
+        "val_accuracy": 0.4699999988079071
       }
     ],
     "classification": {
-      "train_accuracy": 1.0,
-      "val_accuracy": 0.5,
-      "test_accuracy": 0.20000000298023224,
+      "train_accuracy": 0.9139258861541748,
+      "val_accuracy": 0.921999990940094,
+      "test_accuracy": 0.9098999500274658,
       "reservoir_info": {
         "name": "shared_reservoir_params",
         "model_type": "reservoir",
@@ -148,7 +148,7 @@
           "sparsity": 0.1,
           "input_bias": 0.0,
           "nonlinearity": "tanh",
-          "n_reservoir": 600,
+          "n_reservoir": 500,
           "n_inputs": 28,
           "n_outputs": 10,
           "state_aggregation": "mean",

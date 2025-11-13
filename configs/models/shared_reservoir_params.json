@@ -10,6 +10,7 @@
     "reservoir_weight_range": 1.0,
     "sparsity": 0.1,
     "input_bias": 0.0,
-    "nonlinearity": "tanh"
+    "nonlinearity": "tanh",
+    "encode_batch_size": 4096
   }
 }
