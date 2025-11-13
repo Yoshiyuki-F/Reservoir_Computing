@@ -184,6 +184,9 @@ def run_experiment(
     if data_n_output is None:
         data_n_output = data_params.get("n_output")
 
+    raw_training = (demo_config.training.name == "raw_standard")
+    state_agg_override = getattr(demo_config.training, "state_aggregation", None)
+
     if isinstance(dataset, ExperimentDatasetClassification):
         n_input = int(dataset.train_sequences.shape[-1])
         combined_labels = jnp.concatenate(
@@ -198,7 +201,8 @@ def run_experiment(
             demo_config.reservoir = {}
         demo_config.reservoir['n_inputs'] = n_input
         demo_config.reservoir.setdefault('n_outputs', num_classes)
-        demo_config.reservoir.setdefault('state_aggregation', 'mean')
+        default_agg = state_agg_override or ('last' if raw_training else 'mean')
+        demo_config.reservoir.setdefault('state_aggregation', default_agg)
     else:
         if demo_config.reservoir is None:
             demo_config.reservoir = {}
@@ -206,6 +210,15 @@ def run_experiment(
             demo_config.reservoir.setdefault('n_inputs', int(data_n_input))
         if data_n_output is not None:
             demo_config.reservoir.setdefault('n_outputs', int(data_n_output))
+        if raw_training or state_agg_override:
+            demo_config.reservoir.setdefault('state_aggregation', state_agg_override or 'last')
+
+    if raw_training:
+        if demo_config.reservoir is None:
+            demo_config.reservoir = {}
+        demo_config.reservoir.setdefault('use_preprocessing', False)
+        demo_config.reservoir.setdefault('include_bias', False)
+        demo_config.reservoir.setdefault('washout_steps', 0)
 
     dataset_name = demo_config.data_generation.name
     model_name = demo_config.model.name
@@ -318,6 +331,7 @@ def run_experiment(
             except (TypeError, ValueError):
                 continue
     resolved_filename = demo_config.demo.filename
+    filename_suffix_parts = []
     if is_analog_model:
         suffix = Path(resolved_filename).suffix or ".png"
         resolved_filename = f"{dataset_name}_aq_prediction{suffix}"
@@ -325,10 +339,11 @@ def run_experiment(
         suffix = Path(resolved_filename).suffix or ".png"
         resolved_filename = f"{dataset_name}_gq_prediction{suffix}"
 
+    if raw_training:
+        filename_suffix_parts.append("raw")
+
     if n_reservoir is not None and not is_quantum_model:
-        filename_path = Path(resolved_filename)
-        suffix = filename_path.suffix or ""
-        resolved_filename = f"{filename_path.stem}_nr{n_reservoir}{suffix}"
+        filename_suffix_parts.append(f"nr{n_reservoir}")
 
     plot_title = demo_config.demo.title
 
@@ -419,24 +434,38 @@ def run_experiment(
         n_qubits = None
 
     if n_inputs_value is not None:
-        filename_path = Path(resolved_filename)
-        suffix = filename_path.suffix or ""
-        resolved_filename = f"{filename_path.stem}_in{n_inputs_value}{suffix}"
+        filename_suffix_parts.append(f"in{n_inputs_value}")
 
-    data_limit: Optional[int] = None
+    data_fraction = None
     try:
-        limit_value = demo_config.data_generation.get_param("limit")
+        data_fraction = demo_config.data_generation.get_param("train_fraction")
     except AttributeError:
-        limit_value = getattr(demo_config.data_generation, "params", {}).get("limit") if hasattr(demo_config.data_generation, "params") else None
-    if limit_value is not None:
+        params = getattr(demo_config.data_generation, "params", {}) or {}
+        data_fraction = params.get("train_fraction")
+    if data_fraction is None:
         try:
-            data_limit = int(limit_value)
+            data_fraction = demo_config.data_generation.get_param("fraction")
+        except AttributeError:
+            pass
+    if data_fraction is None:
+        train_fraction = getattr(demo_config.training, "train_size", None)
+    else:
+        train_fraction = data_fraction
+
+    if train_fraction is not None:
+        try:
+            frac_val = max(0.0, min(1.0, float(train_fraction)))
+            frac_label = int(round(frac_val * 1000))
+            filename_suffix_parts.append(f"tf{frac_label:04d}")
         except (TypeError, ValueError):
-            data_limit = None
-    if data_limit is not None:
+            pass
+
+    if filename_suffix_parts:
         filename_path = Path(resolved_filename)
         suffix = filename_path.suffix or ""
-        resolved_filename = f"{filename_path.stem}_l{data_limit}{suffix}"
+        stem = filename_path.stem
+        suffix_segment = "_".join(filename_suffix_parts)
+        resolved_filename = f"{stem}_{suffix_segment}{suffix}"
 
     output_filename = resolved_filename
 
@@ -455,45 +484,106 @@ def run_experiment(
         if quantum_mode or "quantum" in model_type:
             raise NotImplementedError("Quantum classification mode is not yet supported")
 
+        train_count = int(dataset.train_sequences.shape[0])
+        val_count = int(dataset.val_sequences.shape[0])
+        test_count = int(dataset.test_sequences.shape[0])
+        print(f"データ分割 → train: {train_count}, val: {val_count}, test: {test_count}")
         print("訓練中 (classification)...")
-        rc.train_classification(
+        train_features = rc.train_classification(
             dataset.train_sequences,
             dataset.train_labels,
             ridge_lambdas=lambda_candidates,
             num_classes=10,
+            return_features=True,
         )
 
         if getattr(rc, "ridge_search_log", None):
             print("🔍 Ridge λ grid search")
             for entry in rc.ridge_search_log:
                 lam = entry["lambda"]
-                metric_label = "train_accuracy" if "train_accuracy" in entry else "train_mse"
-                metric_value = entry.get("train_accuracy", entry.get("train_mse"))
-                if metric_label == "train_accuracy":
-                    print(f"  λ={lam:.2e} -> train Acc={metric_value:.4f}")
+                if "val_accuracy" in entry:
+                    print(f"  λ={lam:.2e} -> val Acc={entry['val_accuracy']:.4f}")
+                elif "val_mse" in entry:
+                    print(f"  λ={lam:.2e} -> val MSE={entry['val_mse']:.6f}")
+                elif "train_accuracy" in entry:
+                    print(f"  λ={lam:.2e} -> train Acc={entry['train_accuracy']:.4f}")
+                elif "train_mse" in entry:
+                    print(f"  λ={lam:.2e} -> train MSE={entry['train_mse']:.6f}")
                 else:
-                    print(f"  λ={lam:.2e} -> train MSE={metric_value:.6f}")
+                    print(f"  λ={lam:.2e}")
             if rc.best_ridge_lambda is not None:
                 print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
 
-        print("予測中...")
-        train_logits = rc.predict_classification(dataset.train_sequences)
-        test_logits = rc.predict_classification(dataset.test_sequences)
+        print("予測中 (train/test/val inference)...")
+        def _predict_with_cache(
+            sequences,
+            *,
+            cached_features,
+            desc: str,
+            position: int,
+        ):
+            if cached_features is not None:
+                return rc.predict_classification(
+                    sequences=None,
+                    precomputed_features=cached_features,
+                    progress_desc=desc,
+                    progress_position=position,
+                )
+            return rc.predict_classification(
+                sequences=sequences,
+                progress_desc=desc,
+                progress_position=position,
+            )
+
+        train_logits = _predict_with_cache(
+            dataset.train_sequences,
+            cached_features=train_features,
+            desc="Encoding train eval sequences",
+            position=1,
+        )
+        test_logits = rc.predict_classification(
+            dataset.test_sequences,
+            progress_desc="Encoding test sequences",
+            progress_position=2,
+        )
+        val_logits = None
+        if hasattr(dataset, "val_sequences") and dataset.val_sequences.size > 0:
+            val_logits = rc.predict_classification(
+                dataset.val_sequences,
+                progress_desc="Encoding validation sequences",
+                progress_position=3,
+            )
 
         train_one_hot = jnp.zeros((dataset.train_labels.shape[0], 10), dtype=jnp.float64)
         train_one_hot = train_one_hot.at[jnp.arange(dataset.train_labels.shape[0]), dataset.train_labels].set(1.0)
         test_one_hot = jnp.zeros((dataset.test_labels.shape[0], 10), dtype=jnp.float64)
         test_one_hot = test_one_hot.at[jnp.arange(dataset.test_labels.shape[0]), dataset.test_labels].set(1.0)
+        if val_logits is not None:
+            val_one_hot = jnp.zeros((dataset.val_labels.shape[0], 10), dtype=jnp.float64)
+            val_one_hot = val_one_hot.at[jnp.arange(dataset.val_labels.shape[0]), dataset.val_labels].set(1.0)
+        else:
+            val_one_hot = None
 
         train_mse = float(calculate_mse(train_logits, train_one_hot))
         test_mse = float(calculate_mse(test_logits, test_one_hot))
+        val_mse = float(calculate_mse(val_logits, val_one_hot)) if val_logits is not None and val_one_hot is not None else None
 
         train_pred = jnp.argmax(train_logits, axis=1)
         test_pred = jnp.argmax(test_logits, axis=1)
         train_accuracy = float(jnp.mean(train_pred == dataset.train_labels))
         test_accuracy = float(jnp.mean(test_pred == dataset.test_labels))
+        if val_logits is not None:
+            val_pred = jnp.argmax(val_logits, axis=1)
+            val_accuracy = float(jnp.mean(val_pred == dataset.val_labels))
+        else:
+            val_pred = None
+            val_accuracy = None
 
-        print(f"Accuracy: train={train_accuracy:.4f}, test={test_accuracy:.4f}")
+        accuracy_msg = f"Accuracy: train={train_accuracy:.4f}"
+        if val_accuracy is not None:
+            accuracy_msg += f", val={val_accuracy:.4f}"
+        accuracy_msg += f", test={test_accuracy:.4f}"
+        print(accuracy_msg)
 
         metrics_caption = {
             "Train MSE": train_mse,
@@ -507,6 +597,12 @@ def run_experiment(
             "train_accuracy": train_accuracy,
             "test_accuracy": test_accuracy,
         }
+        if val_mse is not None:
+            metrics_caption["Val MSE"] = val_mse
+            metrics_snapshot["val_mse"] = val_mse
+        if val_accuracy is not None:
+            metrics_caption["Val Acc"] = f"{val_accuracy:.4f}"
+            metrics_snapshot["val_accuracy"] = val_accuracy
 
         if getattr(rc, "best_ridge_lambda", None) is not None:
             best_lambda = float(rc.best_ridge_lambda)
@@ -522,6 +618,10 @@ def run_experiment(
             np.asarray(train_pred),
             np.asarray(test_pred),
         ]
+        if hasattr(dataset, "val_labels") and dataset.val_labels.size > 0:
+            labels_arrays.append(np.asarray(dataset.val_labels))
+            if val_pred is not None:
+                labels_arrays.append(np.asarray(val_pred))
         detected_classes = max(
             (int(arr.max()) if arr.size > 0 else -1) for arr in labels_arrays
         )
@@ -541,6 +641,7 @@ def run_experiment(
         extra_results = {
             "classification": {
                 "train_accuracy": train_accuracy,
+                "val_accuracy": val_accuracy,
                 "test_accuracy": test_accuracy,
                 "reservoir_info": reservoir_info,
             }
@@ -566,12 +667,16 @@ def run_experiment(
         print("🔍 Ridge λ grid search")
         for entry in rc.ridge_search_log:
             lam = entry["lambda"]
-            metric_label = "train_accuracy" if "train_accuracy" in entry else "train_mse"
-            metric_value = entry.get("train_accuracy", entry.get("train_mse"))
-            if metric_label == "train_accuracy":
-                print(f"  λ={lam:.2e} -> train Acc={metric_value:.4f}")
+            if "val_accuracy" in entry:
+                print(f"  λ={lam:.2e} -> val Acc={entry['val_accuracy']:.4f}")
+            elif "val_mse" in entry:
+                print(f"  λ={lam:.2e} -> val MSE={entry['val_mse']:.6f}")
+            elif "train_accuracy" in entry:
+                print(f"  λ={lam:.2e} -> train Acc={entry['train_accuracy']:.4f}")
+            elif "train_mse" in entry:
+                print(f"  λ={lam:.2e} -> train MSE={entry['train_mse']:.6f}")
             else:
-                print(f"  λ={lam:.2e} -> train MSE={metric_value:.6f}")
+                print(f"  λ={lam:.2e}")
         if rc.best_ridge_lambda is not None:
             print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
 

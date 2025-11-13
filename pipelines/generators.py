@@ -223,14 +223,18 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
     return input_data, target_data
 
 
-def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_mnist_sequence_data(
+    config: DataGenerationConfig,
+    *,
+    split: Optional[str] = None,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate MNIST-based sequence data by scanning images as time series.
 
     Args:
-        config: DataGenerationConfig with params:
-            - limit: Optional[int], number of samples to load (default 1000)
+        config: DataGenerationConfig with params such as:
             - split: str, 'train' or 'test' (default 'train')
+            - train_fraction/test_fraction/fraction: optional floats in (0, 1]
         and fields:
             - time_steps: Number of time steps to reshape each image into.
 
@@ -246,8 +250,7 @@ def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndar
             "Install them to enable this feature."
         )
 
-    limit = config.get_param("limit")
-    split = config.get_param("split", "train")
+    split_name = split or config.get_param("split", "train")
 
     total_pixels = 28 * 28
     time_steps = getattr(config, "time_steps", None)
@@ -262,16 +265,23 @@ def generate_mnist_sequence_data(config: DataGenerationConfig) -> Tuple[jnp.ndar
         )
 
     train_set, test_set = get_mnist_datasets()
-    dataset = train_set if split == "train" else test_set
+    if split_name not in {"train", "test"}:
+        raise ValueError(f"split must be 'train' or 'test', got '{split_name}'")
+    dataset = train_set if split_name == "train" else test_set
 
     max_available = len(dataset)
-    if limit is None:
+    fraction_key = f"{split_name}_fraction"
+    fraction_param = config.get_param(fraction_key)
+    if fraction_param is None:
+        fraction_param = config.get_param("fraction")
+
+    if fraction_param is None:
         limit = max_available
     else:
-        limit = int(limit)
-        if limit < 0:
-            raise ValueError("limit must be non-negative")
-        limit = min(limit, max_available)
+        fraction_val = float(fraction_param)
+        if fraction_val <= 0 or fraction_val > 1:
+            raise ValueError(f"{fraction_key if config.get_param(fraction_key) is not None else 'fraction'} must be in (0, 1], got {fraction_val}")
+        limit = max(1, min(max_available, int(max_available * fraction_val)))
 
     sequences = []
     labels = []

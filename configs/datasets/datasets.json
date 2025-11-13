@@ -62,7 +62,8 @@
     "n_output": 10,
     "params": {
       "split": "train",
-      "limit": 1000
+      "train_fraction": 0.1,
+      "test_fraction": 1
     }
   }
 }

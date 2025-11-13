@@ -1,0 +1,180 @@
+{
+  "data_generation": {
+    "name": "mnist",
+    "time_steps": 28,
+    "dt": 1.0,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": null,
+    "n_input": 28,
+    "n_output": 10,
+    "params": {
+      "split": "train",
+      "limit": 6000
+    }
+  },
+  "model": {
+    "name": "classic_standard",
+    "model_type": "reservoir",
+    "params": {
+      "n_reservoir": 100
+    }
+  },
+  "training": {
+    "name": "raw_standard",
+    "task_type": "classification",
+    "train_size": 0.8,
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ],
+    "state_aggregation": "mean",
+    "preprocessing": null,
+    "readout": null
+  },
+  "demo": {
+    "title": "Mnist Prediction",
+    "filename": "mnist_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_reservoir": 100,
+    "n_inputs": 28,
+    "n_outputs": 10,
+    "state_aggregation": "mean",
+    "use_preprocessing": false,
+    "include_bias": false,
+    "washout_steps": 0,
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ]
+  },
+  "quantum_reservoir": null,
+  "results": {
+    "metrics": {
+      "train_mse": 0.04631556557964424,
+      "test_mse": 0.052208330336427855,
+      "train_accuracy": 0.8141666650772095,
+      "test_accuracy": 0.7591666579246521,
+      "best_ridge_lambda": 100.0
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-07,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 1e-06,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 1e-05,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 0.0001,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 0.001,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 0.01,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 0.1,
+        "train_accuracy": 0.8252314925193787,
+        "val_accuracy": 0.768750011920929
+      },
+      {
+        "lambda": 1.0,
+        "train_accuracy": 0.8254629373550415,
+        "val_accuracy": 0.7666667103767395
+      },
+      {
+        "lambda": 10.0,
+        "train_accuracy": 0.8238425850868225,
+        "val_accuracy": 0.7708333730697632
+      },
+      {
+        "lambda": 100.0,
+        "train_accuracy": 0.8108795881271362,
+        "val_accuracy": 0.7729167342185974
+      },
+      {
+        "lambda": 1000.0,
+        "train_accuracy": 0.7571759223937988,
+        "val_accuracy": 0.6979166865348816
+      },
+      {
+        "lambda": 10000.0,
+        "train_accuracy": 0.6298611164093018,
+        "val_accuracy": 0.5833333730697632
+      },
+      {
+        "lambda": 100000.0,
+        "train_accuracy": 0.496527761220932,
+        "val_accuracy": 0.4520833492279053
+      },
+      {
+        "lambda": 1000000.0,
+        "train_accuracy": 0.36134257912635803,
+        "val_accuracy": 0.3583333492279053
+      },
+      {
+        "lambda": 10000000.0,
+        "train_accuracy": 0.1379629671573639,
+        "val_accuracy": 0.12291667610406876
+      }
+    ],
+    "classification": {
+      "train_accuracy": 0.8141666650772095,
+      "test_accuracy": 0.7591666579246521,
+      "reservoir_info": {
+        "name": "shared_reservoir_params",
+        "model_type": "reservoir",
+        "params": {
+          "random_seed": 42,
+          "spectral_radius": 1.3,
+          "input_scaling": 1.0,
+          "noise_level": 0.001,
+          "alpha": 0.2,
+          "reservoir_weight_range": 1.0,
+          "sparsity": 0.1,
+          "input_bias": 0.0,
+          "nonlinearity": "tanh",
+          "n_reservoir": 100,
+          "n_inputs": 28,
+          "n_outputs": 10,
+          "state_aggregation": "mean",
+          "use_preprocessing": false,
+          "include_bias": false,
+          "washout_steps": 0,
+          "ridge_lambdas": [
+            -7.0,
+            7.0,
+            15.0
+          ]
+        },
+        "description": "Shared parameters common to all reservoir computer variants",
+        "backend": "gpu",
+        "trained": false
+      }
+    }
+  }
+}

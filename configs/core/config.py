@@ -51,11 +51,29 @@ class TrainingConfig(BaseModel):
         description="Primary task type handled by the pipeline"
     )
     train_size: Optional[float] = Field(
-        None, ge=0.0, le=1.0, description="Optional train split fraction"
+        None, ge=0.0, le=1.0, description="Optional train split fraction (timeseries default 0.8)"
+    )
+    val_size: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Optional validation split fraction (classification only)",
     )
     ridge_lambdas: Optional[List[float]] = Field(
         None,
         description="Candidate ridge regularization strengths for grid search (log scale recommended)"
+    )
+    state_aggregation: Optional[str] = Field(
+        None,
+        description="Optional override for reservoir state aggregation mode",
+    )
+    preprocessing: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional preprocessing overrides specific to this training profile",
+    )
+    readout: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional readout configuration overrides specific to this training profile",
     )
 
     model_config = ConfigDict(extra="forbid")

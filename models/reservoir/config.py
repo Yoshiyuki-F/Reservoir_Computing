@@ -229,7 +229,9 @@ class ReservoirConfig(ModelConfig):
             'n_inputs', 'n_reservoir', 'n_outputs', 'spectral_radius',
             'input_scaling', 'noise_level', 'alpha', 'random_seed',
             'reservoir_weight_range', 'sparsity', 'input_bias', 'nonlinearity',
-            'state_aggregation', 'ridge_lambdas'
+            'state_aggregation', 'ridge_lambdas', 'use_preprocessing',
+            'include_bias', 'poly_mode', 'poly_degree', 'std_threshold',
+            'readout_cv', 'readout_n_folds', 'washout_steps'
         }
 
         params = data.get('params', {})

@@ -53,15 +53,9 @@ mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv r
 mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
 mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
 
-mnist-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard" }
+mnist-c-raw = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard --training raw_standard" }
 mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
 mnist-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model analog_quantum" }
-
-# CPU fallbacks ------------------------------------------------------------
-main-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
-sine-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset sine_wave" }
-mnist-cpu = { shell = "export JAX_PLATFORMS=cpu && uv run reservoir-cli --force-cpu --dataset mnist --model classic_standard" }
-
 
 [build-system]
 requires = ["hatchling"]

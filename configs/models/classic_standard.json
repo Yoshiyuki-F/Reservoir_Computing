@@ -2,7 +2,6 @@
   "name": "classic_standard",
   "description": "Standard Echo State Network configuration",
   "params": {
-    "n_reservoir": 300,
-    "state_aggregation": "mts"
+    "n_reservoir": 600
   }
 }

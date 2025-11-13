@@ -437,7 +437,9 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             seq_arr = jnp.array(seq, dtype=jnp.float64)
             states = self._run_quantum_reservoir(seq_arr)
             encoded_states.append(self._aggregate_states(states))
-        return jnp.stack(encoded_states, axis=0)
+        array = jnp.stack(encoded_states, axis=0)
+        print("")
+        return array
 
     def _fit_ridge_with_grid(
         self,
@@ -534,7 +536,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         labels: jnp.ndarray,
         ridge_lambdas: Optional[Sequence[float]] = None,
         num_classes: int = 10,
-    ) -> None:
+        return_features: bool = False,
+    ) -> Optional[jnp.ndarray]:
         features = self._encode_sequences(sequences)
         design_matrix = self._prepare_design_matrix(features, fit=True)
         self.feature_dim_ = design_matrix.shape[1] - 1
@@ -547,14 +550,32 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.classification_mode = True
         self.num_classes = num_classes
         self.trained = True
+        if return_features:
+            return features
+        return None
 
-    def predict_classification(self, sequences: jnp.ndarray) -> jnp.ndarray:
+    def predict_classification(
+        self,
+        sequences: Optional[jnp.ndarray] = None,
+        *,
+        progress_desc: Optional[str] = None,
+        progress_position: int = 0,
+        precomputed_features: Optional[jnp.ndarray] = None,
+    ) -> jnp.ndarray:
         if not self.classification_mode or self.num_classes is None:
             raise ValueError("Classification mode not enabled. Call train_classification first.")
         if self.W_out is None:
             raise ValueError("Model has not been trained.")
 
-        features = self._encode_sequences(sequences)
+        if precomputed_features is None and sequences is None:
+            raise ValueError("Either sequences or precomputed_features must be provided.")
+        if precomputed_features is not None and sequences is not None:
+            raise ValueError("Specify only one of sequences or precomputed_features.")
+
+        if precomputed_features is not None:
+            features = jnp.asarray(precomputed_features, dtype=jnp.float64)
+        else:
+            features = self._encode_sequences(sequences)  # type: ignore[arg-type]
         design_matrix = self._prepare_design_matrix(features, fit=False)
         logits = design_matrix @ self.W_out
         return logits

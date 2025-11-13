@@ -496,7 +496,6 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             scaled = coeff * UT_y
             return Vt.T @ scaled
 
-        train_metric_list = []
         val_metric_list = []
         weights_by_lambda: Dict[float, np.ndarray] = {}
         self.ridge_search_log.clear()
@@ -511,23 +510,17 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
                 preds_val = preds_tr
 
             if classification:
-                pred_labels_tr = np.argmax(preds_tr, axis=1)
-                true_labels_tr = np.argmax(y_train, axis=1)
-                train_accuracy = float(np.mean(pred_labels_tr == true_labels_tr))
-
                 pred_labels_val = np.argmax(preds_val, axis=1)
                 true_labels_val = np.argmax(y_val if X_val.size > 0 else y_train, axis=1)
                 val_accuracy = float(np.mean(pred_labels_val == true_labels_val))
 
-                train_metric_list.append(train_accuracy)
                 val_metric_list.append(val_accuracy)
-                self.ridge_search_log.append({"lambda": lam, "train_accuracy": train_accuracy, "val_accuracy": val_accuracy})
+                self.ridge_search_log.append({"lambda": lam, "val_accuracy": val_accuracy})
             else:
                 train_mse = float(np.mean((y_train - preds_tr) ** 2))
                 y_ref = y_val if X_val.size > 0 else y_train
                 val_mse = float(np.mean((y_ref - preds_val) ** 2))
 
-                train_metric_list.append(train_mse)
                 val_metric_list.append(val_mse)
                 self.ridge_search_log.append({"lambda": lam, "train_mse": train_mse, "val_mse": val_mse})
 
@@ -558,7 +551,8 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         input_data: np.ndarray,
         target_data: np.ndarray,
         ridge_lambdas: Optional[Sequence[float]] = None,
-    ) -> None:
+        return_features: bool = False,
+    ) -> Optional[np.ndarray]:
         """Train the analog reservoir on regression (time-series) data."""
         inputs = np.asarray(input_data, dtype=np.float64)
         targets = np.asarray(target_data, dtype=np.float64)
@@ -613,6 +607,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         labels: np.ndarray,
         ridge_lambdas: Optional[Sequence[float]] = None,
         num_classes: Optional[int] = None,
+        return_features: bool = False,
     ) -> None:
         """Train the reservoir for classification tasks (e.g., MNIST)."""
         data = np.asarray(sequences, dtype=np.float64)
@@ -644,18 +639,32 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         self.num_classes = classes
         self.classification_mode = True
         self.trained = True
+        if return_features:
+            return features
+        return None
 
     def predict_classification(
         self,
-        sequences: np.ndarray,
+        sequences: Optional[np.ndarray] = None,
         return_logits: bool = False,
+        progress_desc: Optional[str] = None,
+        progress_position: int = 0,
+        precomputed_features: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Predict logits or labels for classification."""
         if not self.trained or self.W_out is None or not self.classification_mode:
             raise RuntimeError("Classification model not trained")
 
-        data = np.asarray(sequences, dtype=np.float64)
-        features = self._build_feature_matrix(data, mode=self.input_mode)
+        if precomputed_features is None and sequences is None:
+            raise ValueError("Either sequences or precomputed_features must be provided.")
+        if precomputed_features is not None and sequences is not None:
+            raise ValueError("Specify only one of sequences or precomputed_features.")
+
+        if precomputed_features is not None:
+            features = np.asarray(precomputed_features, dtype=np.float64)
+        else:
+            data = np.asarray(sequences, dtype=np.float64)
+            features = self._build_feature_matrix(data, mode=self.input_mode)
         design_matrix = self._prepare_design_matrix(features, fit=False)
         logits = design_matrix @ self.W_out
         if return_logits:

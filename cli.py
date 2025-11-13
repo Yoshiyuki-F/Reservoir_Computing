@@ -44,7 +44,7 @@ def main():
     parser.add_argument(
         '--training',
         type=str,
-        choices=['standard', 'robust', 'windowed'],
+        choices=['standard', 'robust', 'windowed', 'raw_standard'],
         default='standard',
         help='Training configuration to use (default: standard)'
     )

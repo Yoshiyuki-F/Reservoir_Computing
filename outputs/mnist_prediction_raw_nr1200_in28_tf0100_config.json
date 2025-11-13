@@ -10,26 +10,28 @@
     "n_output": 10,
     "params": {
       "split": "train",
-      "limit": 1000
+      "limit": 6000
     }
   },
   "model": {
     "name": "classic_standard",
     "model_type": "reservoir",
     "params": {
-      "n_reservoir": 1000,
-      "state_aggregation": "mts"
+      "n_reservoir": 1200
     }
   },
   "training": {
-    "name": "standard",
+    "name": "raw_standard",
     "task_type": "classification",
     "train_size": 0.8,
     "ridge_lambdas": [
       -7.0,
       7.0,
       15.0
-    ]
+    ],
+    "state_aggregation": "mean",
+    "preprocessing": null,
+    "readout": null
   },
   "demo": {
     "title": "Mnist Prediction",
@@ -41,10 +43,13 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_reservoir": 1000,
-    "state_aggregation": "mts",
+    "n_reservoir": 1200,
     "n_inputs": 28,
     "n_outputs": 10,
+    "state_aggregation": "mean",
+    "use_preprocessing": false,
+    "include_bias": false,
+    "washout_steps": 0,
     "ridge_lambdas": [
       -7.0,
       7.0,
@@ -54,139 +59,112 @@
   "quantum_reservoir": null,
   "results": {
     "metrics": {
-      "train_mse": 0.0017310228404502778,
-      "test_mse": 0.06231959484825738,
-      "train_accuracy": 1.0,
-      "test_accuracy": 0.7749999761581421,
-      "best_ridge_lambda": 100.0
+      "train_mse": 0.021011282468029687,
+      "test_mse": 0.03248866236340764,
+      "train_accuracy": 0.9620833396911621,
+      "test_accuracy": 0.8808333277702332,
+      "best_ridge_lambda": 1000.0
     },
     "ridge_search": [
       {
         "lambda": 1e-07,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 1e-06,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 1e-05,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 0.0001,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 0.001,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 0.01,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 0.1,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8562500476837158
       },
       {
         "lambda": 1.0,
         "train_accuracy": 1.0,
-        "val_accuracy": 0.85,
-        "train_mse": 1.0,
-        "val_mse": 0.85
+        "val_accuracy": 0.8583333492279053
       },
       {
         "lambda": 10.0,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.8625,
-        "train_mse": 1.0,
-        "val_mse": 0.8625
+        "train_accuracy": 0.9993055462837219,
+        "val_accuracy": 0.8812500238418579
       },
       {
         "lambda": 100.0,
-        "train_accuracy": 1.0,
-        "val_accuracy": 0.875,
-        "train_mse": 1.0,
-        "val_mse": 0.875
+        "train_accuracy": 0.9949073791503906,
+        "val_accuracy": 0.88958340883255
       },
       {
         "lambda": 1000.0,
-        "train_accuracy": 0.9930555555555556,
-        "val_accuracy": 0.8375,
-        "train_mse": 0.9930555555555556,
-        "val_mse": 0.8375
+        "train_accuracy": 0.9629629254341125,
+        "val_accuracy": 0.8958333730697632
       },
       {
         "lambda": 10000.0,
-        "train_accuracy": 0.8986111111111111,
-        "val_accuracy": 0.7625,
-        "train_mse": 0.8986111111111111,
-        "val_mse": 0.7625
+        "train_accuracy": 0.8752314448356628,
+        "val_accuracy": 0.8229166865348816
       },
       {
         "lambda": 100000.0,
-        "train_accuracy": 0.7486111111111111,
-        "val_accuracy": 0.6125,
-        "train_mse": 0.7486111111111111,
-        "val_mse": 0.6125
+        "train_accuracy": 0.7027777433395386,
+        "val_accuracy": 0.6625000238418579
       },
       {
         "lambda": 1000000.0,
-        "train_accuracy": 0.5583333333333333,
-        "val_accuracy": 0.4125,
-        "train_mse": 0.5583333333333333,
-        "val_mse": 0.4125
+        "train_accuracy": 0.5148147940635681,
+        "val_accuracy": 0.4958333671092987
       },
       {
         "lambda": 10000000.0,
-        "train_accuracy": 0.2013888888888889,
-        "val_accuracy": 0.15,
-        "train_mse": 0.2013888888888889,
-        "val_mse": 0.15
+        "train_accuracy": 0.38587963581085205,
+        "val_accuracy": 0.37708336114883423
       }
     ],
     "classification": {
-      "train_accuracy": 1.0,
-      "test_accuracy": 0.7749999761581421,
+      "train_accuracy": 0.9620833396911621,
+      "test_accuracy": 0.8808333277702332,
       "reservoir_info": {
         "name": "shared_reservoir_params",
         "model_type": "reservoir",
         "params": {
           "random_seed": 42,
-          "spectral_radius": 0.95,
+          "spectral_radius": 1.3,
           "input_scaling": 1.0,
           "noise_level": 0.001,
-          "alpha": 0.3,
+          "alpha": 0.2,
           "reservoir_weight_range": 1.0,
           "sparsity": 0.1,
           "input_bias": 0.0,
           "nonlinearity": "tanh",
-          "n_reservoir": 1000,
-          "state_aggregation": "mts",
+          "n_reservoir": 1200,
           "n_inputs": 28,
           "n_outputs": 10,
+          "state_aggregation": "mean",
+          "use_preprocessing": false,
+          "include_bias": false,
+          "washout_steps": 0,
           "ridge_lambdas": [
             -7.0,
             7.0,

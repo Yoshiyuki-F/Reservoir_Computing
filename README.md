@@ -212,4 +212,6 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 
 
 TODO
-ab wie viel bits kann es gut rechnen? literatur fastforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? sequenzmnist  728px andere Reservoir ansat
+ab wie viel bits kann es gut rechnen? 
+literatur fastforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? 
+sequenzmnist  728px andere Reservoir ansat　(nie gefunden)
