@@ -86,7 +86,7 @@ def _save_config_snapshot(
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     with snapshot_path.open('w', encoding='utf-8') as f:
         json.dump(snapshot, f, indent=2, default=_json_default)
-    print(f"📝 Saved config snapshot -> {snapshot_path}")
+    print(f"Saved config snapshot -> {snapshot_path}")
 
 
 def run_dynamic_experiment(
@@ -95,7 +95,7 @@ def run_dynamic_experiment(
     training_name: str = "standard",
     show_training: bool = False,
     backend: Optional[str] = None,
-    force_cpu: bool = False
+    n_reservoir_override: Optional[int] = None,
 ) -> Tuple[Optional[float], float, Optional[float], float]:
     """Run an experiment with dynamic configuration.
 
@@ -106,6 +106,7 @@ def run_dynamic_experiment(
         show_training: Whether to show training data in visualization
         backend: Compute backend ('cpu' or 'gpu')
         force_cpu: Force CPU usage
+        n_reservoir_override: Optional reservoir size override for classical models
 
     Returns:
         Tuple of (train_mse, test_mse, train_mae, test_mae)
@@ -127,6 +128,30 @@ def run_dynamic_experiment(
     composer = ConfigComposer()
     composed_config = composer.compose_experiment(dynamic_experiment)
     legacy_config = composer.compose_legacy_format(composed_config)
+
+    model_name_lower = model_name.lower()
+    is_quantum_choice = "quantum" in model_name_lower
+    if not is_quantum_choice and n_reservoir_override is None:
+        raise ValueError(
+            "n_reservoir_override is required for classical reservoir models. "
+            "Pass --n-reservoir via CLI or script."
+        )
+
+    if n_reservoir_override is not None:
+        try:
+            override_value = int(n_reservoir_override)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("n_reservoir_override must be an integer") from exc
+
+        model_section = legacy_config.get("model", {})
+        model_type = str(model_section.get("model_type", "reservoir")).lower()
+        if "quantum" not in model_type:
+            reservoir_section = legacy_config.get("reservoir")
+            if isinstance(reservoir_section, dict):
+                reservoir_section["n_reservoir"] = override_value
+            params = model_section.setdefault("params", {})
+            if isinstance(params, dict):
+                params["n_reservoir"] = override_value
 
     if dataset_name == 'mnist':
         training_cfg = legacy_config.get("training", {}).copy()
@@ -436,30 +461,6 @@ def run_experiment(
     if n_inputs_value is not None:
         filename_suffix_parts.append(f"in{n_inputs_value}")
 
-    data_fraction = None
-    try:
-        data_fraction = demo_config.data_generation.get_param("train_fraction")
-    except AttributeError:
-        params = getattr(demo_config.data_generation, "params", {}) or {}
-        data_fraction = params.get("train_fraction")
-    if data_fraction is None:
-        try:
-            data_fraction = demo_config.data_generation.get_param("fraction")
-        except AttributeError:
-            pass
-    if data_fraction is None:
-        train_fraction = getattr(demo_config.training, "train_size", None)
-    else:
-        train_fraction = data_fraction
-
-    if train_fraction is not None:
-        try:
-            frac_val = max(0.0, min(1.0, float(train_fraction)))
-            frac_label = int(round(frac_val * 1000))
-            filename_suffix_parts.append(f"tf{frac_label:04d}")
-        except (TypeError, ValueError):
-            pass
-
     if filename_suffix_parts:
         filename_path = Path(resolved_filename)
         suffix = filename_path.suffix or ""
@@ -512,7 +513,7 @@ def run_experiment(
                 else:
                     print(f"  λ={lam:.2e}")
             if rc.best_ridge_lambda is not None:
-                print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
+                print(f"Selected λ={rc.best_ridge_lambda:.2e}")
 
         print("予測中 (train/test/val inference)...")
         def _predict_with_cache(
@@ -678,7 +679,7 @@ def run_experiment(
             else:
                 print(f"  λ={lam:.2e}")
         if rc.best_ridge_lambda is not None:
-            print(f"✅ Selected λ={rc.best_ridge_lambda:.2e}")
+            print(f"Selected λ={rc.best_ridge_lambda:.2e}")
 
     print("予測中...")
     test_predictions_norm = rc.predict(dataset.test_input)
@@ -767,5 +768,7 @@ def run_experiment_from_config(
     """High-level helper that loads config, prepares data, and runs the experiment."""
 
     demo_config = ExperimentConfig.from_json(config_path)
-    dataset = prepare_experiment_data(demo_config, quantum_mode=quantum_mode)
+    model_type = demo_config.model.model_type or "reservoir"
+    prepare_data_fn = get_data_preparation_function(model_type)
+    dataset = prepare_data_fn(demo_config, quantum_mode=quantum_mode)
     return run_experiment(demo_config, dataset, backend=backend, quantum_mode=quantum_mode)

@@ -1,6 +1,7 @@
 """Model-agnostic configuration composition utilities."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Any, Union
 from dataclasses import dataclass
@@ -15,6 +16,16 @@ class ComposedConfig:
     visualization: Dict[str, Any]  # From experiment config
     experiment_name: str
     experiment_description: str
+
+
+BUILTIN_MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "classic_standard": {
+        "name": "classic_standard",
+        "description": "Dynamic classical reservoir config (n_reservoir provided via CLI/script)",
+        "model_type": "reservoir",
+        "params": {}
+    }
+}
 
 
 class ConfigComposer:
@@ -90,6 +101,9 @@ class ConfigComposer:
             raise KeyError(
                 f"Config '{name}' not found in aggregated {category} config: {aggregated_path}"
             )
+
+        if category == "models" and name in BUILTIN_MODEL_CONFIGS:
+            return deepcopy(BUILTIN_MODEL_CONFIGS[name])
 
         raise FileNotFoundError(
             f"Config file not found for category '{category}' and name '{name}'"

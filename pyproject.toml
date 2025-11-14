@@ -41,19 +41,19 @@ test = { shell = "uv run pytest -q" }
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
 # Model variants -----------------------------------------------------------
-sine-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model classic_standard" }
+sine-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model classic_standard --n-reservoir 600" }
 sine-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model gatebased_quantum" }
 sine-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model analog_quantum" }
 
-lorenz-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model classic_standard" }
+lorenz-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model classic_standard --n-reservoir 600" }
 lorenz-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model gatebased_quantum" }
 lorenz-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model analog_quantum" }
 
-mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model classic_standard" }
+mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model classic_standard --n-reservoir 600" }
 mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
 mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
 
-mnist-c-raw = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model classic_standard --training raw_standard" }
+mnist-raw = { cmd = "bash scripts/run_mnist_raw.sh" }
 mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
 mnist-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model analog_quantum" }
 

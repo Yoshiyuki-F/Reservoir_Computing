@@ -11,18 +11,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Usage examples:
-            reservoir-cli --dataset sine_wave --model classic_standard
+            reservoir-cli --dataset sine_wave --model classic_standard --n-reservoir 600
             reservoir-cli --dataset lorenz --model gatebased_quantum --show-training
             reservoir-cli --dataset mnist --model analog_quantum --force-cpu
             reservoir-cli --dataset mackey_glass --model reservoir_large --training windowed
-            reservoir-cli --dataset mnist --model classic_standard --force-cpu
+            reservoir-cli --dataset mnist --model classic_standard --n-reservoir 300 --force-cpu
         """
     )
 
     parser.add_argument(
         '--model',
         type=str,
-        choices=['classic_standard', 'reservoir_large', 'reservoir_complex', 'gatebased_quantum', 'analog_quantum', 'quantum_advanced'],
+        choices=[
+            'classic_standard',
+            'reservoir_large',
+            'reservoir_complex',
+            'gatebased_quantum',
+            'analog_quantum',
+            'quantum_advanced'
+        ],
         default='classic_standard',
         help='Model configuration to use (default: classic_standard)'
     )
@@ -55,13 +62,28 @@ def main():
         help='Show training data in visualization'
     )
 
+    parser.add_argument(
+        '--n-reservoir',
+        type=int,
+        default=None,
+        help='Override reservoir size for classical models'
+    )
+
     args = parser.parse_args()
 
+    model_name_lower = args.model.lower()
+    requires_reservoir = "quantum" not in model_name_lower
+    if requires_reservoir and args.n_reservoir is None:
+        parser.error("--n-reservoir is required for classical reservoir models")
+
     if args.dataset == 'mnist':
-        print("ℹ️ MNIST dataset detected; classification mode will be applied automatically.")
+        print(" MNIST dataset detected; classification mode will be applied automatically.")
 
     print(f"Multi-model ML Framework")
     print("=" * 60)
+    if args.n_reservoir is not None:
+        print(f"Reservoir override: {args.n_reservoir}")
+        print("=" * 60)
     print(f"Dataset: {args.dataset}")
     print(f"Model: {args.model}")
     print(f"Training: {args.training}")
@@ -69,7 +91,7 @@ def main():
 
     # Display experiment info
     experiment_name = f"{args.dataset}_{args.model}_{args.training}"
-    print(f"🎯 Experiment: {experiment_name}")
+    print(f"Experiment: {experiment_name}")
 
     # Run dynamic experiment
     try:
@@ -87,7 +109,7 @@ def main():
         # Import and run dynamic experiment
         from experiments.dynamic_runner import run_dynamic_experiment
 
-        print(f"🚀 Running dynamic experiment...")
+        print(f"Running dynamic experiment...")
 
         result = run_dynamic_experiment(
             dataset_name=args.dataset,
@@ -95,10 +117,10 @@ def main():
             training_name=args.training,
             show_training=args.show_training,
             backend=backend,
-            force_cpu=args.force_cpu
+            n_reservoir_override=args.n_reservoir,
         )
 
-        print(f"✅ Experiment completed successfully!")
+        print(f"Experiment completed successfully!")
         train_mse, test_mse, train_mae, test_mae = result
         if train_mse is not None:
             print(f"📊 Results: Train MSE: {train_mse:.6f}, Test MSE: {test_mse:.6f}")

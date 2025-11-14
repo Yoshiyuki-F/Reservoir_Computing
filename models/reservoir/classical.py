@@ -3,10 +3,9 @@ Classical Reservoir Computer implementation using JAX.
 """
 
 import json
-from pathlib import Path
 from functools import lru_cache
-
-from typing import Optional, Dict, Any, Sequence, Iterable, Tuple
+from pathlib import Path
+from typing import Optional, Dict, Any, Sequence, Iterable, Callable, cast
 
 from pipelines.jax_config import ensure_x64_enabled
 
@@ -16,7 +15,8 @@ import jax.numpy as jnp
 from jax import random, lax, vmap
 from tqdm.auto import tqdm
 
-from reservoirs.preprocess import FeatureScaler, DesignMatrixBuilder, aggregate_states
+from reservoirs.preprocess import FeatureScaler, DesignMatrixBuilder
+from reservoirs.preprocess.aggregator import AggregationMode, aggregate_states
 from reservoirs.readout import BaseReadout, RidgeReadoutNumpy
 from reservoirs.utils.spectral import spectral_radius_scale
 
@@ -85,7 +85,8 @@ class ReservoirComputer(BaseReservoirComputer):
         self.nonlinearity: str = str(params['nonlinearity'])
         self.encode_batch_size: int = max(1, int(params.get('encode_batch_size', 1024)))
         random_seed: int = int(params['random_seed'])
-        self.state_aggregation: str = str(params.get('state_aggregation', 'last')).lower()
+        state_agg = str(params.get('state_aggregation', 'last')).lower()
+        self.state_aggregation: AggregationMode = cast(AggregationMode, state_agg)
 
         # 乱数キーの初期化
         self.key = random.PRNGKey(random_seed)
@@ -214,9 +215,17 @@ class ReservoirComputer(BaseReservoirComputer):
         batch = int(batch_size or self.encode_batch_size)
         batch = max(1, batch)
 
-        run_vmapped = vmap(self._run_sequence_with_key, in_axes=(0, 0))
-        agg_fn = lambda st: aggregate_states(st, self.state_aggregation)
-        aggregate_batch = vmap(agg_fn, in_axes=0)
+        RunVmapped = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
+        run_vmapped: RunVmapped = cast(
+            RunVmapped,
+            vmap(self._run_sequence_with_key, in_axes=(0, 0)),
+        )
+        AggFn = Callable[[jnp.ndarray], jnp.ndarray]
+        agg_fn: AggFn = lambda st: aggregate_states(st, self.state_aggregation)
+        aggregate_batch: Callable[[jnp.ndarray], jnp.ndarray] = cast(
+            Callable[[jnp.ndarray], jnp.ndarray],
+            vmap(agg_fn, in_axes=0),
+        )
 
         features_list = []
         master_key = self.key
@@ -241,8 +250,6 @@ class ReservoirComputer(BaseReservoirComputer):
 
         self.key = master_key
         concatenated = jnp.concatenate(features_list, axis=0)
-        if leave:
-            print("")
         return concatenated
 
     def _build_design_matrix(
