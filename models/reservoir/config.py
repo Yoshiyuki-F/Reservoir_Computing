@@ -65,7 +65,7 @@ def parse_ridge_lambdas(
             )
         if num <= 0:
             raise ValueError(f"{key} num must be positive, got: {num}")
-        return tuple(np.logspace(start, stop, num))
+        return tuple(float(val) for val in np.logspace(start, stop, num))
 
     elif isinstance(ridge_cfg, dict):
         # Format: {"start": -14, "stop": 2, "num": 25}
@@ -83,7 +83,7 @@ def parse_ridge_lambdas(
             )
         if num <= 0:
             raise ValueError(f"{key} num must be positive, got: {num}")
-        return tuple(np.logspace(start, stop, num))
+        return tuple(float(val) for val in np.logspace(start, stop, num))
 
     else:
         # Explicit list of lambda values

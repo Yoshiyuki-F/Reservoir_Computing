@@ -3,7 +3,7 @@
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 from dataclasses import dataclass
 
 
@@ -73,30 +73,22 @@ class ConfigComposer:
                     return json.load(f)
 
             aggregated_dir_path = category_dir / f"{category}.json"
-            if aggregated_dir_path.exists():
-                with open(aggregated_dir_path, "r") as f:
-                    aggregated_data = json.load(f)
-
-                if isinstance(aggregated_data, dict):
-                    if name in aggregated_data:
-                        return aggregated_data[name]
-                    if category in aggregated_data and isinstance(aggregated_data[category], dict):
-                        category_data = aggregated_data[category]
-                        if name in category_data:
-                            return category_data[name]
-
-        aggregated_path = self.config_root / f"{category}.json"
-        if aggregated_path.exists():
-            with open(aggregated_path, "r") as f:
-                aggregated_data = json.load(f)
-
-            if isinstance(aggregated_data, dict):
+            aggregated_data = self._load_aggregated_file(aggregated_dir_path)
+            if aggregated_data:
                 if name in aggregated_data:
                     return aggregated_data[name]
-                if category in aggregated_data and isinstance(aggregated_data[category], dict):
-                    category_data = aggregated_data[category]
-                    if name in category_data:
-                        return category_data[name]
+                nested = aggregated_data.get(category)
+                if isinstance(nested, dict) and name in nested:
+                    return nested[name]
+
+        aggregated_path = self.config_root / f"{category}.json"
+        aggregated_data = self._load_aggregated_file(aggregated_path)
+        if aggregated_data:
+            if name in aggregated_data:
+                return aggregated_data[name]
+            nested = aggregated_data.get(category)
+            if isinstance(nested, dict) and name in nested:
+                return nested[name]
 
             raise KeyError(
                 f"Config '{name}' not found in aggregated {category} config: {aggregated_path}"
@@ -108,6 +100,17 @@ class ConfigComposer:
         raise FileNotFoundError(
             f"Config file not found for category '{category}' and name '{name}'"
         )
+
+    @staticmethod
+    def _load_aggregated_file(path: Path) -> Optional[Dict[str, Any]]:
+        """Load aggregated JSON file if it exists and return dict data."""
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"Aggregated config at {path} must be a JSON object")
+        return data
 
     def compose_experiment(self, experiment_config: Union[str, Dict[str, Any]]) -> ComposedConfig:
         """Compose a complete experiment configuration.
@@ -149,7 +152,8 @@ class ConfigComposer:
             experiment_description=exp_config["description"]
         )
 
-    def compose_legacy_format(self, composed: ComposedConfig) -> Dict[str, Any]:
+    @staticmethod
+    def compose_legacy_format(composed: ComposedConfig) -> Dict[str, Any]:
         """Convert composed config back to legacy format for compatibility.
 
         Args:
@@ -180,19 +184,16 @@ class ConfigComposer:
             }
         model_type = composed.model.get("model_type", composed.model.get("type", "reservoir"))
 
-        if "quantum" in model_name or model_type == "quantum":
-            # Quantum model configuration
+        is_quantum_model = "quantum" in model_name or model_type == "quantum"
+        if is_quantum_model:
             legacy_config["quantum_reservoir"] = model_params.copy()
-            # Add minimal reservoir section for compatibility
             legacy_config["reservoir"] = {
                 "n_inputs": model_params.get("n_inputs", 1),
                 "n_outputs": model_params.get("n_outputs", 1)
             }
         else:
-            # Classical reservoir or other model configuration
             legacy_config["reservoir"] = model_params.copy()
-            # Add None quantum section for compatibility
-            legacy_config["quantum_reservoir"] = None
+            legacy_config["quantum_reservoir"] = {}
 
         # Add generic model config for the new dynamic system
         legacy_config["model"] = {

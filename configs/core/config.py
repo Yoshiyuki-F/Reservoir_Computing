@@ -5,7 +5,7 @@ Model-agnostic configuration system for ML experiments.
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union, Literal
-from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class DataGenerationConfig(BaseModel):

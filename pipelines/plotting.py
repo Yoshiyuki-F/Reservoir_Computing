@@ -4,7 +4,7 @@ Reservoir Computing用の可視化ユーティリティ。
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Dict, Any, Sequence, Tuple
+from typing import Optional, Dict, Any, Sequence
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent

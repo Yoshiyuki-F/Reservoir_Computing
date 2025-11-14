@@ -13,6 +13,7 @@ from pipelines.jax_config import ensure_x64_enabled
 ensure_x64_enabled()
 
 import jax.numpy as jnp
+from jax import Array
 
 
 class BaseReservoirComputer(ABC):
@@ -50,21 +51,10 @@ class BaseReservoirComputer(ABC):
         pass
 
     @abstractmethod
-    def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
-        """Generate predictions for the given input data.
-
-        Args:
-            input_data: Input time series data of shape (time_steps, n_inputs)
-
-        Returns:
-            Predicted time series data of shape (time_steps, n_outputs)
-
-        Raises:
-            RuntimeError: If the reservoir hasn't been trained yet
-            NotImplementedError: Must be implemented by subclasses
-        """
-        if not self.trained:
-            raise RuntimeError("Reservoir must be trained before making predictions")
+    def predict(self, input_data: Array) -> Array:
+        """Generate predictions for the given input data."""
+        self._ensure_trained()
+        raise NotImplementedError
 
     @abstractmethod
     def get_reservoir_info(self) -> Dict[str, Any]:
@@ -88,8 +78,13 @@ class BaseReservoirComputer(ABC):
         """
         self.trained = False
 
-    def _validate_input_data(self, input_data: jnp.ndarray,
-                           expected_features: int) -> None:
+    def _ensure_trained(self) -> None:
+        """Raise if predict is called before training."""
+        if not self.trained:
+            raise RuntimeError("Reservoir must be trained before making predictions")
+
+    @staticmethod
+    def _validate_input_data(input_data: Array, expected_features: int) -> None:
         """Validate input data dimensions and format.
 
         Args:
@@ -111,9 +106,12 @@ class BaseReservoirComputer(ABC):
                 f"got {input_data.shape[1]}"
             )
 
-    def _validate_target_data(self, target_data: jnp.ndarray,
-                            expected_outputs: int,
-                            expected_timesteps: int) -> None:
+    @staticmethod
+    def _validate_target_data(
+        target_data: Array,
+        expected_outputs: int,
+        expected_timesteps: int,
+    ) -> None:
         """Validate target data dimensions and format.
 
         Args:

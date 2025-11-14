@@ -1,6 +1,6 @@
 """Model-agnostic data preparation utilities."""
 
-from typing import Tuple, Dict, Any, Optional, Union
+from typing import Optional, Union
 from dataclasses import dataclass
 
 import jax.numpy as jnp
@@ -46,13 +46,11 @@ class ExperimentDatasetClassification:
 
 def prepare_experiment_data(
     config,
-    quantum_mode: bool = False,
 ) -> Union[ExperimentDataset, ExperimentDatasetClassification]:
     """Prepare data for any model type experiment.
 
     Args:
         config: ExperimentConfig object containing data generation parameters
-        quantum_mode: Whether to prepare data for quantum computing (currently unused)
 
     Returns:
         ExperimentDataset with normalized and split training/test data
