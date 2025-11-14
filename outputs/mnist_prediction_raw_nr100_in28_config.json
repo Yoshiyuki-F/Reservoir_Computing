@@ -58,7 +58,7 @@
       15.0
     ]
   },
-  "quantum_reservoir": null,
+  "quantum_reservoir": {},
   "results": {
     "metrics": {
       "train_mse": 0.0491230940297779,

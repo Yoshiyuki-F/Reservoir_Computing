@@ -9,6 +9,7 @@ import numpy as np
 import jax.numpy as jnp
 
 from configs.core import ExperimentConfig, ConfigComposer
+from pipelines import prepare_experiment_data
 from pipelines.metrics import calculate_mse, calculate_mae
 from pipelines.preprocessing import denormalize_data
 from pipelines.plotting import plot_prediction_results, plot_classification_results
@@ -52,13 +53,6 @@ def get_model_factory(model_type: str):
         raise NotImplementedError("FFN models not yet implemented")
     else:
         raise ValueError(f"Unknown model type: {model_type}")
-
-
-def get_data_preparation_function(_model_type: str):
-    """Get the appropriate data preparation function based on model type."""
-    # Data preparation is now model-agnostic and located in pipelines
-    from pipelines import prepare_experiment_data
-    return prepare_experiment_data
 
 
 def _log_ridge_search(model: Any) -> Optional[list]:
@@ -191,8 +185,7 @@ def run_dynamic_experiment(
     model_type = experiment_config.model.model_type or model_name
 
     # Get data preparation function and prepare data
-    prepare_data_fn = get_data_preparation_function(model_type)
-    dataset = prepare_data_fn(experiment_config, quantum_mode=is_quantum)
+    dataset = prepare_experiment_data(experiment_config)
 
     # Run the experiment
     return run_experiment(
@@ -527,38 +520,32 @@ def run_experiment(
             *,
             cached_features,
             desc: str,
-            position: int,
         ):
             if cached_features is not None:
                 return classical_rc.predict_classification(
                     sequences=None,
                     precomputed_features=cached_features,
                     progress_desc=desc,
-                    progress_position=position,
                 )
             return classical_rc.predict_classification(
                 sequences=sequences,
                 progress_desc=desc,
-                progress_position=position,
             )
 
         train_logits = _predict_with_cache(
             dataset.train_sequences,
             cached_features=train_features,
-            desc="Encoding train eval sequences",
-            position=1,
+            desc="Encoding train eval sequences"
         )
         test_logits = classical_rc.predict_classification(
             dataset.test_sequences,
             progress_desc="Encoding test sequences",
-            progress_position=2,
         )
         val_logits = None
         if hasattr(dataset, "val_sequences") and dataset.val_sequences.size > 0:
             val_logits = classical_rc.predict_classification(
                 dataset.val_sequences,
                 progress_desc="Encoding validation sequences",
-                progress_position=3,
             )
 
         train_one_hot = jnp.zeros((dataset.train_labels.shape[0], 10), dtype=jnp.float64)
@@ -750,7 +737,5 @@ def run_experiment_from_config(
     """High-level helper that loads config, prepares data, and runs the experiment."""
 
     demo_config = ExperimentConfig.from_json(config_path)
-    model_type = demo_config.model.model_type or "reservoir"
-    prepare_data_fn = get_data_preparation_function(model_type)
-    dataset = prepare_data_fn(demo_config, quantum_mode=quantum_mode)
+    dataset = prepare_experiment_data(demo_config)
     return run_experiment(demo_config, dataset, backend=backend, quantum_mode=quantum_mode)
