@@ -1,7 +1,7 @@
 """Dynamic experiment orchestration utilities for any model type."""
 
 import json
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING, cast
 from pathlib import Path
 from functools import lru_cache
 
@@ -13,6 +13,9 @@ from pipelines.metrics import calculate_mse, calculate_mae
 from pipelines.preprocessing import denormalize_data
 from pipelines.plotting import plot_prediction_results, plot_classification_results
 from pipelines.data_preparation import ExperimentDatasetClassification
+
+if TYPE_CHECKING:
+    from models.reservoir.classical import ReservoirComputer
 
 
 @lru_cache()
@@ -51,11 +54,34 @@ def get_model_factory(model_type: str):
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def get_data_preparation_function(model_type: str):
+def get_data_preparation_function(_model_type: str):
     """Get the appropriate data preparation function based on model type."""
     # Data preparation is now model-agnostic and located in pipelines
     from pipelines import prepare_experiment_data
     return prepare_experiment_data
+
+
+def _log_ridge_search(model: Any) -> Optional[list]:
+    """Print ridge-search diagnostics if available and return the log."""
+    ridge_log = getattr(model, "ridge_search_log", None)
+    if ridge_log:
+        print("Ridge λ grid search")
+        for entry in ridge_log:
+            lam = entry["lambda"]
+            if "val_accuracy" in entry:
+                print(f"  λ={lam:.2e} -> val Acc={entry['val_accuracy']:.4f}")
+            elif "val_mse" in entry:
+                print(f"  λ={lam:.2e} -> val MSE={entry['val_mse']:.6f}")
+            elif "train_accuracy" in entry:
+                print(f"  λ={lam:.2e} -> train Acc={entry['train_accuracy']:.4f}")
+            elif "train_mse" in entry:
+                print(f"  λ={lam:.2e} -> train MSE={entry['train_mse']:.6f}")
+            else:
+                print(f"  λ={lam:.2e}")
+        best_lambda = getattr(model, "best_ridge_lambda", None)
+        if best_lambda is not None:
+            print(f"Selected λ={best_lambda:.2e}")
+    return ridge_log
 
 
 def _json_default(obj: Any):
@@ -105,7 +131,6 @@ def run_dynamic_experiment(
         training_name: Name of training config (default: 'standard')
         show_training: Whether to show training data in visualization
         backend: Compute backend ('cpu' or 'gpu')
-        force_cpu: Force CPU usage
         n_reservoir_override: Optional reservoir size override for classical models
 
     Returns:
@@ -198,7 +223,7 @@ def run_experiment(
             model_type = "reservoir"
 
     # Get the appropriate factory for this model type
-    ModelFactory = get_model_factory(model_type)
+    model_factory = get_model_factory(model_type)
 
     data_config = demo_config.data_generation
     data_params = dict(data_config.params or {})
@@ -264,7 +289,7 @@ def run_experiment(
             config_dict["n_inputs"] = int(data_n_input)
         if data_n_output is not None:
             config_dict["n_outputs"] = int(data_n_output)
-        rc = ModelFactory.create_reservoir(
+        rc = model_factory.create_reservoir(
             'analog', config_dict, backend
         )
     elif quantum_mode or "quantum" in model_type:
@@ -282,7 +307,7 @@ def run_experiment(
             demo_config.quantum_reservoir['n_inputs'] = int(data_n_input)
         if data_n_output is not None:
             demo_config.quantum_reservoir['n_outputs'] = int(data_n_output)
-        rc = ModelFactory.create_reservoir(
+        rc = model_factory.create_reservoir(
             'quantum', config_sequence, backend
         )
     else:
@@ -294,7 +319,7 @@ def run_experiment(
             {'params': basic_base},
             demo_config.reservoir,
         ]
-        rc = ModelFactory.create_reservoir(
+        rc = model_factory.create_reservoir(
             'classical', config_sequence, backend
         )
 
@@ -411,7 +436,6 @@ def run_experiment(
             except (TypeError, ValueError):
                 continue
 
-        measurement_basis = reservoir_info.get("measurement_basis", "pauli-z")
         readout_features = reservoir_info.get("readout_feature_dim")
         readout_observables = reservoir_info.get("readout_observables")
         state_agg = str(reservoir_info.get("state_aggregation", "")).lower()
@@ -455,8 +479,6 @@ def run_experiment(
                 resolved_filename = f"{stem}_{n_qubits}{suffix}"
             elif circuit_depth is not None:
                 resolved_filename = f"{stem}_{circuit_depth}{suffix}"
-    else:
-        n_qubits = None
 
     if n_inputs_value is not None:
         filename_suffix_parts.append(f"in{n_inputs_value}")
@@ -470,7 +492,6 @@ def run_experiment(
 
     output_filename = resolved_filename
 
-    # Parse ridge_lambdas: supports (-14, 2, 25), [-14, 2, 25], or explicit list
     ridge_cfg = demo_config.training.ridge_lambdas
     if ridge_cfg and isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
         # Format: [start, stop, num] or (start, stop, num)
@@ -490,30 +511,15 @@ def run_experiment(
         test_count = int(dataset.test_sequences.shape[0])
         print(f"データ分割 → train: {train_count}, val: {val_count}, test: {test_count}")
         print("訓練中 (classification)...")
-        train_features = rc.train_classification(
+        classical_rc = cast("ReservoirComputer", rc)
+        train_features = classical_rc.train_classification(
             dataset.train_sequences,
             dataset.train_labels,
             ridge_lambdas=lambda_candidates,
             num_classes=10,
             return_features=True,
         )
-
-        if getattr(rc, "ridge_search_log", None):
-            print("🔍 Ridge λ grid search")
-            for entry in rc.ridge_search_log:
-                lam = entry["lambda"]
-                if "val_accuracy" in entry:
-                    print(f"  λ={lam:.2e} -> val Acc={entry['val_accuracy']:.4f}")
-                elif "val_mse" in entry:
-                    print(f"  λ={lam:.2e} -> val MSE={entry['val_mse']:.6f}")
-                elif "train_accuracy" in entry:
-                    print(f"  λ={lam:.2e} -> train Acc={entry['train_accuracy']:.4f}")
-                elif "train_mse" in entry:
-                    print(f"  λ={lam:.2e} -> train MSE={entry['train_mse']:.6f}")
-                else:
-                    print(f"  λ={lam:.2e}")
-            if rc.best_ridge_lambda is not None:
-                print(f"Selected λ={rc.best_ridge_lambda:.2e}")
+        ridge_log = _log_ridge_search(classical_rc)
 
         print("予測中 (train/test/val inference)...")
         def _predict_with_cache(
@@ -524,13 +530,13 @@ def run_experiment(
             position: int,
         ):
             if cached_features is not None:
-                return rc.predict_classification(
+                return classical_rc.predict_classification(
                     sequences=None,
                     precomputed_features=cached_features,
                     progress_desc=desc,
                     progress_position=position,
                 )
-            return rc.predict_classification(
+            return classical_rc.predict_classification(
                 sequences=sequences,
                 progress_desc=desc,
                 progress_position=position,
@@ -542,14 +548,14 @@ def run_experiment(
             desc="Encoding train eval sequences",
             position=1,
         )
-        test_logits = rc.predict_classification(
+        test_logits = classical_rc.predict_classification(
             dataset.test_sequences,
             progress_desc="Encoding test sequences",
             progress_position=2,
         )
         val_logits = None
         if hasattr(dataset, "val_sequences") and dataset.val_sequences.size > 0:
-            val_logits = rc.predict_classification(
+            val_logits = classical_rc.predict_classification(
                 dataset.val_sequences,
                 progress_desc="Encoding validation sequences",
                 progress_position=3,
@@ -605,12 +611,11 @@ def run_experiment(
             metrics_caption["Val Acc"] = f"{val_accuracy:.4f}"
             metrics_snapshot["val_accuracy"] = val_accuracy
 
-        if getattr(rc, "best_ridge_lambda", None) is not None:
-            best_lambda = float(rc.best_ridge_lambda)
+        best_lambda_attr = getattr(classical_rc, "best_ridge_lambda", None)
+        if best_lambda_attr is not None:
+            best_lambda = float(best_lambda_attr)
             metrics_caption["Ridge λ"] = f"{best_lambda:.2e}"
             metrics_snapshot["best_ridge_lambda"] = best_lambda
-
-        ridge_log = getattr(rc, "ridge_search_log", None)
 
         # 可視化 (classification)
         labels_arrays = [
@@ -629,10 +634,10 @@ def run_experiment(
         class_count = max(detected_classes + 1, 10)
         class_names = [str(i) for i in range(class_count)]
         plot_classification_results(
-            dataset.train_labels,
-            dataset.test_labels,
-            train_pred,
-            test_pred,
+            np.asarray(dataset.train_labels),
+            np.asarray(dataset.test_labels),
+            np.asarray(train_pred),
+            np.asarray(test_pred),
             plot_title,
             output_filename,
             metrics_info=metrics_caption,
@@ -664,50 +669,28 @@ def run_experiment(
         ridge_lambdas=lambda_candidates,
     )
 
-    if getattr(rc, "ridge_search_log", None):
-        print("🔍 Ridge λ grid search")
-        for entry in rc.ridge_search_log:
-            lam = entry["lambda"]
-            if "val_accuracy" in entry:
-                print(f"  λ={lam:.2e} -> val Acc={entry['val_accuracy']:.4f}")
-            elif "val_mse" in entry:
-                print(f"  λ={lam:.2e} -> val MSE={entry['val_mse']:.6f}")
-            elif "train_accuracy" in entry:
-                print(f"  λ={lam:.2e} -> train Acc={entry['train_accuracy']:.4f}")
-            elif "train_mse" in entry:
-                print(f"  λ={lam:.2e} -> train MSE={entry['train_mse']:.6f}")
-            else:
-                print(f"  λ={lam:.2e}")
-        if rc.best_ridge_lambda is not None:
-            print(f"Selected λ={rc.best_ridge_lambda:.2e}")
+    ridge_log = _log_ridge_search(rc)
+
+    def _predict_and_denormalize(inputs: jnp.ndarray, targets: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        preds_norm = rc.predict(inputs)
+        preds = denormalize_data(preds_norm, dataset.target_mean, dataset.target_std)
+        target_orig = denormalize_data(targets, dataset.target_mean, dataset.target_std)
+        return preds, target_orig
 
     print("予測中...")
-    test_predictions_norm = rc.predict(dataset.test_input)
-    test_target_norm = dataset.test_target
-
-    test_predictions = denormalize_data(
-        test_predictions_norm, dataset.target_mean, dataset.target_std
-    )
-    test_target_orig = denormalize_data(
-        test_target_norm, dataset.target_mean, dataset.target_std
+    test_predictions, test_target_orig = _predict_and_denormalize(
+        dataset.test_input, dataset.test_target
     )
 
     test_mse = calculate_mse(test_predictions, test_target_orig)
     test_mae = calculate_mae(test_predictions, test_target_orig)
 
     train_mse = train_mae = None
-    train_predictions_norm = train_target_norm = None
     train_predictions_orig = train_target_orig = None
 
     if dataset.train_input.size > 0:
-        train_predictions_norm = rc.predict(dataset.train_input)
-        train_target_norm = dataset.train_target
-
-        train_predictions_orig = denormalize_data(
-            train_predictions_norm, dataset.target_mean, dataset.target_std
-        )
-        train_target_orig = denormalize_data(
-            train_target_norm, dataset.target_mean, dataset.target_std
+        train_predictions_orig, train_target_orig = _predict_and_denormalize(
+            dataset.train_input, dataset.train_target
         )
 
         train_mse = calculate_mse(train_predictions_orig, train_target_orig)
@@ -733,21 +716,20 @@ def run_experiment(
     metrics_snapshot["test_mse"] = float(test_mse)
     metrics_snapshot["test_mae"] = float(test_mae)
 
-    if getattr(rc, "best_ridge_lambda", None) is not None:
-        best_lambda = float(rc.best_ridge_lambda)
+    best_lambda_attr = getattr(rc, "best_ridge_lambda", None)
+    if best_lambda_attr is not None:
+        best_lambda = float(best_lambda_attr)
         metrics_caption["Ridge λ"] = f"{best_lambda:.2e}"
         metrics_snapshot["best_ridge_lambda"] = best_lambda
 
-    ridge_log = getattr(rc, "ridge_search_log", None)
-
     plot_prediction_results(
-        test_target_orig,
-        test_predictions,
-        time_indices,
+        np.asarray(test_target_orig),
+        np.asarray(test_predictions),
+        np.asarray(time_indices),
         plot_title,
         output_filename,
-        train_target_orig,
-        train_predictions_orig,
+        np.asarray(train_target_orig) if train_target_orig is not None else None,
+        np.asarray(train_predictions_orig) if train_predictions_orig is not None else None,
         dataset.train_size if dataset.train_input.size > 0 else None,
         y_axis_label=demo_config.demo.y_axis_label,
         metrics_info=metrics_caption,
