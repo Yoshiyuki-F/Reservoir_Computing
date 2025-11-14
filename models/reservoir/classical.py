@@ -203,7 +203,6 @@ class ReservoirComputer(BaseReservoirComputer):
         desc: Optional[str] = None,
         *,
         leave: bool = False,
-        position: int = 0,
         batch_size: Optional[int] = None,
     ) -> jnp.ndarray:
         """Run reservoir on sequences (batched) and collect aggregated features."""
@@ -233,7 +232,6 @@ class ReservoirComputer(BaseReservoirComputer):
             range(0, total, batch),
             desc=desc or "Encoding sequences (batched)",
             leave=leave,
-            position=position,
             unit="batch",
         )
 
@@ -307,8 +305,7 @@ class ReservoirComputer(BaseReservoirComputer):
         features = self._encode_sequences(
             sequences,
             desc="[TRAIN] Encoding sequences",
-            leave=True,
-            position=0,
+            leave=True
         )
         design_matrix = self._build_design_matrix(features, fit=True, washout=False)
 
@@ -329,18 +326,21 @@ class ReservoirComputer(BaseReservoirComputer):
             return features
         return None
 
+    def _ensure_classification_ready(self) -> None:
+        """Ensure classification inference is only run after training."""
+        if not self.classification_mode or self.num_classes is None:
+            raise ValueError("Classification mode not enabled. Call train_classification first.")
+        if self.W_out is None:
+            raise ValueError("Model has not been trained.")
+
     def predict_classification(
         self,
         sequences: Optional[jnp.ndarray] = None,
         *,
         precomputed_features: Optional[jnp.ndarray] = None,
         progress_desc: Optional[str] = None,
-        progress_position: int = 0,
     ) -> jnp.ndarray:
-        if not self.classification_mode or self.num_classes is None:
-            raise ValueError("Classification mode not enabled. Call train_classification first.")
-        if self.W_out is None:
-            raise ValueError("Model has not been trained.")
+        self._ensure_classification_ready()
 
         if precomputed_features is None and sequences is None:
             raise ValueError("Either sequences or precomputed_features must be provided.")
@@ -355,8 +355,7 @@ class ReservoirComputer(BaseReservoirComputer):
             features = self._encode_sequences(
                 sequences,  # type: ignore[arg-type]
                 desc=desc_label,
-                leave=True,
-                position=progress_position,
+                leave=True
             )
         design_matrix = self._build_design_matrix(features, fit=False, washout=False)
         logits = self.readout.predict(design_matrix)
