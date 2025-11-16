@@ -384,9 +384,20 @@ class ReservoirComputer(BaseReservoirComputer):
 
         design_matrix = self._build_design_matrix(reservoir_states, fit=True, washout=True)
 
+        target_aligned = target_data
+        target_len = target_data.shape[0]
+        design_len = design_matrix.shape[0]
+        if target_len > design_len:
+            start = target_len - design_len
+            target_aligned = target_data[start:, ...]
+        elif target_len < design_len:
+            raise ValueError(
+                f"Aligned target data shorter than design matrix ({target_len} vs {design_len})"
+            )
+
         self._train_readout(
             design_matrix,
-            target_data,
+            target_aligned,
             classification=False,
             ridge_lambdas=ridge_lambdas,
         )

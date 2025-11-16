@@ -1,0 +1,147 @@
+{
+  "data_generation": {
+    "name": "mackey_glass",
+    "time_steps": 1000,
+    "dt": 0.1,
+    "noise_level": 0.0,
+    "use_dimensions": null,
+    "warmup_steps": 100,
+    "n_input": 1,
+    "n_output": 1,
+    "params": {
+      "tau": 17,
+      "beta": 0.2,
+      "gamma": 0.1,
+      "n": 10,
+      "initial_value": 1.2
+    }
+  },
+  "model": {
+    "name": "classic_standard",
+    "model_type": "reservoir",
+    "params": {
+      "n_reservoir": 30
+    }
+  },
+  "training": {
+    "name": "standard",
+    "task_type": "timeseries",
+    "train_size": 0.8,
+    "val_size": null,
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ],
+    "state_aggregation": null,
+    "preprocessing": null,
+    "readout": null
+  },
+  "demo": {
+    "title": "Mackey-Glass Prediction",
+    "filename": "mackey_glass_prediction.png",
+    "show_training": false,
+    "y_axis_label": "Value",
+    "add_test_zoom": false,
+    "zoom_range": null
+  },
+  "preprocessing": null,
+  "reservoir": {
+    "n_reservoir": 30,
+    "n_inputs": 1,
+    "n_outputs": 1,
+    "state_aggregation": "mean",
+    "ridge_lambdas": [
+      -7.0,
+      7.0,
+      15.0
+    ]
+  },
+  "quantum_reservoir": {},
+  "results": {
+    "metrics": {
+      "train_mse": 1.1676236778759202e-07,
+      "train_mae": 0.0002677024550160058,
+      "test_mse": 0.00041758014621805836,
+      "test_mae": 0.014384314039320422,
+      "best_ridge_lambda": 1e-07
+    },
+    "ridge_search": [
+      {
+        "lambda": 1e-07,
+        "val_mse": 0.0013674098981748936,
+        "train_mse": 1.1767390734467737e-06
+      },
+      {
+        "lambda": 1e-06,
+        "val_mse": 0.0013873590112397274,
+        "train_mse": 1.1767484883930464e-06
+      },
+      {
+        "lambda": 1e-05,
+        "val_mse": 0.0015756009399043064,
+        "train_mse": 1.1775593928750465e-06
+      },
+      {
+        "lambda": 0.0001,
+        "val_mse": 0.002701478205279227,
+        "train_mse": 1.20933774180451e-06
+      },
+      {
+        "lambda": 0.001,
+        "val_mse": 0.004304407005837276,
+        "train_mse": 1.5597468361869899e-06
+      },
+      {
+        "lambda": 0.01,
+        "val_mse": 0.005570191993474991,
+        "train_mse": 3.624733025975813e-06
+      },
+      {
+        "lambda": 0.1,
+        "val_mse": 0.004320383494633558,
+        "train_mse": 1.4072024229002165e-05
+      },
+      {
+        "lambda": 1.0,
+        "val_mse": 0.0031159069812812116,
+        "train_mse": 6.203534691787211e-05
+      },
+      {
+        "lambda": 10.0,
+        "val_mse": 0.005013800751114921,
+        "train_mse": 0.00027593764080164316
+      },
+      {
+        "lambda": 100.0,
+        "val_mse": 0.018574847283223655,
+        "train_mse": 0.0012504896154934865
+      },
+      {
+        "lambda": 1000.0,
+        "val_mse": 0.09373101564879671,
+        "train_mse": 0.0063965034541064066
+      },
+      {
+        "lambda": 10000.0,
+        "val_mse": 0.749960964972358,
+        "train_mse": 0.11205622766015919
+      },
+      {
+        "lambda": 100000.0,
+        "val_mse": 1.7897262037729147,
+        "train_mse": 0.5264165835142249
+      },
+      {
+        "lambda": 1000000.0,
+        "val_mse": 2.045796972931338,
+        "train_mse": 0.7449204301831516
+      },
+      {
+        "lambda": 10000000.0,
+        "val_mse": 2.0754909524130913,
+        "train_mse": 0.7764878808282284
+      }
+    ]
+  }
+}

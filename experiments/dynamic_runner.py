@@ -253,8 +253,10 @@ def run_experiment(
             demo_config.reservoir.setdefault('n_inputs', int(data_n_input))
         if data_n_output is not None:
             demo_config.reservoir.setdefault('n_outputs', int(data_n_output))
-        if raw_training or state_agg_override:
-            demo_config.reservoir.setdefault('state_aggregation', state_agg_override or 'last')
+        if state_agg_override is not None:
+            demo_config.reservoir.setdefault('state_aggregation', state_agg_override)
+        else:
+            demo_config.reservoir.setdefault('state_aggregation', 'mean')
 
     if raw_training:
         if demo_config.reservoir is None:
@@ -661,7 +663,15 @@ def run_experiment(
     def _predict_and_denormalize(inputs: jnp.ndarray, targets: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         preds_norm = rc.predict(inputs)
         preds = denormalize_data(preds_norm, dataset.target_mean, dataset.target_std)
-        target_orig = denormalize_data(targets, dataset.target_mean, dataset.target_std)
+        target_slice = targets
+        if target_slice.shape[0] > preds.shape[0]:
+            start = target_slice.shape[0] - preds.shape[0]
+            target_slice = target_slice[start:, ...]
+        elif target_slice.shape[0] < preds.shape[0]:
+            raise ValueError(
+                f"Prediction length exceeds target length ({preds.shape[0]} vs {target_slice.shape[0]})"
+            )
+        target_orig = denormalize_data(target_slice, dataset.target_mean, dataset.target_std)
         return preds, target_orig
 
     print("予測中...")

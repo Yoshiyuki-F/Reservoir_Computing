@@ -52,6 +52,7 @@ lorenz-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv 
 mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model classic_standard --n-reservoir 600" }
 mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
 mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
+mackey = { cmd = "bash scripts/run_mackey.sh" }
 
 mnist-raw = { cmd = "bash scripts/run_mnist_raw.sh" }
 mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }

@@ -54,7 +54,6 @@ class BaseReservoirComputer(ABC):
     def predict(self, input_data: Array) -> Array:
         """Generate predictions for the given input data."""
         self._ensure_trained()
-        raise NotImplementedError
 
     @abstractmethod
     def get_reservoir_info(self) -> Dict[str, Any]:
