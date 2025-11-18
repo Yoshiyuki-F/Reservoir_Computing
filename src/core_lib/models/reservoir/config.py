@@ -226,7 +226,7 @@ class ReservoirConfig(ModelConfig):
 
         # Move reservoir-specific fields to params
         reservoir_fields = {
-            'n_inputs', 'n_reservoir', 'n_outputs', 'spectral_radius',
+            'n_inputs', 'n_hiddenLayer', 'n_outputs', 'spectral_radius',
             'input_scaling', 'noise_level', 'alpha', 'random_seed',
             'reservoir_weight_range', 'sparsity', 'input_bias', 'nonlinearity',
             'state_aggregation', 'ridge_lambdas', 'use_preprocessing',
@@ -244,7 +244,7 @@ class ReservoirConfig(ModelConfig):
 
         # Validate required keys
         required_keys = {
-            'n_inputs', 'n_reservoir', 'n_outputs', 'spectral_radius',
+            'n_inputs', 'n_hiddenLayer', 'n_outputs', 'spectral_radius',
             'input_scaling', 'noise_level', 'alpha', 'reservoir_weight_range',
             'sparsity', 'input_bias', 'nonlinearity', 'random_seed', 'state_aggregation',
             'ridge_lambdas'
@@ -259,9 +259,9 @@ class ReservoirConfig(ModelConfig):
         if not isinstance(n_inputs, int) or n_inputs <= 0:
             raise ValueError(f"n_inputs must be a positive integer, got: {n_inputs}")
 
-        n_reservoir = params['n_reservoir']
-        if not isinstance(n_reservoir, int) or n_reservoir <= 0:
-            raise ValueError(f"n_reservoir must be a positive integer, got: {n_reservoir}")
+        n_hiddenLayer = params['n_hiddenLayer']
+        if not isinstance(n_hiddenLayer, int) or n_hiddenLayer <= 0:
+            raise ValueError(f"n_hiddenLayer must be a positive integer, got: {n_hiddenLayer}")
 
         n_outputs = params['n_outputs']
         if not isinstance(n_outputs, int) or n_outputs <= 0:

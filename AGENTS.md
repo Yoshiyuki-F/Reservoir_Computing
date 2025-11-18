@@ -1,16 +1,17 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Python source: `reservoir/` (entrypoints: `__main__.py`, `cli.py`).
-- Utilities: `utils/` (GPU helpers, metrics, plotting, preprocessing).
-- Tests: `tests/` (`test_*.py`).
-- Configs: `configs/` (JSON demos: `sine_wave_demo_config.json`, `lorenz_demo_config.json`).
+- Core library: `src/core_lib/` (pure model + data logic).
+- Application entrypoints: `cli/` (e.g. `cli/main.py` for `reservoir-cli`).
+- Pipelines: `pipelines/` (experiment workflows, plotting, orchestration).
+- Utilities: `src/core_lib/utils/` (GPU helpers, metrics, preprocessing).
+- Tests: `tests/` (`test_*.py` under `tests/core_lib` and `tests/pipelines`).
+- Presets: `presets/` (JSON configs for datasets/models/training/experiments).
 - Scripts: `scripts/` (CUDA setup, rebuild helpers). Docs in `docs/`, example outputs in `outputs/`.
 
 ## Build, Test, and Development Commands
 - Install deps (Python 3.13+): `uv sync`
 - Run CLI: `uv run reservoir-cli --help`
-- Run module: `uv run python -m reservoir --config configs/sine_wave_demo_config.json`
 - CPU tests: `uv run poe test` (equivalent: `uv run pytest -q`)
 - GPU smoke test (skips if no GPU): `uv run poe test-gpu`
 - GPU demos (CUDA 12): `uv run poe demo-sine-gpu` or `uv run poe demo-lorenz-gpu`

@@ -74,7 +74,7 @@ def _train_readout(
     rc.ridge_search_log = result.logs
 
 
-def train_reservoir_regression(
+def train_hiddenLayer_regression(
     rc: Any,
     input_data: jnp.ndarray,
     target_data: jnp.ndarray,
@@ -91,7 +91,7 @@ def train_reservoir_regression(
     input_data = input_data.astype(jnp.float64)
     target_data = target_data.astype(jnp.float64)
 
-    reservoir_states = rc.run_reservoir(input_data)
+    reservoir_states = rc.run_hiddenLayer(input_data)
     design_matrix = _build_design_matrix(
         rc,
         reservoir_states,
@@ -134,7 +134,7 @@ def predict_reservoir_regression(
         raise ValueError("Model has not been trained. Call train() first.")
 
     input_data = input_data.astype(jnp.float64)
-    reservoir_states = rc.run_reservoir(input_data)
+    reservoir_states = rc.run_hiddenLayer(input_data)
     design_matrix = _build_design_matrix(
         rc,
         reservoir_states,
@@ -145,7 +145,7 @@ def predict_reservoir_regression(
     return jnp.asarray(predictions, dtype=jnp.float64)
 
 
-def train_reservoir_classification(
+def train_hiddenLayer_classification(
     rc: Any,
     sequences: jnp.ndarray,
     labels: jnp.ndarray,
@@ -197,7 +197,7 @@ def predict_reservoir_classification(
     if not rc.classification_mode or rc.num_classes is None:
         raise ValueError(
             "Classification mode not enabled. "
-            "Call train_reservoir_classification first."
+            "Call train_hiddenLayer_classification first."
         )
     if rc.W_out is None:
         raise ValueError("Model has not been trained.")

@@ -36,11 +36,15 @@ source .venv/bin/activate
 
 ### CLI エントリポイント
 
-このプロジェクトの推奨エントリポイントは `reservoir-cli` です（`pyproject.toml` の `[project.scripts]` で定義）。
+このプロジェクトの推奨エントリポイントは `reservoir-cli` です（`pyproject.toml` の `[project.scripts]` で定義）。  
+GPU環境では Poe タスク経由で実行するのがおすすめです。
 
 ```bash
-# ヘルプ表示
+# ヘルプ表示（CPU / 共通）
 uv run reservoir-cli --help
+
+# ヘルプ表示（GPU環境 + Poe）
+uv run poe cli-gpu -- --help
 ```
 
 ### 典型的な実行例
@@ -48,39 +52,42 @@ uv run reservoir-cli --help
 #### 1. 古典的リザーバ（回帰）
 
 ```bash
-# サイン波 + 古典的リザーバ
-uv run reservoir-cli \
-  --dataset sine_wave \
-  --model classical \
-  --n-reservoir 600
+# サイン波 + 古典的リザーバ（GPU, Poe 推奨）
+uv run poe cli-gpu -- \
+  sine \                  # (= sine_wave)
+  cr \                    # (= classic_reservoir)
+  600                     # (= --n-hiddenLayer 600)
 ```
+
+uv run poe cli-gpu -- m fnn 30
 
 #### 2. ゲート型量子リザーバ
 
 ```bash
-uv run reservoir-cli \
-  --dataset lorenz \
-  --model gatebased-quantum \
-  --force-cpu
+uv run poe cli-gpu -- \
+  lorenz \
+  qr                      # (= gatebased_quantum)
 ```
 
 #### 3. MNIST + FNN パイプライン
 
 ```bash
 # 単純FNN
-uv run reservoir-cli \
+uv run poe cli-gpu -- \
   --dataset mnist \
-  --model fnn \
-  --config configs/fnn_mnist_config.json
+  --model fnn_pretrained \
+  --config presets/fnn_mnist_config.json
 
 # FNN(b') バリアント
-uv run reservoir-cli \
+uv run poe cli-gpu -- \
   --dataset mnist \
-  --model fnn-b-dash \
-  --config configs/fnn_b_dash_mnist_config.json
+  --model fnn_pretrained_b_dash \
+  --config presets/fnn_b_dash_mnist_config.json
 ```
 
-`--dataset` / `--model` / `--preprocessing` は `src/core_lib/core/identifiers.py` の `Dataset` / `Pipeline` / `Preprocessing` Enum で定義されている識別子の `value` と一致します。
+`--dataset` / `--model` は `src/core_lib/core/identifiers.py` の `Dataset` / `Pipeline` Enum で定義されている識別子の `value` と一致します。  
+古典的リザーバではデフォルトで「Raw」前処理（生のリザーバ状態を使用）が有効になっています。  
+スケーラ＋設計行列を使いたい場合は `--preprocessing default` を指定してください（`raw_standard` との切り替えは CLI が自動で行います）。
 
 実行したコマンドライン自体が実験の完全な記録になるため、再現したい実験はそのままメモ・貼り付けしておくのがおすすめです。
 
@@ -92,29 +99,41 @@ uv run reservoir-cli \
 - CPUでの実行を強制する場合は、CLI で `--force-cpu` フラグを使用してください：
 
 ```bash
-# CPU強制実行の例（Poeタスクがない場合のみ直接実行）
-uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-cpu
+# CPU強制実行の例
+uv run reservoir-cli \
+  --dataset sine_wave \
+  --model classic_reservoir \
+  --n-hiddenLayer 600 \
+  --force-cpu
+```
+
+Poe タスクを利用した GPU 実行の例は次の通りです：
+
+```bash
+# テスト（CPU）
+uv run poe test
+
+# GPU スモークテスト
+uv run poe test-gpu
+
+# 古典的リザーバ（GPU, Raw 前処理）
+uv run poe cli-gpu -- sine cr 600
 ```
 
 ## ファイル構成
 
 ```
 .
-├── reservoir/                   # メインパッケージ
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── cli.py                   # コマンドラインインターフェース
-│   ├── config.py                # 設定クラス
-│   ├── data.py                  # データ生成関数
-│   ├── gpu_utils.py             # GPUユーティリティ
-│   ├── metrics.py               # 評価指標
-│   ├── plotting.py              # 可視化機能
-│   ├── preprocessing.py         # データ前処理
-│   ├── reservoir_computer.py    # ReservoirComputerクラス
-│   └── runner.py                # 実験実行ロジック
-├── configs/                    # 設定ファイル
-│   ├── lorenz_demo_config.json
-│   └── sine_wave_demo_config.json
+├── src/core_lib/               # メインPythonパッケージ
+│   ├── cli.py                  # コマンドラインインターフェース
+│   ├── core/                   # 設定・識別子・コンポーザ
+│   ├── models/                 # 各種モデル定義
+│   ├── reservoirs/             # リザーバ関連ロジック
+│   └── utils/                  # GPU・前処理・メトリクス等ユーティリティ
+├── presets/                   # 実験用プリセット（JSON設定群）
+│   ├── models/
+│   ├── training/
+│   └── datasets/
 ├── docs/                       # ドキュメント
 │   ├── TODO.md
 │   └── TROUBLESHOOTING.md
@@ -136,7 +155,7 @@ uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-c
 
 ## モジュール構造詳細
 
-### コアモジュール
+### コアモジュール（`src/core_lib/` 配下）
 
 #### `reservoir_computer.py`
 - **ReservoirComputer**: メインのReservoir Computingクラス
@@ -162,7 +181,7 @@ uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-c
 - **normalize_data**: データ正規化（0-1スケーリング）
 - **denormalize_data**: 正規化解除
 
-### ユーティリティモジュール
+### ユーティリティモジュール（`src/core_lib/utils/`）
 
 #### `gpu_utils.py`
 - **check_gpu_available**: GPU利用可能性確認
@@ -173,29 +192,24 @@ uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-c
 - **calculate_mse**: 平均二乗誤差計算
 - **calculate_mae**: 平均絶対誤差計算
 
+### パイプライン & 可視化モジュール（`pipelines/`）
+
+#### `dynamic_runner.py`
+- **run_dynamic_experiment / run_experiment**: 設定に基づき、データ生成、学習、評価、可視化までの一連の実験フローを実行するアプリケーション層のロジック。
+
 #### `plotting.py`
 - **plot_prediction_results**: 予測結果可視化（時系列グラフ生成）
+- **plot_classification_results**: 分類タスクの混同行列・精度バーを可視化
 
-### インターフェースと実行モジュール
+### CLI エントリポイント（`cli/`）
 
-#### `runner.py`
-- **run_experiment**: 設定に基づき、データ生成、学習、評価、可視化までの一連の実験フローを実行するコアロジック。
-- `cli.py`から呼び出されることで、コマンドラインと実行ロジックを分離。
-
-#### `cli.py`
-- **main**: `argparse`を用いてコマンドライン引数を解析し、`runner.py`の関数を呼び出す薄いラッパー。
-- ユーザーが設定ファイルや実行オプションを簡単に指定できるようにする。
-
-#### `__main__.py`
-- `python -m reservoir`で実行された際のパッケージエントリーポイント。`cli.main()`を呼び出す。
-
-#### `__init__.py`
-- パッケージの初期化と、外部から利用される主要なクラスや関数をエクスポート。
+#### `cli/main.py`
+- **main**: `argparse`を用いてコマンドライン引数を解析し、`pipelines.dynamic_runner` を呼び出すアプリケーション層のエントリーポイント。
 
 ## ReservoirComputerクラスのパラメータ
 
 - `n_inputs`: 入力次元数
-- `n_reservoir`: reservoir内のニューロン数
+- `n_hiddenLayer`: reservoir内のニューロン数
 - `n_outputs`: 出力次元数
 - `spectral_radius`: reservoirの固有値の最大絶対値（デフォルト: 0.95）
 - `input_scaling`: 入力のスケーリング係数（デフォルト: 1.0）

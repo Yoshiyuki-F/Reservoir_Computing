@@ -19,9 +19,9 @@ class ComposedConfig:
 
 
 BUILTIN_MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "classic_standard": {
-        "name": "classic_standard",
-        "description": "Dynamic classical reservoir config (n_reservoir provided via CLI/script)",
+    "classic_reservoir": {
+        "name": "classic_reservoir",
+        "description": "Dynamic classical reservoir config (n_hiddenLayer provided via CLI/script)",
         "model_type": "reservoir",
         "params": {}
     }
@@ -31,7 +31,7 @@ BUILTIN_MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
 class ConfigComposer:
     """Composes configurations from modular config files."""
 
-    def __init__(self, config_root: Union[str, Path] = "configs"):
+    def __init__(self, config_root: Union[str, Path] = "presets"):
         """Initialize config composer.
 
         Args:
@@ -257,7 +257,7 @@ class ConfigComposer:
         return legacy_config
 
 
-def load_experiment_config(experiment_name: str, config_root: str = "configs") -> Dict[str, Any]:
+def load_experiment_config(experiment_name: str, config_root: str = "presets") -> Dict[str, Any]:
     """Convenience function to load and compose experiment config in legacy format.
 
     Args:

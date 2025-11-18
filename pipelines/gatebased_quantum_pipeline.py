@@ -102,7 +102,7 @@ def predict_quantum_reservoir_classification(
     if not rc.classification_mode or rc.num_classes is None:
         raise ValueError(
             "Classification mode not enabled. "
-            "Call train_reservoir_classification first."
+            "Call train_hiddenLayer_classification first."
         )
     if rc.W_out is None:
         raise ValueError("Model has not been trained.")

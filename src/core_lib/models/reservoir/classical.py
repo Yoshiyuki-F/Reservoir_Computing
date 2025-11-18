@@ -15,18 +15,19 @@ import jax.numpy as jnp
 from jax import random, lax, vmap
 from tqdm.auto import tqdm
 
-from core_lib.reservoirs import (
+from core_lib.components import (
     FeatureScaler,
     DesignMatrixBuilder,
     aggregate_states,
     BaseReadout,
     RidgeReadoutNumpy,
 )
-from core_lib.reservoirs.utils.spectral import spectral_radius_scale
+from core_lib.components.preprocess.aggregator import AggregationMode
+from .utils.spectral import spectral_radius_scale
 from pipelines.classical_reservoir_pipeline import (
-    train_reservoir_regression,
+    train_hiddenLayer_regression,
     predict_reservoir_regression,
-    train_reservoir_classification,
+    train_hiddenLayer_classification,
     predict_reservoir_classification,
 )
 
@@ -36,18 +37,32 @@ from .config import ReservoirConfig, parse_ridge_lambdas
 
 @lru_cache()
 def _load_shared_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "configs/models/shared_reservoir_params.json"
-    data = json.loads(path.read_text())
-    return dict(data.get("params", {}))
+    """Load shared reservoir default parameters from presets/models.
+
+    This function searches upwards from this file's directory to find a
+    top-level ``presets/models/shared_reservoir_params.json`` so that it
+    works both in a source checkout and when installed.
+    """
+    root = Path(__file__).resolve()
+    target_rel = Path("presets/models/shared_reservoir_params.json")
+    for parent in root.parents:
+        candidate = parent / target_rel
+        if candidate.is_file():
+            data = json.loads(candidate.read_text())
+            return dict(data.get("params", {}))
+    raise FileNotFoundError(
+        f"Could not find {target_rel} relative to {root}. "
+        "Ensure presets/models/shared_reservoir_params.json is present."
+    )
 
 class ReservoirComputer(BaseReservoirComputer):
     """JAXベースのEcho State Network (ESN) 実装。
     Attributes:
         config: リザーバーの設定パラメータ
         backend: 計算バックエンド種別（'cpu' or 'gpu'）
-        W_in: 入力重み行列 (n_reservoir, n_inputs)
-        W_res: リザーバー重み行列 (n_reservoir, n_reservoir)
-        W_out: 出力重み行列 (n_reservoir+1, n_outputs) 訓練後に設定
+        W_in: 入力重み行列 (n_hiddenLayer, n_inputs)
+        W_res: リザーバー重み行列 (n_hiddenLayer, n_hiddenLayer)
+        W_out: 出力重み行列 (n_hiddenLayer+1, n_outputs) 訓練後に設定
     """
     
     def __init__(
@@ -83,7 +98,7 @@ class ReservoirComputer(BaseReservoirComputer):
         params = cfg.params
 
         self.n_inputs: int = params['n_inputs']
-        self.n_reservoir: int = params['n_reservoir']
+        self.n_hiddenLayer: int = params['n_hiddenLayer']
         self.n_outputs: int = params['n_outputs']
         self.spectral_radius: float = float(params['spectral_radius'])
         self.input_scaling: float = float(params['input_scaling'])
@@ -149,7 +164,7 @@ class ReservoirComputer(BaseReservoirComputer):
         
         W_in = random.uniform(
             key1, 
-            (self.n_reservoir, self.n_inputs), 
+            (self.n_hiddenLayer, self.n_inputs), 
             minval=-self.input_scaling, 
             maxval=self.input_scaling,
             dtype=jnp.float64
@@ -157,7 +172,7 @@ class ReservoirComputer(BaseReservoirComputer):
         
         W_res = random.uniform(
             key2,
-            (self.n_reservoir, self.n_reservoir),
+            (self.n_hiddenLayer, self.n_hiddenLayer),
             minval=-self.reservoir_weight_range,
             maxval=self.reservoir_weight_range,
             dtype=jnp.float64,
@@ -174,7 +189,7 @@ class ReservoirComputer(BaseReservoirComputer):
         state, key = carry # 前の状態 h(t-1)
         key, subkey = random.split(key)
         
-        noise = random.normal(subkey, (self.n_reservoir,), dtype=jnp.float64) * self.noise_level
+        noise = random.normal(subkey, (self.n_hiddenLayer,), dtype=jnp.float64) * self.noise_level
         
         # 新しい状態 h(t) を計算
         res_contribution = jnp.dot(self.W_res, state)      # W_res * h(t-1)
@@ -194,12 +209,12 @@ class ReservoirComputer(BaseReservoirComputer):
         Run reservoir for a single sequence with the provided key.
         """
         input_sequence = input_sequence.astype(jnp.float64)
-        initial_state = jnp.zeros(self.n_reservoir, dtype=jnp.float64)
+        initial_state = jnp.zeros(self.n_hiddenLayer, dtype=jnp.float64)
         initial_carry = (initial_state, key)
         carry, states = lax.scan(self._reservoir_step, initial_carry, input_sequence)
         return states
         
-    def run_reservoir(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
+    def run_hiddenLayer(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
         """
         入力シーケンスに対してreservoirを実行します。
         """
@@ -269,7 +284,7 @@ class ReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
         return_features: bool = False,
     ) -> Optional[jnp.ndarray]:
-        return train_reservoir_classification(
+        return train_hiddenLayer_classification(
             self,
             sequences,
             labels,
@@ -313,7 +328,7 @@ class ReservoirComputer(BaseReservoirComputer):
             target_data: 形状 (time_steps, n_outputs) の目標データ
             ridge_lambdas: 正則化パラメータ候補リスト
         """
-        train_reservoir_regression(
+        train_hiddenLayer_regression(
             self,
             input_data,
             target_data,

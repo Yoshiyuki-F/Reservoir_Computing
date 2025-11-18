@@ -12,11 +12,11 @@ from flax.training import train_state
 import optax
 from torch.utils.data import DataLoader
 
-from core_lib.utils import ensure_x64_enabled, calculate_mse, plot_epoch_metric
-from core_lib.reservoirs import FeatureScaler, DesignMatrixBuilder, RidgeReadoutNumpy
-from configs.fnn_config import FNNPipelineConfig
-from core_lib.models.fnn import FNN
+from core_lib.utils import ensure_x64_enabled, calculate_mse
+from core_lib.components import FeatureScaler, DesignMatrixBuilder, RidgeReadoutNumpy
+from core_lib.models.fnn import FNN, FNNPipelineConfig
 from core_lib.models.reservoir.config import parse_ridge_lambdas
+from pipelines.plotting import plot_epoch_metric
 
 
 ensure_x64_enabled()

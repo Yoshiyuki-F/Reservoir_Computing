@@ -1,6 +1,10 @@
 {
   "model": {
-    "layer_dims": [784, 30, 10]
+    "layer_dims": [
+      784,
+      30,
+      10
+    ]
   },
   "training": {
     "learning_rate": 0.001,
@@ -8,6 +12,10 @@
     "num_epochs": 20,
     "weights_path": "outputs/mnist_fnn_raw_30.msgpack"
   },
-  "ridge_alpha": 1.0,
+  "ridge_lambdas": [
+    -7,
+    7,
+    15
+  ],
   "use_preprocessing": false
 }

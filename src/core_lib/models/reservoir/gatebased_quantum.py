@@ -32,14 +32,14 @@ from pipelines.gatebased_quantum_pipeline import (
 
 @lru_cache()
 def _load_shared_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "configs/models/shared_reservoir_params.json"
+    path = Path(__file__).resolve().parents[2] / "presets/models/shared_reservoir_params.json"
     data = json.loads(path.read_text())
     return dict(data.get("params", {}))
 
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "configs/models/gatebased_quantum.json"
+    path = Path(__file__).resolve().parents[2] / "presets/models/gatebased_quantum.json"
     data = json.loads(path.read_text())
     params = data.get('params', {}) or {}
     base = _load_shared_defaults()
