@@ -140,10 +140,7 @@ uv run poe cli-gpu -- sine cr 600
 ├── outputs/                    # 生成ファイル
 │   ├── lorenz_prediction.png
 │   └── sine_wave_prediction.png
-├── scripts/                    # ユーティリティスクリプト
-│   ├── install_cuda.sh
-│   ├── rebuild_test.sh
-│   └── run_gpu.sh
+├── pipelines/                 # 実験パイプライン
 ├── tests/                      # テストファイル
 │   ├── test_edge_cases.py
 │   ├── test_eigenvalues_comparison.py
@@ -209,7 +206,7 @@ uv run poe cli-gpu -- sine cr 600
 ## ReservoirComputerクラスのパラメータ
 
 - `n_inputs`: 入力次元数
-- `n_hiddenLayer`: reservoir内のニューロン数
+- `n_hiddenLayer`: reservoir/FNN内のニューロン数
 - `n_outputs`: 出力次元数
 - `spectral_radius`: reservoirの固有値の最大絶対値（デフォルト: 0.95）
 - `input_scaling`: 入力のスケーリング係数（デフォルト: 1.0）
@@ -247,5 +244,5 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 
 TODO
 ab wie viel bits kann es gut rechnen? 
-literatur fastforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? 
+literatur feedforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? 
 sequenzmnist  728px andere Reservoir ansat　(nie gefunden)
