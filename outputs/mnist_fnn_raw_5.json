@@ -1,0 +1,13 @@
+{
+  "model": {
+    "layer_dims": [784, 5, 10]
+  },
+  "training": {
+    "learning_rate": 0.001,
+    "batch_size": 128,
+    "num_epochs": 20,
+    "weights_path": "outputs/mnist_fnn_raw_5.msgpack"
+  },
+  "ridge_alpha": 1.0,
+  "use_preprocessing": false
+}

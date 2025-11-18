@@ -75,6 +75,21 @@ class TrainingConfig(BaseModel):
         None,
         description="Optional readout configuration overrides specific to this training profile",
     )
+    learning_rate: float = Field(
+        ...,
+        gt=0.0,
+        description="Base learning rate for gradient-based models (required when used)",
+    )
+    batch_size: int = Field(
+        ...,
+        gt=0,
+        description="Mini-batch size for training (required when used)",
+    )
+    num_epochs: int = Field(
+        ...,
+        gt=0,
+        description="Number of training epochs (required when used)",
+    )
 
     model_config = ConfigDict(extra="forbid")
 

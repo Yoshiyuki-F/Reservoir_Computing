@@ -16,6 +16,8 @@ dependencies = [
     #ML
     "jax[cuda12]==0.6.2",
     "jaxlib==0.6.2",
+    "flax",
+    "optax",
     #this is the latest for pennylane https://docs.pennylane.ai/en/stable/development/release_notes.html
     #Quantum
     "pennylane>=0.42.3,<0.43.0", #the latest for now
@@ -23,6 +25,7 @@ dependencies = [
     "torchvision>=0.24.0",
     "tqdm>=4.67.1,<5.0.0",
     "qutip>=5.2.1",
+    "flax>=0.11.2",
 ]
 
 [project.scripts]
@@ -54,7 +57,10 @@ mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv 
 mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
 mackey = { cmd = "bash scripts/run_mackey.sh" }
 
-mnist-raw = { cmd = "bash scripts/run_mnist_raw.sh" }
+mnist-c-raw = { cmd = "bash scripts/run_mnist_raw.sh" }
+mnist-c = { cmd = "bash scripts/run_mnist_classic.sh" }
+mnist-b-raw = { cmd = "bash scripts/run_mnist_fnn_raw.sh" }
+mnist-b = { cmd = "bash scripts/run_mnist_fnn.sh" }
 mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
 mnist-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model analog_quantum" }
 

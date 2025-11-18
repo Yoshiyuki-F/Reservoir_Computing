@@ -9,6 +9,100 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
+
+def plot_epoch_metric(
+    epochs: Sequence[int],
+    values: Sequence[float],
+    title: str,
+    filename: str,
+    *,
+    ylabel: str = "Metric",
+    metric_name: str = "value",
+    extra_metrics: Optional[Dict[str, Sequence[float]]] = None,
+    phase2_test_acc: Optional[float] = None,
+    phase2_train_acc: Optional[float] = None,
+) -> None:
+    """Plot a simple training curve (e.g., epoch vs accuracy) and save as PNG."""
+    if not epochs or not values:
+        return
+
+    epochs_arr = np.asarray(list(epochs), dtype=np.int32)
+    values_arr = np.asarray(list(values), dtype=np.float64)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(
+        epochs_arr,
+        values_arr,
+        marker="o",
+        linestyle="-",
+        color="tab:blue",
+        label=metric_name,
+    )
+
+    if extra_metrics:
+        colors = [
+            "tab:orange",
+            "tab:green",
+            "tab:red",
+            "tab:purple",
+            "tab:brown",
+            "tab:pink",
+            "tab:gray",
+        ]
+        for idx, (name, series) in enumerate(extra_metrics.items()):
+            vals = np.asarray(list(series), dtype=np.float64)
+            if vals.size == 0:
+                continue
+            length = min(len(epochs_arr), len(vals))
+            color = colors[idx % len(colors)]
+            ax.plot(
+                epochs_arr[:length],
+                vals[:length],
+                marker="o",
+                linestyle="--",
+                color=color,
+                label=name,
+            )
+    x_ticks = list(epochs_arr)
+    if phase2_test_acc is not None or phase2_train_acc is not None:
+        x_phase2 = int(epochs_arr[-1]) + 1
+        if phase2_test_acc is not None:
+            ax.scatter(
+                [x_phase2],
+                [float(phase2_test_acc)],
+                color="tab:blue",
+                marker="*",
+                s=80,
+                label="phase2_test_acc",
+                zorder=5,
+            )
+        if phase2_train_acc is not None:
+            ax.scatter(
+                [x_phase2],
+                [float(phase2_train_acc)],
+                color="tab:orange",
+                marker="*",
+                s=80,
+                label="phase2_train_acc",
+                zorder=5,
+            )
+        x_ticks.append(x_phase2)
+
+    ax.set_title(title)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(ylabel)
+    ax.set_xticks(x_ticks)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower right")
+
+    fig.tight_layout()
+    output_path = PROJECT_ROOT / f"outputs/{filename}"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"学習曲線を 'outputs/{filename}' に保存しました。")
+
+
 def plot_prediction_results(
     ground_truth: np.ndarray,
     predictions: np.ndarray,

@@ -94,8 +94,15 @@ class ConfigComposer:
                 f"Config '{name}' not found in aggregated {category} config: {aggregated_path}"
             )
 
+        # Built-in fallbacks for certain categories
         if category == "models" and name in BUILTIN_MODEL_CONFIGS:
             return deepcopy(BUILTIN_MODEL_CONFIGS[name])
+        if category == "training" and name == "raw_standard":
+            base = self.load_from_category("training", "standard")
+            merged = deepcopy(base)
+            merged["name"] = "raw_standard"
+            merged.setdefault("description", "Raw variant sharing hyperparameters with 'standard'")
+            return merged
 
         raise FileNotFoundError(
             f"Config file not found for category '{category}' and name '{name}'"

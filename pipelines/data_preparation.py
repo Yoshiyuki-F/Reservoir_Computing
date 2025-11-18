@@ -66,6 +66,8 @@ def prepare_experiment_data(
 
     dataset_name = config.data_generation.name
     task_type = getattr(config.training, "task_type", "timeseries")
+    training_name = getattr(config.training, "name", "")
+    is_raw_training = training_name == "raw_standard"
 
     if task_type == "classification":
         if dataset_name != 'mnist':
@@ -87,9 +89,15 @@ def prepare_experiment_data(
         test_sequences_raw = jnp.array(test_sequences_raw, dtype=jnp.float64)
         test_labels_raw = jnp.array(test_labels_raw, dtype=jnp.int32)
 
-        norm_train_sequences, seq_mean, seq_std = normalize_data(train_sequences_raw)
-        std_safe = max(seq_std, 1e-12)
-        test_sequences = (test_sequences_raw - seq_mean) / std_safe
+        if is_raw_training:
+            norm_train_sequences = train_sequences_raw
+            test_sequences = test_sequences_raw
+            seq_mean = 0.0
+            seq_std = 1.0
+        else:
+            norm_train_sequences, seq_mean, seq_std = normalize_data(train_sequences_raw)
+            std_safe = max(seq_std, 1e-12)
+            test_sequences = (test_sequences_raw - seq_mean) / std_safe
 
         total_train_samples = norm_train_sequences.shape[0]
         if total_train_samples == 0:

@@ -1,6 +1,7 @@
 """CLI entry point for reservoir-cli command."""
 
 import argparse
+import json
 import sys
 
 def main():
@@ -23,6 +24,7 @@ def main():
         type=str,
         choices=[
             'classic_standard',
+            'fnn_pretrained',
             'reservoir_large',
             'reservoir_complex',
             'gatebased_quantum',
@@ -68,12 +70,25 @@ def main():
         help='Override reservoir size for classical models'
     )
 
+    parser.add_argument(
+        '--config',
+        type=str,
+        default=None,
+        help='Path to JSON config file (used for FNN models)',
+    )
+
     args = parser.parse_args()
 
     model_name_lower = args.model.lower()
-    requires_reservoir = "quantum" not in model_name_lower
+    is_fnn_model = "fnn" in model_name_lower
+    requires_reservoir = "quantum" not in model_name_lower and not is_fnn_model
     if requires_reservoir and args.n_reservoir is None:
         parser.error("--n-reservoir is required for classical reservoir models")
+
+    if is_fnn_model and args.dataset != "mnist":
+        parser.error("fnn_pretrained model is currently supported only for the 'mnist' dataset")
+    if is_fnn_model and args.config is None:
+        parser.error("--config is required when using the fnn_pretrained model")
 
     if args.dataset == 'mnist':
         print(" MNIST dataset detected; classification mode will be applied automatically.")
@@ -105,7 +120,46 @@ def main():
 
         backend = 'cpu' if args.force_cpu else 'gpu'
 
-        # Import and run dynamic experiment
+        if is_fnn_model:
+            from configs.fnn_config import FNNPipelineConfig
+            from pipelines.datasets.mnist_loader import get_mnist_dataloaders
+            from pipelines.fnn_pipeline import pretrain_fnn, run_fnn_fixed_feature_pipeline
+
+            if args.config is None:
+                raise ValueError("FNN models require --config pointing to a JSON config file")
+
+            with open(args.config, "r", encoding="utf-8") as f:
+                cfg_dict = json.load(f)
+            fnn_config = FNNPipelineConfig(**cfg_dict)
+
+            train_loader, test_loader = get_mnist_dataloaders(
+                batch_size=fnn_config.training.batch_size,
+                shuffle_train=True,
+                num_workers=0,
+            )
+
+            print("[Phase 1] Running FNN pretraining phase...")
+            epochs, train_hist, test_hist = pretrain_fnn(fnn_config, train_loader, test_loader)
+            print("[Phase 2] Running FNN fixed-feature ridge pipeline...")
+            results = run_fnn_fixed_feature_pipeline(
+                fnn_config,
+                train_loader,
+                test_loader,
+                epochs,
+                train_hist,
+                test_hist,
+            )
+
+            print(f"Experiment completed successfully!")
+            print(
+                "📊 Results: "
+                f"Train MSE: {results['train_mse']:.6f}, "
+                f"Test MSE: {results['test_mse']:.6f}, "
+                f"Train Acc: {results['train_accuracy']:.4f}, "
+                f"Test Acc: {results['test_accuracy']:.4f}"
+            )
+            return
+
         from experiments.dynamic_runner import run_dynamic_experiment
 
         print(f"Running dynamic experiment...")

@@ -87,6 +87,7 @@ class ReservoirComputer(BaseReservoirComputer):
         random_seed: int = int(params['random_seed'])
         state_agg = str(params.get('state_aggregation', 'last')).lower()
         self.state_aggregation: AggregationMode = cast(AggregationMode, state_agg)
+        self.use_preprocessing: bool = bool(params.get('use_preprocessing', True))
 
         # 乱数キーの初期化
         self.key = random.PRNGKey(random_seed)
@@ -260,6 +261,10 @@ class ReservoirComputer(BaseReservoirComputer):
         data = features
         if washout and data.shape[0] > self.washout_steps:
             data = data[self.washout_steps :, ...]
+        data = jnp.asarray(data, dtype=jnp.float64)
+        if not self.use_preprocessing:
+            bias = jnp.ones((data.shape[0], 1), dtype=data.dtype)
+            return jnp.concatenate([data, bias], axis=1)
         if fit:
             normalized = self.scaler.fit_transform(data)
             design = self.design_builder.fit_transform(normalized)
