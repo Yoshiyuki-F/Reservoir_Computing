@@ -32,37 +32,57 @@ uv sync
 source .venv/bin/activate
 ```
 
-## 使用方法
+## 使用方法（Usage）
 
-### デモンストレーション実行
+### CLI エントリポイント
 
-**推奨方法（Poe the Poet使用）:**
+このプロジェクトの推奨エントリポイントは `reservoir-cli` です（`pyproject.toml` の `[project.scripts]` で定義）。
+
 ```bash
-# all datas
-uv run poe main
-# サイン波デモ実行（環境変数は自動設定）
-uv run poe sine
-
-# Lorenzアトラクターデモ実行
-uv run poe lorenz
+# ヘルプ表示
+uv run reservoir-cli --help
 ```
 
-**その他の実行方法:**
-```bash
-# 全てのテスト実行
-uv run poe test-simple-gpu
-uv run poe test-gpu-comparison
+### 典型的な実行例
 
-# カスタム設定での実行（環境変数なしの場合）
-uv run python -m reservoir --config configs/sine_wave_demo_config.json --force-cpu
+#### 1. 古典的リザーバ（回帰）
+
+```bash
+# サイン波 + 古典的リザーバ
+uv run reservoir-cli \
+  --dataset sine_wave \
+  --model classical \
+  --n-reservoir 600
 ```
 
-環境変数の詳細は docs/TROUBLESHOOTING.md を参照してください。
+#### 2. ゲート型量子リザーバ
 
-このコマンドで以下の2つのデモンストレーションが実行されます：
+```bash
+uv run reservoir-cli \
+  --dataset lorenz \
+  --model gatebased-quantum \
+  --force-cpu
+```
 
-1. **サイン波予測**: 複数の周波数を含むサイン波の時系列予測
-2. **Lorenzアトラクター予測**: カオス時系列の予測
+#### 3. MNIST + FNN パイプライン
+
+```bash
+# 単純FNN
+uv run reservoir-cli \
+  --dataset mnist \
+  --model fnn \
+  --config configs/fnn_mnist_config.json
+
+# FNN(b') バリアント
+uv run reservoir-cli \
+  --dataset mnist \
+  --model fnn-b-dash \
+  --config configs/fnn_b_dash_mnist_config.json
+```
+
+`--dataset` / `--model` / `--preprocessing` は `src/core_lib/core/identifiers.py` の `Dataset` / `Pipeline` / `Preprocessing` Enum で定義されている識別子の `value` と一致します。
+
+実行したコマンドライン自体が実験の完全な記録になるため、再現したい実験はそのままメモ・貼り付けしておくのがおすすめです。
 
 ## GPU要件
 

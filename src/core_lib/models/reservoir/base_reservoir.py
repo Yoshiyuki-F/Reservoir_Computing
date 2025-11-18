@@ -8,7 +8,7 @@ reservoir computers, enabling unified usage and experimentation.
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, Optional, Sequence
 
-from pipelines.jax_config import ensure_x64_enabled
+from core_lib.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
 

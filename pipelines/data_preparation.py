@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 
-from .preprocessing import normalize_data
+from core_lib.utils import normalize_data
 from .generators import (
     generate_sine_data,
     generate_lorenz_data,

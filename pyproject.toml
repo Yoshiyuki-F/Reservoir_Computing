@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
-reservoir-cli = "cli:main"
+reservoir-cli = "core_lib.cli:main"
 
 [tool.uv]
 dev-dependencies = []
@@ -43,50 +43,21 @@ test = { shell = "uv run pytest -q" }
 # GPU smoke test (skips if no GPU)
 test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
 
-# Model variants -----------------------------------------------------------
-sine-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model classic_standard --n-reservoir 600" }
-sine-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model gatebased_quantum" }
-sine-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset sine_wave --model analog_quantum" }
-
-lorenz-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model classic_standard --n-reservoir 600" }
-lorenz-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model gatebased_quantum" }
-lorenz-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset lorenz --model analog_quantum" }
-
-mackey-c = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model classic_standard --n-reservoir 600" }
-mackey-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model gatebased_quantum" }
-mackey-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mackey_glass --model analog_quantum" }
-mackey = { cmd = "bash scripts/run_mackey.sh" }
-
-mnist-c-raw = { cmd = "bash scripts/run_mnist_raw.sh" }
-mnist-c = { cmd = "bash scripts/run_mnist_classic.sh" }
-mnist-b-raw = { cmd = "bash scripts/run_mnist_fnn_raw.sh" }
-mnist-b = { cmd = "bash scripts/run_mnist_fnn.sh" }
-mnist-gq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model gatebased_quantum" }
-mnist-aq = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run reservoir-cli --dataset mnist --model analog_quantum" }
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "models",
-    "pipelines",
-    "experiments"
-]
-
-[tool.hatch.build.targets.wheel.sources]
-"__main__.py" = "__main__.py"
-"cli.py" = "cli.py"
+packages = ["src/core_lib"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "__main__.py",
+    "src",
     "cli.py",
-    "models",
+    "__main__.py",
     "pipelines",
     "experiments",
-    "configs"
+    "configs",
 ]
 
 [[tool.uv.index]]

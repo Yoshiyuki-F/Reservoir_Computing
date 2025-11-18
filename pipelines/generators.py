@@ -18,11 +18,11 @@ except ModuleNotFoundError:  # pragma: no cover - torch optional
     get_mnist_datasets = None  # type: ignore
     image_to_sequence = None  # type: ignore
 
-from .jax_config import ensure_x64_enabled
+from core_lib.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
 
-from configs.core import DataGenerationConfig
+from core_lib.core import DataGenerationConfig
 
 
 def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:

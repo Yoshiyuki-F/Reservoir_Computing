@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Dict, Any, Sequence, Iterable, Callable, cast
 
-from pipelines.jax_config import ensure_x64_enabled
+from core_lib.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
 
@@ -15,10 +15,20 @@ import jax.numpy as jnp
 from jax import random, lax, vmap
 from tqdm.auto import tqdm
 
-from reservoirs.preprocess import FeatureScaler, DesignMatrixBuilder
-from reservoirs.preprocess.aggregator import AggregationMode, aggregate_states
-from reservoirs.readout import BaseReadout, RidgeReadoutNumpy
-from reservoirs.utils.spectral import spectral_radius_scale
+from core_lib.reservoirs import (
+    FeatureScaler,
+    DesignMatrixBuilder,
+    aggregate_states,
+    BaseReadout,
+    RidgeReadoutNumpy,
+)
+from core_lib.reservoirs.utils.spectral import spectral_radius_scale
+from pipelines.classical_reservoir_pipeline import (
+    train_reservoir_regression,
+    predict_reservoir_regression,
+    train_reservoir_classification,
+    predict_reservoir_classification,
+)
 
 from .base_reservoir import BaseReservoirComputer
 from .config import ReservoirConfig, parse_ridge_lambdas
@@ -251,54 +261,6 @@ class ReservoirComputer(BaseReservoirComputer):
         concatenated = jnp.concatenate(features_list, axis=0)
         return concatenated
 
-    def _build_design_matrix(
-        self,
-        features: jnp.ndarray,
-        *,
-        fit: bool,
-        washout: bool,
-    ) -> jnp.ndarray:
-        data = features
-        if washout and data.shape[0] > self.washout_steps:
-            data = data[self.washout_steps :, ...]
-        data = jnp.asarray(data, dtype=jnp.float64)
-        if not self.use_preprocessing:
-            bias = jnp.ones((data.shape[0], 1), dtype=data.dtype)
-            return jnp.concatenate([data, bias], axis=1)
-        if fit:
-            normalized = self.scaler.fit_transform(data)
-            design = self.design_builder.fit_transform(normalized)
-        else:
-            normalized = self.scaler.transform(data)
-            design = self.design_builder.transform(normalized)
-        return design
-
-    def _train_readout(
-        self,
-        design_matrix: jnp.ndarray,
-        target_data: jnp.ndarray,
-        *,
-        classification: bool,
-        ridge_lambdas: Optional[Sequence[float]],
-    ) -> None:
-        result = self.readout.fit(
-            design_matrix,
-            jnp.asarray(target_data, dtype=jnp.float64),
-            classification=classification,
-            lambdas=ridge_lambdas or self.ridge_lambdas,
-            cv=self._readout_cv,
-            n_folds=self._readout_n_folds,
-            random_state=self.initial_random_seed,
-        )
-        self.W_out = jnp.asarray(result.weights, dtype=jnp.float64)
-        self.best_ridge_lambda = result.best_lambda
-        self.last_training_score = result.score_val
-        self.last_training_score_name = result.score_name
-        self.last_training_mse = (
-            result.score_val if result.score_name.lower() == "mse" else None
-        )
-        self.ridge_search_log = result.logs
-
     def train_classification(
         self,
         sequences: jnp.ndarray,
@@ -307,29 +269,14 @@ class ReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
         return_features: bool = False,
     ) -> Optional[jnp.ndarray]:
-        features = self._encode_sequences(
+        return train_reservoir_classification(
+            self,
             sequences,
-            desc="[TRAIN] Encoding sequences",
-            leave=True
-        )
-        design_matrix = self._build_design_matrix(features, fit=True, washout=False)
-
-        labels = labels.astype(jnp.int32)
-        targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
-        targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
-
-        self._train_readout(
-            design_matrix,
-            targets,
-            classification=True,
+            labels,
             ridge_lambdas=ridge_lambdas,
+            num_classes=num_classes,
+            return_features=return_features,
         )
-        self.classification_mode = True
-        self.num_classes = num_classes
-        self.trained = True
-        if return_features:
-            return features
-        return None
 
     def _ensure_classification_ready(self) -> None:
         """Ensure classification inference is only run after training."""
@@ -345,26 +292,12 @@ class ReservoirComputer(BaseReservoirComputer):
         precomputed_features: Optional[jnp.ndarray] = None,
         progress_desc: Optional[str] = None,
     ) -> jnp.ndarray:
-        self._ensure_classification_ready()
-
-        if precomputed_features is None and sequences is None:
-            raise ValueError("Either sequences or precomputed_features must be provided.")
-        if precomputed_features is not None and sequences is not None:
-            raise ValueError("Specify only one of sequences or precomputed_features.")
-
-        phase_desc = progress_desc or "Encoding eval sequences"
-        desc_label = f"[PREDICT] {phase_desc}"
-        if precomputed_features is not None:
-            features = jnp.asarray(precomputed_features, dtype=jnp.float64)
-        else:
-            features = self._encode_sequences(
-                sequences,  # type: ignore[arg-type]
-                desc=desc_label,
-                leave=True
-            )
-        design_matrix = self._build_design_matrix(features, fit=False, washout=False)
-        logits = self.readout.predict(design_matrix)
-        return jnp.asarray(logits, dtype=jnp.float64)
+        return predict_reservoir_classification(
+            self,
+            sequences=sequences,
+            precomputed_features=precomputed_features,
+            progress_desc=progress_desc,
+        )
 
     def train(
         self,
@@ -380,35 +313,12 @@ class ReservoirComputer(BaseReservoirComputer):
             target_data: 形状 (time_steps, n_outputs) の目標データ
             ridge_lambdas: 正則化パラメータ候補リスト
         """
-        # データをfloat64に変換
-        input_data = input_data.astype(jnp.float64)
-        target_data = target_data.astype(jnp.float64)
-
-        # ①固定されたランダム重みを使ってreservoir状態を計算
-        reservoir_states = self.run_reservoir(input_data)
-
-        design_matrix = self._build_design_matrix(reservoir_states, fit=True, washout=True)
-
-        target_aligned = target_data
-        target_len = target_data.shape[0]
-        design_len = design_matrix.shape[0]
-        if target_len > design_len:
-            start = target_len - design_len
-            target_aligned = target_data[start:, ...]
-        elif target_len < design_len:
-            raise ValueError(
-                f"Aligned target data shorter than design matrix ({target_len} vs {design_len})"
-            )
-
-        self._train_readout(
-            design_matrix,
-            target_aligned,
-            classification=False,
+        train_reservoir_regression(
+            self,
+            input_data,
+            target_data,
             ridge_lambdas=ridge_lambdas,
         )
-        self.classification_mode = False
-        self.num_classes = None
-        self.trained = True  # Mark as trained
         
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """
@@ -420,22 +330,7 @@ class ReservoirComputer(BaseReservoirComputer):
         Returns:
             予測結果 (time_steps, n_outputs)
         """
-        # Use base class validation
-        super().predict(input_data)
-
-        if self.W_out is None:
-            raise ValueError("モデルが訓練されていません。先にtrain()を呼び出してください。")
-
-        # 入力データをfloat64に変換
-        input_data = input_data.astype(jnp.float64)
-
-        # reservoirを実行
-        reservoir_states = self.run_reservoir(input_data)
-
-        design_matrix = self._build_design_matrix(reservoir_states, fit=False, washout=True)
-
-        predictions = self.readout.predict(design_matrix)
-        return jnp.asarray(predictions, dtype=jnp.float64)
+        return predict_reservoir_regression(self, input_data)
 
     def reset_state(self) -> None:
         """Reset the reservoir to initial state."""

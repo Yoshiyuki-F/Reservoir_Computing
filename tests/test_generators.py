@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from configs.core.config import DataGenerationConfig
+from core_lib.core.config import DataGenerationConfig
 from pipelines.generators import generate_mackey_glass_data
 
 

@@ -5,7 +5,7 @@
 import numpy as np
 import jax.numpy as jnp
 import pytest
-from pipelines.preprocessing import normalize_data, denormalize_data
+from core_lib.utils import normalize_data, denormalize_data
 
 
 class TestNormalizeData:

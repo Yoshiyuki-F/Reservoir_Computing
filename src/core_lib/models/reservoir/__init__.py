@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - optional dependency
     AnalogQuantumReservoir = None
     ANALOG_AVAILABLE = False
 
-from configs.core import (
+from core_lib.core import (
     ExperimentConfig,
     DataGenerationConfig,
     TrainingConfig,

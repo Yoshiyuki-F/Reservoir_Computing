@@ -5,7 +5,7 @@ Reservoir-specific configuration classes and validation utilities.
 from typing import Any, Dict, Sequence, Set, Union, Tuple, ClassVar
 import numpy as np
 
-from configs.core.config import ModelConfig
+from core_lib.core.config import ModelConfig
 
 
 # ============================================================================

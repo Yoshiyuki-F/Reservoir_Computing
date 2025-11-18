@@ -8,19 +8,15 @@ from typing import Any, Dict, Tuple
 import jax
 import jax.numpy as jnp
 from flax import serialization
-from flax.core import freeze, unfreeze
 from flax.training import train_state
 import optax
 from torch.utils.data import DataLoader
 
-from pipelines.jax_config import ensure_x64_enabled
-from pipelines.metrics import calculate_mse
-from pipelines.plotting import plot_epoch_metric
-from reservoirs.preprocess import FeatureScaler, DesignMatrixBuilder
-from reservoirs.readout import RidgeReadoutNumpy
+from core_lib.utils import ensure_x64_enabled, calculate_mse, plot_epoch_metric
+from core_lib.reservoirs import FeatureScaler, DesignMatrixBuilder, RidgeReadoutNumpy
 from configs.fnn_config import FNNPipelineConfig
-from models.fnn import FNN
-from models.reservoir.config import parse_ridge_lambdas
+from core_lib.models.fnn import FNN
+from core_lib.models.reservoir.config import parse_ridge_lambdas
 
 
 ensure_x64_enabled()

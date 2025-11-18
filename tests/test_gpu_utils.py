@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import sys
 from io import StringIO
-from pipelines.gpu_utils import check_gpu_available, require_gpu, print_gpu_info
+from core_lib.utils import check_gpu_available, require_gpu, print_gpu_info
 
 
 class TestCheckGPUAvailable:
@@ -93,7 +93,7 @@ class TestCheckGPUAvailable:
 class TestRequireGPU:
     """require_gpu デコレータのテスト"""
     
-    @patch('pipelines.gpu_utils.check_gpu_available')
+    @patch('core_lib.utils.gpu_utils.check_gpu_available')
     def test_gpu_available_decorator_success(self, mock_check_gpu):
         """GPU利用可能時のデコレータ成功テスト"""
         # check_gpu_available が成功すると仮定
@@ -109,7 +109,7 @@ class TestRequireGPU:
         assert result == "GPU test passed"
         mock_check_gpu.assert_called_once()
     
-    @patch('pipelines.gpu_utils.check_gpu_available')
+    @patch('core_lib.utils.gpu_utils.check_gpu_available')
     @patch('sys.exit')
     def test_gpu_unavailable_decorator_exit(self, mock_exit, mock_check_gpu):
         """GPU利用不可時のデコレータ終了テスト"""
@@ -132,7 +132,7 @@ class TestRequireGPU:
         assert "GPU REQUIREMENT FAILED:" in output
         assert "Exiting test due to GPU requirement..." in output
     
-    @patch('pipelines.gpu_utils.check_gpu_available')
+    @patch('core_lib.utils.gpu_utils.check_gpu_available')
     def test_decorated_function_with_args(self, mock_check_gpu):
         """引数付き関数のデコレータテスト"""
         mock_check_gpu.return_value = True

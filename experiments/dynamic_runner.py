@@ -1,22 +1,38 @@
 """Dynamic experiment orchestration utilities for any model type."""
 
 import json
-from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING, cast
+from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING, cast, Callable, Sequence
 from pathlib import Path
 from functools import lru_cache
 
 import numpy as np
 import jax.numpy as jnp
 
-from configs.core import ExperimentConfig, ConfigComposer
+from core_lib.core import ExperimentConfig, ConfigComposer
 from pipelines import prepare_experiment_data
-from pipelines.metrics import calculate_mse, calculate_mae
-from pipelines.preprocessing import denormalize_data
-from pipelines.plotting import plot_prediction_results, plot_classification_results
+from core_lib.utils import (
+    calculate_mse,
+    calculate_mae,
+    denormalize_data,
+    plot_prediction_results,
+    plot_classification_results,
+)
 from pipelines.data_preparation import ExperimentDatasetClassification
+from pipelines.classical_reservoir_pipeline import (
+    train_reservoir_regression,
+    predict_reservoir_regression,
+    train_reservoir_classification,
+    predict_reservoir_classification,
+)
+from pipelines.gatebased_quantum_pipeline import (
+    train_quantum_reservoir_regression,
+    predict_quantum_reservoir_regression,
+    train_quantum_reservoir_classification,
+    predict_quantum_reservoir_classification,
+)
 
 if TYPE_CHECKING:
-    from models.reservoir.classical import ReservoirComputer
+    from core_lib.models.reservoir.classical import ReservoirComputer
 
 
 @lru_cache()
@@ -46,13 +62,176 @@ def _load_analog_quantum_config() -> Dict[str, Any]:
 def get_model_factory(model_type: str):
     """Get the appropriate model factory based on model type."""
     if "reservoir" in model_type or "quantum" in model_type:
-        from models.reservoir import ReservoirComputerFactory
+        from core_lib.models.reservoir import ReservoirComputerFactory
         return ReservoirComputerFactory
     elif "ffn" in model_type:
         # Future: from models.ffn import FFNFactory
         raise NotImplementedError("FFN models not yet implemented")
     else:
         raise ValueError(f"Unknown model type: {model_type}")
+
+
+TrainFn = Callable[[Any, jnp.ndarray, jnp.ndarray, Optional[Sequence[float]]], None]
+PredictFn = Callable[[Any, jnp.ndarray], jnp.ndarray]
+
+ClassTrainFn = Callable[
+    [Any, jnp.ndarray, jnp.ndarray, Optional[Sequence[float]], int, bool],
+    Optional[jnp.ndarray],
+]
+ClassPredictFn = Callable[
+    [Any, jnp.ndarray, Optional[jnp.ndarray], str],
+    jnp.ndarray,
+]
+
+
+def _legacy_train_regression(
+    rc: Any,
+    input_data: jnp.ndarray,
+    target_data: jnp.ndarray,
+    ridge_lambdas: Optional[Sequence[float]],
+) -> None:
+    """Legacy training path for models that still own their train() logic."""
+    rc.train(input_data, target_data, ridge_lambdas=ridge_lambdas)
+
+
+def _legacy_predict_regression(
+    rc: Any,
+    input_data: jnp.ndarray,
+) -> jnp.ndarray:
+    """Legacy prediction path for models that still own their predict() logic."""
+    return rc.predict(input_data)
+
+
+REGRESSION_PIPELINES: Dict[str, Tuple[TrainFn, PredictFn]] = {
+    "classical": (train_reservoir_regression, predict_reservoir_regression),
+    "gatebased_quantum": (train_quantum_reservoir_regression, predict_quantum_reservoir_regression),
+    "analog_quantum_legacy": (_legacy_train_regression, _legacy_predict_regression),
+}
+
+
+def _train_classical_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    labels: jnp.ndarray,
+    ridge_lambdas: Optional[Sequence[float]],
+    num_classes: int,
+    return_features: bool,
+) -> Optional[jnp.ndarray]:
+    return train_reservoir_classification(
+        rc,
+        sequences,
+        labels,
+        ridge_lambdas=ridge_lambdas,
+        num_classes=num_classes,
+        return_features=return_features,
+    )
+
+
+def _predict_classical_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    cached_features: Optional[jnp.ndarray],
+    desc: str,
+) -> jnp.ndarray:
+    if cached_features is not None:
+        return predict_reservoir_classification(
+            rc,
+            sequences=None,
+            precomputed_features=cached_features,
+            progress_desc=desc,
+        )
+    return predict_reservoir_classification(
+        rc,
+        sequences=sequences,
+        precomputed_features=None,
+        progress_desc=desc,
+    )
+
+
+def _train_quantum_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    labels: jnp.ndarray,
+    ridge_lambdas: Optional[Sequence[float]],
+    num_classes: int,
+    return_features: bool,
+) -> Optional[jnp.ndarray]:
+    return train_quantum_reservoir_classification(
+        rc,
+        sequences,
+        labels,
+        ridge_lambdas=ridge_lambdas,
+        num_classes=num_classes,
+        return_features=return_features,
+    )
+
+
+def _predict_quantum_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    cached_features: Optional[jnp.ndarray],
+    desc: str,
+) -> jnp.ndarray:
+    if cached_features is not None:
+        return predict_quantum_reservoir_classification(
+            rc,
+            sequences=None,
+            progress_desc=desc,
+            progress_position=0,
+            precomputed_features=cached_features,
+        )
+    return predict_quantum_reservoir_classification(
+        rc,
+        sequences=sequences,
+        progress_desc=desc,
+        progress_position=0,
+        precomputed_features=None,
+    )
+
+
+def _legacy_train_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    labels: jnp.ndarray,
+    ridge_lambdas: Optional[Sequence[float]],
+    num_classes: int,
+    return_features: bool,
+) -> Optional[jnp.ndarray]:
+    raise NotImplementedError(
+        "Analog quantum classification is legacy and not supported in dynamic_runner."
+    )
+
+
+def _legacy_predict_classification(
+    rc: Any,
+    sequences: jnp.ndarray,
+    cached_features: Optional[jnp.ndarray],
+    desc: str,
+) -> jnp.ndarray:
+    raise NotImplementedError(
+        "Analog quantum classification is legacy and not supported in dynamic_runner."
+    )
+
+
+CLASSIFICATION_PIPELINES: Dict[str, Tuple[ClassTrainFn, ClassPredictFn]] = {
+    "classical": (_train_classical_classification, _predict_classical_classification),
+    "gatebased_quantum": (_train_quantum_classification, _predict_quantum_classification),
+    "analog_quantum_legacy": (_legacy_train_classification, _legacy_predict_classification),
+}
+
+
+def _resolve_model_kind(model_name: str, model_type: str) -> str:
+    """Resolve a coarse model kind for regression pipeline dispatch."""
+    mt = (model_type or "").lower()
+    name = (model_name or "").lower()
+    if "analog" in name or "analog" in mt:
+        return "analog_quantum_legacy"
+    if "gatebased_quantum" in name:
+        return "gatebased_quantum"
+    if "quantum" in mt:
+        # Fallback: treat non-analog quantum as gate-based
+        return "gatebased_quantum"
+    return "classical"
 
 
 def _log_ridge_search(model: Any) -> Optional[list]:
@@ -498,56 +677,61 @@ def run_experiment(
         lambda_candidates = [1e-6, 1e-5, 1e-4, 1e-3]
 
     if isinstance(dataset, ExperimentDatasetClassification):
-        if quantum_mode or "quantum" in model_type:
-            raise NotImplementedError("Quantum classification mode is not yet supported")
-
         train_count = int(dataset.train_sequences.shape[0])
         val_count = int(dataset.val_sequences.shape[0])
         test_count = int(dataset.test_sequences.shape[0])
         print(f"データ分割 → train: {train_count}, val: {val_count}, test: {test_count}")
         print("訓練中 (classification)...")
-        classical_rc = cast("ReservoirComputer", rc)
-        train_features = classical_rc.train_classification(
+
+        model_kind = _resolve_model_kind(model_name, model_type or "")
+        class_train_fn, class_predict_fn = CLASSIFICATION_PIPELINES.get(
+            model_kind,
+            CLASSIFICATION_PIPELINES["classical"],
+        )
+
+        train_features = class_train_fn(
+            rc,
             dataset.train_sequences,
             dataset.train_labels,
             ridge_lambdas=lambda_candidates,
             num_classes=10,
             return_features=True,
         )
-        ridge_log = _log_ridge_search(classical_rc)
+        ridge_log = _log_ridge_search(rc)
 
         print("予測中 (train/test/val inference)...")
+
         def _predict_with_cache(
             sequences,
             *,
             cached_features,
             desc: str,
         ):
-            if cached_features is not None:
-                return classical_rc.predict_classification(
-                    sequences=None,
-                    precomputed_features=cached_features,
-                    progress_desc=desc,
-                )
-            return classical_rc.predict_classification(
-                sequences=sequences,
-                progress_desc=desc,
+            return class_predict_fn(
+                rc,
+                sequences,
+                cached_features,
+                desc,
             )
 
         train_logits = _predict_with_cache(
             dataset.train_sequences,
             cached_features=train_features,
-            desc="Encoding train eval sequences"
+            desc="Encoding train eval sequences",
         )
-        test_logits = classical_rc.predict_classification(
+        test_logits = class_predict_fn(
+            rc,
             dataset.test_sequences,
-            progress_desc="Encoding test sequences",
+            cached_features=None,
+            desc="Encoding test sequences",
         )
         val_logits = None
         if hasattr(dataset, "val_sequences") and dataset.val_sequences.size > 0:
-            val_logits = classical_rc.predict_classification(
+            val_logits = class_predict_fn(
+                rc,
                 dataset.val_sequences,
-                progress_desc="Encoding validation sequences",
+                cached_features=None,
+                desc="Encoding validation sequences",
             )
 
         train_one_hot = jnp.zeros((dataset.train_labels.shape[0], 10), dtype=jnp.float64)
@@ -600,7 +784,7 @@ def run_experiment(
             metrics_caption["Val Acc"] = f"{val_accuracy:.4f}"
             metrics_snapshot["val_accuracy"] = val_accuracy
 
-        best_lambda_attr = getattr(classical_rc, "best_ridge_lambda", None)
+        best_lambda_attr = getattr(rc, "best_ridge_lambda", None)
         if best_lambda_attr is not None:
             best_lambda = float(best_lambda_attr)
             metrics_caption["Ridge λ"] = f"{best_lambda:.2e}"
@@ -652,16 +836,22 @@ def run_experiment(
         return train_mse, test_mse, train_accuracy, test_accuracy
 
     print("訓練中...")
-    rc.train(
+    model_kind = _resolve_model_kind(model_name, model_type or "")
+    train_fn, predict_fn = REGRESSION_PIPELINES.get(
+        model_kind,
+        REGRESSION_PIPELINES["classical"],
+    )
+    train_fn(
+        rc,
         dataset.train_input,
         dataset.train_target,
-        ridge_lambdas=lambda_candidates,
+        lambda_candidates,
     )
 
     ridge_log = _log_ridge_search(rc)
 
     def _predict_and_denormalize(inputs: jnp.ndarray, targets: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        preds_norm = rc.predict(inputs)
+        preds_norm = predict_fn(rc, inputs)
         preds = denormalize_data(preds_norm, dataset.target_mean, dataset.target_std)
         target_slice = targets
         if target_slice.shape[0] > preds.shape[0]:

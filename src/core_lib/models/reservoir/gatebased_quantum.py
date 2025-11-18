@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from functools import lru_cache
 
-from pipelines.jax_config import ensure_x64_enabled
+from core_lib.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
 
@@ -22,6 +22,12 @@ import jax.numpy as jnp
 
 from .base_reservoir import BaseReservoirComputer
 from .config import QuantumReservoirConfig, parse_ridge_lambdas
+from pipelines.gatebased_quantum_pipeline import (
+    train_quantum_reservoir_regression,
+    predict_quantum_reservoir_regression,
+    train_quantum_reservoir_classification,
+    predict_quantum_reservoir_classification,
+)
 
 
 @lru_cache()
@@ -538,21 +544,14 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
         return_features: bool = False,
     ) -> Optional[jnp.ndarray]:
-        features = self._encode_sequences(sequences)
-        design_matrix = self._prepare_design_matrix(features, fit=True)
-        self.feature_dim_ = design_matrix.shape[1] - 1
-
-        labels = labels.astype(jnp.int32)
-        targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
-        targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
-
-        self._fit_ridge_with_grid(design_matrix, targets, ridge_lambdas)
-        self.classification_mode = True
-        self.num_classes = num_classes
-        self.trained = True
-        if return_features:
-            return features
-        return None
+        return train_quantum_reservoir_classification(
+            self,
+            sequences,
+            labels,
+            ridge_lambdas=ridge_lambdas,
+            num_classes=num_classes,
+            return_features=return_features,
+        )
 
     def predict_classification(
         self,
@@ -562,23 +561,13 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         progress_position: int = 0,
         precomputed_features: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
-        if not self.classification_mode or self.num_classes is None:
-            raise ValueError("Classification mode not enabled. Call train_classification first.")
-        if self.W_out is None:
-            raise ValueError("Model has not been trained.")
-
-        if precomputed_features is None and sequences is None:
-            raise ValueError("Either sequences or precomputed_features must be provided.")
-        if precomputed_features is not None and sequences is not None:
-            raise ValueError("Specify only one of sequences or precomputed_features.")
-
-        if precomputed_features is not None:
-            features = jnp.asarray(precomputed_features, dtype=jnp.float64)
-        else:
-            features = self._encode_sequences(sequences)  # type: ignore[arg-type]
-        design_matrix = self._prepare_design_matrix(features, fit=False)
-        logits = design_matrix @ self.W_out
-        return logits
+        return predict_quantum_reservoir_classification(
+            self,
+            sequences=sequences,
+            progress_desc=progress_desc,
+            progress_position=progress_position,
+            precomputed_features=precomputed_features,
+        )
 
     def train(
         self,
@@ -598,50 +587,16 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             the classical readout layer. Future versions could include
             variational optimization of quantum parameters.
         """
-        # Validate inputs using base class
-        self._validate_input_data(input_data, self.n_inputs)
-        self._validate_target_data(target_data, self.n_outputs, input_data.shape[0])
-
-        # Convert to appropriate data types
-        input_data = jnp.array(input_data, dtype=jnp.float32)
-        target_data = jnp.array(target_data, dtype=jnp.float32)
-
-        # Run quantum reservoir to get quantum states
-        quantum_states = self._run_quantum_reservoir(input_data)
-        design_matrix = self._prepare_design_matrix(quantum_states, fit=True)
-        self.feature_dim_ = design_matrix.shape[1] - 1
-
-        self._fit_ridge_with_grid(design_matrix, target_data, ridge_lambdas)
-
-        # Mark as trained
-        self.classification_mode = False
-        self.num_classes = None
-        self.trained = True
+        train_quantum_reservoir_regression(
+            self,
+            input_data,
+            target_data,
+            ridge_lambdas=ridge_lambdas,
+        )
 
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
-        """Generate predictions using the trained quantum reservoir.
-
-        Args:
-            input_data: Input time series, shape (time_steps, n_inputs)
-
-        Returns:
-            Predictions, shape (time_steps, n_outputs)
-        """
-        # Use base class validation
-        super().predict(input_data)
-
-        if self.W_out is None:
-            raise ValueError("モデルが訓練されていません。先にtrain()を呼び出してください。")
-
-        # Convert to appropriate data type
-        input_data = jnp.array(input_data, dtype=jnp.float32)
-
-        # Run quantum reservoir
-        quantum_states = self._run_quantum_reservoir(input_data)
-        design_matrix = self._prepare_design_matrix(quantum_states, fit=False)
-
-        predictions = design_matrix @ self.W_out
-        return predictions
+        """Generate predictions using the trained quantum reservoir."""
+        return predict_quantum_reservoir_regression(self, input_data)
 
     def reset_state(self) -> None:
         """Reset the quantum reservoir to initial state."""

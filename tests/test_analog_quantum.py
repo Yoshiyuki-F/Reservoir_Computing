@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 try:
-    from models.reservoir.analog_quantum import AnalogQuantumReservoir
+from core_lib.models.reservoir.analog_quantum import AnalogQuantumReservoir
 except ImportError:  # pragma: no cover - optional dependency
     AnalogQuantumReservoir = None
 
