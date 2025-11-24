@@ -306,7 +306,6 @@ def main() -> None:
             from pipelines.fnn_pipeline import (
                 pretrain_fnn,
                 run_fnn_fixed_feature_pipeline,
-                run_reservoir_emulation_pipeline,
             )
 
             if comparison_mode and args.config is not None:
@@ -367,57 +366,48 @@ def main() -> None:
                 )
                 print(f"  Config saved: {json_path}")
 
-            if comparison_mode:
-                print("[Phase 1] Generating reservoir teacher data and training FNN (regression)...")
-                results = run_reservoir_emulation_pipeline(
-                    fnn_config,
-                    reservoir_size=comparison_reservoir_size,
-                    time_steps=28,
-                    backend=backend,
+            if not comparison_mode:
+                train_loader, test_loader = get_mnist_dataloaders(
+                    batch_size=fnn_config.training.batch_size,
+                    shuffle_train=True,
+                    num_workers=0,
                 )
+
+                print("[Phase 1] Running FNN pretraining phase...")
+                epochs, train_hist, test_hist = pretrain_fnn(
+                    fnn_config,
+                    train_loader,
+                    test_loader,
+                )
+                print("[Phase 2] Running FNN fixed-feature ridge pipeline...")
+                results = run_fnn_fixed_feature_pipeline(
+                    fnn_config,
+                    train_loader,
+                    test_loader,
+                    epochs,
+                    train_hist,
+                    test_hist,
+                )
+
                 print("Experiment completed successfully!")
                 print(
                     "📊 Results: "
                     f"Train MSE: {results['train_mse']:.6f}, "
-                    f"Test MSE: {results['test_mse']:.6f}"
+                    f"Test MSE: {results['test_mse']:.6f}, "
+                    f"Train Acc: {results['train_accuracy']:.4f}, "
+                    f"Test Acc: {results['test_accuracy']:.4f}"
                 )
                 return
-
-            train_loader, test_loader = get_mnist_dataloaders(
-                batch_size=fnn_config.training.batch_size,
-                shuffle_train=True,
-                num_workers=0,
-            )
-
-            print("[Phase 1] Running FNN pretraining phase...")
-            epochs, train_hist, test_hist = pretrain_fnn(
-                fnn_config,
-                train_loader,
-                test_loader,
-            )
-            print("[Phase 2] Running FNN fixed-feature ridge pipeline...")
-            results = run_fnn_fixed_feature_pipeline(
-                fnn_config,
-                train_loader,
-                test_loader,
-                epochs,
-                train_hist,
-                test_hist,
-            )
-
-            print("Experiment completed successfully!")
-            print(
-                "📊 Results: "
-                f"Train MSE: {results['train_mse']:.6f}, "
-                f"Test MSE: {results['test_mse']:.6f}, "
-                f"Train Acc: {results['train_accuracy']:.4f}, "
-                f"Test Acc: {results['test_accuracy']:.4f}"
-            )
-            return
-
         from pipelines.dynamic_runner import run_dynamic_experiment
 
         print("Running dynamic experiment...")
+
+        comparison_payload = None
+        if comparison_mode:
+            comparison_payload = {
+                "fnn_config": fnn_config,
+                "reservoir_size": comparison_reservoir_size,
+            }
 
         result = run_dynamic_experiment(
             dataset_name=dataset,
@@ -426,6 +416,7 @@ def main() -> None:
             show_training=args.show_training,
             backend=backend,
             n_hiddenLayer_override=n_hiddenLayer,
+            comparison_config=comparison_payload,
         )
 
         print("Experiment completed successfully!")
@@ -434,6 +425,8 @@ def main() -> None:
             print(f"📊 Results: Train MSE: {train_mse:.6f}, Test MSE: {test_mse:.6f}")
         else:
             print(f"📊 Results: Test MSE: {test_mse:.6f}")
+        if train_mae is not None or test_mae is not None:
+            print(f"📈 Acc: Train={train_mae or 0:.4f}, Test={test_mae or 0:.4f}")
 
     except Exception as exc:  # pragma: no cover - top-level error
         print(f"❌ Error running experiment: {exc}")

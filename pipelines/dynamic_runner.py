@@ -31,6 +31,7 @@ from pipelines.gatebased_quantum_pipeline import (
     train_quantum_reservoir_classification,
     predict_quantum_reservoir_classification,
 )
+from pipelines.fnn_pipeline import run_reservoir_emulation_pipeline
 
 if TYPE_CHECKING:
     from core_lib.models.reservoir.classical import ReservoirComputer
@@ -296,6 +297,7 @@ def run_dynamic_experiment(
     show_training: bool = False,
     backend: Optional[str] = None,
     n_hiddenLayer_override: Optional[int] = None,
+    comparison_config: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[float], float, Optional[float], float]:
     """Run an experiment with dynamic configuration.
 
@@ -306,10 +308,30 @@ def run_dynamic_experiment(
         show_training: Whether to show training data in visualization
         backend: Compute backend ('cpu' or 'gpu')
         n_hiddenLayer_override: Optional reservoir size override for classical models
+        comparison_config: Optional payload for FNN vs Reservoir emulation
 
     Returns:
         Tuple of (train_mse, test_mse, train_mae, test_mae)
     """
+
+    # Fast-path: FNN vs Reservoir emulation comparison
+    if comparison_config is not None:
+        print("=== Dynamic Experiment: FNN vs Reservoir (Emulation) ===")
+        fnn_config = comparison_config["fnn_config"]
+        res_size = int(comparison_config["reservoir_size"])
+        results = run_reservoir_emulation_pipeline(
+            fnn_config,
+            reservoir_size=res_size,
+            time_steps=28,  # MNIST fixed
+            backend=backend or "cpu",
+        )
+        # Map to (train_mse, test_mse, train_acc, test_acc)
+        return (
+            results.get("train_mse"),
+            results.get("test_mse", 0.0),
+            results.get("train_accuracy"),
+            results.get("test_accuracy", 0.0),
+        )
 
     # Create dynamic experiment configuration
     dynamic_experiment = {
