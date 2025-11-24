@@ -150,8 +150,14 @@ def _helper_plot_classification(
     }
     if "val_mse" in metrics_dict:
         metrics_info["Val MSE"] = float(metrics_dict["val_mse"])
-    if "val_accuracy" in metrics_dict:
-        metrics_info["Val Acc"] = f"{float(metrics_dict['val_accuracy']):.4f}"
+    val_accuracy_value = metrics_dict.get("val_accuracy")
+    if val_accuracy_value is None and val_labels is not None and val_pred is not None:
+        try:
+            val_accuracy_value = float(np.mean(np.asarray(val_pred) == np.asarray(val_labels)))
+        except Exception:
+            val_accuracy_value = None
+    if val_accuracy_value is not None:
+        metrics_info["Val Acc"] = float(val_accuracy_value)
     if ridge_lambda is not None:
         metrics_info["Ridge λ"] = f"{ridge_lambda:.2e}"
 
