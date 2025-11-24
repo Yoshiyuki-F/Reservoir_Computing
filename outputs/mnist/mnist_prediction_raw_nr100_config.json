@@ -15,25 +15,28 @@
     }
   },
   "model": {
-    "name": "classic_reservoir",
+    "name": "classical_reservoir",
     "model_type": "reservoir",
     "params": {
-      "n_hiddenLayer": 500
+      "n_hidden_layer": 100
     }
   },
   "training": {
     "name": "raw_standard",
     "task_type": "classification",
-    "train_size": null,
+    "train_size": 0.8,
     "val_size": 0.1,
     "ridge_lambdas": [
       -7.0,
       7.0,
       15.0
     ],
-    "state_aggregation": "mean",
+    "state_aggregation": null,
     "preprocessing": null,
-    "readout": null
+    "readout": null,
+    "learning_rate": 0.001,
+    "batch_size": 128,
+    "num_epochs": 20
   },
   "demo": {
     "title": "Mnist Prediction",
@@ -45,10 +48,10 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_hiddenLayer": 500,
+    "n_hidden_layer": 100,
     "n_inputs": 28,
     "n_outputs": 10,
-    "state_aggregation": "mean",
+    "state_aggregation": "last",
     "use_preprocessing": false,
     "include_bias": false,
     "washout_steps": 0,
@@ -58,83 +61,83 @@
       15.0
     ]
   },
-  "quantum_reservoir": null,
+  "quantum_reservoir": {},
   "results": {
     "metrics": {
-      "train_mse": 0.029857480384213774,
-      "test_mse": 0.030592617769616748,
-      "train_accuracy": 0.9139258861541748,
-      "test_accuracy": 0.9098999500274658,
-      "val_mse": 0.0288481888895467,
-      "val_accuracy": 0.921999990940094,
-      "best_ridge_lambda": 100.0
+      "train_mse": 0.050150525774760694,
+      "test_mse": 0.04899218368420088,
+      "train_accuracy": 0.7536296248435974,
+      "test_accuracy": 0.767300009727478,
+      "val_mse": 0.047983295980465766,
+      "val_accuracy": 0.7716666460037231,
+      "best_ridge_lambda": 0.1
     },
     "ridge_search": [
       {
         "lambda": 1e-07,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 1e-06,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 1e-05,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 0.0001,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 0.001,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 0.01,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7492592334747314
       },
       {
         "lambda": 0.1,
-        "val_accuracy": 0.8996296525001526
+        "val_accuracy": 0.7496296167373657
       },
       {
         "lambda": 1.0,
-        "val_accuracy": 0.899814784526825
+        "val_accuracy": 0.7494444251060486
       },
       {
         "lambda": 10.0,
-        "val_accuracy": 0.899814784526825
+        "val_accuracy": 0.746666669845581
       },
       {
         "lambda": 100.0,
-        "val_accuracy": 0.9007407426834106
+        "val_accuracy": 0.7192592620849609
       },
       {
         "lambda": 1000.0,
-        "val_accuracy": 0.8937036991119385
+        "val_accuracy": 0.6451851725578308
       },
       {
         "lambda": 10000.0,
-        "val_accuracy": 0.855555534362793
+        "val_accuracy": 0.5161111354827881
       },
       {
         "lambda": 100000.0,
-        "val_accuracy": 0.7666666507720947
+        "val_accuracy": 0.40259259939193726
       },
       {
         "lambda": 1000000.0,
-        "val_accuracy": 0.5812963247299194
+        "val_accuracy": 0.20796296000480652
       },
       {
         "lambda": 10000000.0,
-        "val_accuracy": 0.4699999988079071
+        "val_accuracy": 0.10759259015321732
       }
     ],
     "classification": {
-      "train_accuracy": 0.9139258861541748,
-      "val_accuracy": 0.921999990940094,
-      "test_accuracy": 0.9098999500274658,
+      "train_accuracy": 0.7536296248435974,
+      "val_accuracy": 0.7716666460037231,
+      "test_accuracy": 0.767300009727478,
       "reservoir_info": {
         "name": "shared_reservoir_params",
         "model_type": "reservoir",
@@ -148,10 +151,11 @@
           "sparsity": 0.1,
           "input_bias": 0.0,
           "nonlinearity": "tanh",
-          "n_hiddenLayer": 500,
+          "encode_batch_size": 4096,
+          "n_hidden_layer": 100,
           "n_inputs": 28,
           "n_outputs": 10,
-          "state_aggregation": "mean",
+          "state_aggregation": "last",
           "use_preprocessing": false,
           "include_bias": false,
           "washout_steps": 0,
@@ -161,6 +165,7 @@
             15.0
           ]
         },
+        "encode_batch_size": 4096,
         "description": "Shared parameters common to all reservoir computer variants",
         "backend": "gpu",
         "trained": false

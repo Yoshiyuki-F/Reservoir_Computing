@@ -17,7 +17,7 @@ def resolve_experiment_naming(
     quantum_mode: bool,
     is_quantum_model: bool,
     raw_training: bool,
-    n_hiddenLayer: Optional[int]
+    n_hidden_layer: Optional[int],
 ) -> Tuple[str, str]:
     """Resolve output filename and plot title for an experiment."""
 
@@ -30,8 +30,8 @@ def resolve_experiment_naming(
     if raw_training:
         filename_suffix_parts.append("raw")
 
-    if n_hiddenLayer is not None and not is_quantum_model:
-        filename_suffix_parts.append(f"nr{n_hiddenLayer}")
+    if n_hidden_layer is not None and not is_quantum_model:
+        filename_suffix_parts.append(f"nr{n_hidden_layer}")
 
     plot_title = demo_config.demo.title
 

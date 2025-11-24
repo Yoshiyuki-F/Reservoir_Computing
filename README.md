@@ -55,8 +55,8 @@ uv run poe cli-gpu -- --help
 # サイン波 + 古典的リザーバ（GPU, Poe 推奨）
 uv run poe cli-gpu -- \
   sine \                  # (= sine_wave)
-  cr \                    # (= classic_reservoir)
-  600                     # (= --n-hiddenLayer 600)
+  cr \                    # (= classical_reservoir)
+  600                     # (= --n-hidden_layer 600)
 ```
 
 uv run poe cli-gpu -- m fnn 30
@@ -66,7 +66,7 @@ uv run poe cli-gpu -- m fnn 30
 ```bash
 uv run poe cli-gpu -- \
   lorenz \
-  qr                      # (= gatebased_quantum)
+  qr                      # (= gate_based_quantum)
 ```
 
 #### 3. MNIST + FNN パイプライン
@@ -101,8 +101,8 @@ uv run poe cli-gpu -- \
 # CPU強制実行の例
 uv run reservoir-cli \
   --dataset sine_wave \
-  --model classic_reservoir \
-  --n-hiddenLayer 600 \
+  --model classical_reservoir \
+  --n-hidden_layer 600 \
   --force-cpu
 ```
 
@@ -205,7 +205,7 @@ uv run poe cli-gpu -- sine cr 600
 ## ReservoirComputerクラスのパラメータ
 
 - `n_inputs`: 入力次元数
-- `n_hiddenLayer`: reservoir/FNN内のニューロン数
+- `n_hidden_layer`: reservoir/FNN内のニューロン数
 - `n_outputs`: 出力次元数
 - `spectral_radius`: reservoirの固有値の最大絶対値（デフォルト: 0.95）
 - `input_scaling`: 入力のスケーリング係数（デフォルト: 1.0）

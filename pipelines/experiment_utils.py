@@ -17,7 +17,7 @@ def _resolve_model_kind(model_name: str, model_type: str) -> str:
     if "analog" in name or "analog" in mt:
         return "analog_quantum_legacy"
     if "quantum" in mt:
-        return "gatebased_quantum"
+        return "gate_based_quantum"
     return "classical"
 
 
@@ -76,6 +76,42 @@ def _save_config_snapshot(
     print(f"Saved config snapshot -> {snapshot_path}")
 
 
+def _save_json_snapshot(snapshot_path: Path, payload: Dict[str, Any]) -> None:
+    """Write a JSON snapshot to disk with project defaults."""
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    with snapshot_path.open('w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2, default=_json_default)
+    print(f"Saved config snapshot -> {snapshot_path}")
+
+
+def _plot_classification_confusion(
+    train_labels: np.ndarray,
+    test_labels: np.ndarray,
+    train_pred: np.ndarray,
+    test_pred: np.ndarray,
+    *,
+    title: str,
+    filename: str | Path,
+    metrics_dict: Dict[str, float],
+    val_labels: Optional[np.ndarray] = None,
+    val_pred: Optional[np.ndarray] = None,
+    ridge_lambda: Optional[float] = None,
+) -> None:
+    """Render and save classification confusion and metrics visualization."""
+    _helper_plot_classification(
+        train_labels,
+        test_labels,
+        train_pred,
+        test_pred,
+        title,
+        str(filename),
+        metrics_dict,
+        val_labels=val_labels,
+        val_pred=val_pred,
+        ridge_lambda=ridge_lambda,
+    )
+
+
 def _helper_plot_classification(
     train_labels: np.ndarray,
     test_labels: np.ndarray,
@@ -129,3 +165,66 @@ def _helper_plot_classification(
         metrics_info=metrics_info,
         class_names=class_names,
     )
+
+
+def finalize_classification_report(
+    output_filename: str | Path,
+    plot_title: str,
+    metrics: Dict[str, Any],
+    *,
+    train_labels: np.ndarray,
+    test_labels: np.ndarray,
+    train_pred: np.ndarray,
+    test_pred: np.ndarray,
+    val_labels: Optional[np.ndarray] = None,
+    val_pred: Optional[np.ndarray] = None,
+    ridge_lambda: Optional[float] = None,
+    ridge_log: Optional[list] = None,
+    config: Optional[ExperimentConfig] = None,
+    snapshot_payload: Optional[Dict[str, Any]] = None,
+    extra_results: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Unified classification reporting: confusion plot + snapshot write."""
+    if config is not None and snapshot_payload is not None:
+        raise ValueError("Provide either 'config' or 'snapshot_payload', not both.")
+
+    base_path = Path(output_filename)
+    suffix = base_path.suffix or ".png"
+    base_path = base_path if base_path.suffix else base_path.with_suffix(suffix)
+    confusion_filename = base_path.with_name(f"{base_path.stem}_confusion{suffix}")
+
+    _plot_classification_confusion(
+        np.asarray(train_labels),
+        np.asarray(test_labels),
+        np.asarray(train_pred),
+        np.asarray(test_pred),
+        title=plot_title,
+        filename=confusion_filename,
+        metrics_dict=metrics,
+        val_labels=np.asarray(val_labels) if val_labels is not None else None,
+        val_pred=np.asarray(val_pred) if val_pred is not None else None,
+        ridge_lambda=ridge_lambda,
+    )
+
+    metrics_copy = dict(metrics)
+    if config is not None:
+        _save_config_snapshot(
+            config,
+            str(base_path),
+            metrics_copy,
+            ridge_log,
+            extra=extra_results,
+        )
+        return
+
+    payload = dict(snapshot_payload or {})
+    results_section = dict(payload.get("results", {}))
+    results_section["metrics"] = metrics_copy
+    if ridge_log is not None:
+        results_section["ridge_search"] = ridge_log
+    if extra_results:
+        results_section.update(extra_results)
+    payload["results"] = results_section
+
+    snapshot_path = base_path.with_name(f"{base_path.stem}_config.json")
+    _save_json_snapshot(snapshot_path, payload)

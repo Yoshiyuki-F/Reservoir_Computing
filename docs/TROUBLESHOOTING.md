@@ -75,7 +75,7 @@ uv run poe test-gpu-comparison
 
 ```bash
 # カスタム設定での実行例
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-cli --dataset sine_wave --model classic_reservoir --n-hiddenLayer 600
+unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-cli --dataset sine_wave --model classical_reservoir --n-hidden_layer 600
 ```
 
 ### Linux Mint 特有の注意点

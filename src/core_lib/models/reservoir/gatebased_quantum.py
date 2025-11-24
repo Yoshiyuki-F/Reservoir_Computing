@@ -22,7 +22,7 @@ import jax.numpy as jnp
 
 from .base_reservoir import BaseReservoirComputer
 from .config import QuantumReservoirConfig, parse_ridge_lambdas
-from pipelines.gatebased_quantum_pipeline import (
+from pipelines.gate_based_quantum_pipeline import (
     train_quantum_reservoir_regression,
     predict_quantum_reservoir_regression,
     train_quantum_reservoir_classification,
@@ -39,7 +39,7 @@ def _load_shared_defaults() -> Dict[str, Any]:
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "presets/models/gatebased_quantum.json"
+    path = Path(__file__).resolve().parents[2] / "presets/models/gate_based_quantum.json"
     data = json.loads(path.read_text())
     params = data.get('params', {}) or {}
     base = _load_shared_defaults()
@@ -327,7 +327,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
             kept_sigma = sigma_adj[keep]
             print(
-                f"[gatebased-qrc] feature std range (kept) -> min={float(kept_sigma.min()):.3e}, max={float(kept_sigma.max()):.3e}"
+                f"[gate_based-qrc] feature std range (kept) -> min={float(kept_sigma.min()):.3e}, max={float(kept_sigma.max()):.3e}"
             )
         else:
             if self._feature_mu_ is None or self._feature_sigma_ is None or self._feature_keep_mask_ is None:
@@ -478,14 +478,14 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         if feature_part.size:
             sigma = feature_part.std(axis=0)
             print(
-                f"[gatebased-qrc] feature std range (train) -> min={float(sigma.min()):.3e}, max={float(sigma.max()):.3e}"
+                f"[gate_based-qrc] feature std range (train) -> min={float(sigma.min()):.3e}, max={float(sigma.max()):.3e}"
             )
             try:
                 sv = np.linalg.svd(feature_part, compute_uv=False)
                 cond_number = float(sv.max() / max(sv.min(), 1e-12))
-                print(f"[gatebased-qrc] design matrix cond -> {cond_number:.3e}")
+                print(f"[gate_based-qrc] design matrix cond -> {cond_number:.3e}")
             except np.linalg.LinAlgError:
-                print("[gatebased-qrc] SVD failed; skipping condition number log.")
+                print("[gate_based-qrc] SVD failed; skipping condition number log.")
 
         def ridge_via_svd(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
             U, s, Vt = np.linalg.svd(design, full_matrices=False)

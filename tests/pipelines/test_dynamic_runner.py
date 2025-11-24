@@ -41,7 +41,7 @@ class DummyReservoir:
         return input_data
 
     def get_reservoir_info(self) -> Dict[str, Any]:  # type: ignore[override]
-        return {"n_hiddenLayer": 5, "n_inputs": 1}
+        return {"n_hidden_layer": 5, "n_inputs": 1}
 
 
 class DummyFactory:
@@ -100,9 +100,9 @@ def test_run_experiment_classical_regression_wiring(monkeypatch) -> None:
         num_epochs=1,
     )
     model_cfg = ModelConfig(
-        name="classic_reservoir",
+        name="classical_reservoir",
         model_type="reservoir",
-        params={"n_hiddenLayer": 5, "n_inputs": 1, "n_outputs": 1},
+        params={"n_hidden_layer": 5, "n_inputs": 1, "n_outputs": 1},
     )
     demo_cfg = DemoConfig(
         title="Dummy",

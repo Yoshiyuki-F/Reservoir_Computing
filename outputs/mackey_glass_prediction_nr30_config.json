@@ -17,10 +17,10 @@
     }
   },
   "model": {
-    "name": "classic_reservoir",
+    "name": "classical_reservoir",
     "model_type": "reservoir",
     "params": {
-      "n_hiddenLayer": 30
+      "n_hidden_layer": 30
     }
   },
   "training": {
@@ -47,7 +47,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_hiddenLayer": 30,
+    "n_hidden_layer": 30,
     "n_inputs": 1,
     "n_outputs": 1,
     "state_aggregation": "mean",

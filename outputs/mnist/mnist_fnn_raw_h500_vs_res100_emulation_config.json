@@ -27,10 +27,10 @@
   },
   "results": {
     "metrics": {
-      "train_mse": 0.0034838155207873533,
-      "test_mse": 0.003466422436758876,
-      "train_accuracy": 0.7701666666666667,
-      "test_accuracy": 0.7807
+      "train_mse": 0.0034150906837483778,
+      "test_mse": 0.003450474781396834,
+      "train_accuracy": 0.7853666666666667,
+      "test_accuracy": 0.7915
     }
   }
 }

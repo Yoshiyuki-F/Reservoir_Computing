@@ -7,10 +7,10 @@ import jax.numpy as jnp
 from pipelines.classical_reservoir_pipeline import (
     predict_reservoir_classification,
     predict_reservoir_regression,
-    train_hiddenLayer_classification,
-    train_hiddenLayer_regression,
+    train_hidden_layer_classification,
+    train_hidden_layer_regression,
 )
-from pipelines.gatebased_quantum_pipeline import (
+from pipelines.gate_based_quantum_pipeline import (
     predict_quantum_reservoir_classification,
     predict_quantum_reservoir_regression,
     train_quantum_reservoir_classification,
@@ -62,8 +62,8 @@ def _legacy_predict_regression(
 
 
 REGRESSION_PIPELINES: Dict[str, Tuple[TrainFn, PredictFn]] = {
-    "classical": (train_hiddenLayer_regression, predict_reservoir_regression),
-    "gatebased_quantum": (train_quantum_reservoir_regression, predict_quantum_reservoir_regression),
+    "classical": (train_hidden_layer_regression, predict_reservoir_regression),
+    "gate_based_quantum": (train_quantum_reservoir_regression, predict_quantum_reservoir_regression),
     "analog_quantum_legacy": (_legacy_train_regression, _legacy_predict_regression),
 }
 
@@ -76,7 +76,7 @@ def _train_classical_classification(
     num_classes: int,
     return_features: bool,
 ) -> Optional[jnp.ndarray]:
-    return train_hiddenLayer_classification(
+    return train_hidden_layer_classification(
         rc,
         sequences,
         labels,
@@ -150,5 +150,5 @@ def _predict_quantum_classification(
 
 CLASSIFICATION_PIPELINES: Dict[str, Tuple[ClassTrainFn, ClassPredictFn]] = {
     "classical": (_train_classical_classification, _predict_classical_classification),
-    "gatebased_quantum": (_train_quantum_classification, _predict_quantum_classification)
+    "gate_based_quantum": (_train_quantum_classification, _predict_quantum_classification)
 }

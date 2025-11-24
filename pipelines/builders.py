@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from core_lib.core import ExperimentConfig
 from core_lib.data import ExperimentDataset, ExperimentDatasetClassification
+from core_lib.models.fnn import FNNPipelineConfig
 from pipelines.dispatchers import get_model_factory
 
 
@@ -28,8 +29,25 @@ def _load_shared_reservoir_config() -> Dict[str, Any]:
 
 
 @lru_cache()
-def _load_gatebased_quantum_config() -> Dict[str, Any]:
-    return _load_config_json('presets/models/gatebased_quantum.json')
+def _load_gate_based_quantum_config() -> Dict[str, Any]:
+    return _load_config_json('presets/models/gate_based_quantum.json')
+
+
+@lru_cache()
+def _load_training_preset(training_name: str) -> Dict[str, Any]:
+    """Load a training preset JSON from presets/training/, falling back to standard."""
+    base_dir = Path(__file__).resolve().parents[1] / "presets" / "training"
+    preset_path = base_dir / f"{training_name}.json"
+    if preset_path.exists():
+        return json.loads(preset_path.read_text())
+
+    fallback_path = base_dir / "standard.json"
+    if training_name != "standard" and fallback_path.exists():
+        print(f"Warning: training preset '{training_name}' not found. Falling back to 'standard'.")
+        return json.loads(fallback_path.read_text())
+
+    print(f"Warning: training preset '{training_name}' not found. Using default values.")
+    return {}
 
 
 @dataclass
@@ -38,7 +56,7 @@ class ReservoirBuildResult:
     reservoir_info: Dict[str, Any]
     model_type: str
     is_quantum_model: bool
-    n_hiddenLayer: Optional[int]
+    n_hidden_layer: Optional[int]
     n_inputs_value: Optional[int]
     raw_training: bool
 
@@ -103,7 +121,7 @@ def build_reservoir_model(
         if demo_config.quantum_reservoir is None:
             raise ValueError("Quantum mode enabled but quantum_reservoir config is missing")
         demo_config.quantum_reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
-        quantum_base = _load_gatebased_quantum_config().get('params', {})
+        quantum_base = _load_gate_based_quantum_config().get('params', {})
         basic_base = _load_shared_reservoir_config()
         config_sequence = [
             {'params': basic_base},
@@ -130,22 +148,22 @@ def build_reservoir_model(
     print(f"Reservoir情報: {reservoir_info}")
 
     is_quantum_model = quantum_mode or ("quantum" in resolved_model_type)
-    n_hiddenLayer: Optional[int] = None
+    n_hidden_layer: Optional[int] = None
     n_inputs_value: Optional[int] = None
     if not is_quantum_model:
         candidates: list[Any] = []
         if isinstance(reservoir_info, dict):
-            candidates.append(reservoir_info.get("n_hiddenLayer"))
-        if hasattr(rc, "n_hiddenLayer"):
-            candidates.append(getattr(rc, "n_hiddenLayer"))
+            candidates.append(reservoir_info.get("n_hidden_layer"))
+        if hasattr(rc, "n_hidden_layer"):
+            candidates.append(getattr(rc, "n_hidden_layer"))
         if demo_config.reservoir:
-            candidates.append(demo_config.reservoir.get("n_hiddenLayer"))
+            candidates.append(demo_config.reservoir.get("n_hidden_layer"))
 
         for candidate in candidates:
             if candidate is None:
                 continue
             try:
-                n_hiddenLayer = int(candidate)
+                n_hidden_layer = int(candidate)
                 break
             except (TypeError, ValueError):
                 continue
@@ -189,7 +207,52 @@ def build_reservoir_model(
         reservoir_info=reservoir_info,
         model_type=resolved_model_type,
         is_quantum_model=is_quantum_model,
-        n_hiddenLayer=n_hiddenLayer,
+        n_hidden_layer=n_hidden_layer,
         n_inputs_value=n_inputs_value,
         raw_training=raw_training,
     )
+
+
+def build_fnn_config(
+    dataset_name: str,
+    n_hidden: int,
+    reservoir_size: Optional[int] = None,
+    training_name: str = "standard",
+) -> FNNPipelineConfig:
+    """Construct an FNNPipelineConfig using presets/training values."""
+
+    train_preset = _load_training_preset(training_name)
+    learning_rate = float(train_preset.get("learning_rate", 0.001))
+    batch_size = int(train_preset.get("batch_size", 128))
+    num_epochs = int(train_preset.get("num_epochs", 20))
+    ridge_lambdas = train_preset.get("ridge_lambdas", [-7, 7, 15])
+
+    input_dim = 784
+    output_dim = 10
+    suffix = f"h{int(n_hidden)}"
+
+    if reservoir_size is not None:
+        res_size = int(reservoir_size)
+        suffix = f"{suffix}_vs_res{res_size}"
+        input_dim = 28 * res_size
+        output_dim = res_size
+
+    base_dir = Path("outputs") / dataset_name
+    base_dir.mkdir(parents=True, exist_ok=True)
+    weights_path = base_dir / f"mnist_fnn_raw_{suffix}.msgpack"
+
+    cfg_dict = {
+        "model": {
+            "layer_dims": [input_dim, int(n_hidden), output_dim]
+        },
+        "training": {
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+            "weights_path": str(weights_path),
+        },
+        "ridge_lambdas": ridge_lambdas,
+        "use_preprocessing": False,
+    }
+
+    return FNNPipelineConfig(**cfg_dict)

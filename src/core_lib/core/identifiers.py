@@ -22,7 +22,7 @@ class Pipeline(enum.Enum):
     CLASSICAL_RESERVOIR = "classical"
     FNN = "fnn"
     FNN_B_DASH = "fnn-b-dash"
-    GATEBASED_QUANTUM = "gatebased-quantum"
+    gate_based_QUANTUM = "gate_based-quantum"
     ANALOG_QUANTUM = "analog-quantum"
 
     def __str__(self) -> str:
@@ -107,7 +107,7 @@ def generate_valid_experiments() -> List[ExperimentIdentifier]:
     valid_experiments: List[ExperimentIdentifier] = []
     for pipeline, dataset, preprocessing in all_combinations:
         # 例1: 量子モデルは MNIST を扱わない（将来サポートするならここを緩和）
-        if pipeline in {Pipeline.GATEBASED_QUANTUM, Pipeline.ANALOG_QUANTUM} and dataset is Dataset.MNIST:
+        if pipeline in {Pipeline.gate_based_QUANTUM, Pipeline.ANALOG_QUANTUM} and dataset is Dataset.MNIST:
             continue
 
         # 例2: PCA は MNIST のときのみ意味がある、と仮定

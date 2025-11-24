@@ -15,10 +15,10 @@
     }
   },
   "model": {
-    "name": "classic_reservoir",
+    "name": "classical_reservoir",
     "model_type": "reservoir",
     "params": {
-      "n_hiddenLayer": 600
+      "n_hidden_layer": 600
     }
   },
   "training": {
@@ -45,7 +45,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_hiddenLayer": 600,
+    "n_hidden_layer": 600,
     "n_inputs": 28,
     "n_outputs": 10,
     "state_aggregation": "mean",
@@ -149,7 +149,7 @@
           "input_bias": 0.0,
           "nonlinearity": "tanh",
           "encode_batch_size": 4096,
-          "n_hiddenLayer": 600,
+          "n_hidden_layer": 600,
           "n_inputs": 28,
           "n_outputs": 10,
           "state_aggregation": "mean",

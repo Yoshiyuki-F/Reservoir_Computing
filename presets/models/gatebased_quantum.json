@@ -1,5 +1,5 @@
 {
-  "name": "gatebased_quantum",
+  "name": "gate_based_quantum",
   "description": "Gate-based Quantum Reservoir Computer",
   "params": {
     "n_qubits": 4,

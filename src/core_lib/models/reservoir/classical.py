@@ -25,9 +25,9 @@ from core_lib.components import (
 from core_lib.components.preprocess.aggregator import AggregationMode
 from .utils.spectral import spectral_radius_scale
 from pipelines.classical_reservoir_pipeline import (
-    train_hiddenLayer_regression,
+    train_hidden_layer_regression,
     predict_reservoir_regression,
-    train_hiddenLayer_classification,
+    train_hidden_layer_classification,
     predict_reservoir_classification,
 )
 
@@ -60,9 +60,9 @@ class ReservoirComputer(BaseReservoirComputer):
     Attributes:
         config: リザーバーの設定パラメータ
         backend: 計算バックエンド種別（'cpu' or 'gpu'）
-        W_in: 入力重み行列 (n_hiddenLayer, n_inputs)
-        W_res: リザーバー重み行列 (n_hiddenLayer, n_hiddenLayer)
-        W_out: 出力重み行列 (n_hiddenLayer+1, n_outputs) 訓練後に設定
+        W_in: 入力重み行列 (n_hidden_layer, n_inputs)
+        W_res: リザーバー重み行列 (n_hidden_layer, n_hidden_layer)
+        W_out: 出力重み行列 (n_hidden_layer+1, n_outputs) 訓練後に設定
     """
     
     def __init__(
@@ -98,7 +98,7 @@ class ReservoirComputer(BaseReservoirComputer):
         params = cfg.params
 
         self.n_inputs: int = params['n_inputs']
-        self.n_hiddenLayer: int = params['n_hiddenLayer']
+        self.n_hidden_layer: int = params['n_hidden_layer']
         self.n_outputs: int = params['n_outputs']
         self.spectral_radius: float = float(params['spectral_radius'])
         self.input_scaling: float = float(params['input_scaling'])
@@ -164,7 +164,7 @@ class ReservoirComputer(BaseReservoirComputer):
         
         W_in = random.uniform(
             key1, 
-            (self.n_hiddenLayer, self.n_inputs), 
+            (self.n_hidden_layer, self.n_inputs), 
             minval=-self.input_scaling, 
             maxval=self.input_scaling,
             dtype=jnp.float64
@@ -172,7 +172,7 @@ class ReservoirComputer(BaseReservoirComputer):
         
         W_res = random.uniform(
             key2,
-            (self.n_hiddenLayer, self.n_hiddenLayer),
+            (self.n_hidden_layer, self.n_hidden_layer),
             minval=-self.reservoir_weight_range,
             maxval=self.reservoir_weight_range,
             dtype=jnp.float64,
@@ -191,7 +191,7 @@ class ReservoirComputer(BaseReservoirComputer):
         state, key = carry # 前の状態 h(t-1)
         key, subkey = random.split(key)
         
-        noise = random.normal(subkey, (self.n_hiddenLayer,), dtype=jnp.float64) * self.noise_level
+        noise = random.normal(subkey, (self.n_hidden_layer,), dtype=jnp.float64) * self.noise_level
         
         # 新しい状態 h(t) を計算
         res_contribution = jnp.dot(self.W_res, state)      # W_res * h(t-1)
@@ -211,12 +211,12 @@ class ReservoirComputer(BaseReservoirComputer):
         """
         input_sequence = input_sequence.astype(jnp.float64)
         projected_inputs = jnp.dot(input_sequence, self.W_in.T)
-        initial_state = jnp.zeros(self.n_hiddenLayer, dtype=jnp.float64)
+        initial_state = jnp.zeros(self.n_hidden_layer, dtype=jnp.float64)
         initial_carry = (initial_state, key)
         carry, states = lax.scan(self._reservoir_step, initial_carry, projected_inputs)
         return states
         
-    def run_hiddenLayer(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
+    def run_hidden_layer(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
         """
         入力シーケンスに対してreservoirを実行します。
         """
@@ -286,7 +286,7 @@ class ReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
         return_features: bool = False,
     ) -> Optional[jnp.ndarray]:
-        return train_hiddenLayer_classification(
+        return train_hidden_layer_classification(
             self,
             sequences,
             labels,
@@ -330,7 +330,7 @@ class ReservoirComputer(BaseReservoirComputer):
             target_data: 形状 (time_steps, n_outputs) の目標データ
             ridge_lambdas: 正則化パラメータ候補リスト
         """
-        train_hiddenLayer_regression(
+        train_hidden_layer_regression(
             self,
             input_data,
             target_data,

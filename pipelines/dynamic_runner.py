@@ -1,6 +1,5 @@
 """Dynamic experiment orchestration utilities for any model type."""
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -14,14 +13,13 @@ from core_lib.data import (
     prepare_experiment_data,
 )
 from core_lib.utils import calculate_mae, calculate_mse, denormalize_data
-from pipelines.builders import build_reservoir_model
+from pipelines.builders import build_fnn_config, build_reservoir_model
 from pipelines.dispatchers import CLASSIFICATION_PIPELINES, REGRESSION_PIPELINES
 from pipelines.experiment_utils import (
-    _helper_plot_classification,
-    _json_default,
     _log_ridge_search,
     _resolve_model_kind,
     _save_config_snapshot,
+    finalize_classification_report,
 )
 from pipelines.fnn_pipeline import run_reservoir_emulation_pipeline
 from pipelines.naming import resolve_experiment_naming
@@ -34,7 +32,7 @@ def run_dynamic_experiment(
     training_name: str = "standard",
     show_training: bool = False,
     backend: Optional[str] = None,
-    n_hiddenLayer_override: Optional[int] = None,
+    n_hidden_layer_override: Optional[int] = None,
     comparison_config: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[float], float, Optional[float], float]:
     """Run an experiment with dynamic configuration."""
@@ -42,8 +40,31 @@ def run_dynamic_experiment(
     # Fast-path: FNN vs Reservoir emulation comparison
     if comparison_config is not None:
         print("=== Dynamic Experiment: FNN vs Reservoir (Emulation) ===")
-        fnn_config = comparison_config["fnn_config"]
         res_size = int(comparison_config["reservoir_size"])
+        hidden_candidates = [
+            comparison_config.get("n_hidden"),
+            comparison_config.get("n_hidden_layer"),
+            comparison_config.get("fnn_hidden"),
+        ]
+        n_hidden: Optional[int] = None
+        for candidate in hidden_candidates:
+            if candidate is None:
+                continue
+            try:
+                n_hidden = int(candidate)
+                break
+            except (TypeError, ValueError):
+                continue
+        if n_hidden is None:
+            n_hidden = 100
+            print("Warning: n_hidden for FNN comparison was not provided; defaulting to 100.")
+
+        fnn_config = build_fnn_config(
+            dataset_name=dataset_name,
+            n_hidden=n_hidden,
+            reservoir_size=res_size,
+            training_name=training_name or "standard",
+        )
         results = run_reservoir_emulation_pipeline(
             fnn_config,
             reservoir_size=res_size,
@@ -63,10 +84,9 @@ def run_dynamic_experiment(
 
         hidden_dim: Optional[int] = None
         model_cfg = getattr(fnn_config, "model", None)
-        layer_dims = getattr(model_cfg, "layer_dims", None) if model_cfg is not None else None
-        if layer_dims and len(layer_dims) > 1:
+        if model_cfg is not None and getattr(model_cfg, "hidden_dims", None):
             try:
-                hidden_dim = int(layer_dims[1])
+                hidden_dim = int(model_cfg.hidden_dims[0])
             except (TypeError, ValueError):
                 hidden_dim = None
 
@@ -80,18 +100,8 @@ def run_dynamic_experiment(
         base_dir = Path("outputs") / dataset_dir
         base_dir.mkdir(parents=True, exist_ok=True)
 
-        if test_pred.size > 0 and test_labels.size > 0:
-            confusion_filename = base_dir / f"{base_name}_confusion.png"
-            plot_title = f"FNN Reservoir Emulation (h={hidden_dim or 'unknown'}, N={res_size})"
-            _helper_plot_classification(
-                train_labels=train_labels.astype(int, copy=False),
-                test_labels=test_labels.astype(int, copy=False),
-                train_pred=train_pred.astype(int, copy=False),
-                test_pred=test_pred.astype(int, copy=False),
-                title=plot_title,
-                filename=confusion_filename,
-                metrics_dict=metrics_for_plot,
-            )
+        plot_title = f"FNN Reservoir Emulation (h={hidden_dim or 'unknown'}, N={res_size})"
+        base_output = base_dir / f"{base_name}.png"
         snapshot_data = {
             "dataset": dataset_name,
             "model": "fnn_reservoir_emulation",
@@ -103,11 +113,16 @@ def run_dynamic_experiment(
                 "metrics": metrics_for_plot,
             },
         }
-        snapshot_path = base_dir / f"{base_name}_config.json"
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        with snapshot_path.open('w', encoding='utf-8') as f:
-            json.dump(snapshot_data, f, indent=2, default=_json_default)
-        print(f"Saved config snapshot -> {snapshot_path}")
+        finalize_classification_report(
+            output_filename=base_output,
+            plot_title=plot_title,
+            metrics=metrics_for_plot,
+            train_labels=train_labels.astype(int, copy=False),
+            test_labels=test_labels.astype(int, copy=False),
+            train_pred=train_pred.astype(int, copy=False),
+            test_pred=test_pred.astype(int, copy=False),
+            snapshot_payload=snapshot_data,
+        )
         return (
             float(results["train_mse"]),
             float(results["test_mse"]),
@@ -133,27 +148,27 @@ def run_dynamic_experiment(
 
     model_name_lower = model_name.lower()
     is_quantum_choice = "quantum" in model_name_lower
-    if not is_quantum_choice and n_hiddenLayer_override is None:
+    if not is_quantum_choice and n_hidden_layer_override is None:
         raise ValueError(
-            "n_hiddenLayer_override is required for classical reservoir models. "
-            "Pass --n-hiddenLayer via CLI or script."
+            "n_hidden_layer_override is required for classical reservoir models. "
+            "Pass --n-hidden_layer via CLI or script."
         )
 
-    if n_hiddenLayer_override is not None:
+    if n_hidden_layer_override is not None:
         try:
-            override_value = int(n_hiddenLayer_override)
+            override_value = int(n_hidden_layer_override)
         except (TypeError, ValueError) as exc:
-            raise ValueError("n_hiddenLayer_override must be an integer") from exc
+            raise ValueError("n_hidden_layer_override must be an integer") from exc
 
         model_section = legacy_config.get("model", {})
         model_type = str(model_section.get("model_type", "reservoir")).lower()
         if "quantum" not in model_type:
             reservoir_section = legacy_config.get("reservoir")
             if isinstance(reservoir_section, dict):
-                reservoir_section["n_hiddenLayer"] = override_value
+                reservoir_section["n_hidden_layer"] = override_value
             params = model_section.setdefault("params", {})
             if isinstance(params, dict):
-                params["n_hiddenLayer"] = override_value
+                params["n_hidden_layer"] = override_value
 
     if dataset_name == 'mnist':
         training_cfg = legacy_config.get("training", {}).copy()
@@ -162,7 +177,6 @@ def run_dynamic_experiment(
 
     experiment_config = ExperimentConfig(**legacy_config)
     is_quantum = "quantum" in model_name or experiment_config.model.model_type == "quantum"
-    model_type = experiment_config.model.model_type or model_name
     dataset = prepare_experiment_data(experiment_config)
 
     return run_experiment(
@@ -170,7 +184,6 @@ def run_dynamic_experiment(
         dataset,
         backend=backend,
         quantum_mode=is_quantum,
-        model_type=model_type,
     )
 
 
@@ -179,20 +192,16 @@ def run_experiment(
     dataset: Any,
     backend: Optional[str] = None,
     quantum_mode: bool = False,
-    model_type: Optional[str] = None,
 ) -> Tuple[Optional[float], float, Optional[float], float]:
     """Execute training, prediction, and reporting for a prepared dataset."""
 
     print(f"=== {demo_config.demo.title} ===")
-
-    resolved_model_type = model_type or ("quantum" if quantum_mode else "classical")
 
     build_result = build_reservoir_model(
         demo_config,
         dataset,
         backend=backend,
         quantum_mode=quantum_mode,
-        model_type=resolved_model_type,
     )
     rc = build_result.rc
     reservoir_info = build_result.reservoir_info
@@ -209,8 +218,7 @@ def run_experiment(
         quantum_mode=quantum_mode,
         is_quantum_model=build_result.is_quantum_model,
         raw_training=build_result.raw_training,
-        n_hiddenLayer=build_result.n_hiddenLayer,
-        n_inputs_value=build_result.n_inputs_value,
+        n_hidden_layer=build_result.n_hidden_layer,
     )
     Path(output_filename).parent.mkdir(parents=True, exist_ok=True)
 
@@ -361,21 +369,6 @@ def _run_classification_routine(
     else:
         best_lambda = None
 
-    output_path = Path(output_filename)
-    confusion_filename = output_path.with_name(f"{output_path.stem}_confusion{output_path.suffix}")
-    _helper_plot_classification(
-        train_labels=np.asarray(dataset.train_labels),
-        test_labels=np.asarray(dataset.test_labels),
-        train_pred=np.asarray(train_pred),
-        test_pred=np.asarray(test_pred),
-        title=plot_title,
-        filename=confusion_filename,
-        metrics_dict=current_metrics,
-        val_labels=np.asarray(dataset.val_labels) if hasattr(dataset, "val_labels") and dataset.val_labels.size > 0 else None,
-        val_pred=np.asarray(val_pred) if val_pred is not None else None,
-        ridge_lambda=best_lambda,
-    )
-
     extra_results = {
         "classification": {
             "train_accuracy": train_accuracy,
@@ -384,12 +377,20 @@ def _run_classification_routine(
             "reservoir_info": reservoir_info,
         }
     }
-    _save_config_snapshot(
-        demo_config,
-        output_filename,
-        current_metrics,
-        ridge_log,
-        extra=extra_results,
+    finalize_classification_report(
+        output_filename=output_filename,
+        plot_title=plot_title,
+        metrics=current_metrics,
+        train_labels=np.asarray(dataset.train_labels),
+        test_labels=np.asarray(dataset.test_labels),
+        train_pred=np.asarray(train_pred),
+        test_pred=np.asarray(test_pred),
+        val_labels=np.asarray(dataset.val_labels) if hasattr(dataset, "val_labels") and dataset.val_labels.size > 0 else None,
+        val_pred=np.asarray(val_pred) if val_pred is not None else None,
+        ridge_lambda=best_lambda,
+        ridge_log=ridge_log,
+        config=demo_config,
+        extra_results=extra_results,
     )
 
     return train_mse, test_mse, train_accuracy, test_accuracy

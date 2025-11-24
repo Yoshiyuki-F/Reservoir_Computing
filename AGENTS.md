@@ -68,12 +68,12 @@ def _reservoir_step(self, carry, projected_input):
 
     Args:
         carry: (state, key) のタプル
-        projected_input: W_in @ u(t) 済みのベクトル (shape: n_hiddenLayer)
+        projected_input: W_in @ u(t) 済みのベクトル (shape: n_hidden_layer)
     """
     state, key = carry
     key, subkey = random.split(key)
 
-    noise = random.normal(subkey, (self.n_hiddenLayer,), dtype=jnp.float64) * self.noise_level
+    noise = random.normal(subkey, (self.n_hidden_layer,), dtype=jnp.float64) * self.noise_level
     res_contribution = jnp.dot(self.W_res, state)
     input_contribution = projected_input
 
@@ -94,7 +94,7 @@ def __call__(self, input_sequence, key):
     # --- W_in stage (事前計算) ---
     projected_inputs = jnp.dot(input_sequence, self.W_in.T)
 
-    init_state = jnp.zeros((self.n_hiddenLayer,), dtype=jnp.float64)
+    init_state = jnp.zeros((self.n_hidden_layer,), dtype=jnp.float64)
     init_carry = (init_state, key)
 
     (final_state, _), states = jax.lax.scan(

@@ -19,9 +19,9 @@ class ComposedConfig:
 
 
 BUILTIN_MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "classic_reservoir": {
-        "name": "classic_reservoir",
-        "description": "Dynamic classical reservoir config (n_hiddenLayer provided via CLI/script)",
+    "classical_reservoir": {
+        "name": "classical_reservoir",
+        "description": "Dynamic classical reservoir config (n_hidden_layer provided via CLI/script)",
         "model_type": "reservoir",
         "params": {}
     }

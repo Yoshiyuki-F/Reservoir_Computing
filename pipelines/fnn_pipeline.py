@@ -331,7 +331,7 @@ def _create_teacher_reservoir(
     params = {
         **shared,
         "n_inputs": 28,
-        "n_hiddenLayer": reservoir_size,
+        "n_hidden_layer": reservoir_size,
         "n_outputs": 1,
         "state_aggregation": "last",
         "ridge_lambdas": ridge_lambdas,
@@ -340,7 +340,7 @@ def _create_teacher_reservoir(
         "readout_n_folds": 5,
     }
     cfg = {
-        "name": "classic_reservoir_emulation_teacher",
+        "name": "classical_reservoir_emulation_teacher",
         "model_type": "reservoir",
         "params": params,
     }

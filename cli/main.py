@@ -8,8 +8,6 @@ script entry point is wired to ``cli.main:main``.
 from __future__ import annotations
 
 import argparse
-import json
-from pathlib import Path
 import sys
 
 from core_lib.utils import check_gpu_available
@@ -61,33 +59,18 @@ def _parse_model(value: str) -> str:
     """Normalize model argument, supporting short aliases."""
     v = value.lower()
     aliases = {
-        "classic_reservoir": "classic_reservoir",
-        "cr": "classic_reservoir",
-        "classic": "classic_reservoir",
-        "reservoir": "classic_reservoir",
-        "reservoir_classical": "classic_reservoir",
-        "fnn_pretrained": "fnn_pretrained",
-        "fnn": "fnn_pretrained",
-        "fnn_pretrained_b_dash": "fnn_pretrained_b_dash",
-        "fnn-b-dash": "fnn_pretrained_b_dash",
-        "reservoir_large": "reservoir_large",
-        "large": "reservoir_large",
-        "reservoir_complex": "reservoir_complex",
-        "complex": "reservoir_complex",
-        "gatebased_quantum": "gatebased_quantum",
-        "gq": "gatebased_quantum",
-        "qr": "gatebased_quantum",
-        "gatebased": "gatebased_quantum",
-        "analog_quantum": "analog_quantum",
-        "aq": "analog_quantum",
-        "quantum_advanced": "quantum_advanced",
-        "qa": "quantum_advanced",
+        "classical_reservoir": "classical_reservoir",
+        "cr": "classical_reservoir",
+        "classical": "classical_reservoir",
+        "gate_based_quantum": "gate_based_quantum",
+        "gq": "gate_based_quantum",
+        "gate_based": "gate_based_quantum",
     }
     if v in aliases:
         return aliases[v]
     raise SystemExit(
         f"Unknown model '{value}'. Use a full name such as "
-        "classic_reservoir, gatebased_quantum, analog_quantum, "
+        "classical_reservoir, gate_based_quantum, analog_quantum, "
         "quantum_advanced, fnn_pretrained, or their aliases "
         "(cr, qr, fnn, gq, aq, qa, ...)."
     )
@@ -100,12 +83,12 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Usage examples:
-            reservoir-cli --dataset sine_wave --model classic_reservoir --n-hiddenLayer 600
+            reservoir-cli --dataset sine_wave --model classical_reservoir --n-hidden_layer 600
             reservoir-cli sine cr 600
-            reservoir-cli --dataset lorenz --model gatebased_quantum --show-training
+            reservoir-cli --dataset lorenz --model gate_based_quantum --show-training
             reservoir-cli --dataset mnist --model analog_quantum --force-cpu
             reservoir-cli --dataset mackey_glass --model reservoir_large --training windowed
-            reservoir-cli --dataset mnist --model classic_reservoir --n-hiddenLayer 300 --force-cpu
+            reservoir-cli --dataset mnist --model classical_reservoir --n-hidden_layer 300 --force-cpu
         """,
     )
 
@@ -113,17 +96,11 @@ def main() -> None:
         "--model",
         type=_parse_model,
         choices=[
-            "classic_reservoir",
-            "fnn_pretrained",
-            "fnn_pretrained_b_dash",
-            "reservoir_large",
-            "reservoir_complex",
-            "gatebased_quantum",
-            "analog_quantum",
-            "quantum_advanced",
+            "classical_reservoir",
+            "gate_based_quantum",
         ],
-        default="classic_reservoir",
-        help="Model configuration to use (default: classic_reservoir)",
+        default="classical_reservoir",
+        help="Model configuration to use (default: classical_reservoir)",
     )
 
     parser.add_argument(
@@ -145,7 +122,7 @@ def main() -> None:
     parser.add_argument(
         "--training",
         type=str,
-        choices=["standard", "robust", "windowed", "raw_standard"],
+        choices=["standard"],
         default="standard",
         help="Training configuration to use (default: standard)",
     )
@@ -166,7 +143,7 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "--n-hiddenLayer",
+        "--n-hidden_layer",
         type=int,
         default=None,
         help="Override reservoir size for classical models",
@@ -218,7 +195,7 @@ def main() -> None:
     extra_args_lower = [str(x).lower() for x in extra_args]
 
     model = args.model_pos or args.model
-    n_hiddenLayer = args.n_hiddenLayer if args.n_hiddenLayer is not None else args.n_reservoir_pos
+    n_hidden_layer = args.n_hidden_layer if args.n_hidden_layer is not None else args.n_reservoir_pos
 
     if "fnn" in extra_args_lower:
         comparison_mode = True
@@ -235,26 +212,26 @@ def main() -> None:
             except (ValueError, IndexError):
                 parser.error("Comparison mode requires reservoir size after 'reservoir'.")
         else:
-            comparison_reservoir_size = args.n_reservoir_pos or args.n_hiddenLayer
+            comparison_reservoir_size = args.n_reservoir_pos or args.n_hidden_layer
 
         if comparison_reservoir_size is None:
             parser.error("Comparison mode requires reservoir size before 'fnn'.")
 
         model = "fnn_pretrained"
-        n_hiddenLayer = n_fnn_hidden
+        n_hidden_layer = n_fnn_hidden
 
     model_name_lower = model.lower()
     is_fnn_model = "fnn" in model_name_lower
     requires_reservoir = "quantum" not in model_name_lower and not is_fnn_model
-    if requires_reservoir and n_hiddenLayer is None:
-        parser.error("--n-hiddenLayer is required for classical reservoir models")
+    if requires_reservoir and n_hidden_layer is None:
+        parser.error("--n-hidden_layer is required for classical reservoir models")
 
     if is_fnn_model and dataset != "mnist":
         parser.error("fnn_pretrained model is currently supported only for the 'mnist' dataset")
 
-    # For FNN models, either config or n_hiddenLayer must be provided
-    if is_fnn_model and args.config is None and n_hiddenLayer is None:
-        parser.error("fnn_pretrained model requires either --config or --n-hiddenLayer (hidden layer size)")
+    # For FNN models, either config or n_hidden_layer must be provided
+    if is_fnn_model and args.config is None and n_hidden_layer is None:
+        parser.error("fnn_pretrained model requires either --config or --n-hidden_layer (hidden layer size)")
 
     if dataset == "mnist":
         print(" MNIST dataset detected; classification mode will be applied automatically.")
@@ -267,12 +244,12 @@ def main() -> None:
     print("=" * 60)
     if comparison_mode:
         print(
-            f"Comparison mode: FNN hidden={n_hiddenLayer} "
+            f"Comparison mode: FNN hidden={n_hidden_layer} "
             f"vs Reservoir baseline N={comparison_reservoir_size}"
         )
         print("=" * 60)
-    elif n_hiddenLayer is not None:
-        print(f"Reservoir override: {n_hiddenLayer}")
+    elif n_hidden_layer is not None:
+        print(f"Reservoir override: {n_hidden_layer}")
         print("=" * 60)
     print(f"Dataset: {dataset}")
     print(f"Model: {model}")
@@ -283,7 +260,7 @@ def main() -> None:
 
     # Display experiment info
     experiment_name = (
-        f"{dataset}_fnn_h{n_hiddenLayer}_vs_res{comparison_reservoir_size}"
+        f"{dataset}_fnn_h{n_hidden_layer}_vs_res{comparison_reservoir_size}"
         if comparison_mode
         else f"{dataset}_{model}_{training_name}"
     )
@@ -302,64 +279,33 @@ def main() -> None:
         backend = "cpu" if args.force_cpu else "gpu"
 
         if is_fnn_model:
-            from core_lib.models.fnn import FNNPipelineConfig
+            from pipelines.builders import build_fnn_config
 
             if comparison_mode and args.config is not None:
                 parser.error("Comparison mode ignores external --config; remove it to proceed.")
 
-            # Load config from file or auto-generate from n_hiddenLayer
-            if args.config is not None:
-                with open(args.config, "r", encoding="utf-8") as f:
-                    cfg_dict = json.load(f)
-                fnn_config = FNNPipelineConfig(**cfg_dict)
-            else:
-                # Auto-generate config from n_hiddenLayer
-                # For MNIST classification: input_dim=784, output_dim=10
-                # Reservoir emulation: input_dim=time_steps*N_res, output_dim=N_res
-                print(f"Auto-generating FNN config with hidden layer size: {n_hiddenLayer}")
-                suffix = f"h{n_hiddenLayer}"
-                input_dim = 784
-                output_dim = 10
-                if comparison_mode and comparison_reservoir_size is not None:
-                    suffix = f"{suffix}_vs_res{comparison_reservoir_size}"
-                    input_dim = 28 * comparison_reservoir_size  # time_steps (28) * N_res
-                    output_dim = comparison_reservoir_size      # reservoir state dimension
-                base_dir = Path("outputs") / dataset
-                base_dir.mkdir(parents=True, exist_ok=True)
-                json_path = base_dir / f"mnist_fnn_raw_{suffix}.json"
-                weights_path = base_dir / f"mnist_fnn_raw_{suffix}.msgpack"
-                layer_dims = [input_dim, n_hiddenLayer, output_dim]  # input -> hidden -> output
-                cfg_dict = {
-                    "model": {
-                        "layer_dims": layer_dims
-                    },
-                    "training": {
-                        "learning_rate": 0.001,
-                        "batch_size": 128,
-                        "num_epochs": 20,
-                        "weights_path": str(weights_path)
-                    },
-                    "ridge_lambdas": [-7, 7, 15],  # log10 space: 10^-7 to 10^7, 15 points
-                    "use_preprocessing": False  # raw features, like reservoir
-                }
+            fnn_config = build_fnn_config(
+                dataset_name=dataset,
+                n_hidden=int(n_hidden_layer),
+                reservoir_size=comparison_reservoir_size if comparison_mode else None,
+                training_name="standard",
+            )
 
-                # Save the config JSON file
-                import json as json_module
-                with open(json_path, "w", encoding="utf-8") as f:
-                    json_module.dump(cfg_dict, f, indent=2)
-
-                fnn_config = FNNPipelineConfig(**cfg_dict)
-
-                # Log architecture and trainable weight count (excluding biases)
-                dims = layer_dims
-                num_weights = sum(d_in * d_out for d_in, d_out in zip(dims[:-1], dims[1:]))
-                arch_str = " → ".join(str(d) for d in dims)
-                print(
-                    "  Architecture: "
-                    f"{arch_str} "
-                    f"| Weights: {num_weights}"
-                )
-                print(f"  Config saved: {json_path}")
+            # Log architecture and trainable weight count (excluding biases)
+            dims = fnn_config.model.layer_dims
+            num_weights = sum(d_in * d_out for d_in, d_out in zip(dims[:-1], dims[1:]))
+            arch_str = " → ".join(str(d) for d in dims)
+            print(
+                "  FNN config (preset: standard): "
+                f"{arch_str} "
+                f"| Weights: {num_weights}"
+            )
+            print(
+                "  Training preset: "
+                f"lr={fnn_config.training.learning_rate}, "
+                f"batch={fnn_config.training.batch_size}, "
+                f"epochs={fnn_config.training.num_epochs}"
+            )
 
             if not comparison_mode:
                 from pipelines.datasets.mnist_loader import get_mnist_dataloaders
@@ -406,17 +352,19 @@ def main() -> None:
         comparison_payload = None
         if comparison_mode:
             comparison_payload = {
-                "fnn_config": fnn_config,
                 "reservoir_size": comparison_reservoir_size,
+                "n_hidden": n_hidden_layer,
             }
+
+        runner_training_name = "standard" if comparison_mode and is_fnn_model else training_name
 
         result = run_dynamic_experiment(
             dataset_name=dataset,
             model_name=model,
-            training_name=training_name,
+            training_name=runner_training_name,
             show_training=args.show_training,
             backend=backend,
-            n_hiddenLayer_override=n_hiddenLayer,
+            n_hidden_layer_override=n_hidden_layer,
             comparison_config=comparison_payload,
         )
 

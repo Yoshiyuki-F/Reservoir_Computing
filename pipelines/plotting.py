@@ -107,12 +107,12 @@ def plot_epoch_metric(
     ax.legend(loc="lower right")
 
     fig.tight_layout()
-    output_path = PROJECT_ROOT / f"outputs/{filename}"
+    output_path = PROJECT_ROOT / f"{filename}"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"学習曲線を 'outputs/{filename}' に保存しました。")
+    print(f"学習曲線を '{output_path}' に保存しました。")
 
 
 def plot_prediction_results(
