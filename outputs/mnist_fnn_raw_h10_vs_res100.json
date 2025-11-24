@@ -1,16 +1,16 @@
 {
   "model": {
     "layer_dims": [
-      784,
-      30,
-      10
+      2800,
+      10,
+      100
     ]
   },
   "training": {
     "learning_rate": 0.001,
     "batch_size": 128,
     "num_epochs": 20,
-    "weights_path": "outputs/mnist_fnn_raw_30.msgpack"
+    "weights_path": "outputs/mnist_fnn_raw_h10_vs_res100.msgpack"
   },
   "ridge_lambdas": [
     -7,

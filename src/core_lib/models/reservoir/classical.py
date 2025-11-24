@@ -184,8 +184,10 @@ class ReservoirComputer(BaseReservoirComputer):
         self.W_res = W_res_scaled
         self.key = new_key
         
-    def _reservoir_step(self, carry, input_data):
-        """reservoirの1ステップを実行します（JAX scan用）。"""
+    def _reservoir_step(self, carry, projected_input):
+        """reservoirの1ステップを実行します（JAX scan用）。　leaky integrator付き。
+        input_contribution  # 事前計算済みの W_in * u(t)
+        """
         state, key = carry # 前の状態 h(t-1)
         key, subkey = random.split(key)
         
@@ -193,9 +195,8 @@ class ReservoirComputer(BaseReservoirComputer):
         
         # 新しい状態 h(t) を計算
         res_contribution = jnp.dot(self.W_res, state)      # W_res * h(t-1)
-        input_contribution = jnp.dot(self.W_in, input_data) # W_in * u(t)
-        
-        pre_activation = res_contribution + input_contribution + noise
+
+        pre_activation = res_contribution + projected_input  + noise
         new_state = (1 - self.alpha) * state + self.alpha * jnp.tanh(pre_activation)
         
         return (new_state, key), new_state  # h(t)を返す
@@ -209,9 +210,10 @@ class ReservoirComputer(BaseReservoirComputer):
         Run reservoir for a single sequence with the provided key.
         """
         input_sequence = input_sequence.astype(jnp.float64)
+        projected_inputs = jnp.dot(input_sequence, self.W_in.T)
         initial_state = jnp.zeros(self.n_hiddenLayer, dtype=jnp.float64)
         initial_carry = (initial_state, key)
-        carry, states = lax.scan(self._reservoir_step, initial_carry, input_sequence)
+        carry, states = lax.scan(self._reservoir_step, initial_carry, projected_inputs)
         return states
         
     def run_hiddenLayer(self, input_sequence: jnp.ndarray) -> jnp.ndarray:

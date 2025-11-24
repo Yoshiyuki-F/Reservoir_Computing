@@ -197,6 +197,11 @@ def main() -> None:
         type=int,
         help="Optional reservoir size shorthand for classical models",
     )
+    parser.add_argument(
+        "extra_args",
+        nargs="*",
+        help="Additional positional arguments (e.g., 'reservoir 100 fnn 1' for comparison mode)",
+    )
 
     args = parser.parse_args()
 
@@ -205,8 +210,37 @@ def main() -> None:
     if dataset is None:
         parser.error("Dataset is required; pass -d/--dataset or use positional DATASET.")
 
+    comparison_mode = False
+    comparison_reservoir_size = None
+    n_fnn_hidden = None
+    extra_args = args.extra_args or []
+    extra_args_lower = [str(x).lower() for x in extra_args]
+
     model = args.model_pos or args.model
     n_hiddenLayer = args.n_hiddenLayer if args.n_hiddenLayer is not None else args.n_reservoir_pos
+
+    if "fnn" in extra_args_lower:
+        comparison_mode = True
+        try:
+            fnn_idx = extra_args_lower.index("fnn")
+            n_fnn_hidden = int(extra_args[fnn_idx + 1])
+        except (ValueError, IndexError):
+            parser.error("Invalid syntax. Use: DATASET reservoir [N_RES] fnn [H]")
+
+        if "reservoir" in extra_args_lower:
+            try:
+                res_idx = extra_args_lower.index("reservoir")
+                comparison_reservoir_size = int(extra_args[res_idx + 1])
+            except (ValueError, IndexError):
+                parser.error("Comparison mode requires reservoir size after 'reservoir'.")
+        else:
+            comparison_reservoir_size = args.n_reservoir_pos or args.n_hiddenLayer
+
+        if comparison_reservoir_size is None:
+            parser.error("Comparison mode requires reservoir size before 'fnn'.")
+
+        model = "fnn_pretrained"
+        n_hiddenLayer = n_fnn_hidden
 
     model_name_lower = model.lower()
     is_fnn_model = "fnn" in model_name_lower
@@ -230,7 +264,13 @@ def main() -> None:
 
     print("Multi-model ML Framework")
     print("=" * 60)
-    if n_hiddenLayer is not None:
+    if comparison_mode:
+        print(
+            f"Comparison mode: FNN hidden={n_hiddenLayer} "
+            f"vs Reservoir baseline N={comparison_reservoir_size}"
+        )
+        print("=" * 60)
+    elif n_hiddenLayer is not None:
         print(f"Reservoir override: {n_hiddenLayer}")
         print("=" * 60)
     print(f"Dataset: {dataset}")
@@ -241,7 +281,11 @@ def main() -> None:
     print("=" * 60)
 
     # Display experiment info
-    experiment_name = f"{dataset}_{model}_{training_name}"
+    experiment_name = (
+        f"{dataset}_fnn_h{n_hiddenLayer}_vs_res{comparison_reservoir_size}"
+        if comparison_mode
+        else f"{dataset}_{model}_{training_name}"
+    )
     print(f"Experiment: {experiment_name}")
 
     # Run dynamic experiment
@@ -259,16 +303,15 @@ def main() -> None:
         if is_fnn_model:
             from core_lib.models.fnn import FNNPipelineConfig
             from pipelines.datasets.mnist_loader import get_mnist_dataloaders
-            if args.model == "fnn_pretrained_b_dash":
-                from pipelines.fnn_b_dash_pipeline import (
-                    pretrain_fnn_b_dash as pretrain_fnn,
-                    run_fnn_fixed_feature_pipeline_b_dash as run_fnn_fixed_feature_pipeline,
-                )
-            else:
-                from pipelines.fnn_pipeline import (
-                    pretrain_fnn,
-                    run_fnn_fixed_feature_pipeline,
-                )
+            from pipelines.fnn_pipeline import (
+                pretrain_fnn,
+                run_fnn_fixed_feature_pipeline,
+                run_reservoir_emulation_pipeline,
+            )
+
+            if comparison_mode and args.config is not None:
+                parser.error("Comparison mode ignores external --config; remove it to proceed.")
+
 
             # Load config from file or auto-generate from n_hiddenLayer
             if args.config is not None:
@@ -277,13 +320,22 @@ def main() -> None:
                 fnn_config = FNNPipelineConfig(**cfg_dict)
             else:
                 # Auto-generate config from n_hiddenLayer
-                # For MNIST: input_dim=784, hidden_layer=n_hiddenLayer, output_dim=10
+                # For MNIST classification: input_dim=784, output_dim=10
+                # Reservoir emulation: input_dim=time_steps*N_res, output_dim=N_res
                 print(f"Auto-generating FNN config with hidden layer size: {n_hiddenLayer}")
-                json_path = f"outputs/mnist_fnn_raw_{n_hiddenLayer}.json"
-                weights_path = f"outputs/mnist_fnn_raw_{n_hiddenLayer}.msgpack"
+                suffix = f"h{n_hiddenLayer}"
+                input_dim = 784
+                output_dim = 10
+                if comparison_mode and comparison_reservoir_size is not None:
+                    suffix = f"{suffix}_vs_res{comparison_reservoir_size}"
+                    input_dim = 28 * comparison_reservoir_size  # time_steps (28) * N_res
+                    output_dim = comparison_reservoir_size      # reservoir state dimension
+                json_path = f"outputs/mnist_fnn_raw_{suffix}.json"
+                weights_path = f"outputs/mnist_fnn_raw_{suffix}.msgpack"
+                layer_dims = [input_dim, n_hiddenLayer, output_dim]  # input -> hidden -> output
                 cfg_dict = {
                     "model": {
-                        "layer_dims": [784, n_hiddenLayer, 10]  # input -> hidden -> output
+                        "layer_dims": layer_dims
                     },
                     "training": {
                         "learning_rate": 0.001,
@@ -303,8 +355,33 @@ def main() -> None:
                     json_module.dump(cfg_dict, f, indent=2)
 
                 fnn_config = FNNPipelineConfig(**cfg_dict)
-                print(f"  Architecture: 784 → {n_hiddenLayer} (ReLU) → 10")
+
+                # Log architecture and trainable weight count (excluding biases)
+                dims = layer_dims
+                num_weights = sum(d_in * d_out for d_in, d_out in zip(dims[:-1], dims[1:]))
+                arch_str = " → ".join(str(d) for d in dims)
+                print(
+                    "  Architecture: "
+                    f"{arch_str} "
+                    f"| Weights: {num_weights}"
+                )
                 print(f"  Config saved: {json_path}")
+
+            if comparison_mode:
+                print("[Phase 1] Generating reservoir teacher data and training FNN (regression)...")
+                results = run_reservoir_emulation_pipeline(
+                    fnn_config,
+                    reservoir_size=comparison_reservoir_size,
+                    time_steps=28,
+                    backend=backend,
+                )
+                print("Experiment completed successfully!")
+                print(
+                    "📊 Results: "
+                    f"Train MSE: {results['train_mse']:.6f}, "
+                    f"Test MSE: {results['test_mse']:.6f}"
+                )
+                return
 
             train_loader, test_loader = get_mnist_dataloaders(
                 batch_size=fnn_config.training.batch_size,

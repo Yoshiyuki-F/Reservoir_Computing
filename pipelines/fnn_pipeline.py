@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Sequence, Optional
 
 import jax
 import jax.numpy as jnp
@@ -11,15 +11,100 @@ from flax import serialization
 from flax.training import train_state
 import optax
 from torch.utils.data import DataLoader
+from torch.utils.data import TensorDataset
+import torch
+import numpy as np
+import json
 
 from core_lib.utils import ensure_x64_enabled, calculate_mse
 from core_lib.components import FeatureScaler, DesignMatrixBuilder, RidgeReadoutNumpy
 from core_lib.models.fnn import FNN, FNNPipelineConfig
 from core_lib.models.reservoir.config import parse_ridge_lambdas
 from pipelines.plotting import plot_epoch_metric
-
+from pipelines.datasets.mnist_loader import get_mnist_datasets, image_to_sequence
+from core_lib.models.reservoir.classical import ReservoirComputer
 
 ensure_x64_enabled()
+
+
+# --- Helper Functions for De-duplication ---
+
+def _train_and_evaluate_ridge(
+    X_train: jnp.ndarray,
+    Y_train_onehot: jnp.ndarray,
+    X_test: jnp.ndarray,
+    Y_test_onehot: jnp.ndarray,
+    labels_train: jnp.ndarray,
+    labels_test: jnp.ndarray,
+    lambdas: Sequence[float],
+    description: str = "Ridge Readout",
+    *,
+    plot_filename: Optional[str] = None,
+    plot_title: Optional[str] = None,
+    class_labels: Optional[Sequence[str]] = None,
+) -> Dict[str, float]:
+    """Common logic for training, logging, and evaluating Ridge Regression."""
+    readout = RidgeReadoutNumpy()
+    
+    # Fit
+    result = readout.fit(
+        X_train,
+        Y_train_onehot,
+        classification=True,
+        lambdas=lambdas,
+    )
+
+    # Log Lambda Search
+    if result.logs:
+        print("Ridge λ grid search")
+        for entry in result.logs:
+            lam = entry.get("lambda")
+            val_acc = entry.get("val_accuracy")
+            if lam is not None and val_acc is not None:
+                print(f"  λ={lam:.2e} -> val Acc={val_acc:.4f}")
+        if result.best_lambda is not None:
+            print(f"Selected λ={float(result.best_lambda):.2e}")
+
+    # Predict & Evaluate
+    train_logits = readout.predict(X_train)
+    test_logits = readout.predict(X_test)
+
+    train_mse = calculate_mse(train_logits, Y_train_onehot)
+    test_mse = calculate_mse(test_logits, Y_test_onehot)
+
+    train_pred = jnp.argmax(train_logits, axis=1)
+    test_pred = jnp.argmax(test_logits, axis=1)
+    
+    # Use numpy/jax agnostic comparison
+    train_acc = float(np.mean(np.array(train_pred) == np.array(labels_train)))
+    test_acc = float(np.mean(np.array(test_pred) == np.array(labels_test)))
+
+    if plot_filename:
+        from pipelines.plotting import plot_confusion_and_accuracy  # local import to avoid cycles
+        plot_confusion_and_accuracy(
+            labels_test,
+            np.array(test_pred),
+            train_acc=train_acc,
+            test_acc=test_acc,
+            val_acc=None,
+            title=plot_title or description,
+            filename=plot_filename,
+            class_labels=class_labels,
+        )
+
+    print(
+        f"[{description}] "
+        f"(best λ={float(result.best_lambda):.2e}) "
+        f"train_acc={train_acc:.4f}, test_acc={test_acc:.4f}"
+    )
+
+    return {
+        "train_mse": train_mse,
+        "test_mse": test_mse,
+        "train_accuracy": train_acc,
+        "test_accuracy": test_acc,
+        "best_ridge_lambda": float(result.best_lambda),
+    }
 
 
 def _save_params(params: Any, path: Path) -> None:
@@ -38,6 +123,43 @@ def _load_params(model: FNN, input_dim: int, path: Path) -> Any:
     return serialization.from_bytes(params_template, bytes_data)
 
 
+def _predict_features(
+    model: FNN,
+    params: Any,
+    loader: DataLoader,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Run the trained FNN to extract features and aligned labels for the entire loader."""
+    feats = []
+    labels_list = []
+    for batch in loader:
+        # loader yields (x, y, labels) - we only need x and labels
+        batch_x = batch[0]
+        batch_labels = batch[2]
+
+        x = jnp.asarray(batch_x.numpy(), dtype=jnp.float32)
+        # FNN.apply expects {"params": ...} structure
+        # If return_hidden=True, it returns (logits, hidden).
+        # If return_hidden=False, it returns logits (or final state).
+        # We need to handle both cases or assume usage context.
+        # Since this helper is generic, let's inspect the output.
+        out = model.apply({"params": params}, x)
+
+        if isinstance(out, tuple):
+            # Case: return_hidden=True -> (logits, hidden)
+            # We usually want the hidden/embedding part for features
+            _, features = out
+        else:
+            # Case: return_hidden=False -> features (e.g. reservoir emulation output)
+            features = out
+
+        feats.append(np.array(features))
+        labels_list.append(batch_labels.numpy())
+
+    return np.concatenate(feats, axis=0), np.concatenate(labels_list, axis=0)
+
+
+# --- FNN Training Logic ---
+
 def pretrain_fnn(
     config: FNNPipelineConfig,
     train_loader: DataLoader,
@@ -45,7 +167,7 @@ def pretrain_fnn(
 ) -> Tuple[Tuple[int, ...], Tuple[float, ...], Tuple[float, ...]]:
     """End-to-end pretraining of the FNN classifier (baseline b)."""
     input_dim = config.model.input_dim
-    model = FNN(features=config.model.hidden_dims, return_hidden=False)
+    model = FNN(layer_dims=config.model.hidden_dims, return_hidden=False)
     rng = jax.random.PRNGKey(0)
     variables = model.init(rng, jnp.ones((1, input_dim), jnp.float32))
     params = variables["params"]
@@ -141,10 +263,7 @@ def pretrain_fnn(
     print(f"[Phase 1] FNN pre-training complete. Best test accuracy={best_test_acc:.4f}.")
     print(f"[Phase 1] Weights saved to: {weights_path}")
 
-    epochs_out = tuple(int(e) for e in epoch_indices)
-    train_hist_out = tuple(float(a) for a in train_acc_history)
-    test_hist_out = tuple(float(a) for a in test_acc_history)
-    return epochs_out, train_hist_out, test_hist_out
+    return tuple(epoch_indices), tuple(train_acc_history), tuple(test_acc_history)
 
 
 def run_fnn_fixed_feature_pipeline(
@@ -157,86 +276,45 @@ def run_fnn_fixed_feature_pipeline(
 ) -> Dict[str, float]:
     """Use pretrained FNN as fixed feature extractor and train ridge readout."""
     input_dim = config.model.input_dim
-    model = FNN(features=config.model.hidden_dims, return_hidden=True)
+    model = FNN(layer_dims=config.model.hidden_dims, return_hidden=True)
     params = _load_params(model, input_dim, config.weights_path)
 
-    @jax.jit
-    def feature_step(
-        params_eval: Any,
-        images: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        logits, hidden = model.apply({"params": params_eval}, images)
-        return logits, hidden
+    # Feature Extraction (Using global helper)
+    # Note: model is init with return_hidden=True, so apply returns (logits, hidden)
+    # _predict_features handles tuple return automatically.
+    train_features, train_labels = _predict_features(model, params, train_loader)
+    test_features, test_labels = _predict_features(model, params, test_loader)
 
-    def _extract_features(loader: DataLoader) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        feats_list = []
-        labels_list = []
-        for batch_images, batch_labels in loader:
-            images_np = batch_images.view(batch_images.size(0), -1).numpy()
-            labels_np = batch_labels.numpy()
-            images = jnp.asarray(images_np, dtype=jnp.float32)
-            logits, hidden = feature_step(params, images)
-            feats_list.append(jnp.asarray(hidden, dtype=jnp.float64))
-            labels_list.append(jnp.asarray(labels_np, dtype=jnp.int32))
-        features = jnp.concatenate(feats_list, axis=0)
-        labels = jnp.concatenate(labels_list, axis=0)
-        return features, labels
-
-    train_features, train_labels = _extract_features(train_loader)
-    test_features, test_labels = _extract_features(test_loader)
-
+    # --- Design Matrix Construction ---
     if config.use_preprocessing:
         scaler = FeatureScaler()
         train_scaled = scaler.fit_transform(train_features)
         test_scaled = scaler.transform(test_features)
         design_builder = DesignMatrixBuilder(
-            poly_mode="square",
-            degree=2,
-            include_bias=True,
-            std_threshold=1e-3,
+            poly_mode="square", degree=2, include_bias=True, std_threshold=1e-3
         )
         X_train = design_builder.fit_transform(train_scaled)
         X_test = design_builder.transform(test_scaled)
     else:
-        X_train_core = jnp.asarray(train_features, dtype=jnp.float64)
-        X_test_core = jnp.asarray(test_features, dtype=jnp.float64)
-        bias_train = jnp.ones((X_train_core.shape[0], 1), dtype=X_train_core.dtype)
-        bias_test = jnp.ones((X_test_core.shape[0], 1), dtype=X_test_core.dtype)
-        X_train = jnp.concatenate([X_train_core, bias_train], axis=1)
-        X_test = jnp.concatenate([X_test_core, bias_test], axis=1)
+        design_builder = DesignMatrixBuilder(
+            poly_mode="none", degree=1, include_bias=True, std_threshold=0.0
+        )
+        X_train = design_builder.fit_transform(train_features)
+        X_test = design_builder.transform(test_features)
 
+    # --- Ridge Readout ---
     num_classes = int(jnp.max(train_labels).item()) + 1
     train_one_hot = jax.nn.one_hot(train_labels, num_classes=num_classes).astype(jnp.float64)
     test_one_hot = jax.nn.one_hot(test_labels, num_classes=num_classes).astype(jnp.float64)
 
-    readout = RidgeReadoutNumpy()
     lambda_candidates = parse_ridge_lambdas(
-        {"ridge_lambdas": config.ridge_lambdas},
-        key="ridge_lambdas",
-        default=None,
-    )
-    result = readout.fit(
-        X_train,
-        train_one_hot,
-        classification=True,
-        lambdas=lambda_candidates,
+        {"ridge_lambdas": config.ridge_lambdas}, key="ridge_lambdas", default=None
     )
 
-    train_logits = readout.predict(X_train)
-    test_logits = readout.predict(X_test)
-
-    train_mse = calculate_mse(train_logits, train_one_hot)
-    test_mse = calculate_mse(test_logits, test_one_hot)
-
-    train_pred = jnp.argmax(train_logits, axis=1)
-    test_pred = jnp.argmax(test_logits, axis=1)
-    train_accuracy = float(jnp.mean(train_pred == train_labels))
-    test_accuracy = float(jnp.mean(test_pred == test_labels))
-
-    print(
-        f"[Phase 2] FNN fixed-feature ridge readout "
-        f"(best λ={float(result.best_lambda):.2e}) "
-        f"train_acc={train_accuracy:.4f}, test_acc={test_accuracy:.4f}"
+    results = _train_and_evaluate_ridge(
+        X_train, train_one_hot, X_test, test_one_hot,
+        train_labels, test_labels,
+        lambda_candidates, description="Phase 2 FNN Fixed-Feature"
     )
 
     if epochs and test_acc_history:
@@ -244,22 +322,256 @@ def run_fnn_fixed_feature_pipeline(
         plot_epoch_metric(
             epochs,
             list(test_acc_history),
-            title=f"FNN Pretraining + Phase 2 (best λ={float(result.best_lambda):.2e})",
+            title=f"FNN Pretraining + Phase 2 (best λ={results['best_ridge_lambda']:.2e})",
             filename=curve_filename,
             ylabel="Accuracy",
             metric_name="phase1_test_acc",
-            extra_metrics={
-                "phase1_train_acc": list(train_acc_history),
-            },
-            phase2_test_acc=test_accuracy,
-            phase2_train_acc=train_accuracy,
+            extra_metrics={"phase1_train_acc": list(train_acc_history)},
+            phase2_test_acc=results['test_accuracy'],
+            phase2_train_acc=results['train_accuracy'],
         )
 
-    results: Dict[str, float] = {
-        "train_mse": train_mse,
-        "test_mse": test_mse,
-        "train_accuracy": train_accuracy,
-        "test_accuracy": test_accuracy,
-        "best_ridge_lambda": float(result.best_lambda),
+    return results
+
+
+# === Reservoir emulation (regression) mode ===
+
+def _load_shared_reservoir_params() -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[1] / "presets/models/shared_reservoir_params.json"
+    return json.loads(path.read_text()).get("params", {})
+
+
+def _load_training_preset(name: str = "standard") -> Dict[str, Any]:
+    path = Path(__file__).resolve().parents[1] / "presets/training" / f"{name}.json"
+    return json.loads(path.read_text())
+
+
+def _create_teacher_reservoir(
+    reservoir_size: int,
+    backend: str,
+    ridge_lambdas: Sequence[float],
+) -> ReservoirComputer:
+    shared = _load_shared_reservoir_params()
+    params = {
+        **shared,
+        "n_inputs": 28,
+        "n_hiddenLayer": reservoir_size,
+        "n_outputs": 1,
+        "state_aggregation": "last",
+        "ridge_lambdas": ridge_lambdas,
+        "use_preprocessing": False,
+        "readout_cv": "holdout",
+        "readout_n_folds": 5,
     }
+    cfg = {
+        "name": "classic_reservoir_emulation_teacher",
+        "model_type": "reservoir",
+        "params": params,
+    }
+    return ReservoirComputer(cfg, backend=backend)
+
+
+def _build_teacher_pairs(
+    reservoir: ReservoirComputer,
+    dataset: Sequence[Any],
+    time_steps: int,
+    master_key: jax.Array,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jax.Array]:
+    """Generate (flattened projected inputs, final reservoir states, labels) pairs."""
+    sequences = []
+    labels = []
+    for img_tensor, label in dataset:
+        img_np = img_tensor.numpy()
+        seq = image_to_sequence(img_np, n_steps=time_steps)
+        sequences.append(seq.astype(np.float64))
+        labels.append(int(label))
+
+    seq_array = jnp.asarray(np.stack(sequences, axis=0), dtype=jnp.float64)
+    label_array = jnp.asarray(np.array(labels, dtype=np.int32))
+
+    split_keys = jax.random.split(master_key, seq_array.shape[0] + 1)
+    seq_keys = split_keys[:-1]
+    next_key = split_keys[-1]
+
+    run_vmapped = jax.vmap(reservoir._run_sequence_with_key, in_axes=(0, 0))
+    states = run_vmapped(seq_array, seq_keys)
+    final_states = states[:, -1, :]
+
+    projected = jnp.einsum("bti,hi->bth", seq_array, reservoir.W_in)
+    flat_inputs = projected.reshape(projected.shape[0], -1)
+    return flat_inputs, final_states, label_array, next_key
+
+
+def _to_dataloader(
+    inputs: jnp.ndarray,
+    targets: jnp.ndarray,
+    labels: jnp.ndarray,
+    batch_size: int,
+    shuffle: bool,
+) -> DataLoader:
+    x_np = np.asarray(inputs, dtype=np.float32)
+    y_np = np.asarray(targets, dtype=np.float32)
+    lbl_np = np.asarray(labels, dtype=np.int64)
+    dataset = TensorDataset(
+        torch.from_numpy(x_np),
+        torch.from_numpy(y_np),
+        torch.from_numpy(lbl_np),
+    )
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=0)
+
+
+def run_reservoir_emulation_pipeline(
+    config: FNNPipelineConfig,
+    *,
+    reservoir_size: int,
+    time_steps: int,
+    backend: str = "cpu",
+) -> Dict[str, float]:
+    """Train an FNN to emulate a reservoir's final state given projected inputs."""
+    training_preset = _load_training_preset("standard")
+    preset_lambdas = training_preset.get("ridge_lambdas")
+    preset_lambda_grid = None
+    if preset_lambdas is not None:
+        preset_lambda_grid = parse_ridge_lambdas(
+            {"ridge_lambdas": preset_lambdas}, key="ridge_lambdas", default=None
+        )
+
+    teacher = _create_teacher_reservoir(
+        reservoir_size,
+        backend=backend,
+        ridge_lambdas=preset_lambda_grid,
+    )
+    train_set, test_set = get_mnist_datasets()
+
+    master_key = teacher.key
+    train_inputs, train_targets, train_labels, key_after_train = _build_teacher_pairs(
+        teacher, train_set, time_steps, master_key
+    )
+    test_inputs, test_targets, test_labels, final_key = _build_teacher_pairs(
+        teacher, test_set, time_steps, key_after_train
+    )
+    teacher.key = final_key
+
+    # Config validation ...
+    expected_input_dim = train_inputs.shape[1]
+    expected_output_dim = train_targets.shape[1]
+    if config.model.input_dim != expected_input_dim:
+        raise ValueError(f"Config mismatch: input {config.model.input_dim} vs {expected_input_dim}")
+    if config.model.hidden_dims[-1] != expected_output_dim:
+        raise ValueError(f"Config mismatch: output {config.model.hidden_dims[-1]} vs {expected_output_dim}")
+
+    train_loader = _to_dataloader(
+        train_inputs, train_targets, train_labels, config.training.batch_size, shuffle=True
+    )
+    test_loader = _to_dataloader(
+        test_inputs, test_targets, test_labels, config.training.batch_size, shuffle=False
+    )
+
+    model = FNN(layer_dims=config.model.hidden_dims, return_hidden=False)
+    rng = jax.random.PRNGKey(0)
+    variables = model.init(rng, jnp.ones((1, expected_input_dim), jnp.float32))
+    params = variables["params"]
+    tx = optax.adam(config.training.learning_rate)
+    state = train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
+
+    @jax.jit
+    def train_step(state, batch_x, batch_y):
+        def loss_fn(p):
+            preds = state.apply_fn({"params": p}, batch_x)
+            return jnp.mean(jnp.square(preds - batch_y))
+        loss, grads = jax.value_and_grad(loss_fn)(state.params)
+        return state.apply_gradients(grads=grads), loss
+
+    @jax.jit
+    def eval_step(params_eval, batch_x, batch_y):
+        preds = model.apply({"params": params_eval}, batch_x)
+        return jnp.mean(jnp.square(preds - batch_y))
+
+    best_params = state.params
+    best_test_mse = float("inf")
+    epoch_indices: list[int] = []
+    train_mse_hist: list[float] = []
+    test_mse_hist: list[float] = []
+
+    print("[Phase 1] Training FNN Regression...")
+    for epoch in range(1, config.training.num_epochs + 1):
+        train_loss_sum = 0.0
+        train_batches = 0
+        for batch_x, batch_y, _ in train_loader:
+            x = jnp.asarray(batch_x.numpy(), dtype=jnp.float32)
+            y = jnp.asarray(batch_y.numpy(), dtype=jnp.float32)
+            state, loss = train_step(state, x, y)
+            train_loss_sum += float(loss)
+            train_batches += 1
+        train_mse = train_loss_sum / max(train_batches, 1)
+
+        test_loss_sum = 0.0
+        test_batches = 0
+        for batch_x, batch_y, _ in test_loader:
+            x = jnp.asarray(batch_x.numpy(), dtype=jnp.float32)
+            y = jnp.asarray(batch_y.numpy(), dtype=jnp.float32)
+            loss = eval_step(state.params, x, y)
+            test_loss_sum += float(loss)
+            test_batches += 1
+        test_mse = test_loss_sum / max(test_batches, 1)
+
+        if test_mse < best_test_mse:
+            best_test_mse = test_mse
+            best_params = state.params
+        print(f"[Epoch {epoch:03d}] train_mse={train_mse:.6f}, test_mse={test_mse:.6f}")
+        epoch_indices.append(epoch)
+        train_mse_hist.append(train_mse)
+        test_mse_hist.append(test_mse)
+
+    weights_path = config.weights_path
+    _save_params(best_params, weights_path)
+    print(f"[Reservoir Emulation] Weights saved to: {weights_path}")
+
+    # Phase 2: Use emulated reservoir states as features for classification
+    print("\n[Phase 2] Training ridge readout on FNN-emulated states...")
+
+    # Note: Emulation model is init with return_hidden=False, so it returns features directly.
+    train_feats, train_labels_aligned = _predict_features(model, best_params, train_loader)
+    test_feats, test_labels_aligned = _predict_features(model, best_params, test_loader)
+
+    design_builder = DesignMatrixBuilder(
+        poly_mode="none", degree=1, include_bias=True, std_threshold=0.0
+    )
+    train_feats_b = design_builder.fit_transform(jnp.asarray(train_feats, dtype=jnp.float64))
+    test_feats_b = design_builder.transform(jnp.asarray(test_feats, dtype=jnp.float64))
+
+    num_classes = 10
+    train_labels_onehot = jax.nn.one_hot(train_labels_aligned, num_classes=num_classes).astype(jnp.float64)
+    test_labels_onehot = jax.nn.one_hot(test_labels_aligned, num_classes=num_classes).astype(jnp.float64)
+
+    lambda_candidates = teacher.ridge_lambdas or parse_ridge_lambdas(
+        {"ridge_lambdas": config.ridge_lambdas}, key="ridge_lambdas", default=None
+    )
+
+    results = _train_and_evaluate_ridge(
+        train_feats_b, train_labels_onehot, test_feats_b, test_labels_onehot,
+        train_labels_aligned, test_labels_aligned,
+        lambda_candidates, description="Phase 2 Emulation Readout",
+        plot_filename=f"{config.weights_path.stem}_emulation_confusion.png",
+        plot_title="Emulation Readout (FNN → Ridge)",
+        class_labels=[str(i) for i in range(num_classes)],
+    )
+    
+    results["train_mse"] = train_mse
+    results["test_mse"] = best_test_mse
+
+    if epoch_indices and train_mse_hist and test_mse_hist:
+        curve_filename = f"{config.weights_path.stem}_emulation_mse.png"
+        plot_epoch_metric(
+            epoch_indices,
+            train_mse_hist,
+            title="Reservoir Emulation FNN Regression (MSE)",
+            filename=curve_filename,
+            ylabel="MSE",
+            metric_name="train_mse",
+            extra_metrics={"test_mse": test_mse_hist},
+            phase2_test_acc=results.get("test_accuracy"),
+            phase2_train_acc=results.get("train_accuracy"),
+        )
+
     return results

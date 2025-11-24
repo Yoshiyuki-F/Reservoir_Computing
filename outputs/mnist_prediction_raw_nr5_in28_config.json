@@ -18,7 +18,7 @@
     "name": "classic_reservoir",
     "model_type": "reservoir",
     "params": {
-      "n_hiddenLayer": 100
+      "n_hiddenLayer": 5
     }
   },
   "training": {
@@ -48,7 +48,7 @@
   },
   "preprocessing": null,
   "reservoir": {
-    "n_hiddenLayer": 100,
+    "n_hiddenLayer": 5,
     "n_inputs": 28,
     "n_outputs": 10,
     "state_aggregation": "last",
@@ -64,70 +64,70 @@
   "quantum_reservoir": {},
   "results": {
     "metrics": {
-      "train_mse": 0.050150525774760694,
-      "test_mse": 0.04899218368420088,
-      "train_accuracy": 0.7536296248435974,
-      "test_accuracy": 0.767300009727478,
-      "val_mse": 0.047983295980465766,
-      "val_accuracy": 0.7716666460037231,
-      "best_ridge_lambda": 0.1
+      "train_mse": 0.08525681482214417,
+      "test_mse": 0.0850283207782765,
+      "train_accuracy": 0.2690185010433197,
+      "test_accuracy": 0.2717999815940857,
+      "val_mse": 0.08450193277240087,
+      "val_accuracy": 0.27566665410995483,
+      "best_ridge_lambda": 1.0
     },
     "ridge_search": [
       {
         "lambda": 1e-07,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 1e-06,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 1e-05,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 0.0001,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 0.001,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 0.01,
-        "val_accuracy": 0.7492592334747314
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 0.1,
-        "val_accuracy": 0.7496296167373657
+        "val_accuracy": 0.27611109614372253
       },
       {
         "lambda": 1.0,
-        "val_accuracy": 0.7494444251060486
+        "val_accuracy": 0.2764814794063568
       },
       {
         "lambda": 10.0,
-        "val_accuracy": 0.746666669845581
+        "val_accuracy": 0.27481481432914734
       },
       {
         "lambda": 100.0,
-        "val_accuracy": 0.7192592620849609
+        "val_accuracy": 0.2657407522201538
       },
       {
         "lambda": 1000.0,
-        "val_accuracy": 0.6451851725578308
+        "val_accuracy": 0.24611110985279083
       },
       {
         "lambda": 10000.0,
-        "val_accuracy": 0.5161111354827881
+        "val_accuracy": 0.21796296536922455
       },
       {
         "lambda": 100000.0,
-        "val_accuracy": 0.40259259939193726
+        "val_accuracy": 0.13018518686294556
       },
       {
         "lambda": 1000000.0,
-        "val_accuracy": 0.20796296000480652
+        "val_accuracy": 0.10759259015321732
       },
       {
         "lambda": 10000000.0,
@@ -135,9 +135,9 @@
       }
     ],
     "classification": {
-      "train_accuracy": 0.7536296248435974,
-      "val_accuracy": 0.7716666460037231,
-      "test_accuracy": 0.767300009727478,
+      "train_accuracy": 0.2690185010433197,
+      "val_accuracy": 0.27566665410995483,
+      "test_accuracy": 0.2717999815940857,
       "reservoir_info": {
         "name": "shared_reservoir_params",
         "model_type": "reservoir",
@@ -152,7 +152,7 @@
           "input_bias": 0.0,
           "nonlinearity": "tanh",
           "encode_batch_size": 4096,
-          "n_hiddenLayer": 100,
+          "n_hiddenLayer": 5,
           "n_inputs": 28,
           "n_outputs": 10,
           "state_aggregation": "last",

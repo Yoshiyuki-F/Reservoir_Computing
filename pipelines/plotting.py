@@ -332,6 +332,75 @@ def plot_prediction_results(
     print(f"結果を 'outputs/{filename}' に保存しました。")
 
 
+def plot_confusion_and_accuracy(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    train_acc: float,
+    test_acc: float,
+    *,
+    title: str,
+    filename: str,
+    val_acc: Optional[float] = None,
+    class_labels: Optional[Sequence[str]] = None,
+) -> None:
+    """Plot confusion matrix (left) and accuracy overview (right) in one figure."""
+    y_true_np = np.asarray(y_true, dtype=np.int32)
+    y_pred_np = np.asarray(y_pred, dtype=np.int32)
+    n_classes = int(max(y_true_np.max(), y_pred_np.max())) + 1
+
+    cm = np.zeros((n_classes, n_classes), dtype=np.int64)
+    for t, p in zip(y_true_np, y_pred_np):
+        cm[t, p] += 1
+
+    labels = class_labels or [str(i) for i in range(n_classes)]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    im = axes[0].imshow(cm, cmap="Blues")
+    axes[0].set_title("Test Confusion Matrix")
+    axes[0].set_xlabel("Predicted Label")
+    axes[0].set_ylabel("True Label")
+    axes[0].set_xticks(range(n_classes))
+    axes[0].set_yticks(range(n_classes))
+    axes[0].set_xticklabels(labels)
+    axes[0].set_yticklabels(labels)
+    plt.setp(axes[0].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+    for i in range(n_classes):
+        for j in range(n_classes):
+            axes[0].text(
+                j, i, int(cm[i, j]),
+                ha="center", va="center",
+                color="black" if cm[i, j] < cm.max() * 0.7 else "white",
+                fontsize=8,
+            )
+    fig.colorbar(im, ax=axes[0], fraction=0.046, pad=0.04, label="Count")
+
+    bars_labels = ["Train", "Test"]
+    bars_vals = [train_acc, test_acc]
+    colors = ["#2ca02c", "#ff7f0e"]
+    if val_acc is not None:
+        bars_labels.insert(1, "Val")
+        bars_vals.insert(1, val_acc)
+        colors.insert(1, "#9467bd")
+
+    axes[1].set_title("Accuracy Overview")
+    bars = axes[1].barh(bars_labels, [v * 100 for v in bars_vals], color=colors)
+    axes[1].set_xlim(0, 100)
+    axes[1].set_xlabel("Accuracy (%)")
+    for bar, val in zip(bars, bars_vals):
+        axes[1].text(bar.get_width() + 1, bar.get_y() + bar.get_height() / 2, f"{val*100:.2f}%", va="center")
+    axes[1].grid(True, axis="x", alpha=0.3)
+
+    fig.suptitle(title)
+    fig.tight_layout()
+    output_path = PROJECT_ROOT / f"outputs/{filename}"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"混同行列と精度サマリを 'outputs/{filename}' に保存しました。")
+
+
 def plot_classification_results(
     train_labels: np.ndarray,
     test_labels: np.ndarray,

@@ -81,8 +81,7 @@ uv run poe cli-gpu -- \
 # FNN(b') バリアント
 uv run poe cli-gpu -- \
   --dataset mnist \
-  --model fnn_pretrained_b_dash \
-  --config presets/fnn_b_dash_mnist_config.json
+  --model fnn_pretrained_b_dash 
 ```
 
 `--dataset` / `--model` は `src/core_lib/core/identifiers.py` の `Dataset` / `Pipeline` Enum で定義されている識別子の `value` と一致します。  
@@ -242,7 +241,4 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 - [JAX CUDA Installation Guide](https://jax.readthedocs.io/en/latest/installation.html)
 
 
-TODO
-ab wie viel bits kann es gut rechnen? 
-literatur feedforward netz small mid large je nach ansatz literatur mnist(auf was literatur  beziehn? 
-sequenzmnist  728px andere Reservoir ansat　(nie gefunden)
+

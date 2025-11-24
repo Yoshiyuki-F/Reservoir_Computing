@@ -9,9 +9,9 @@ import jax.numpy as jnp
 
 
 class FNN(nn.Module):
-    """Simple feed-forward network used as a feature extractor."""
+    """Feed-forward network whose depth/width comes from layer_dims."""
 
-    features: Sequence[int]
+    layer_dims: Sequence[int]
     return_hidden: bool = False
 
     @nn.compact
@@ -19,12 +19,20 @@ class FNN(nn.Module):
         x = jnp.asarray(x, dtype=jnp.float32)
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
-        for feat in self.features[:-1]:
-            x = nn.Dense(features=feat)(x)
-            x = nn.relu(x)
-        hidden = x
-        x = nn.Dense(features=self.features[-1])(x)
-        if self.return_hidden:
-            return x, hidden
-        return x
+        if not self.layer_dims:
+            raise ValueError("layer_dims must include at least one output dimension")
 
+        hidden_output = None
+        for idx, feat in enumerate(self.layer_dims):
+            x = nn.Dense(features=feat)(x)
+            is_last = idx == len(self.layer_dims) - 1
+            if not is_last:
+                x = nn.relu(x)
+                hidden_output = x
+
+        if hidden_output is None:
+            hidden_output = x
+
+        if self.return_hidden:
+            return x, hidden_output
+        return x
