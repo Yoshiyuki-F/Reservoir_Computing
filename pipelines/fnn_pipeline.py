@@ -508,17 +508,18 @@ def run_reservoir_emulation_pipeline(
     print(f"[Reservoir Emulation] Weights saved to: {weights_path}")
 
     # --- Plot Phase 1 MSE Curve (New) ---
-    curve_filename = f"{config.weights_path.stem}_mse_curve.png"
+    weights_path = Path(config.weights_path)
+    curve_filename = weights_path.with_name(f"{weights_path.stem}_mse_curve.png")
     plot_epoch_metric(
         tuple(epoch_indices),
         tuple(test_mse_history),
         title=f"Reservoir Emulation Phase 1 (H={config.model.hidden_dims[1]})",
-        filename=curve_filename,
+        filename=str(curve_filename),
         ylabel="MSE (Loss)",
         metric_name="test_mse",
         extra_metrics={"train_mse": tuple(train_mse_history)},
     )
-    print(f"[Reservoir Emulation] Plot saved to: outputs/{curve_filename}")
+    print(f"[Reservoir Emulation] Plot saved to: {curve_filename}")
 
     # Phase 2: Use emulated reservoir states as features for classification
     print("\n[Phase 2] Training ridge readout on FNN-emulated states...")

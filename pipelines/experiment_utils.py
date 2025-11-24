@@ -68,7 +68,8 @@ def _save_config_snapshot(
     if extra:
         snapshot['results'].update(extra)
 
-    snapshot_path = Path('outputs') / f"{Path(output_filename).stem}_config.json"
+    output_path = Path(output_filename)
+    snapshot_path = output_path.with_name(f"{output_path.stem}_config.json")
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     with snapshot_path.open('w', encoding='utf-8') as f:
         json.dump(snapshot, f, indent=2, default=_json_default)

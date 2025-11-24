@@ -15,20 +15,15 @@ def resolve_experiment_naming(
     dataset_name: str,
     model_type: str,
     quantum_mode: bool,
-    is_analog_model: bool,
     is_quantum_model: bool,
     raw_training: bool,
-    n_hiddenLayer: Optional[int],
-    n_inputs_value: Optional[int],
+    n_hiddenLayer: Optional[int]
 ) -> Tuple[str, str]:
     """Resolve output filename and plot title for an experiment."""
 
     resolved_filename = demo_config.demo.filename
     filename_suffix_parts = []
-    if is_analog_model:
-        suffix = Path(resolved_filename).suffix or ".png"
-        resolved_filename = f"{dataset_name}_aq_prediction{suffix}"
-    elif quantum_mode or "quantum" in model_type:
+    if quantum_mode or "quantum" in model_type:
         suffix = Path(resolved_filename).suffix or ".png"
         resolved_filename = f"{dataset_name}_gq_prediction{suffix}"
 
@@ -127,4 +122,9 @@ def resolve_experiment_naming(
         suffix_segment = "_".join(filename_suffix_parts)
         resolved_filename = f"{stem}_{suffix_segment}{suffix}"
 
-    return resolved_filename, plot_title
+    dataset_dir = Path(dataset_name).name
+    base_dir = Path("outputs") / dataset_dir
+    base_dir.mkdir(parents=True, exist_ok=True)
+    resolved_path = base_dir / resolved_filename
+
+    return str(resolved_path), plot_title

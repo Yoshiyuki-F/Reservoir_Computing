@@ -1,0 +1,36 @@
+{
+  "dataset": "mnist",
+  "model": "fnn_reservoir_emulation",
+  "params": {
+    "reservoir_size": 100,
+    "fnn_config": {
+      "model": {
+        "layer_dims": [
+          2800,
+          500,
+          100
+        ]
+      },
+      "training": {
+        "learning_rate": 0.001,
+        "batch_size": 128,
+        "num_epochs": 20,
+        "weights_path": "outputs/mnist/mnist_fnn_raw_h500_vs_res100.msgpack"
+      },
+      "ridge_lambdas": [
+        -7.0,
+        7.0,
+        15.0
+      ],
+      "use_preprocessing": false
+    }
+  },
+  "results": {
+    "metrics": {
+      "train_mse": 0.0034838155207873533,
+      "test_mse": 0.003466422436758876,
+      "train_accuracy": 0.7701666666666667,
+      "test_accuracy": 0.7807
+    }
+  }
+}

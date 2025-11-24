@@ -75,10 +75,13 @@ def run_dynamic_experiment(
             suffix_parts.append(f"h{hidden_dim}")
         suffix_parts.append(f"vs_res{res_size}")
         suffix_segment = "_".join(suffix_parts)
-        base_name = f"{dataset_name}_fnn_raw_{suffix_segment}_emulation"
+        dataset_dir = Path(dataset_name).name
+        base_name = f"{dataset_dir}_fnn_raw_{suffix_segment}_emulation"
+        base_dir = Path("outputs") / dataset_dir
+        base_dir.mkdir(parents=True, exist_ok=True)
 
         if test_pred.size > 0 and test_labels.size > 0:
-            confusion_filename = f"{base_name}_confusion.png"
+            confusion_filename = base_dir / f"{base_name}_confusion.png"
             plot_title = f"FNN Reservoir Emulation (h={hidden_dim or 'unknown'}, N={res_size})"
             _helper_plot_classification(
                 train_labels=train_labels.astype(int, copy=False),
@@ -100,7 +103,7 @@ def run_dynamic_experiment(
                 "metrics": metrics_for_plot,
             },
         }
-        snapshot_path = Path('outputs') / f"{base_name}_config.json"
+        snapshot_path = base_dir / f"{base_name}_config.json"
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         with snapshot_path.open('w', encoding='utf-8') as f:
             json.dump(snapshot_data, f, indent=2, default=_json_default)
@@ -182,12 +185,14 @@ def run_experiment(
 
     print(f"=== {demo_config.demo.title} ===")
 
+    resolved_model_type = model_type or ("quantum" if quantum_mode else "classical")
+
     build_result = build_reservoir_model(
         demo_config,
         dataset,
         backend=backend,
         quantum_mode=quantum_mode,
-        model_type=model_type,
+        model_type=resolved_model_type,
     )
     rc = build_result.rc
     reservoir_info = build_result.reservoir_info
@@ -202,12 +207,12 @@ def run_experiment(
         dataset_name=dataset_name,
         model_type=model_type,
         quantum_mode=quantum_mode,
-        is_analog_model=build_result.is_analog_model,
         is_quantum_model=build_result.is_quantum_model,
         raw_training=build_result.raw_training,
         n_hiddenLayer=build_result.n_hiddenLayer,
         n_inputs_value=build_result.n_inputs_value,
     )
+    Path(output_filename).parent.mkdir(parents=True, exist_ok=True)
 
     ridge_cfg = demo_config.training.ridge_lambdas
     if ridge_cfg and isinstance(ridge_cfg, (list, tuple)) and len(ridge_cfg) == 3:
@@ -356,7 +361,8 @@ def _run_classification_routine(
     else:
         best_lambda = None
 
-    confusion_filename = f"{Path(output_filename).stem}_confusion{Path(output_filename).suffix}"
+    output_path = Path(output_filename)
+    confusion_filename = output_path.with_name(f"{output_path.stem}_confusion{output_path.suffix}")
     _helper_plot_classification(
         train_labels=np.asarray(dataset.train_labels),
         test_labels=np.asarray(dataset.test_labels),

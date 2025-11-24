@@ -21,7 +21,7 @@ from pipelines.gatebased_quantum_pipeline import (
 
 def get_model_factory(model_type: str):
     """Get the appropriate model factory based on model type."""
-    if "reservoir" in model_type or "quantum" in model_type:
+    if model_type == "classical" or model_type == "quantum":
         from core_lib.models.reservoir import ReservoirComputerFactory
 
         return ReservoirComputerFactory

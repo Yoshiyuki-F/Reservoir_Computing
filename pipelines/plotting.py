@@ -537,8 +537,14 @@ def plot_classification_results(
     # Metrics caption removed per design request
 
     fig.tight_layout(rect=[0, 0.05, 1, 0.97])
-    output_path = PROJECT_ROOT / f"outputs/{filename}"
+
+    filename_path = Path(filename)
+    if filename_path.is_absolute() or (filename_path.parts and filename_path.parts[0] == "outputs"):
+        output_path = PROJECT_ROOT / filename_path
+    else:
+        output_path = PROJECT_ROOT / "outputs" / filename_path
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
-    print(f"分類結果を 'outputs/{filename}' に保存しました。")
+    print(f"分類結果を '{output_path}' に保存しました。")

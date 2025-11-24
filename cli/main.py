@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from core_lib.utils import check_gpu_available
@@ -323,8 +324,10 @@ def main() -> None:
                     suffix = f"{suffix}_vs_res{comparison_reservoir_size}"
                     input_dim = 28 * comparison_reservoir_size  # time_steps (28) * N_res
                     output_dim = comparison_reservoir_size      # reservoir state dimension
-                json_path = f"outputs/mnist_fnn_raw_{suffix}.json"
-                weights_path = f"outputs/mnist_fnn_raw_{suffix}.msgpack"
+                base_dir = Path("outputs") / dataset
+                base_dir.mkdir(parents=True, exist_ok=True)
+                json_path = base_dir / f"mnist_fnn_raw_{suffix}.json"
+                weights_path = base_dir / f"mnist_fnn_raw_{suffix}.msgpack"
                 layer_dims = [input_dim, n_hiddenLayer, output_dim]  # input -> hidden -> output
                 cfg_dict = {
                     "model": {
@@ -334,7 +337,7 @@ def main() -> None:
                         "learning_rate": 0.001,
                         "batch_size": 128,
                         "num_epochs": 20,
-                        "weights_path": weights_path
+                        "weights_path": str(weights_path)
                     },
                     "ridge_lambdas": [-7, 7, 15],  # log10 space: 10^-7 to 10^7, 15 points
                     "use_preprocessing": False  # raw features, like reservoir
@@ -342,8 +345,6 @@ def main() -> None:
 
                 # Save the config JSON file
                 import json as json_module
-                from pathlib import Path
-                Path("outputs").mkdir(parents=True, exist_ok=True)
                 with open(json_path, "w", encoding="utf-8") as f:
                     json_module.dump(cfg_dict, f, indent=2)
 

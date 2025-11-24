@@ -32,17 +32,11 @@ def _load_gatebased_quantum_config() -> Dict[str, Any]:
     return _load_config_json('presets/models/gatebased_quantum.json')
 
 
-@lru_cache()
-def _load_analog_quantum_config() -> Dict[str, Any]:
-    return _load_config_json('presets/models/analog_quantum.json')
-
-
 @dataclass
 class ReservoirBuildResult:
     rc: Any
     reservoir_info: Dict[str, Any]
     model_type: str
-    is_analog_model: bool
     is_quantum_model: bool
     n_hiddenLayer: Optional[int]
     n_inputs_value: Optional[int]
@@ -55,11 +49,10 @@ def build_reservoir_model(
     *,
     backend: Optional[str] = None,
     quantum_mode: bool = False,
-    model_type: Optional[str] = None,
 ) -> ReservoirBuildResult:
     """Construct reservoir model and return build metadata."""
 
-    resolved_model_type = model_type or ("quantum" if quantum_mode else "reservoir")
+    resolved_model_type = "quantum" if quantum_mode else "classical"
     model_factory = get_model_factory(resolved_model_type)
 
     data_config = demo_config.data_generation
@@ -103,26 +96,10 @@ def build_reservoir_model(
         demo_config.reservoir.setdefault('include_bias', False)
         demo_config.reservoir.setdefault('washout_steps', 0)
 
-    model_name = demo_config.model.name
-    is_analog_model = "analog" in model_name or resolved_model_type == "analog_quantum"
-
     ridge_cfg = getattr(demo_config.training, "ridge_lambdas", None)
     ridge_defaults = list(ridge_cfg) if ridge_cfg else [1e-6, 1e-5, 1e-4, 1e-3]
 
-    if is_analog_model:
-        if demo_config.quantum_reservoir is None:
-            raise ValueError("Analog quantum mode requires quantum_reservoir config")
-        demo_config.quantum_reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
-        analog_base = _load_analog_quantum_config().get('params', {})
-        config_dict: Dict[str, Any] = {"model_type": "analog_quantum"}
-        config_dict.update(analog_base)
-        config_dict.update(demo_config.quantum_reservoir)
-        if data_n_input is not None:
-            config_dict["n_inputs"] = int(data_n_input)
-        if data_n_output is not None:
-            config_dict["n_outputs"] = int(data_n_output)
-        rc = model_factory.create_reservoir('analog', config_dict, backend)
-    elif quantum_mode or "quantum" in resolved_model_type:
+    if quantum_mode or "quantum" in resolved_model_type:
         if demo_config.quantum_reservoir is None:
             raise ValueError("Quantum mode enabled but quantum_reservoir config is missing")
         demo_config.quantum_reservoir.setdefault('ridge_lambdas', list(ridge_defaults))
@@ -152,7 +129,7 @@ def build_reservoir_model(
     reservoir_info = rc.get_reservoir_info()
     print(f"Reservoir情報: {reservoir_info}")
 
-    is_quantum_model = quantum_mode or ("quantum" in (resolved_model_type or ""))
+    is_quantum_model = quantum_mode or ("quantum" in resolved_model_type)
     n_hiddenLayer: Optional[int] = None
     n_inputs_value: Optional[int] = None
     if not is_quantum_model:
@@ -211,7 +188,6 @@ def build_reservoir_model(
         rc=rc,
         reservoir_info=reservoir_info,
         model_type=resolved_model_type,
-        is_analog_model=is_analog_model,
         is_quantum_model=is_quantum_model,
         n_hiddenLayer=n_hiddenLayer,
         n_inputs_value=n_inputs_value,
