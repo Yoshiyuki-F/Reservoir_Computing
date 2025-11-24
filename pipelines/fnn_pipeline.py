@@ -86,6 +86,10 @@ def _train_and_evaluate_ridge(
         "train_accuracy": train_acc,
         "test_accuracy": test_acc,
         "best_ridge_lambda": float(result.best_lambda),
+        "train_predictions": np.array(train_pred),
+        "test_predictions": np.array(test_pred),
+        "train_labels": np.array(labels_train),
+        "test_labels": np.array(labels_test),
     }
 
 

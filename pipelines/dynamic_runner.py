@@ -290,6 +290,62 @@ def _save_config_snapshot(
     print(f"Saved config snapshot -> {snapshot_path}")
 
 
+def _helper_plot_classification(
+    train_labels: np.ndarray,
+    test_labels: np.ndarray,
+    train_pred: np.ndarray,
+    test_pred: np.ndarray,
+    title: str,
+    filename: str,
+    metrics_dict: Dict[str, float],
+    val_labels: Optional[np.ndarray] = None,
+    val_pred: Optional[np.ndarray] = None,
+    ridge_lambda: Optional[float] = None,
+) -> None:
+    """Shared helper to plot confusion matrix and metrics for classification runs."""
+
+    labels_arrays = [
+        np.asarray(train_labels),
+        np.asarray(test_labels),
+        np.asarray(train_pred),
+        np.asarray(test_pred),
+    ]
+    if val_labels is not None:
+        labels_arrays.append(np.asarray(val_labels))
+    if val_pred is not None:
+        labels_arrays.append(np.asarray(val_pred))
+
+    detected_classes = max(
+        (int(arr.max()) if arr.size > 0 else -1) for arr in labels_arrays
+    )
+    class_count = max(detected_classes + 1, 10)
+    class_names = [str(i) for i in range(class_count)]
+
+    metrics_info: Dict[str, Any] = {
+        "Train MSE": float(metrics_dict["train_mse"]),
+        "Test MSE": float(metrics_dict["test_mse"]),
+        "Train Acc": f"{float(metrics_dict['train_accuracy']):.4f}",
+        "Test Acc": f"{float(metrics_dict['test_accuracy']):.4f}",
+    }
+    if "val_mse" in metrics_dict:
+        metrics_info["Val MSE"] = float(metrics_dict["val_mse"])
+    if "val_accuracy" in metrics_dict:
+        metrics_info["Val Acc"] = f"{float(metrics_dict['val_accuracy']):.4f}"
+    if ridge_lambda is not None:
+        metrics_info["Ridge λ"] = f"{ridge_lambda:.2e}"
+
+    plot_classification_results(
+        np.asarray(train_labels),
+        np.asarray(test_labels),
+        np.asarray(train_pred),
+        np.asarray(test_pred),
+        title,
+        filename,
+        metrics_info=metrics_info,
+        class_names=class_names,
+    )
+
+
 def run_dynamic_experiment(
     dataset_name: str,
     model_name: str,
@@ -325,12 +381,49 @@ def run_dynamic_experiment(
             time_steps=28,  # MNIST fixed
             backend=backend or "cpu",
         )
-        # Map to (train_mse, test_mse, train_acc, test_acc)
+        metrics_for_plot = {
+            "train_mse": float(results["train_mse"]),
+            "test_mse": float(results["test_mse"]),
+            "train_accuracy": float(results["train_accuracy"]),
+            "test_accuracy": float(results["test_accuracy"]),
+        }
+        train_pred = np.asarray(results.get("train_predictions", []))
+        test_pred = np.asarray(results.get("test_predictions", []))
+        train_labels = np.asarray(results.get("train_labels", []))
+        test_labels = np.asarray(results.get("test_labels", []))
+        if test_pred.size > 0 and test_labels.size > 0:
+            confusion_filename = f"{dataset_name}_fnn_emulation_nr{res_size}_confusion.png"
+            plot_title = f"FNN Reservoir Emulation (N={res_size})"
+            _helper_plot_classification(
+                train_labels=train_labels.astype(int, copy=False),
+                test_labels=test_labels.astype(int, copy=False),
+                train_pred=train_pred.astype(int, copy=False),
+                test_pred=test_pred.astype(int, copy=False),
+                title=plot_title,
+                filename=confusion_filename,
+                metrics_dict=metrics_for_plot,
+            )
+        snapshot_data = {
+            "dataset": dataset_name,
+            "model": "fnn_reservoir_emulation",
+            "params": {
+                "reservoir_size": res_size,
+                "fnn_config": fnn_config.model_dump() if hasattr(fnn_config, "model_dump") else getattr(fnn_config, "__dict__", fnn_config),
+            },
+            "results": {
+                "metrics": metrics_for_plot,
+            },
+        }
+        snapshot_path = Path('outputs') / f"{dataset_name}_fnn_emulation_nr{res_size}_config.json"
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        with snapshot_path.open('w', encoding='utf-8') as f:
+            json.dump(snapshot_data, f, indent=2, default=_json_default)
+        print(f"Saved config snapshot -> {snapshot_path}")
         return (
-            results.get("train_mse"),
-            results.get("test_mse", 0.0),
-            results.get("train_accuracy"),
-            results.get("test_accuracy", 0.0),
+            float(results["train_mse"]),
+            float(results["test_mse"]),
+            float(results["train_accuracy"]),
+            float(results["test_accuracy"]),
         )
 
     # Create dynamic experiment configuration
@@ -788,56 +881,37 @@ def run_experiment(
         accuracy_msg += f", test={test_accuracy:.4f}"
         print(accuracy_msg)
 
-        metrics_caption = {
-            "Train MSE": train_mse,
-            "Test MSE": test_mse,
-            "Train Acc": f"{train_accuracy:.4f}",
-            "Test Acc": f"{test_accuracy:.4f}",
-        }
-        metrics_snapshot = {
+        current_metrics: Dict[str, Any] = {
             "train_mse": train_mse,
             "test_mse": test_mse,
             "train_accuracy": train_accuracy,
             "test_accuracy": test_accuracy,
         }
         if val_mse is not None:
-            metrics_caption["Val MSE"] = val_mse
-            metrics_snapshot["val_mse"] = val_mse
+            current_metrics["val_mse"] = val_mse
         if val_accuracy is not None:
-            metrics_caption["Val Acc"] = f"{val_accuracy:.4f}"
-            metrics_snapshot["val_accuracy"] = val_accuracy
+            current_metrics["val_accuracy"] = val_accuracy
 
         best_lambda_attr = getattr(rc, "best_ridge_lambda", None)
         if best_lambda_attr is not None:
             best_lambda = float(best_lambda_attr)
-            metrics_caption["Ridge λ"] = f"{best_lambda:.2e}"
-            metrics_snapshot["best_ridge_lambda"] = best_lambda
+            current_metrics["best_ridge_lambda"] = best_lambda
+        else:
+            best_lambda = None
 
         # 可視化 (classification)
-        labels_arrays = [
-            np.asarray(dataset.train_labels),
-            np.asarray(dataset.test_labels),
-            np.asarray(train_pred),
-            np.asarray(test_pred),
-        ]
-        if hasattr(dataset, "val_labels") and dataset.val_labels.size > 0:
-            labels_arrays.append(np.asarray(dataset.val_labels))
-            if val_pred is not None:
-                labels_arrays.append(np.asarray(val_pred))
-        detected_classes = max(
-            (int(arr.max()) if arr.size > 0 else -1) for arr in labels_arrays
-        )
-        class_count = max(detected_classes + 1, 10)
-        class_names = [str(i) for i in range(class_count)]
-        plot_classification_results(
-            np.asarray(dataset.train_labels),
-            np.asarray(dataset.test_labels),
-            np.asarray(train_pred),
-            np.asarray(test_pred),
-            plot_title,
-            output_filename,
-            metrics_info=metrics_caption,
-            class_names=class_names,
+        confusion_filename = f"{Path(output_filename).stem}_confusion{Path(output_filename).suffix}"
+        _helper_plot_classification(
+            train_labels=np.asarray(dataset.train_labels),
+            test_labels=np.asarray(dataset.test_labels),
+            train_pred=np.asarray(train_pred),
+            test_pred=np.asarray(test_pred),
+            title=plot_title,
+            filename=confusion_filename,
+            metrics_dict=current_metrics,
+            val_labels=np.asarray(dataset.val_labels) if hasattr(dataset, "val_labels") and dataset.val_labels.size > 0 else None,
+            val_pred=np.asarray(val_pred) if val_pred is not None else None,
+            ridge_lambda=best_lambda,
         )
 
         extra_results = {
@@ -851,7 +925,7 @@ def run_experiment(
         _save_config_snapshot(
             demo_config,
             output_filename,
-            metrics_snapshot,
+            current_metrics,
             ridge_log,
             extra=extra_results,
         )

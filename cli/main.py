@@ -302,15 +302,9 @@ def main() -> None:
 
         if is_fnn_model:
             from core_lib.models.fnn import FNNPipelineConfig
-            from pipelines.datasets.mnist_loader import get_mnist_dataloaders
-            from pipelines.fnn_pipeline import (
-                pretrain_fnn,
-                run_fnn_fixed_feature_pipeline,
-            )
 
             if comparison_mode and args.config is not None:
                 parser.error("Comparison mode ignores external --config; remove it to proceed.")
-
 
             # Load config from file or auto-generate from n_hiddenLayer
             if args.config is not None:
@@ -367,6 +361,12 @@ def main() -> None:
                 print(f"  Config saved: {json_path}")
 
             if not comparison_mode:
+                from pipelines.datasets.mnist_loader import get_mnist_dataloaders
+                from pipelines.fnn_pipeline import (
+                    pretrain_fnn,
+                    run_fnn_fixed_feature_pipeline,
+                )
+
                 train_loader, test_loader = get_mnist_dataloaders(
                     batch_size=fnn_config.training.batch_size,
                     shuffle_train=True,
