@@ -66,7 +66,7 @@ uv run poe cli-gpu -- m fnn 30
 ```bash
 uv run poe cli-gpu -- \
   lorenz \
-  qr                      # (= gate_based_quantum)
+  qr                      # (= quantum_gate_based)
 ```
 
 #### 3. MNIST + FNN パイプライン

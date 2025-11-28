@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 try:
-from core_lib.models.reservoir.analog_quantum import AnalogQuantumReservoir
+from core_lib.models.reservoir.quantum_analog import AnalogQuantumReservoir
 except ImportError:  # pragma: no cover - optional dependency
     AnalogQuantumReservoir = None
 
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(
 
 def _simple_regression_config():
     return {
-        "model_type": "analog_quantum",
+        "model_type": "quantum_analog",
         "n_qubits": 2,
         "Omega": np.pi,
         "Delta_g": 0.0,
@@ -64,7 +64,7 @@ def test_readout_observable_subset_controls_feature_dim():
     assert info["readout_observables"] == ["Z", "ZZ"]
 
 
-def test_analog_quantum_regression_roundtrip():
+def test_quantum_analog_regression_roundtrip():
     cfg = _simple_regression_config()
     reservoir = AnalogQuantumReservoir(cfg)
 
@@ -81,7 +81,7 @@ def test_analog_quantum_regression_roundtrip():
     assert info["feature_dim"] > 0
 
 
-def test_analog_quantum_classification_pathway():
+def test_quantum_analog_classification_pathway():
     cfg = _simple_classification_config()
     reservoir = AnalogQuantumReservoir(cfg)
 

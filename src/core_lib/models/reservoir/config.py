@@ -371,7 +371,7 @@ class AnalogQuantumReservoirConfig(ModelConfig):
 
     def __init__(self, **data):
         if 'model_type' not in data:
-            data['model_type'] = 'analog_quantum'
+            data['model_type'] = 'quantum_analog'
         if 'name' not in data and 'model_type' in data:
             data['name'] = f"{data['model_type']}_config"
 
@@ -404,9 +404,9 @@ class AnalogQuantumReservoirConfig(ModelConfig):
         # ===== VALIDATION STARTS HERE =====
 
         # Validate model_type
-        model_type = data.get('model_type', 'analog_quantum')
-        if model_type != 'analog_quantum':
-            raise ValueError(f"AnalogQuantumReservoirConfig expects model_type='analog_quantum', got '{model_type}'")
+        model_type = data.get('model_type', 'quantum_analog')
+        if model_type != 'quantum_analog':
+            raise ValueError(f"AnalogQuantumReservoirConfig expects model_type='quantum_analog', got '{model_type}'")
 
         # Validate required keys
         required_keys = {

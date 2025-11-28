@@ -1,6 +1,6 @@
 {
-  "name": "analog_quantum",
-  "model_type": "analog_quantum",
+  "name": "quantum_analog",
+  "model_type": "quantum_analog",
   "params": {
     "n_qubits": 6,
     "Omega": 6.283185307179586,

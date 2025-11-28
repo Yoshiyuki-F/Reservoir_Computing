@@ -4,14 +4,14 @@ from .base_reservoir import BaseReservoirComputer, ReservoirComputerFactory
 from .classical import ReservoirComputer
 from .factory import ReservoirFactory
 try:
-    from .gate_based_quantum import QuantumReservoirComputer
+    from .quantum_gate_based import QuantumReservoirComputer
     QUANTUM_AVAILABLE = True
 except ImportError:
     QuantumReservoirComputer = None
     QUANTUM_AVAILABLE = False
 
 try:
-    from .analog_quantum import AnalogQuantumReservoir
+    from .quantum_analog import AnalogQuantumReservoir
     ANALOG_AVAILABLE = True
 except ImportError:  # pragma: no cover - optional dependency
     AnalogQuantumReservoir = None

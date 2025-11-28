@@ -39,7 +39,7 @@ def _load_shared_defaults() -> Dict[str, Any]:
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "presets/models/gate_based_quantum.json"
+    path = Path(__file__).resolve().parents[2] / "presets/models/quantum_gate_based.json"
     data = json.loads(path.read_text())
     params = data.get('params', {}) or {}
     base = _load_shared_defaults()

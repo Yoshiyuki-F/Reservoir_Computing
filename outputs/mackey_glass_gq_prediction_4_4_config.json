@@ -17,7 +17,7 @@
     }
   },
   "model": {
-    "name": "gate_based_quantum",
+    "name": "quantum_gate_based",
     "model_type": "reservoir",
     "params": {
       "n_qubits": 4,

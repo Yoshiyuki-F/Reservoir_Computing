@@ -5,7 +5,7 @@ This module defines the common interface for both classical and quantum
 reservoir computers, enabling unified usage and experimentation.
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Dict, Any, Union, Optional, Sequence
 
 from core_lib.models.base import BaseModel
@@ -193,7 +193,7 @@ class ReservoirComputerFactory:
 
         elif reservoir_type.lower() == 'quantum':
             try:
-                from .gate_based_quantum import QuantumReservoirComputer
+                from .quantum_gate_based import QuantumReservoirComputer
                 return QuantumReservoirComputer(config=config, backend=backend)
             except ImportError as e:
                 raise ImportError(
@@ -201,9 +201,9 @@ class ReservoirComputerFactory:
                     "Install with: uv add pennylane pennylane-jax"
                 ) from e
 
-        elif reservoir_type.lower() in {'analog', 'analog_quantum'}:
+        elif reservoir_type.lower() in {'analog', 'quantum_analog'}:
             try:
-                from .analog_quantum import AnalogQuantumReservoir
+                from .quantum_analog import AnalogQuantumReservoir
                 return AnalogQuantumReservoir(config=config)
             except ImportError as e:
                 raise ImportError(
@@ -214,5 +214,5 @@ class ReservoirComputerFactory:
         else:
             raise ValueError(
                 f"Unknown reservoir type '{reservoir_type}'. "
-                "Supported types: 'classical', 'gate_based_quantum', 'analog_quantum'"
+                "Supported types: 'classical', 'quantum_gate_based', 'quantum_analog'"
             )

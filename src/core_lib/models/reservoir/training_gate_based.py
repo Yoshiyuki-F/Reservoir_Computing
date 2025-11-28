@@ -1,4 +1,5 @@
-"""Training and prediction helpers for the gate-based quantum reservoir."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/reservoir/training_gate_based.py
+Training and prediction helpers for the gate-based quantum reservoir."""
 
 from __future__ import annotations
 

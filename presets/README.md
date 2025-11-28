@@ -10,8 +10,8 @@ presets/
 ├── models/             # Model architecture configurations
 │   ├── shared_reservoir_params.json
 │   ├── quantum_advanced.json
-│   ├── gate_based_quantum.json
-│   ├── analog_quantum.json
+│   ├── quantum_gate_based.json
+│   ├── quantum_analog.json
 │   ├── reservoir_complex.json
 │   ├── reservoir_large.json
 │   └── reservoir_standard.json

@@ -13,6 +13,7 @@ from core_lib.models import FlaxModelFactory
 from core_lib.models.reservoir.factory import ReservoirFactory
 from pipelines.generic_runner import UniversalPipeline
 from core_lib.data.registry import DatasetRegistry
+
 # Ensure dataset loaders are registered
 from core_lib.data import loaders as _data_loaders  # noqa: F401
 
@@ -67,12 +68,7 @@ def run_pipeline(
     # 1. Data Preparation
     if train_X is None or train_y is None:
         print(f"Loading dataset: {config.get('dataset', 'sine_wave')}...")
-        X, y = _load_dataset(config)
-        
-        # Simple validation split (80/20)
-        split_idx = int(0.8 * len(X))
-        train_X, test_X = X[:split_idx], X[split_idx:]
-        train_y, test_y = y[:split_idx], y[split_idx:]
+        raise ValueError("train_X and train_y must be provided explicitly for this pipeline.")
 
     dataset_name, dataset_meta = _dataset_meta(config)
     preset_type = str(dataset_meta.get("type", "")).lower()
@@ -82,15 +78,11 @@ def run_pipeline(
     elif preset_type in {"classification", "regression"}:
         is_classification = preset_type == "classification"
     else:
-        # Fallback to dtype-based heuristic
-        is_classification = bool(
-            train_y.ndim == 1
-            and (jnp.issubdtype(train_y.dtype, jnp.integer) or jnp.issubdtype(train_y.dtype, jnp.bool_))
-        )
+        raise ValueError(f"Unknown preset type: {preset_type}")
     meta_n_outputs = dataset_meta.get("n_output")
     
     # --- Shape Adjustment Logic ---
-    model_type = config.get("model_type", "rnn").lower()
+    model_type = config.get("model_type").lower()
 
     # FNN expects flattened input: (N, Features)
     if model_type == "fnn":
@@ -111,13 +103,11 @@ def run_pipeline(
     print(f"Data Shapes -> Train: {train_X.shape}, Test: {test_X.shape if test_X is not None else 'None'}")
 
     # Determine default output dimension from presets/data
-    if is_classification:
-        default_output_dim = int(meta_n_outputs) if meta_n_outputs is not None else int(jnp.max(train_y)) + 1
-    else:
-        if train_y.ndim > 1:
-            default_output_dim = int(train_y.shape[-1])
-        else:
-            default_output_dim = int(meta_n_outputs) if meta_n_outputs is not None else 1
+    if meta_n_outputs is None:
+        raise ValueError(
+            "Classification tasks require 'n_output' to be specified in dataset presets."
+        )
+    default_output_dim = int(meta_n_outputs)
 
     # 2. Model Creation
     input_shape = train_X.shape[1:]

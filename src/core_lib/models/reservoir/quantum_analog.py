@@ -698,7 +698,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
     def get_reservoir_info(self) -> Dict[str, Any]:
         """Return reservoir metadata for logging/debugging."""
         info = {
-            "model_type": "analog_quantum",
+            "model_type": "quantum_analog",
             "n_qubits": self.n_qubits,
             "reupload_layers": self.reupload_layers,
             "state_aggregation": self.state_aggregation,
