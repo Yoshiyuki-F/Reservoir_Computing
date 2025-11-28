@@ -1,18 +1,14 @@
 import jax.numpy as jnp
 
-from pipelines import run_fnn_pipeline
-from core_lib.models import FlaxTrainingConfig
-from core_lib.models.fnn import FNNModelConfig
+from core_lib.models import FlaxModelFactory
 
 
 def test_run_fnn_pipeline_classification():
-    model_cfg = FNNModelConfig(layer_dims=[2, 4, 2])
-    training_cfg = FlaxTrainingConfig(
-        learning_rate=1e-3,
-        batch_size=2,
-        num_epochs=2,
-        classification=True,
-    )
+    cfg = {
+        "type": "fnn",
+        "model": {"layer_dims": [2, 4, 2]},
+        "training": {"learning_rate": 1e-3, "batch_size": 2, "num_epochs": 2, "classification": True},
+    }
 
     # Simple XOR-like dataset
     X = jnp.array(
@@ -26,15 +22,10 @@ def test_run_fnn_pipeline_classification():
     )
     y = jnp.array([0, 1, 1, 0])
 
-    results = run_fnn_pipeline(
-        train_X=X,
-        train_y=y,
-        test_X=X,
-        test_y=y,
-        model_config=model_cfg,
-        training_config=training_cfg,
-    )
+    model = FlaxModelFactory.create_model(cfg)
+    train_metrics = model.train(X, y)
+    test_metrics = model.evaluate(X, y)
 
-    assert "train" in results and "test" in results
-    assert "accuracy" in results["test"]
-    assert 0.0 <= results["test"]["accuracy"] <= 1.0
+    assert "final_loss" in train_metrics
+    assert "accuracy" in test_metrics
+    assert 0.0 <= test_metrics["accuracy"] <= 1.0

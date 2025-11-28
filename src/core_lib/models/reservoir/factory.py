@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Sequence, Tuple, Union
 
-from .base_reservoir import ReservoirComputerFactory
+from .base import ReservoirComputerFactory
 
 
 class ReservoirFactory:

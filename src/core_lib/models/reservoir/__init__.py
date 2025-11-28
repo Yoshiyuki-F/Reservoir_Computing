@@ -1,6 +1,6 @@
 """Reservoir model implementations."""
 
-from .base_reservoir import BaseReservoirComputer, ReservoirComputerFactory
+from .base import BaseReservoir, BaseReservoirComputer, ReservoirComputerFactory
 from .classical import ReservoirComputer
 from .factory import ReservoirFactory
 try:
@@ -40,6 +40,7 @@ except ImportError:
 # QuantumReservoirComputer is already handled above
 
 __all__ = [
+    "BaseReservoir",
     "BaseReservoirComputer",
     "ReservoirComputerFactory",
     "ReservoirFactory",

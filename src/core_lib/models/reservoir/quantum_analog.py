@@ -11,10 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
+import jax.numpy as jnp
 import qutip as qt
 
-from .base_reservoir import BaseReservoirComputer
+from .base import BaseReservoirComputer
 from .config import AnalogQuantumReservoirConfig, parse_ridge_lambdas
+from core_lib.components import RidgeReadoutNumpy
+from core_lib.models.reservoir.training import train_reservoir, predict_reservoir
 
 # --------------------------------------------------------------------------- #
 # Helper dataclasses / utilities                                             #
@@ -102,6 +105,8 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
 
         # Parse ridge_lambdas
         self.ridge_lambdas: Sequence[float] = parse_ridge_lambdas(params)
+        self._readout = RidgeReadoutNumpy()
+        self._washout_steps = 0
 
         # Training state
         self.W_out: Optional[np.ndarray] = None
@@ -110,6 +115,13 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         self.classification_mode: bool = False
         self.num_classes: Optional[int] = None
         self.last_training_mse: Optional[float] = None
+        self.readout_logs: Optional[Any] = None
+        self._washout_steps: int = 0
+        self._readout = RidgeReadoutNumpy()
+        self.readout_logs: Optional[Any] = None
+
+        # Minimal interface compliance (unified reservoir API)
+        self._washout_steps: int = 0
 
         # Normalization statistics (fit during train)
         self._norm_stats: Optional[_NormalizationStats] = None
@@ -452,6 +464,31 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         design = np.concatenate([centered, bias], axis=1)
         return design
 
+    # Minimal interface compliance for unified training API ----------------
+    @property
+    def readout(self):
+        return self._readout
+
+    @property
+    def washout_steps(self) -> int:
+        return self._washout_steps
+
+    def get_states(self, inputs):
+        arr = np.asarray(inputs, dtype=np.float64)
+        if self._norm_stats is None:
+            self._fit_normalizer(arr)
+        # Choose mode based on dimensionality
+        if arr.ndim == 1 or (arr.ndim == 2 and arr.shape[1] == 1):
+            mode = "scalar"
+        else:
+            mode = self.input_mode
+        features = self._build_feature_matrix(arr, mode=mode)
+        return jnp.asarray(features, dtype=jnp.float64)
+
+    def transform_states(self, raw_states, fit: bool = False):
+        design = self._prepare_design_matrix(np.asarray(raw_states, dtype=np.float64), fit=fit)
+        return jnp.asarray(design, dtype=jnp.float64)
+
     def _select_ridge_lambda(
         self,
         X: np.ndarray,
@@ -488,65 +525,7 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
             except np.linalg.LinAlgError:
                 print("[analog-qrc] SVD failed; skipping condition number log.")
 
-        def ridge_via_svd(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
-            U, s, Vt = np.linalg.svd(design, full_matrices=False)
-            UT_y = U.T @ targets
-            denom = s ** 2 + lam
-            coeff = (s / denom)[:, None]
-            scaled = coeff * UT_y
-            return Vt.T @ scaled
-
-        val_metric_list = []
-        weights_by_lambda: Dict[float, np.ndarray] = {}
-        self.ridge_search_log.clear()
-
-        for lam in lambda_candidates:
-            weights = ridge_via_svd(X_train, y_train, lam)
-            preds_tr = X_train @ weights
-
-            if X_val.size > 0:
-                preds_val = X_val @ weights
-            else:
-                preds_val = preds_tr
-
-            if classification:
-                pred_labels_val = np.argmax(preds_val, axis=1)
-                true_labels_val = np.argmax(y_val if X_val.size > 0 else y_train, axis=1)
-                val_accuracy = float(np.mean(pred_labels_val == true_labels_val))
-
-                val_metric_list.append(val_accuracy)
-                self.ridge_search_log.append({"lambda": lam, "val_accuracy": val_accuracy})
-            else:
-                train_mse = float(np.mean((y_train - preds_tr) ** 2))
-                y_ref = y_val if X_val.size > 0 else y_train
-                val_mse = float(np.mean((y_ref - preds_val) ** 2))
-
-                val_metric_list.append(val_mse)
-                self.ridge_search_log.append({"lambda": lam, "train_mse": train_mse, "val_mse": val_mse})
-
-            weights_by_lambda[lam] = weights
-
-        if classification:
-            best_value = max(val_metric_list)
-            best_candidates = [
-                lam
-                for lam, score in zip(lambda_candidates, val_metric_list)
-                if np.isclose(score, best_value)
-            ]
-            best_lambda = max(best_candidates) if best_candidates else lambda_candidates[0]
-            print("🔍 Ridge λ grid search (VAL - Accuracy)")
-            for lam, val_acc in zip(lambda_candidates, val_metric_list):
-                print(f"  λ={lam:.2e} -> val Acc={val_acc:.6f}")
-        else:
-            best_index = int(np.argmin(val_metric_list))
-            print("🔍 Ridge λ grid search (VAL - MSE)")
-            for lam, val_mse in zip(lambda_candidates, val_metric_list):
-                print(f"  λ={lam:.2e} -> val MSE={val_mse:.6e}")
-            best_lambda = lambda_candidates[best_index]
-        best_weights = weights_by_lambda[best_lambda]
-        self.best_ridge_lambda = best_lambda
-
-        return best_weights, best_lambda
+        # Legacy ridge search removed; unified training handles readout fitting.
     # ------------------------------------------------------------------ #
     # Training / prediction (regression)                                #
     # ------------------------------------------------------------------ #
@@ -558,49 +537,25 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         ridge_lambdas: Optional[Sequence[float]] = None,
         return_features: bool = False,
     ) -> Optional[np.ndarray]:
-        """Train the analog reservoir on regression (time-series) data."""
-        inputs = np.asarray(input_data, dtype=np.float64)
-        targets = np.asarray(target_data, dtype=np.float64)
-        if inputs.shape[0] != targets.shape[0]:
-            raise ValueError("input_data and target_data length mismatch")
-
-        self._fit_normalizer(inputs)
-        self.n_input_ = inputs.shape[-1] if inputs.ndim > 1 else 1
-
-        features = self._build_feature_matrix(inputs, mode="scalar")
-        design_matrix = self._prepare_design_matrix(features, fit=True)
-
-        lambdas = ridge_lambdas or self.ridge_lambdas
-
-        weights, best_lam = self._select_ridge_lambda(
-                design_matrix, targets, lambdas, classification=False
+        """Train the analog reservoir using the unified readout."""
+        # Fit input normalizer once per training call
+        self._fit_normalizer(np.asarray(input_data, dtype=np.float64))
+        result = train_reservoir(
+            self,
+            jnp.asarray(input_data),
+            jnp.asarray(target_data),
+            mode="regression",
+            ridge_lambdas=ridge_lambdas,
+            num_classes=None,
         )
-
-        def _ridge_svd_full(X, Y, lam):
-            # 正: W = V^T * diag(s/(s^2+λ)) * U^T * Y
-            U, s, Vt = np.linalg.svd(X, full_matrices=False)
-            UTY = U.T @ Y  # (r, out)
-            coef = (s / (s * s + lam))[:, None]  # (r, 1)
-            scaled = coef * UTY  # (r, out)
-            return Vt.T @ scaled  # (D, out)
-        
-        
-        self.W_out = _ridge_svd_full(design_matrix, targets, best_lam)
-
-        preds = design_matrix @ self.W_out
-        self.last_training_mse = float(np.mean((preds - targets) ** 2))
-        self.classification_mode = False
-        self.trained = True
+        self.last_training_mse = result.get("score")
+        if return_features:
+            return self.get_states(jnp.asarray(input_data))
+        return None
 
     def predict(self, input_data: np.ndarray) -> np.ndarray:
         """Generate predictions for regression data."""
-        if not self.trained or self.W_out is None:
-            raise RuntimeError("Model not trained")
-
-        inputs = np.asarray(input_data, dtype=np.float64)
-        features = self._build_feature_matrix(inputs, mode="scalar")
-        design_matrix = self._prepare_design_matrix(features, fit=False)
-        return design_matrix @ self.W_out
+        return np.array(predict_reservoir(self, jnp.asarray(input_data), mode="regression"))
 
     # ------------------------------------------------------------------ #
     # Classification helpers                                            #
@@ -614,38 +569,19 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         num_classes: Optional[int] = None,
         return_features: bool = False,
     ) -> None:
-        """Train the reservoir for classification tasks (e.g., MNIST)."""
+        """Train the reservoir for classification tasks."""
         data = np.asarray(sequences, dtype=np.float64)
-        lbls = np.asarray(labels, dtype=np.int32)
-        if data.shape[0] != lbls.shape[0]:
-            raise ValueError("Sequence/label length mismatch")
-
         self._fit_normalizer(data)
-        self.n_input_ = data.shape[-1]
-
-        capacity = self.n_qubits * self.reupload_layers
-        if self.input_mode in {"sequence", "block"} and capacity < self.n_input_:
-            raise ValueError(
-                f"Input dimensionality {self.n_input_} exceeds capacity "
-                f"{self.n_qubits}×{self.reupload_layers}"
-            )
-
-        features = self._build_feature_matrix(data, mode=self.input_mode)
-        design_matrix = self._prepare_design_matrix(features, fit=True)
-
-        classes = int(num_classes or (lbls.max() + 1))
-        Y = np.zeros((lbls.shape[0], classes), dtype=np.float64)
-        Y[np.arange(lbls.shape[0]), lbls] = 1.0
-
-        lambdas = ridge_lambdas or self.ridge_lambdas
-        weights = self._select_ridge_lambda(design_matrix, Y, lambdas, classification=True)
-
-        self.W_out = weights
-        self.num_classes = classes
-        self.classification_mode = True
-        self.trained = True
+        train_reservoir(
+            self,
+            jnp.asarray(sequences),
+            jnp.asarray(labels),
+            mode="classification",
+            ridge_lambdas=ridge_lambdas,
+            num_classes=num_classes,
+        )
         if return_features:
-            return features
+            return self.get_states(jnp.asarray(sequences))
         return None
 
     def predict_classification(
@@ -657,24 +593,21 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         precomputed_features: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Predict logits or labels for classification."""
-        if not self.trained or self.W_out is None or not self.classification_mode:
-            raise RuntimeError("Classification model not trained")
-
+        del progress_desc, progress_position
         if precomputed_features is None and sequences is None:
             raise ValueError("Either sequences or precomputed_features must be provided.")
         if precomputed_features is not None and sequences is not None:
             raise ValueError("Specify only one of sequences or precomputed_features.")
-
-        if precomputed_features is not None:
-            features = np.asarray(precomputed_features, dtype=np.float64)
-        else:
-            data = np.asarray(sequences, dtype=np.float64)
-            features = self._build_feature_matrix(data, mode=self.input_mode)
-        design_matrix = self._prepare_design_matrix(features, fit=False)
-        logits = design_matrix @ self.W_out
+        inputs = precomputed_features if precomputed_features is not None else sequences
+        logits = predict_reservoir(
+            self,
+            jnp.asarray(inputs),
+            precomputed_features=jnp.asarray(precomputed_features) if precomputed_features is not None else None,
+            mode="classification",
+        )
         if return_logits:
-            return logits
-        return np.argmax(logits, axis=1)
+            return np.array(logits)
+        return np.array(jnp.argmax(logits, axis=1))
 
     # ------------------------------------------------------------------ #
     # Housekeeping                                                      #
@@ -694,6 +627,11 @@ class AnalogQuantumReservoir(BaseReservoirComputer):
         self._feature_mu_ = None
         self._feature_sigma_ = None
         self._feature_keep_mask_ = None
+        if hasattr(self._readout, "weights"):
+            try:
+                self._readout.weights = None  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
     def get_reservoir_info(self) -> Dict[str, Any]:
         """Return reservoir metadata for logging/debugging."""

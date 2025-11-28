@@ -19,15 +19,11 @@ from core_lib.utils import ensure_x64_enabled
 ensure_x64_enabled()
 
 import jax.numpy as jnp
+from core_lib.components import RidgeReadoutNumpy
 
-from .base_reservoir import BaseReservoirComputer
+from .base import BaseReservoirComputer
 from .config import QuantumReservoirConfig, parse_ridge_lambdas
-from core_lib.models.reservoir.training_gate_based import (
-    train_quantum_reservoir_regression,
-    predict_quantum_reservoir_regression,
-    train_quantum_reservoir_classification,
-    predict_quantum_reservoir_classification,
-)
+from core_lib.models.reservoir.training import train_reservoir, predict_reservoir
 
 
 @lru_cache()
@@ -200,6 +196,9 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self.last_training_mse: Optional[float] = None
         self.classification_mode: bool = False
         self.num_classes: Optional[int] = None
+        self.readout_logs: Optional[Any] = None
+        self._washout_steps: int = 0
+        self._readout = RidgeReadoutNumpy()
 
     def _initialize_quantum_device(self) -> None:
         """Initialize the PennyLane quantum device."""
@@ -343,6 +342,24 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         design = np.concatenate([centered, bias], axis=1)
         return jnp.array(design, dtype=jnp.float64)
 
+    # Interface adapters -------------------------------------------------
+    @property
+    def readout(self):
+        return self._readout
+
+    @property
+    def washout_steps(self) -> int:
+        return self._washout_steps
+
+    def get_states(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        if arr.ndim == 3:
+            return self._encode_sequences(arr)
+        return self._run_quantum_reservoir(arr)
+
+    def transform_states(self, raw_states: jnp.ndarray, fit: bool = False) -> jnp.ndarray:
+        return self._prepare_design_matrix(raw_states, fit=fit)
+
     def _measure_quantum_state(self):
         """Return measurement observables based on selected basis."""
         measurements: List[Any] = []
@@ -447,95 +464,6 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         print("")
         return array
 
-    def _fit_ridge_with_grid(
-        self,
-        X: jnp.ndarray,
-        target_data: jnp.ndarray,
-        ridge_lambdas: Optional[Sequence[float]] = None,
-    ) -> None:
-        X_np = np.asarray(X, dtype=np.float64)
-        y_np = np.asarray(target_data, dtype=np.float64)
-
-        lambdas = ridge_lambdas or self.ridge_lambdas
-        lambda_candidates = [float(lam) for lam in lambdas if lam is not None and lam > 0]
-
-        if not lambda_candidates:
-            lambda_candidates = list(self.ridge_lambdas)
-
-        lambda_candidates = sorted(set(lambda_candidates))
-
-        n_samples = X_np.shape[0]
-        if n_samples < 2:
-            raise ValueError("Not enough samples to perform ridge regression")
-
-        split_idx = int(0.9 * n_samples)
-        split_idx = max(1, min(split_idx, n_samples - 1))
-
-        X_train, X_val = X_np[:split_idx], X_np[split_idx:]
-        y_train, y_val = y_np[:split_idx], y_np[split_idx:]
-
-        feature_part = X_train[:, :-1]
-        if feature_part.size:
-            sigma = feature_part.std(axis=0)
-            print(
-                f"[gate_based-qrc] feature std range (train) -> min={float(sigma.min()):.3e}, max={float(sigma.max()):.3e}"
-            )
-            try:
-                sv = np.linalg.svd(feature_part, compute_uv=False)
-                cond_number = float(sv.max() / max(sv.min(), 1e-12))
-                print(f"[gate_based-qrc] design matrix cond -> {cond_number:.3e}")
-            except np.linalg.LinAlgError:
-                print("[gate_based-qrc] SVD failed; skipping condition number log.")
-
-        def ridge_via_svd(design: np.ndarray, targets: np.ndarray, lam: float) -> np.ndarray:
-            U, s, Vt = np.linalg.svd(design, full_matrices=False)
-            UT_y = U.T @ targets
-            denom = s ** 2 + lam
-            coeff = (s / denom)[:, None]
-            scaled = coeff * UT_y
-            return Vt.T @ scaled
-
-        train_mse_list: List[float] = []
-        val_mse_list: List[float] = []
-        weights_by_lambda: Dict[float, np.ndarray] = {}
-
-        for lam in lambda_candidates:
-            weights = ridge_via_svd(X_train, y_train, lam)
-            yhat_tr = X_train @ weights
-            train_mse = float(np.mean((y_train - yhat_tr) ** 2))
-
-            if X_val.size > 0:
-                yhat_val = X_val @ weights
-                val_mse = float(np.mean((y_val - yhat_val) ** 2))
-            else:
-                val_mse = train_mse
-
-            train_mse_list.append(train_mse)
-            val_mse_list.append(val_mse)
-            weights_by_lambda[lam] = weights
-
-        best_index = int(np.argmin(val_mse_list))
-        best_lambda = lambda_candidates[best_index]
-        best_weights_np = weights_by_lambda[best_lambda]
-
-        print("🔍 Ridge λ grid search (VAL)")
-        for lam, val_mse in zip(lambda_candidates, val_mse_list):
-            print(f"  λ={lam:.2e} -> val MSE={val_mse:.6e}")
-
-        self.W_out = jnp.array(best_weights_np, dtype=jnp.float64)
-        self.best_ridge_lambda = best_lambda
-        self.selected_lambda_ = best_lambda
-        self.last_training_mse = float(train_mse_list[best_index])
-        self.train_mse_by_lambda_ = {lam: val for lam, val in zip(lambda_candidates, val_mse_list)}
-        self.ridge_search_log = [
-            {
-                "lambda": lam,
-                "train_mse": tr,
-                "val_mse": val,
-            }
-            for lam, tr, val in zip(lambda_candidates, train_mse_list, val_mse_list)
-        ]
-
     def train_classification(
         self,
         sequences: jnp.ndarray,
@@ -544,14 +472,17 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         num_classes: int = 10,
         return_features: bool = False,
     ) -> Optional[jnp.ndarray]:
-        return train_quantum_reservoir_classification(
+        train_reservoir(
             self,
             sequences,
             labels,
+            mode="classification",
             ridge_lambdas=ridge_lambdas,
             num_classes=num_classes,
-            return_features=return_features,
         )
+        if return_features:
+            return self.get_states(sequences)
+        return None
 
     def predict_classification(
         self,
@@ -561,12 +492,17 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         progress_position: int = 0,
         precomputed_features: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
-        return predict_quantum_reservoir_classification(
+        del progress_desc, progress_position
+        if precomputed_features is None and sequences is None:
+            raise ValueError("Either sequences or precomputed_features must be provided.")
+        if precomputed_features is not None and sequences is not None:
+            raise ValueError("Specify only one of sequences or precomputed_features.")
+        inputs = sequences if sequences is not None else precomputed_features
+        return predict_reservoir(
             self,
-            sequences=sequences,
-            progress_desc=progress_desc,
-            progress_position=progress_position,
-            precomputed_features=precomputed_features,
+            inputs,  # type: ignore[arg-type]
+            precomputed_features=precomputed_features if precomputed_features is not None else None,
+            mode="classification",
         )
 
     def train(
@@ -587,16 +523,27 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             the classical readout layer. Future versions could include
             variational optimization of quantum parameters.
         """
-        train_quantum_reservoir_regression(
+        is_classification_labels = (
+            target_data.ndim == 1
+            and (jnp.issubdtype(target_data.dtype, jnp.integer) or jnp.issubdtype(target_data.dtype, jnp.bool_))
+        )
+        mode = "classification" if is_classification_labels else "regression"
+        num_classes = None
+        if mode == "classification":
+            num_classes = int(self.n_outputs) if self.n_outputs > 1 else int(jnp.max(target_data)) + 1
+        train_reservoir(
             self,
             input_data,
             target_data,
+            mode=mode,  # type: ignore[arg-type]
             ridge_lambdas=ridge_lambdas,
+            num_classes=num_classes,
         )
 
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """Generate predictions using the trained quantum reservoir."""
-        return predict_quantum_reservoir_regression(self, input_data)
+        mode = "classification" if getattr(self, "classification_mode", False) else "regression"
+        return predict_reservoir(self, input_data, mode=mode)  # type: ignore[arg-type]
 
     def reset_state(self) -> None:
         """Reset the quantum reservoir to initial state."""
@@ -615,6 +562,8 @@ class QuantumReservoirComputer(BaseReservoirComputer):
         self._feature_mu_ = None
         self._feature_sigma_ = None
         self._feature_keep_mask_ = None
+        self.readout_logs = None
+        self._readout = RidgeReadoutNumpy()
 
     def get_reservoir_info(self) -> Dict[str, Any]:
         """Get information about the quantum reservoir configuration."""

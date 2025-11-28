@@ -1,36 +1,56 @@
-"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/reservoir/base_reservoir.py
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/reservoir/base.py
 Abstract base class for Reservoir Computing implementations.
-
-This module defines the common interface for both classical and quantum
-reservoir computers, enabling unified usage and experimentation.
 """
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, Optional, Sequence
-
-from core_lib.models.base import BaseModel
-
-from core_lib.utils import ensure_x64_enabled
-
-ensure_x64_enabled()
 
 import jax.numpy as jnp
 from jax import Array
 
+from core_lib.models.base import BaseModel
+from core_lib.components.readout.base import BaseReadout
+from core_lib.utils import ensure_x64_enabled
 
-class BaseReservoirComputer(BaseModel):
-    """Abstract base class for all reservoir computer implementations.
+ensure_x64_enabled()
 
-    This class defines the essential interface that both classical and quantum
-    reservoir computers must implement, allowing for seamless switching between
-    different reservoir types in experiments.
 
-    Attributes:
-        trained (bool): Whether the reservoir has been trained
-    """
+class BaseReservoir(ABC):
+    """Abstract interface for any reservoir system (classical, quantum, etc.)."""
+
+    def __init__(self) -> None:
+        self.W_out: Optional[jnp.ndarray] = None
+        self.readout_logs: Optional[Any] = None
+
+    @property
+    @abstractmethod
+    def readout(self) -> BaseReadout:
+        """Return the readout component used for training."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def washout_steps(self) -> int:
+        """Number of initial timesteps to discard for regression tasks."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_states(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Run the reservoir dynamics and return raw internal states."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def transform_states(self, raw_states: jnp.ndarray, fit: bool = False) -> jnp.ndarray:
+        """Transform raw states into a design matrix (scaling/expansion/bias)."""
+        raise NotImplementedError
+
+
+class BaseReservoirComputer(BaseModel, BaseReservoir):
+    """Abstract base class for all reservoir computer implementations."""
 
     def __init__(self):
         """Initialize the base reservoir computer."""
+        BaseReservoir.__init__(self)
         self.trained = False
 
     @abstractmethod
@@ -40,16 +60,7 @@ class BaseReservoirComputer(BaseModel):
         target_data: jnp.ndarray,
         ridge_lambdas: Optional[Sequence[float]] = None,
     ) -> None:
-        """Train the reservoir computer on the given data.
-
-        Args:
-            input_data: Input time series data of shape (time_steps, n_inputs)
-            target_data: Target time series data of shape (time_steps, n_outputs)
-            ridge_lambdas: Candidate ridge regularization strengths
-
-        Raises:
-            NotImplementedError: Must be implemented by subclasses
-        """
+        """Train the reservoir computer on the given data."""
         pass
 
     @abstractmethod
@@ -84,24 +95,12 @@ class BaseReservoirComputer(BaseModel):
 
     @abstractmethod
     def get_reservoir_info(self) -> Dict[str, Any]:
-        """Get information about the reservoir configuration.
-
-        Returns:
-            Dictionary containing reservoir parameters and status
-
-        Note:
-            Should include at least: n_inputs, n_outputs, trained status,
-            and implementation-specific parameters
-        """
+        """Get information about the reservoir configuration."""
         pass
 
     @abstractmethod
     def reset_state(self) -> None:
-        """Reset the internal state of the reservoir.
-
-        This method should clear any internal states and set trained=False,
-        effectively returning the reservoir to its initial condition.
-        """
+        """Reset the internal state of the reservoir."""
         self.trained = False
 
     def _ensure_trained(self) -> None:
@@ -111,21 +110,10 @@ class BaseReservoirComputer(BaseModel):
 
     @staticmethod
     def _validate_input_data(input_data: Array, expected_features: int) -> None:
-        """Validate input data dimensions and format.
-
-        Args:
-            input_data: Input data to validate
-            expected_features: Expected number of input features
-
-        Raises:
-            ValueError: If input data has wrong shape or type
-        """
         if not isinstance(input_data, jnp.ndarray):
             raise ValueError("Input data must be a JAX array")
-
         if input_data.ndim != 2:
             raise ValueError(f"Input data must be 2D, got shape {input_data.shape}")
-
         if input_data.shape[1] != expected_features:
             raise ValueError(
                 f"Expected {expected_features} input features, "
@@ -138,22 +126,10 @@ class BaseReservoirComputer(BaseModel):
         expected_outputs: int,
         expected_timesteps: int,
     ) -> None:
-        """Validate target data dimensions and format.
-
-        Args:
-            target_data: Target data to validate
-            expected_outputs: Expected number of output features
-            expected_timesteps: Expected number of time steps
-
-        Raises:
-            ValueError: If target data has wrong shape or type
-        """
         if not isinstance(target_data, jnp.ndarray):
             raise ValueError("Target data must be a JAX array")
-
         if target_data.ndim != 2:
             raise ValueError(f"Target data must be 2D, got shape {target_data.shape}")
-
         if target_data.shape != (expected_timesteps, expected_outputs):
             raise ValueError(
                 f"Target data shape mismatch: expected "
@@ -163,30 +139,12 @@ class BaseReservoirComputer(BaseModel):
 
 
 class ReservoirComputerFactory:
-    """Factory class for creating reservoir computer instances.
-
-    This factory allows for easy switching between different reservoir
-    implementations based on configuration parameters.
-    """
+    """Factory class for creating reservoir computer instances."""
 
     @staticmethod
     def create_reservoir(reservoir_type: str,
                         config: Union[Dict[str, Any], Sequence[Dict[str, Any]]],
                         backend: str = 'cpu') -> BaseReservoirComputer:
-        """Create a reservoir computer instance.
-
-        Args:
-            reservoir_type: Type of reservoir ('classical' or 'quantum')
-            config: Configuration object or dictionary
-            backend: Computation backend ('cpu', 'gpu', 'quantum')
-
-        Returns:
-            Configured reservoir computer instance
-
-        Raises:
-            ValueError: If unknown reservoir type is specified
-            ImportError: If required dependencies are not available
-        """
         if reservoir_type.lower() == 'classical':
             from .classical import ReservoirComputer
             return ReservoirComputer(config=config, backend=backend)

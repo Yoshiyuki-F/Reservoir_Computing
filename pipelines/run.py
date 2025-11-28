@@ -68,7 +68,10 @@ def run_pipeline(
     # 1. Data Preparation
     if train_X is None or train_y is None:
         print(f"Loading dataset: {config.get('dataset', 'sine_wave')}...")
-        raise ValueError("train_X and train_y must be provided explicitly for this pipeline.")
+        X, y = _load_dataset(config)
+        split_idx = int(0.8 * len(X))
+        train_X, test_X = X[:split_idx], X[split_idx:]
+        train_y, test_y = y[:split_idx], y[split_idx:]
 
     dataset_name, dataset_meta = _dataset_meta(config)
     preset_type = str(dataset_meta.get("type", "")).lower()

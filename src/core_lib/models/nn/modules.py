@@ -1,12 +1,44 @@
-"""Simple recurrent neural network model."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/nn/modules.py
+Pure flax.linen network definitions for FNN and SimpleRNN."""
 
 from __future__ import annotations
 
-from typing import Tuple, Union
+from typing import Sequence, Tuple, Union
 
-from jax import lax
 import flax.linen as nn
 import jax.numpy as jnp
+from jax import lax
+
+
+class FNN(nn.Module):
+    """Feed-forward network whose depth/width comes from layer_dims."""
+
+    layer_dims: Sequence[int]
+    return_hidden: bool = False
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray):
+        x = jnp.asarray(x, dtype=jnp.float32)
+        if x.ndim != 2:
+            raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
+        if len(self.layer_dims) < 2:
+            raise ValueError("layer_dims must include at least input and output dimensions")
+
+        hidden_output = None
+        target_dims = self.layer_dims[1:]  # skip input dimension; flax infers input shape
+        for idx, feat in enumerate(target_dims):
+            x = nn.Dense(features=feat)(x)
+            is_last = idx == len(target_dims) - 1
+            if not is_last:
+                x = nn.relu(x)
+                hidden_output = x
+
+        if hidden_output is None:
+            hidden_output = x
+
+        if self.return_hidden:
+            return x, hidden_output
+        return x
 
 
 class SimpleRNN(nn.Module):

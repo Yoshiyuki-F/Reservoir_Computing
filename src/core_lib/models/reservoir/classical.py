@@ -27,14 +27,9 @@ from core_lib.components import (
 )
 from core_lib.components.preprocess.aggregator import AggregationMode
 from .utils.spectral import spectral_radius_scale
-from core_lib.models.reservoir.training_classical import (
-    train_hidden_layer_regression,
-    predict_reservoir_regression,
-    train_hidden_layer_classification,
-    predict_reservoir_classification,
-)
+from core_lib.models.reservoir.training import train_reservoir, predict_reservoir
 
-from .base_reservoir import BaseReservoirComputer
+from .base import BaseReservoirComputer
 from .config import ReservoirConfig, parse_ridge_lambdas
 
 
@@ -177,7 +172,7 @@ class ReservoirComputer(BaseReservoirComputer):
         self.last_training_mse: Optional[float] = None
         self.classification_mode: bool = False
         self.num_classes: Optional[int] = None
-        self.washout_steps: int = 3
+        self._washout_steps: int = 3
         self.ridge_lambdas: Sequence[float] = parse_ridge_lambdas(params)
 
         # Readout Components
@@ -194,16 +189,25 @@ class ReservoirComputer(BaseReservoirComputer):
         self._readout_n_folds = int(params.get("readout_n_folds", 5))
         self._external_readout = readout
         if readout is not None:
-            self.readout = readout
+            self._readout = readout
         elif (backend or "").lower() == "gpu":
-            self.readout = RidgeReadoutJAX()
+            self._readout = RidgeReadoutJAX()
         else:
-            self.readout = RidgeReadoutNumpy(
+            self._readout = RidgeReadoutNumpy(
                 default_cv=self._readout_cv,
                 default_n_folds=self._readout_n_folds,
             )
         self.last_training_score: Optional[float] = None
         self.last_training_score_name: Optional[str] = None
+
+    # Interface adapters -------------------------------------------------
+    @property
+    def readout(self) -> BaseReadout:
+        return self._readout
+
+    @property
+    def washout_steps(self) -> int:
+        return self._washout_steps
 
     def _build_cell(self) -> NNXReservoirCell:
         cell_rngs = self.rngs.fork()
@@ -261,6 +265,27 @@ class ReservoirComputer(BaseReservoirComputer):
         # --- Parallelize over Batch ---
         batch_states = jax.vmap(run_single_sequence)(projected, seq_keys)
         return batch_states
+
+    def get_states(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Return raw states or aggregated features depending on input rank."""
+        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        if arr.ndim == 3:
+            # Batched sequences -> aggregated features per sequence
+            return self.encode_batch(arr)
+        # Single sequence -> full state trajectory
+        return self.run_hidden_layer(arr)
+
+    def transform_states(self, raw_states: jnp.ndarray, fit: bool = False) -> jnp.ndarray:
+        """Transform raw states into design features (scaler + polynomial expansion)."""
+        data = jnp.asarray(raw_states, dtype=jnp.float64)
+        if not self.use_preprocessing:
+            bias = jnp.ones((data.shape[0], 1), dtype=data.dtype)
+            return jnp.concatenate([data, bias], axis=1)
+        if fit:
+            normalized = self.scaler.fit_transform(data)
+            return self.design_builder.fit_transform(normalized)
+        normalized = self.scaler.transform(data)
+        return self.design_builder.transform(normalized)
 
     def run_hidden_layer(self, input_sequence: jnp.ndarray) -> jnp.ndarray:
         """Run reservoir on a single sequence (wrapper)."""
@@ -330,46 +355,27 @@ class ReservoirComputer(BaseReservoirComputer):
             (jnp.issubdtype(target_data.dtype, jnp.integer) or jnp.issubdtype(target_data.dtype, jnp.bool_))
         )
 
-        if is_classification_labels:
-            # --- Classification Mode ---
-            # If n_outputs is set in config (e.g. 10 for MNIST), use it.
-            # Otherwise, infer from data (max label + 1).
+        mode = "classification" if is_classification_labels else "regression"
+        num_classes = None
+        if mode == "classification":
             num_classes = int(self.n_outputs) if self.n_outputs > 1 else int(jnp.max(target_data) + 1)
 
-            train_hidden_layer_classification(
-                self,
-                input_data,
-                target_data,
-                ridge_lambdas=ridge_lambdas,
-                num_classes=num_classes
-            )
-        else:
-            # --- Regression Mode ---
-            train_hidden_layer_regression(
-                self,
-                input_data,
-                target_data,
-                ridge_lambdas=ridge_lambdas,
-            )
-
-        return {
-            "trained": True,
-            "classification_mode": self.classification_mode,
-            "best_lambda": self.best_ridge_lambda,
-            "score": self.last_training_score
-        }
+        return train_reservoir(
+            self,
+            input_data,
+            target_data,
+            mode=mode,  # type: ignore[arg-type]
+            ridge_lambdas=ridge_lambdas,
+            num_classes=num_classes,
+        )
 
     def predict(self, input_data: jnp.ndarray) -> jnp.ndarray:
         """
         Predicts outputs.
         Returns Logits (for classification) or Values (for regression) based on training mode.
         """
-        if self.classification_mode:
-            # Returns Logits (N, C)
-            return predict_reservoir_classification(self, sequences=input_data)
-        else:
-            # Returns Regression Values (N, T, O) or (N, O)
-            return predict_reservoir_regression(self, input_data)
+        mode = "classification" if self.classification_mode else "regression"
+        return predict_reservoir(self, input_data, mode=mode)  # type: ignore[arg-type]
 
     def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
         """
@@ -403,6 +409,7 @@ class ReservoirComputer(BaseReservoirComputer):
         self.last_training_score_name = None
         self.classification_mode = False
         self.num_classes = None
+        self.readout_logs = None
 
         # Reset Preprocessing
         self.scaler = FeatureScaler()
@@ -411,16 +418,16 @@ class ReservoirComputer(BaseReservoirComputer):
         # Reset Readout
         if self._external_readout is None:
             if (self.backend or "").lower() == "gpu":
-                self.readout = RidgeReadoutJAX()
+                self._readout = RidgeReadoutJAX()
             else:
-                self.readout = RidgeReadoutNumpy(
+                self._readout = RidgeReadoutNumpy(
                     default_cv=self._readout_cv,
                     default_n_folds=self._readout_n_folds,
                 )
         else:
-            self.readout = self._external_readout
-            if hasattr(self.readout, "weights"):
-                setattr(self.readout, "weights", None)
+            self._readout = self._external_readout
+            if hasattr(self._readout, "weights"):
+                setattr(self._readout, "weights", None)
 
         # Reset Weights (New Seed)
         self.rngs = nnx.Rngs(params=self.initial_random_seed, noise=self.initial_random_seed)

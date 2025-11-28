@@ -1,4 +1,5 @@
-"""Configuration models for the FNN pipelines."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/nn/config.py
+Configuration models for NN adapters (FNN/RNN)."""
 
 from __future__ import annotations
 
@@ -40,7 +41,7 @@ class FNNModelConfig(BaseModel):
 
 
 class FNNPipelineConfig(BaseModel):
-    """Complete configuration for FNN pipeline (b)."""
+    """Complete configuration for FNN pipeline."""
 
     model: FNNModelConfig
     training: FNNTrainingConfig
@@ -62,3 +63,14 @@ class FNNPipelineConfig(BaseModel):
     def weights_path(self) -> Path:
         return Path(self.training.weights_path)
 
+
+class SimpleRNNConfig(BaseModel):
+    """Architecture settings for SimpleRNN."""
+
+    input_dim: int = Field(..., gt=0)
+    hidden_dim: int = Field(..., gt=0)
+    output_dim: int = Field(..., gt=0)
+    return_sequences: bool = False
+    return_hidden: bool = False
+
+    model_config = ConfigDict(extra="forbid")
