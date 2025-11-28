@@ -15,6 +15,9 @@ from .generators import (
     generate_mackey_glass_data,
     generate_mnist_sequence_data,
 )
+from .registry import DatasetRegistry  # noqa: F401
+# Import loaders for side-effect registration
+from . import loaders  # noqa: F401
 
 __all__ = [
     "ExperimentDataset",
@@ -24,4 +27,5 @@ __all__ = [
     "generate_lorenz_data",
     "generate_mackey_glass_data",
     "generate_mnist_sequence_data",
+    "DatasetRegistry",
 ]

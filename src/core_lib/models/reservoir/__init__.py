@@ -2,6 +2,7 @@
 
 from .base_reservoir import BaseReservoirComputer, ReservoirComputerFactory
 from .classical import ReservoirComputer
+from .factory import ReservoirFactory
 try:
     from .gate_based_quantum import QuantumReservoirComputer
     QUANTUM_AVAILABLE = True
@@ -41,6 +42,7 @@ except ImportError:
 __all__ = [
     "BaseReservoirComputer",
     "ReservoirComputerFactory",
+    "ReservoirFactory",
     "ReservoirComputer",
     "QuantumReservoirComputer",
     "AnalogQuantumReservoir",

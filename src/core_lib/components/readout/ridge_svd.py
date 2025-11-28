@@ -167,4 +167,3 @@ class RidgeReadoutNumpy(BaseReadout):
             raise RuntimeError("Readout has not been fitted.")
         X_np = jnp.asarray(X, dtype=jnp.float64)
         return X_np @ self.weights
-

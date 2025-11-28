@@ -1,10 +1,5 @@
-"""Pipelines for training and using the classical ReservoirComputer.
-
-This module contains the end-to-end workflows (training, feature extraction,
-readout fitting) for the classical reservoir model. The ReservoirComputer
-class itself is responsible only for weight initialization and state
-propagation; all learning logic lives here.
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/reservoir/training_classical.py
+Training and prediction helpers for the classical reservoir computer."""
 
 from __future__ import annotations
 
@@ -20,12 +15,7 @@ def _build_design_matrix(
     fit: bool,
     washout: bool,
 ) -> jnp.ndarray:
-    """Construct a design matrix from raw reservoir features.
-
-    This mirrors the former `_build_design_matrix` method on ReservoirComputer
-    but is now implemented as a pipeline helper operating on the model
-    instance.
-    """
+    """Construct a design matrix from raw reservoir features."""
     data = features
     if washout and data.shape[0] > rc.washout_steps:
         data = data[rc.washout_steps :, ...]
@@ -50,11 +40,7 @@ def _train_readout(
     classification: bool,
     ridge_lambdas: Optional[Sequence[float]],
 ) -> None:
-    """Fit the readout on the given design matrix and targets.
-
-    Updates readout weights and logging fields on the ReservoirComputer
-    instance.
-    """
+    """Fit the readout on the given design matrix and targets."""
     result = rc.readout.fit(
         design_matrix,
         jnp.asarray(target_data, dtype=jnp.float64),
@@ -80,14 +66,7 @@ def train_hidden_layer_regression(
     target_data: jnp.ndarray,
     ridge_lambdas: Optional[Sequence[float]] = None,
 ) -> None:
-    """Train reservoir readout for regression using Ridge regression.
-
-    Args:
-        rc: ReservoirComputer instance.
-        input_data: Input series of shape (time_steps, n_inputs).
-        target_data: Target series of shape (time_steps, n_outputs).
-        ridge_lambdas: Candidate ridge strengths, overrides config if given.
-    """
+    """Train reservoir readout for regression using Ridge regression."""
     input_data = input_data.astype(jnp.float64)
     target_data = target_data.astype(jnp.float64)
 
@@ -118,22 +97,17 @@ def train_hidden_layer_regression(
         classification=False,
         ridge_lambdas=ridge_lambdas,
     )
-    rc.classification_mode = False
-    rc.num_classes = None
-    rc.trained = True
 
 
-def predict_reservoir_regression(
-    rc: Any,
-    input_data: jnp.ndarray,
-) -> jnp.ndarray:
+def predict_reservoir_regression(rc: Any, input_data: jnp.ndarray) -> jnp.ndarray:
     """Run regression prediction using a trained reservoir readout."""
     rc._ensure_trained()
-
     if rc.W_out is None:
         raise ValueError("Model has not been trained. Call train() first.")
 
-    input_data = input_data.astype(jnp.float64)
+    input_data = jnp.asarray(input_data, dtype=jnp.float64)
+    rc._validate_input_data(input_data, rc.n_inputs)
+
     reservoir_states = rc.run_hidden_layer(input_data)
     design_matrix = _build_design_matrix(
         rc,
@@ -141,7 +115,7 @@ def predict_reservoir_regression(
         fit=False,
         washout=True,
     )
-    predictions = rc.readout.predict(design_matrix)
+    predictions = design_matrix @ rc.W_out
     return jnp.asarray(predictions, dtype=jnp.float64)
 
 
@@ -154,35 +128,32 @@ def train_hidden_layer_classification(
     return_features: bool = False,
 ) -> Optional[jnp.ndarray]:
     """Train reservoir readout for classification."""
-    features = rc._encode_sequences(
-        sequences,
-        desc="[TRAIN] Encoding sequences",
-        leave=True,
-    )
+    labels = labels.astype(jnp.int32)
+    target_one_hot = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
+    target_one_hot = target_one_hot.at[jnp.arange(labels.shape[0]), labels].set(1.0)
+
+    reservoir_states = rc.encode_batch(sequences)
     design_matrix = _build_design_matrix(
         rc,
-        features,
+        reservoir_states,
         fit=True,
         washout=False,
     )
 
-    labels = labels.astype(jnp.int32)
-    targets = jnp.zeros((labels.shape[0], num_classes), dtype=jnp.float64)
-    targets = targets.at[jnp.arange(labels.shape[0]), labels].set(1.0)
-
     _train_readout(
         rc,
         design_matrix,
-        targets,
+        target_one_hot,
         classification=True,
         ridge_lambdas=ridge_lambdas,
     )
+
     rc.classification_mode = True
     rc.num_classes = num_classes
     rc.trained = True
 
     if return_features:
-        return features
+        return reservoir_states
     return None
 
 
@@ -194,35 +165,25 @@ def predict_reservoir_classification(
     progress_desc: Optional[str] = None,
 ) -> jnp.ndarray:
     """Predict classification logits using a trained reservoir."""
+    del progress_desc  # placeholder for future logging
     if not rc.classification_mode or rc.num_classes is None:
-        raise ValueError(
-            "Classification mode not enabled. "
-            "Call train_hidden_layer_classification first."
-        )
+        raise ValueError("Classification mode not enabled. Call train_classification first.")
     if rc.W_out is None:
         raise ValueError("Model has not been trained.")
-
     if precomputed_features is None and sequences is None:
         raise ValueError("Either sequences or precomputed_features must be provided.")
     if precomputed_features is not None and sequences is not None:
         raise ValueError("Specify only one of sequences or precomputed_features.")
 
-    phase_desc = progress_desc or "Encoding eval sequences"
-    desc_label = f"[PREDICT] {phase_desc}"
     if precomputed_features is not None:
         features = jnp.asarray(precomputed_features, dtype=jnp.float64)
     else:
-        features = rc._encode_sequences(
-            sequences,  # type: ignore[arg-type]
-            desc=desc_label,
-            leave=True,
-        )
+        features = rc.encode_batch(sequences)
     design_matrix = _build_design_matrix(
         rc,
         features,
         fit=False,
         washout=False,
     )
-    logits = rc.readout.predict(design_matrix)
+    logits = design_matrix @ rc.W_out
     return jnp.asarray(logits, dtype=jnp.float64)
-

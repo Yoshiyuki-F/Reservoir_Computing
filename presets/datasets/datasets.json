@@ -2,6 +2,7 @@
   "sine_wave": {
     "name": "sine_wave",
     "description": "Multi-frequency sine wave composite",
+    "type": "regression",
     "time_steps": 2000,
     "dt": 0.01,
     "noise_level": 0.05,
@@ -19,6 +20,7 @@
   "lorenz": {
     "name": "lorenz",
     "description": "Lorenz attractor chaotic time series",
+    "type": "regression",
     "time_steps": 3000,
     "dt": 0.01,
     "noise_level": 0.01,
@@ -36,6 +38,7 @@
   "mackey_glass": {
     "name": "mackey_glass",
     "description": "Mackey-Glass chaotic time series",
+    "type": "regression",
     "time_steps": 1000,
     "warmup_steps": 100,
     "dt": 0.1,
@@ -54,6 +57,7 @@
   "mnist": {
     "name": "mnist",
     "description": "MNIST digit classification",
+    "type" : "classification",
     "time_steps": 28,
     "dt": 1.0,
     "noise_level": 0.0,

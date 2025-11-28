@@ -1,5 +1,5 @@
 # Repository Guidelines
-
+ls --recursive --ignore='.*' --ignore='__pycache__' --ignore='node_modules' --ignore='*.lock' --ignore='package*.json'
 ## Project Structure & Module Organization
 - Core library: `src/core_lib/` (pure model + data logic).
 - Application entrypoints: `cli/` (e.g. `cli/main.py` for `reservoir-cli`).
@@ -59,49 +59,3 @@
 
 ### JAXでの実装変更案
 クラスのメソッド構成を想定し、呼び出し元（`__call__` や forward に相当）と、修正された `_reservoir_step` を記述する。
-
-#### 修正後の `_reservoir_step`
-```python
-def _reservoir_step(self, carry, projected_input):
-    """
-    reservoirの1ステップを実行します（JAX scan用）。
-
-    Args:
-        carry: (state, key) のタプル
-        projected_input: W_in @ u(t) 済みのベクトル (shape: n_hidden_layer)
-    """
-    state, key = carry
-    key, subkey = random.split(key)
-
-    noise = random.normal(subkey, (self.n_hidden_layer,), dtype=jnp.float64) * self.noise_level
-    res_contribution = jnp.dot(self.W_res, state)
-    input_contribution = projected_input
-
-    pre_activation = res_contribution + input_contribution + noise
-    new_state = (1 - self.alpha) * state + self.alpha * jnp.tanh(pre_activation)
-
-    return (new_state, key), new_state
-```
-
-#### 呼び出し元の変更イメージ（W_in stageの追加）
-```python
-def __call__(self, input_sequence, key):
-    """
-    Args:
-        input_sequence: (Time, N_in) 例: (28, 28)
-        key: PRNGKey
-    """
-    # --- W_in stage (事前計算) ---
-    projected_inputs = jnp.dot(input_sequence, self.W_in.T)
-
-    init_state = jnp.zeros((self.n_hidden_layer,), dtype=jnp.float64)
-    init_carry = (init_state, key)
-
-    (final_state, _), states = jax.lax.scan(
-        self._reservoir_step,
-        init_carry,
-        projected_inputs
-    )
-
-    return states
-```

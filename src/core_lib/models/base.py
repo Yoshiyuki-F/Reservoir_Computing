@@ -1,7 +1,8 @@
-"""Base abstractions for models."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/base.py
+Base abstractions for models."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import jax.numpy as jnp
 
@@ -10,7 +11,7 @@ class BaseModel(ABC):
     """Abstract base class for all models."""
 
     @abstractmethod
-    def train(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, Any]:
+    def train(self, X: jnp.ndarray, y: jnp.ndarray) -> Optional[Dict[str, Any]]:
         """Train the model.
 
         Args:
@@ -18,7 +19,8 @@ class BaseModel(ABC):
             y: Target data
 
         Returns:
-            Training metrics and state
+            Training metrics/state if available. Can be None for models that only
+            expose inference metrics.
         """
         pass
 

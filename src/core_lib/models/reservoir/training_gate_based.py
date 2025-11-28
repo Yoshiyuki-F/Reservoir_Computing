@@ -1,10 +1,4 @@
-"""Pipelines for training and using the gate-based QuantumReservoirComputer.
-
-This module contains the end-to-end workflows (training, feature extraction,
-readout fitting) for the gate-based quantum reservoir model. The
-QuantumReservoirComputer class itself is responsible only for quantum state
-evolution and feature construction; all learning logic lives here.
-"""
+"""Training and prediction helpers for the gate-based quantum reservoir."""
 
 from __future__ import annotations
 
@@ -19,11 +13,7 @@ def train_quantum_reservoir_regression(
     target_data: jnp.ndarray,
     ridge_lambdas: Optional[Sequence[float]] = None,
 ) -> None:
-    """Train gate-based quantum reservoir readout for regression.
-
-    Mirrors QuantumReservoirComputer.train but is implemented as a pipeline
-    helper that operates on the model instance.
-    """
+    """Train gate-based quantum reservoir readout for regression."""
     rc._validate_input_data(input_data, rc.n_inputs)  # type: ignore[attr-defined]
     rc._validate_target_data(  # type: ignore[attr-defined]
         target_data,
@@ -99,6 +89,7 @@ def predict_quantum_reservoir_classification(
     precomputed_features: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """Predict classification logits using a trained quantum reservoir."""
+    del progress_desc, progress_position  # placeholders
     if not rc.classification_mode or rc.num_classes is None:
         raise ValueError(
             "Classification mode not enabled. "
@@ -115,9 +106,7 @@ def predict_quantum_reservoir_classification(
     if precomputed_features is not None:
         features = jnp.asarray(precomputed_features, dtype=jnp.float64)
     else:
-        _ = progress_desc, progress_position  # placeholders for future logging
         features = rc._encode_sequences(sequences)  # type: ignore[arg-type,attr-defined]
     design_matrix = rc._prepare_design_matrix(features, fit=False)  # type: ignore[attr-defined]
     logits = design_matrix @ rc.W_out
     return jnp.asarray(logits, dtype=jnp.float64)
-

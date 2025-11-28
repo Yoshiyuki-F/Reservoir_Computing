@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/core_lib/models/reservoir/base_reservoir.py
 Abstract base class for Reservoir Computing implementations.
 
 This module defines the common interface for both classical and quantum
@@ -8,6 +8,8 @@ reservoir computers, enabling unified usage and experimentation.
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, Optional, Sequence
 
+from core_lib.models.base import BaseModel
+
 from core_lib.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
@@ -16,7 +18,7 @@ import jax.numpy as jnp
 from jax import Array
 
 
-class BaseReservoirComputer(ABC):
+class BaseReservoirComputer(BaseModel):
     """Abstract base class for all reservoir computer implementations.
 
     This class defines the essential interface that both classical and quantum
@@ -54,6 +56,31 @@ class BaseReservoirComputer(ABC):
     def predict(self, input_data: Array) -> Array:
         """Generate predictions for the given input data."""
         self._ensure_trained()
+
+    def evaluate(self, input_data: Array, target_data: Array) -> Dict[str, float]:
+        """Compute simple regression metrics (MSE/MAE)."""
+        self._ensure_trained()
+        if not hasattr(self, "n_inputs") or not hasattr(self, "n_outputs"):
+            raise AttributeError(
+                "Subclasses must define n_inputs and n_outputs to use evaluate()."
+            )
+
+        self._validate_input_data(input_data, int(self.n_inputs))
+        self._validate_target_data(
+            target_data,
+            expected_outputs=int(self.n_outputs),
+            expected_timesteps=input_data.shape[0],
+        )
+
+        predictions = self.predict(input_data)
+        if predictions.shape != target_data.shape:
+            raise ValueError(
+                f"Prediction shape {predictions.shape} does not match target shape {target_data.shape}"
+            )
+
+        mse = float(jnp.mean((predictions - target_data) ** 2))
+        mae = float(jnp.mean(jnp.abs(predictions - target_data)))
+        return {"mse": mse, "mae": mae}
 
     @abstractmethod
     def get_reservoir_info(self) -> Dict[str, Any]:

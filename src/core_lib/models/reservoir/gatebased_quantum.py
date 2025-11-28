@@ -22,7 +22,7 @@ import jax.numpy as jnp
 
 from .base_reservoir import BaseReservoirComputer
 from .config import QuantumReservoirConfig, parse_ridge_lambdas
-from pipelines.gate_based_quantum_pipeline import (
+from core_lib.models.reservoir.training_gate_based import (
     train_quantum_reservoir_regression,
     predict_quantum_reservoir_regression,
     train_quantum_reservoir_classification,
