@@ -6,13 +6,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
+import jax
 import jax.numpy as jnp
 
 # Core Imports
 from reservoir.models import FlaxModelFactory
-from reservoir.models.reservoir.factory import ReservoirFactory
 from pipelines.generic_runner import UniversalPipeline
 from reservoir.data.registry import DatasetRegistry
+from reservoir.components import FeatureScaler, DesignMatrixBuilder, RidgeRegression
+from reservoir.models.orchestrator import ReservoirModel
+from reservoir.models.reservoir.classical import ClassicalReservoir
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
@@ -74,6 +77,17 @@ def run_pipeline(
         train_y, test_y = y[:split_idx], y[split_idx:]
 
     dataset_name, dataset_meta = _dataset_meta(config)
+    if dataset_name in {"mnist", "fashion_mnist"}:
+        num_classes = int(dataset_meta.get("n_output", 10))
+        print(f"Converting labels to one-hot vectors (classes={num_classes})...")
+        train_y = jax.nn.one_hot(train_y.astype(int), num_classes)
+        test_y = jax.nn.one_hot(test_y.astype(int), num_classes)
+        print("Normalizing image data to [0, 1] range (div by 255)...")
+        train_X = train_X.astype(jnp.float32) / 255.0
+        if test_X is not None:
+            test_X = test_X.astype(jnp.float32) / 255.0
+        config["use_preprocessing"] = False
+
     preset_type = str(dataset_meta.get("type", "")).lower()
     override_cls = config.get("is_classification")
     if override_cls is not None:
@@ -136,27 +150,37 @@ def run_pipeline(
             model_cfg.setdefault("return_hidden", False)
         factory_cfg = {"type": model_type, "model": model_cfg, "training": training_cfg}
         model = FlaxModelFactory.create_model(factory_cfg)
-    elif model_type in ["reservoir", "esn", "classical", "quantum_analog", "quantum_gate"]:
-        reservoir_type = config.get("reservoir_type") or ("classical" if model_type == "reservoir" else model_type)
-        reservoir_cfg = config.get("reservoir_config", config)
-        if isinstance(reservoir_cfg, dict):
-            params = reservoir_cfg.setdefault("params", {})
-            params.setdefault("n_inputs", int(input_shape[-1]))
-            params.setdefault("n_hidden_layer", int(config.get("hidden_dim", params.get("n_hidden_layer", 100))))
-            if "n_outputs" not in params:
-                params["n_outputs"] = int(default_output_dim)
-        # Reservoir auto-detects classification from data, no guard needed.
-        model = ReservoirFactory.create(
-            reservoir_cfg,
-            input_shape=input_shape,
-            reservoir_type=reservoir_type,
-            backend=config.get("backend"),
+    elif model_type in ["reservoir", "esn", "classical"]:
+        node_cfg = config.get("reservoir", {})
+        node = ClassicalReservoir(
+            n_inputs=int(input_shape[-1]),
+            n_units=int(node_cfg.get("n_units", config.get("hidden_dim", 100))),
+            input_scale=float(node_cfg.get("input_scale", 0.6)),
+            spectral_radius=float(node_cfg.get("spectral_radius", 1.3)),
+            leak_rate=float(node_cfg.get("leak_rate", 0.2)),
+            connectivity=float(node_cfg.get("connectivity", 0.1)),
+            noise_rc=float(node_cfg.get("noise_rc", 0.0)),
+            bias_scale=float(node_cfg.get("bias_scale", 1.0)),
+            seed=int(node_cfg.get("seed", config.get("random_seed", 42))),
         )
+        readout_cfg = config.get("readout", {})
+        readout = RidgeRegression(
+            alpha=float(readout_cfg.get("alpha", 1e-3)),
+            use_intercept=bool(readout_cfg.get("fit_intercept", True)),
+        )
+        preprocess = None
+        if config.get("use_preprocessing", True):
+            print("Initializing FeatureScaler (StandardScaler)...")
+            scaler = FeatureScaler()
+            preprocess = scaler
+        readout_mode = "flatten" if is_classification else "auto"
+        model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
     # 3. Execution
-    runner = UniversalPipeline(model, config.get("save_path"))
+    metric = "accuracy" if dataset_name in {"mnist", "fashion_mnist"} else "mse"
+    runner = UniversalPipeline(model, config.get("save_path"), metric=metric)
     results = runner.run(train_X, train_y, test_X, test_y)
 
     # 4. Persistence

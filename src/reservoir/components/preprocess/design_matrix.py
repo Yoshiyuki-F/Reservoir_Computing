@@ -1,12 +1,14 @@
-"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/components/preprocess/design_matrix.py
-Design matrix expansion utilities."""
-
+"""
+src/reservoir/components/preprocess/design_matrix.py
+Design matrix expansion utilities.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional
 
 import jax.numpy as jnp
+from reservoir.core.interfaces import Transformer
 
 PolyMode = Literal["none", "square", "poly_k"]
 
@@ -16,7 +18,7 @@ class DesignState:
     keep_mask: Optional[jnp.ndarray] = None
 
 
-class DesignMatrixBuilder:
+class DesignMatrixBuilder(Transformer):
     """Constructs expanded feature matrices with polynomial terms and bias."""
 
     def __init__(
@@ -33,7 +35,7 @@ class DesignMatrixBuilder:
         self.std_threshold = float(std_threshold)
         self.state = DesignState()
 
-    def fit(self, features) -> "DesignMatrixBuilder":
+    def fit(self, features: jnp.ndarray) -> "DesignMatrixBuilder":
         arr = jnp.asarray(features, dtype=jnp.float64)
         if arr.ndim != 2:
             raise ValueError(f"Design builder expects 2D input, got {arr.shape}")
@@ -47,10 +49,12 @@ class DesignMatrixBuilder:
         self.state.keep_mask = keep
         return self
 
-    def transform(self, features):
+    def transform(self, features: jnp.ndarray) -> jnp.ndarray:
         if self.state.keep_mask is None:
             raise RuntimeError("DesignMatrixBuilder has not been fitted.")
         arr = jnp.asarray(features, dtype=jnp.float64)
+        if arr.ndim != 2:
+            raise ValueError(f"Design builder expects 2D input, got {arr.shape}")
         arr = arr[:, self.state.keep_mask]
 
         expanded = self._apply_polynomial_expansion(arr)
@@ -59,7 +63,7 @@ class DesignMatrixBuilder:
             expanded = jnp.concatenate([expanded, bias], axis=1)
         return expanded
 
-    def fit_transform(self, features):
+    def fit_transform(self, features: jnp.ndarray) -> jnp.ndarray:
         return self.fit(features).transform(features)
 
     def _apply_polynomial_expansion(self, features: jnp.ndarray) -> jnp.ndarray:
@@ -97,4 +101,3 @@ class DesignMatrixBuilder:
         if keep is not None:
             builder.state.keep_mask = jnp.asarray(keep, dtype=bool)
         return builder
-
