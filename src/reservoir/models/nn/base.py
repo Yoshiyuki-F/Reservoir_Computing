@@ -11,7 +11,21 @@ import jax.numpy as jnp
 import optax
 from flax.training import train_state
 
-from reservoir.models.base import BaseModel
+
+class BaseModel(ABC):
+    """Minimal training/evaluation contract shared by Flax adapters."""
+
+    @abstractmethod
+    def train(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, Any]:
+        ...
+
+    @abstractmethod
+    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        ...
+
+    @abstractmethod
+    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+        ...
 
 
 class BaseFlaxModel(BaseModel, ABC):

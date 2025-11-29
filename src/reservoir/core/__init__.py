@@ -1,23 +1,5 @@
-"""Model-agnostic configuration system."""
+"""Core protocol interfaces for reservoir components."""
 
-from .config import (
-    ModelConfig,
-    DataGenerationConfig,
-    TrainingConfig,
-    DemoConfig,
-    ExperimentConfig,
-    PreprocessingConfig,
-)
+from .interfaces import ReservoirNode, ReadoutModule, Transformer
 
-from .composer import ConfigComposer, ComposedConfig
-
-__all__ = [
-    "ModelConfig",
-    "DataGenerationConfig",
-    "TrainingConfig",
-    "DemoConfig",
-    "ExperimentConfig",
-    "PreprocessingConfig",
-    "ConfigComposer",
-    "ComposedConfig",
-]
+__all__ = ["ReservoirNode", "ReadoutModule", "Transformer"]

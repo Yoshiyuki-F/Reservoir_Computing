@@ -29,7 +29,7 @@ class DatasetRegistry:
     @classmethod
     def get(cls, name: str) -> DatasetLoaderFn:
         """Fetch a registered loader, resolving simple aliases."""
-        key = name.lower()
+        key = name.lower().replace("-", "_")
         # Alias handling
         if key in {"sine", "sw"}:
             key = "sine_wave"

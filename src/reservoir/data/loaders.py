@@ -7,8 +7,8 @@ from typing import Dict, Any, Tuple
 
 import jax.numpy as jnp
 
-from reservoir.core import DataGenerationConfig
-from reservoir.data.generators import generate_sine_data, generate_mnist_sequence_data
+from reservoir.data.config import DataGenerationConfig
+from reservoir.data.generators import generate_sine_data, generate_mnist_sequence_data, generate_mackey_glass_data
 from reservoir.data.registry import DatasetRegistry
 
 
@@ -71,3 +71,29 @@ def load_mnist(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     X = jnp.concatenate([train_arr, test_arr], axis=0)
     y = jnp.concatenate([jnp.asarray(train_labels), jnp.asarray(test_labels)], axis=0)
     return X, y
+
+
+@DatasetRegistry.register("mackey_glass")
+def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Generate Mackey-Glass samples (N, 1, 1) compatible with sequence models."""
+    params = config.get("data_params", {}) or {}
+    data_cfg = DataGenerationConfig(
+        name="mackey_glass",
+        time_steps=int(params.get("time_steps", 2000)),
+        dt=float(params.get("dt", 0.1)),
+        noise_level=float(params.get("noise_level", 0.0)),
+        params={
+            "tau": params.get("tau", 17),
+            "beta": params.get("beta", 0.2),
+            "gamma": params.get("gamma", 0.1),
+            "n": params.get("n", 10),
+            "initial_value": params.get("initial_value", 1.2),
+            "warmup_steps": params.get("warmup_steps", 100),
+        },
+    )
+    X, y = generate_mackey_glass_data(data_cfg)
+    X_arr = jnp.asarray(X, dtype=jnp.float32)
+    y_arr = jnp.asarray(y, dtype=jnp.float32)
+    if X_arr.ndim == 2:
+        X_arr = X_arr[:, None, :]
+    return X_arr, y_arr

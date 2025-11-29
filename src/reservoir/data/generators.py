@@ -22,7 +22,7 @@ from reservoir.utils import ensure_x64_enabled
 
 ensure_x64_enabled()
 
-from reservoir.core import DataGenerationConfig
+from reservoir.data.config import DataGenerationConfig
 
 
 def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:

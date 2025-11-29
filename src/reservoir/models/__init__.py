@@ -1,6 +1,5 @@
 """Models package."""
 
-from .base import BaseModel, ModelFactory, BaseRunner
 from .factories import FlaxModelFactory
 from .nn.base import BaseFlaxModel
 from .nn.modules import FNN, SimpleRNN
@@ -14,9 +13,6 @@ from .nn.config import (
 )
 
 __all__ = [
-    "BaseModel",
-    "ModelFactory",
-    "BaseRunner",
     "SimpleRNN",
     "SimpleRNNConfig",
     "FNN",

@@ -13,7 +13,7 @@ import jax.numpy as jnp
 from reservoir.models import FlaxModelFactory
 from pipelines.generic_runner import UniversalPipeline
 from reservoir.data.registry import DatasetRegistry
-from reservoir.components import FeatureScaler, DesignMatrixBuilder, RidgeRegression
+from reservoir.components import FeatureScaler, DesignMatrix, RidgeRegression, TransformerSequence
 from reservoir.models.orchestrator import ReservoirModel
 from reservoir.models.reservoir.classical import ClassicalReservoir
 
@@ -89,6 +89,8 @@ def run_pipeline(
         config["use_preprocessing"] = False
 
     preset_type = str(dataset_meta.get("type", "")).lower()
+    if not preset_type:
+        preset_type = "regression"
     override_cls = config.get("is_classification")
     if override_cls is not None:
         is_classification = bool(override_cls)
@@ -121,9 +123,9 @@ def run_pipeline(
 
     # Determine default output dimension from presets/data
     if meta_n_outputs is None:
-        raise ValueError(
-            "Classification tasks require 'n_output' to be specified in dataset presets."
-        )
+        print("Dataset metadata missing 'n_output'; defaulting to regression with inferred output dim 1.")
+        meta_n_outputs = 1
+        is_classification = False
     default_output_dim = int(meta_n_outputs)
 
     # 2. Model Creation
@@ -168,11 +170,16 @@ def run_pipeline(
             alpha=float(readout_cfg.get("alpha", 1e-3)),
             use_intercept=bool(readout_cfg.get("fit_intercept", True)),
         )
-        preprocess = None
-        if config.get("use_preprocessing", True):
-            print("Initializing FeatureScaler (StandardScaler)...")
-            scaler = FeatureScaler()
-            preprocess = scaler
+        preprocess_steps = []
+        if dataset_name not in {"mnist", "fashion_mnist"} and config.get("use_preprocessing", True):
+            print("Adding FeatureScaler to preprocessing pipeline...")
+            preprocess_steps.append(FeatureScaler())
+        if config.get("use_design_matrix", False):
+            degree = int(config.get("poly_degree", 2))
+            include_bias = bool(config.get("poly_bias", False))
+            print(f"Adding DesignMatrix (degree={degree}, bias={include_bias})...")
+            preprocess_steps.append(DesignMatrix(degree=degree, include_bias=include_bias))
+        preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
         readout_mode = "flatten" if is_classification else "auto"
         model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
     else:

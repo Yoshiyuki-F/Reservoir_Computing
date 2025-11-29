@@ -1,6 +1,5 @@
-"""Readout components shared across models."""
+"""Readout implementations."""
 
-from .base import BaseReadout, ReadoutResult  # noqa: F401
-from .ridge_svd import RidgeReadoutNumpy  # noqa: F401
+from .ridge import RidgeRegression
 
-__all__ = ["BaseReadout", "ReadoutResult", "RidgeReadoutNumpy"]
+__all__ = ["RidgeRegression"]

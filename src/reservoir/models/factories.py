@@ -5,13 +5,13 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .base import ModelFactory, BaseModel
+from .nn.base import BaseFlaxModel as BaseModel
 from .nn.fnn import FNNModel
 from .nn.rnn import RNNModel
 from .nn.config import FNNModelConfig, SimpleRNNConfig
 
 
-class FlaxModelFactory(ModelFactory):
+class ModelFactory:
     """Create BaseFlaxModel instances (FNN/RNN) from config dictionaries."""
 
     @staticmethod
@@ -45,3 +45,11 @@ class FlaxModelFactory(ModelFactory):
             "Expected 'fnn' or 'rnn', got "
             f"{model_type!r}"
         )
+
+
+class FlaxModelFactory(ModelFactory):
+    """Backward-compatible alias for callers expecting FlaxModelFactory.create_model."""
+
+    @staticmethod
+    def create_model(config: Dict[str, Any]) -> BaseModel:
+        return ModelFactory.create_model(config)
