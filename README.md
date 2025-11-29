@@ -84,7 +84,7 @@ uv run poe cli-gpu -- \
   --model fnn_pretrained_b_dash 
 ```
 
-`--dataset` / `--model` は `src/core_lib/core/identifiers.py` の `Dataset` / `Pipeline` Enum で定義されている識別子の `value` と一致します。  
+`--dataset` / `--model` は `src/reservoir/core/identifiers.py` の `Dataset` / `Pipeline` Enum で定義されている識別子の `value` と一致します。  
 古典的リザーバではデフォルトで「Raw」前処理（生のリザーバ状態を使用）が有効になっています。  
 スケーラ＋設計行列を使いたい場合は `--preprocessing default` を指定してください（`raw_standard` との切り替えは CLI が自動で行います）。
 
@@ -123,7 +123,7 @@ uv run poe cli-gpu -- sine cr 600
 
 ```
 .
-├── src/core_lib/               # メインPythonパッケージ
+├── src/reservoir/               # メインPythonパッケージ
 │   ├── cli.py                  # コマンドラインインターフェース
 │   ├── core/                   # 設定・識別子・コンポーザ
 │   ├── models/                 # 各種モデル定義
@@ -151,7 +151,7 @@ uv run poe cli-gpu -- sine cr 600
 
 ## モジュール構造詳細
 
-### コアモジュール（`src/core_lib/` 配下）
+### コアモジュール（`src/reservoir/` 配下）
 
 #### `reservoir_computer.py`
 - **ReservoirComputer**: メインのReservoir Computingクラス
@@ -177,7 +177,7 @@ uv run poe cli-gpu -- sine cr 600
 - **normalize_data**: データ正規化（0-1スケーリング）
 - **denormalize_data**: 正規化解除
 
-### ユーティリティモジュール（`src/core_lib/utils/`）
+### ユーティリティモジュール（`src/reservoir/utils/`）
 
 #### `gpu_utils.py`
 - **check_gpu_available**: GPU利用可能性確認

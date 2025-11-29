@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import jax.numpy as jnp
 
-from core_lib.models import BaseModel
+from reservoir.models import BaseModel
 from pipelines.run import run_pipeline
 
 

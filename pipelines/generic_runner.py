@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 import jax.numpy as jnp
 
-from core_lib.models import BaseModel
+from reservoir.models import BaseModel
 
 
 class UniversalPipeline:

@@ -1,7 +1,7 @@
 """Data pipelines package.
 
 Top-level modules focus on experiment workflows (classical/quantum/FNN).
-Generic helpers live under `core_lib.utils` and `core_lib.data`.
+Generic helpers live under `reservoir.utils` and `reservoir.data`.
 Imports here are lazy to avoid circular dependencies with models that
 depend on individual pipeline modules.
 """
@@ -24,7 +24,7 @@ def __getattr__(name):
 
         return UniversalPipeline
     if name in {"prepare_experiment_data", "ExperimentDataset"}:
-        from core_lib.data.data_preparation import prepare_experiment_data, ExperimentDataset
+        from reservoir.data.data_preparation import prepare_experiment_data, ExperimentDataset
 
         return {"prepare_experiment_data": prepare_experiment_data, "ExperimentDataset": ExperimentDataset}[
             name

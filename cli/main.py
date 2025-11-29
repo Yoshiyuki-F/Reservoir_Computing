@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-from core_lib.utils import check_gpu_available
+from reservoir.utils import check_gpu_available
 from pipelines import run_pipeline
 
 

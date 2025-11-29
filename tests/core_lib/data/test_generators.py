@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from core_lib.core.config import DataGenerationConfig
-from core_lib.data.generators import generate_mackey_glass_data
+from reservoir.core.config import DataGenerationConfig
+from reservoir.data.generators import generate_mackey_glass_data
 
 
 @pytest.mark.parametrize("warmup_a, warmup_b", [(0, 100), (0, 500)])

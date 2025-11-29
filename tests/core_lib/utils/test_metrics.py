@@ -4,7 +4,7 @@
 """
 import jax.numpy as jnp
 import pytest
-from core_lib.utils import calculate_mse, calculate_mae
+from reservoir.utils import calculate_mse, calculate_mae
 
 
 class TestCalculateMSE:

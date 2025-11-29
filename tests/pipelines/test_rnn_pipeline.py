@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from core_lib.models import FlaxModelFactory
+from reservoir.models import FlaxModelFactory
 
 
 def test_run_rnn_pipeline_regression():

@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from core_lib.models.factories import FlaxModelFactory
+from reservoir.models.factories import FlaxModelFactory
 from pipelines.generic_runner import UniversalPipeline
 
 

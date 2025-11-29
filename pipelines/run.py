@@ -9,13 +9,13 @@ from typing import Dict, Any, Optional, Tuple
 import jax.numpy as jnp
 
 # Core Imports
-from core_lib.models import FlaxModelFactory
-from core_lib.models.reservoir.factory import ReservoirFactory
+from reservoir.models import FlaxModelFactory
+from reservoir.models.reservoir.factory import ReservoirFactory
 from pipelines.generic_runner import UniversalPipeline
-from core_lib.data.registry import DatasetRegistry
+from reservoir.data.registry import DatasetRegistry
 
 # Ensure dataset loaders are registered
-from core_lib.data import loaders as _data_loaders  # noqa: F401
+from reservoir.data import loaders as _data_loaders  # noqa: F401
 
 _DATASET_PRESETS = Path(__file__).resolve().parents[1] / "presets" / "datasets" / "datasets.json"
 
