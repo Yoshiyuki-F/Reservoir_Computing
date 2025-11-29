@@ -8,11 +8,8 @@ import numpy as np
 import jax.numpy as jnp
 
 try:
-    import torch
-    from pipelines.datasets.mnist_loader import (
-        get_mnist_datasets,
-        image_to_sequence,
-    )
+    import torch  # type: ignore
+    from reservoir.data.mnist_loader import get_mnist_datasets, image_to_sequence
 except ModuleNotFoundError:  # pragma: no cover - torch optional
     torch = None
     get_mnist_datasets = None  # type: ignore
@@ -39,22 +36,8 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
         tuple: (入力データ, 目標データ) のペア
             - 入力データ: 形状 (time_steps-1, 1) の現在値
             - 目標データ: 形状 (time_steps-1, 1) の次時刻値
-            
-    Examples:
-        単一周波数のサイン波:
-        
-        >>> from reservoir.core import DataGenerationConfig
-        >>> config = DataGenerationConfig(
-        ...     name="sine_wave",
-        ...     time_steps=1000,
-        ...     dt=0.01,
-        ...     noise_level=0.05,
-        ...     params={"frequencies": [1.0]}
-        ... )
-        >>> inputs, targets = generate_sine_data(config)
-        >>> print(inputs.shape)
-        (999, 1)
     """
+
     t = np.arange(config.time_steps, dtype=np.float64) * config.dt
     
     # 複数の周波数のサインwave合成
@@ -96,25 +79,7 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
         tuple: (入力データ, 目標データ) のペア
             - 入力データ: 形状 (time_steps-1, 3) の現在状態 [x, y, z]
             - 目標データ: 形状 (time_steps-1, 3) の次時刻状態
-            
-    Examples:
-        標準的なLorenzパラメータでカオス時系列生成:
-        
-        >>> from reservoir.core import DataGenerationConfig
-        >>> config = DataGenerationConfig(
-        ...     name="lorenz",
-        ...     time_steps=5000,
-        ...     dt=0.01,
-        ...     noise_level=0.01,
-        ...     params={
-        ...         "sigma": 10.0,
-        ...         "rho": 28.0,
-        ...         "beta": 8.0/3.0
-        ...     }
-        ... )
-        >>> inputs, targets = generate_lorenz_data(config)
-        >>> print(inputs.shape)
-        (4999, 3)
+
         
     Note:
         数値積分にはオイラー法を使用。より高精度が必要な場合は

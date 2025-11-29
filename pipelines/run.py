@@ -154,8 +154,22 @@ def run_pipeline(
         model = FlaxModelFactory.create_model(factory_cfg)
     elif model_type in ["reservoir", "esn", "classical"]:
         node_cfg = config.get("reservoir", {})
+        preprocess_steps = []
+        effective_input_dim = int(input_shape[-1])
+        if dataset_name not in {"mnist", "fashion_mnist"} and config.get("use_preprocessing", True):
+            print("Adding FeatureScaler to preprocessing pipeline...")
+            preprocess_steps.append(FeatureScaler())
+        if config.get("use_design_matrix", False):
+            degree = int(config.get("poly_degree", 2))
+            include_bias = bool(config.get("poly_bias", False))
+            print(f"Adding DesignMatrix (degree={degree}, bias={include_bias})...")
+            preprocess_steps.append(DesignMatrix(degree=degree, include_bias=include_bias))
+            factor = degree if degree > 0 else 1
+            effective_input_dim = effective_input_dim * factor + (1 if include_bias else 0)
+        preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
+        readout_mode = "flatten" if is_classification else "auto"
         node = ClassicalReservoir(
-            n_inputs=int(input_shape[-1]),
+            n_inputs=effective_input_dim,
             n_units=int(node_cfg.get("n_units", config.get("hidden_dim", 100))),
             input_scale=float(node_cfg.get("input_scale", 0.6)),
             spectral_radius=float(node_cfg.get("spectral_radius", 1.3)),
@@ -170,17 +184,6 @@ def run_pipeline(
             alpha=float(readout_cfg.get("alpha", 1e-3)),
             use_intercept=bool(readout_cfg.get("fit_intercept", True)),
         )
-        preprocess_steps = []
-        if dataset_name not in {"mnist", "fashion_mnist"} and config.get("use_preprocessing", True):
-            print("Adding FeatureScaler to preprocessing pipeline...")
-            preprocess_steps.append(FeatureScaler())
-        if config.get("use_design_matrix", False):
-            degree = int(config.get("poly_degree", 2))
-            include_bias = bool(config.get("poly_bias", False))
-            print(f"Adding DesignMatrix (degree={degree}, bias={include_bias})...")
-            preprocess_steps.append(DesignMatrix(degree=degree, include_bias=include_bias))
-        preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
-        readout_mode = "flatten" if is_classification else "auto"
         model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")

@@ -29,6 +29,8 @@ def _run_unified_pipeline_cli(args) -> None:
             "batch_size": 32,
             "learning_rate": 1e-3,
         },
+        "use_design_matrix": args.use_design_matrix,
+        "poly_degree": args.poly_degree,
     }
 
     # Reservoir config merging
@@ -73,6 +75,8 @@ def main() -> None:
     parser.add_argument("--unified-seq-len", type=int, default=50)
     parser.add_argument("--reservoir-config-path", type=str, default=None)
     parser.add_argument("--force-cpu", action="store_true")
+    parser.add_argument("--use-design-matrix", action="store_true", help="Enable polynomial feature expansion")
+    parser.add_argument("--poly-degree", type=int, default=2, help="Polynomial expansion degree")
 
     args = parser.parse_args()
 
