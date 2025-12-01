@@ -41,9 +41,10 @@ class ClassicalReservoir(Reservoir):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        k_in, k_res, k_bias = jax.random.split(self._rng, 3)
+        k_in, k_res, k_bias, k_mask_in, k_mask_res = jax.random.split(self._rng, 5)
         self._rng = k_bias
-        boundary = self.input_scale / jnp.sqrt(self.n_inputs)
+
+        boundary = self.input_scale
         self.Win = jax.random.uniform(
             k_in,
             (self.n_inputs, self.n_units),
@@ -51,13 +52,21 @@ class ClassicalReservoir(Reservoir):
             maxval=boundary,
             dtype=jnp.float64,
         )
+
+        if 0.0 < self.connectivity < 1.0:
+            mask_in = jax.random.bernoulli(k_mask_in, p=self.connectivity, shape=self.Win.shape)
+            self.Win = jnp.where(mask_in, self.Win, 0.0)
+
+        # W (Reservoir) の初期化
         W_dense = jax.random.normal(k_res, (self.n_units, self.n_units), dtype=jnp.float64)
         if 0.0 < self.connectivity < 1.0:
-            mask = jax.random.bernoulli(k_res, p=self.connectivity, shape=W_dense.shape)
-            W_dense = jnp.where(mask, W_dense, 0.0)
+            mask_res = jax.random.bernoulli(k_mask_res, p=self.connectivity, shape=W_dense.shape)
+            W_dense = jnp.where(mask_res, W_dense, 0.0)
+
         eig = jnp.max(jnp.abs(jnp.linalg.eigvals(W_dense)))
         scale = self.spectral_radius / eig if eig > 0 else 1.0
         self.W = W_dense * scale
+
         self.bias = jax.random.uniform(
             k_bias,
             (self.n_units,),
@@ -70,9 +79,14 @@ class ClassicalReservoir(Reservoir):
         return jnp.zeros((batch_size, self.n_units), dtype=jnp.float64)
 
     def step(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        # 論文の式:   (1 - a) * state + tanh(...)
+
         pre_activation = jnp.dot(input_data, self.Win) + jnp.dot(state, self.W) + self.bias
         activated = jnp.tanh(pre_activation)
-        next_state = (1.0 - self.leak_rate) * state + self.leak_rate * activated
+
+        # 論文 Eq(7) 通りの実装
+        next_state = (1.0 - self.leak_rate) * state + activated
+
         return next_state, next_state
 
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, StepArtifacts]:

@@ -373,7 +373,7 @@ def run_pipeline(
         sorted_lambdas = sorted(history.keys())
         for lam in sorted_lambdas:
             score = history[lam]
-            marker = " 🏆 Best" if (best_lam is not None and jnp.isclose(lam, best_lam)) else ""
+            marker = " 🏆 Best" if (best_lam is not None and lam == best_lam) else ""
             print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
         print("=" * 40 + "\n")
 
