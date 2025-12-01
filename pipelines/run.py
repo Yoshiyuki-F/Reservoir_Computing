@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 # Core Imports
 from reservoir.models import FlaxModelFactory
@@ -314,6 +315,38 @@ def run_pipeline(
     if save_path and hasattr(model, 'save'):
         print(f"Saving model to {save_path}...")
         model.save(save_path)
+
+    # --- 5. Visualization (classification only) ---
+    if is_classification and test_X is not None and test_y is not None:
+        try:
+            from pipelines.plotting import plot_classification_results
+        except Exception as exc:  # pragma: no cover - optional dependency
+            print(f"Skipping plotting due to import error: {exc}")
+        else:
+            train_labels_np = np.asarray(train_y)
+            test_labels_np = np.asarray(test_y)
+            if train_labels_np.ndim > 1:
+                train_labels_np = np.argmax(train_labels_np, axis=-1)
+            if test_labels_np.ndim > 1:
+                test_labels_np = np.argmax(test_labels_np, axis=-1)
+
+            train_pred_np = np.asarray(model.predict(train_X))
+            test_pred_np = np.asarray(model.predict(test_X))
+            if train_pred_np.ndim > 1:
+                train_pred_np = np.argmax(train_pred_np, axis=-1)
+            if test_pred_np.ndim > 1:
+                test_pred_np = np.argmax(test_pred_np, axis=-1)
+
+            filename = f"outputs/{dataset_name}_{model_type}_raw_nr{reservoir_params["n_units"]}_confusion.png"
+            plot_classification_results(
+                train_labels=train_labels_np,
+                test_labels=test_labels_np,
+                train_predictions=train_pred_np,
+                test_predictions=test_pred_np,
+                title=f"{model_type.upper()} on {dataset_name}",
+                filename=filename,
+                metrics_info=results.get("test", {}),
+            )
 
     return results
 

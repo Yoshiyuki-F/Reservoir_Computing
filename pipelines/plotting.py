@@ -1,4 +1,4 @@
-"""
+"""pipelines/plotting.py
 Reservoir Computing用の可視化ユーティリティ。
 """
 
