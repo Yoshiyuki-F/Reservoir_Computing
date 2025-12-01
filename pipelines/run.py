@@ -403,12 +403,26 @@ def run_pipeline(
             if test_pred_np.ndim > 1:
                 test_pred_np = np.argmax(test_pred_np, axis=-1)
 
-            filename = f"outputs/{dataset_name}_{model_type}_raw_nr{reservoir_params["n_units"]}_confusion.png"
+            val_labels_np = None
+            val_pred_np = None
+            if val_tuple is not None:
+                val_X, val_y = val_tuple
+                val_labels_np = np.asarray(val_y)
+                if val_labels_np.ndim > 1:
+                    val_labels_np = np.argmax(val_labels_np, axis=-1)
+                val_pred_raw = np.asarray(model.predict(val_X))
+                val_pred_np = val_pred_raw
+                if val_pred_np.ndim > 1:
+                    val_pred_np = np.argmax(val_pred_np, axis=-1)
+
+            filename = f"outputs/{dataset_name}_{model_type}_raw_nr{reservoir_params['n_units']}_confusion.png"
             plot_classification_results(
                 train_labels=train_labels_np,
                 test_labels=test_labels_np,
                 train_predictions=train_pred_np,
                 test_predictions=test_pred_np,
+                val_labels=val_labels_np,
+                val_predictions=val_pred_np,
                 title=f"{model_type.upper()} on {dataset_name}",
                 filename=filename,
                 metrics_info=results.get("test", {}),
