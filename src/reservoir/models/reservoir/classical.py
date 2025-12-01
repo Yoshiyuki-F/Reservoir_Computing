@@ -22,13 +22,13 @@ class ClassicalReservoir(Reservoir):
         self,
         n_inputs: int,
         n_units: int,
-        input_scale: float = 1.0,
-        spectral_radius: float = 0.95,
-        leak_rate: float = 1.0,
-        connectivity: float = 0.1,
-        noise_rc: float = 0.0,
-        bias_scale: float = 0.0,
-        seed: int = 42,
+        input_scale: float,
+        spectral_radius: float,
+        leak_rate: float,
+        connectivity: float,
+        noise_rc: float,
+        bias_scale: float,
+        seed: int,
     ) -> None:
         super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc)
         self.input_scale = float(input_scale)
@@ -104,14 +104,17 @@ class ClassicalReservoir(Reservoir):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ClassicalReservoir":
-        return cls(
-            n_inputs=int(data["n_inputs"]),
-            n_units=int(data["n_units"]),
-            input_scale=float(data.get("input_scale", 1.0)),
-            spectral_radius=float(data.get("spectral_radius", 0.95)),
-            leak_rate=float(data.get("leak_rate", 1.0)),
-            connectivity=float(data.get("connectivity", 0.1)),
-            noise_rc=float(data.get("noise_rc", 0.0)),
-            bias_scale=float(data.get("bias_scale", 0.0)),
-            seed=int(data.get("seed", 42)),
-        )
+        try:
+            return cls(
+                n_inputs=int(data["n_inputs"]),
+                n_units=int(data["n_units"]),
+                input_scale=float(data["input_scale"]),
+                spectral_radius=float(data["spectral_radius"]),
+                leak_rate=float(data["leak_rate"]),
+                connectivity=float(data["connectivity"]),
+                noise_rc=float(data["noise_rc"]),
+                bias_scale=float(data["bias_scale"]),
+                seed=int(data["seed"]),
+            )
+        except KeyError as exc:
+            raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc

@@ -1,5 +1,12 @@
-"""/home/yoshi/PycharmProjects/Reservoir/pipelines/run.py
-Unified Pipeline Runner for JAX-based Models and Datasets."""
+"""
+pipelines/run.py
+Unified Pipeline Runner for JAX-based Models and Datasets.
+
+V2 Architecture Compliance:
+- Strict Configuration: No implicit defaults. Rely entirely on Presets + User Config.
+- Canonical Names Only: No alias resolution (e.g., 'alpha' -> 'leak_rate') happens here.
+- Fail Fast: Dictionary access raises KeyError if parameters are missing.
+"""
 
 from typing import Dict, Any, Optional, Tuple
 
@@ -13,67 +20,99 @@ from reservoir.components import FeatureScaler, DesignMatrix, RidgeRegression, T
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
 from reservoir.data.registry import DatasetRegistry
 from reservoir.models.orchestrator import ReservoirModel
-from reservoir.models.presets import MODEL_REGISTRY, get_model_preset
-from reservoir.training.presets import TRAINING_REGISTRY, get_training_preset
+from reservoir.models.presets import MODEL_REGISTRY, get_model_preset, ModelPreset
+from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
 
 
-def _dataset_meta(config: Dict[str, Any]) -> Tuple[str, Optional[DatasetPreset]]:
-    name = DATASET_REGISTRY.normalize_name(config.get("dataset", "sine_wave"))
-    return name, DATASET_REGISTRY.get(name)
+def _get_strict_dataset_meta(config: Dict[str, Any]) -> Tuple[str, DatasetPreset]:
+    """
+    Retrieve dataset metadata.
+    Raises ValueError if the dataset is unknown or metadata is incomplete.
+    """
+    name = config.get("dataset")
+    if not name:
+        raise ValueError("Configuration Error: 'dataset' name is missing.")
+
+    normalized_name = DATASET_REGISTRY.normalize_name(name)
+    preset = DATASET_REGISTRY.get(normalized_name)
+
+    if preset is None:
+        raise ValueError(f"Configuration Error: Dataset '{name}' is not registered in DATASET_REGISTRY.")
+
+    if preset.config.n_output is None:
+        raise ValueError(f"Preset Error: Dataset '{name}' is missing 'n_output' in its definition.")
+
+    return normalized_name, preset
 
 
 def _resolve_training_config(config: Dict[str, Any], is_classification: bool) -> Dict[str, Any]:
+    """
+    Resolve training configuration strictly.
+    """
     preset_name = config.get("training_preset", "standard")
-    preset: TrainingConfig = get_training_preset(preset_name)
+    try:
+        preset: TrainingConfig = get_training_preset(preset_name)
+    except KeyError:
+        raise ValueError(f"Configuration Error: Training preset '{preset_name}' not found.")
+
     merged = preset.to_dict()
     overrides = dict(config.get("training", {}) or {})
     merged.update(overrides)
+
     if is_classification:
         merged["classification"] = True
     return merged
 
 
-def _resolve_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
-    preset_name = config.get("reservoir_preset") or config.get("reservoir_type") or "classical"
-    preset: ModelPreset = get_model_preset(preset_name)
+def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge ModelPreset parameters with User Configuration.
+    Maps generic CLI args (hidden_dim) to model specific args (n_units).
+    """
+    # 1. Identify Preset
+    preset_name = config.get("reservoir_preset") or config.get("reservoir_type")
+    if not preset_name:
+        preset_name = "classical"
+
+    try:
+        preset: ModelPreset = get_model_preset(preset_name)
+    except KeyError:
+        raise ValueError(f"Configuration Error: Model Preset '{preset_name}' not found.")
+
+    # 2. Base params from Preset (Canonical names only)
     base_params = preset.to_params()
-    overrides = dict(config.get("reservoir", {}) or {})
-    top_level_keys = [
+
+    # 3. Overrides from User (Canonical names only expected)
+    user_overrides = dict(config.get("reservoir", {}) or {})
+
+    # Map generic CLI 'hidden_dim' to 'n_units' (explicit override)
+    if "hidden_dim" in config and config["hidden_dim"] is not None:
+        user_overrides["n_units"] = config["hidden_dim"]
+
+    # 4. Merge
+    merged = {**base_params, **user_overrides}
+
+    required = [
         "n_units",
-        "hidden_dim",
         "input_scale",
-        "input_scaling",
         "spectral_radius",
         "leak_rate",
-        "alpha",
         "connectivity",
-        "sparsity",
-        "noise_rc",
         "bias_scale",
-        "random_seed",
+        "noise_rc",
         "seed",
-        "use_design_matrix",
-        "poly_degree",
-        "poly_bias",
     ]
-    for key in top_level_keys:
-        if key in config:
-            overrides.setdefault(key, config[key])
+    missing = [key for key in required if key not in merged or merged[key] is None]
+    if missing:
+        raise ValueError(
+            f"Configuration Error: Missing required reservoir parameters {missing}. "
+            "Provide them via preset or explicit overrides."
+        )
 
-    merged = {**base_params, **overrides}
-    if "hidden_dim" in merged:
-        merged["n_units"] = int(merged["hidden_dim"])
-    merged["n_units"] = int(merged.get("n_units", 100))
-    if "input_scaling" in merged and "input_scale" not in merged:
-        merged["input_scale"] = merged["input_scaling"]
-    if "sparsity" in merged and "connectivity" not in merged:
-        merged["connectivity"] = merged["sparsity"]
-    if "random_seed" in merged and "seed" not in merged:
-        merged["seed"] = merged["random_seed"]
     return merged
 
 
@@ -90,10 +129,18 @@ def load_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
         "test_y": test_y,
     }
 
+
 def _load_dataset(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load dataset via registry."""
-    dataset = DATASET_REGISTRY.normalize_name(config.get("dataset", "sine_wave"))
-    loader = DatasetRegistry.get(dataset)
+    dataset_name = config.get("dataset")
+    if not dataset_name:
+        raise ValueError("Configuration Error: 'dataset' key missing in config.")
+
+    normalized_name = DATASET_REGISTRY.normalize_name(dataset_name)
+    loader = DatasetRegistry.get(normalized_name)
+    if not loader:
+        raise ValueError(f"Registry Error: No loader found for dataset '{normalized_name}'.")
+
     return loader(config)
 
 
@@ -106,20 +153,21 @@ def run_pipeline(
     save_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    The Unified Entry Point.
-    Orchestrates data loading, model creation, and execution.
+    The Unified Entry Point (V2 Strict Mode).
     """
-    # 1. Data Preparation
+    # --- 1. Data Preparation & Metadata Validation ---
+    dataset_name, dataset_preset = _get_strict_dataset_meta(config)
+
     if train_X is None or train_y is None:
-        print(f"Loading dataset: {config.get('dataset', 'sine_wave')}...")
+        print(f"Loading dataset: {dataset_name}...")
         X, y = _load_dataset(config)
         split_idx = int(0.8 * len(X))
         train_X, test_X = X[:split_idx], X[split_idx:]
         train_y, test_y = y[:split_idx], y[split_idx:]
 
-    dataset_name, dataset_preset = _dataset_meta(config)
+    # Classification/Shape Handling
     if dataset_name in {"mnist", "fashion_mnist"}:
-        num_classes = int(dataset_preset.config.n_output if dataset_preset else 10)
+        num_classes = int(dataset_preset.config.n_output)
         print(f"Converting labels to one-hot vectors (classes={num_classes})...")
         train_y = jax.nn.one_hot(train_y.astype(int), num_classes)
         test_y = jax.nn.one_hot(test_y.astype(int), num_classes)
@@ -129,20 +177,24 @@ def run_pipeline(
             test_X = test_X.astype(jnp.float32) / 255.0
         config["use_preprocessing"] = False
 
-    preset_type = dataset_preset.task_type.lower() if dataset_preset else "regression"
+    # Determine Task Type
+    preset_type = dataset_preset.task_type.lower()
     override_cls = config.get("is_classification")
     if override_cls is not None:
         is_classification = bool(override_cls)
     elif preset_type in {"classification", "regression"}:
         is_classification = preset_type == "classification"
     else:
-        raise ValueError(f"Unknown preset type: {preset_type}")
-    meta_n_outputs = dataset_preset.config.n_output if dataset_preset else None
-    
-    # --- Shape Adjustment Logic ---
-    model_type = config.get("model_type").lower()
+        raise ValueError(f"Unknown preset task type: {preset_type}")
 
-    # FNN expects flattened input: (N, Features)
+    meta_n_outputs = int(dataset_preset.config.n_output)
+
+    # Shape Adjustment Logic
+    model_type = config.get("model_type")
+    if not model_type:
+        raise ValueError("Configuration Error: 'model_type' is required.")
+    model_type = model_type.lower()
+
     if model_type == "fnn":
         if train_X.ndim > 2:
             print(f"Flattening input for FNN: {train_X.shape} -> (N, Flattened)")
@@ -150,7 +202,6 @@ def run_pipeline(
             if test_X is not None:
                 test_X = test_X.reshape(test_X.shape[0], -1)
 
-    # RNN/Reservoir expects sequence input: (N, Time, Features)
     elif model_type in ["rnn", "reservoir", "esn", "classical"]:
         if train_X.ndim != 3:
             raise ValueError(
@@ -159,94 +210,107 @@ def run_pipeline(
             )
 
     print(f"Data Shapes -> Train: {train_X.shape}, Test: {test_X.shape if test_X is not None else 'None'}")
-
-    # Determine default output dimension from presets/data
-    if meta_n_outputs is None:
-        print("Dataset metadata missing 'n_output'; defaulting to regression with inferred output dim 1.")
-        meta_n_outputs = 1
-        is_classification = False
-    default_output_dim = int(meta_n_outputs)
-
-    # 2. Model Creation
     input_shape = train_X.shape[1:]
+
+    # --- 2. Model Creation (Strict) ---
     print(f"Initializing {model_type.upper()} model via Factory...")
-    
+
     if model_type in ["fnn", "rnn", "lstm", "gru"]:
-        # FlaxModelFactory expects a dict with type/model/training keys
         model_cfg = dict(config.get("model", {}))
         training_cfg = _resolve_training_config(config, is_classification)
-        # Inject shapes
+
+        # Enforce explicit dimensions or fail
         if model_type == "fnn":
-            model_cfg.setdefault(
-                "layer_dims",
-                [int(input_shape[-1]), int(config.get("hidden_dim", 128)), int(default_output_dim)],
-            )
+            hidden_dim = config.get("hidden_dim")
+            if hidden_dim is None:
+                raise ValueError("Configuration Error: 'hidden_dim' must be specified for FNN.")
+
+            model_cfg["layer_dims"] = [
+                int(input_shape[-1]),
+                int(hidden_dim),
+                int(meta_n_outputs)
+            ]
         else:
+            # RNN types
+            hidden_dim = config.get("hidden_dim")
+            if hidden_dim is None:
+                raise ValueError(f"Configuration Error: 'hidden_dim' must be specified for {model_type}.")
+
             model_cfg.setdefault("input_dim", int(input_shape[-1]))
-            model_cfg.setdefault("hidden_dim", int(config.get("hidden_dim", 64)))
-            model_cfg.setdefault("output_dim", int(default_output_dim))
+            model_cfg["hidden_dim"] = int(hidden_dim)
+            model_cfg.setdefault("output_dim", int(meta_n_outputs))
             model_cfg.setdefault("return_sequences", False)
             model_cfg.setdefault("return_hidden", False)
+
         factory_cfg = {"type": model_type, "model": model_cfg, "training": training_cfg}
         model = FlaxModelFactory.create_model(factory_cfg)
-    elif model_type in ["reservoir", "esn", "classical"]:
-        reservoir_params = _resolve_reservoir_params(config)
-        reservoir_preset = config.get("reservoir_preset") or config.get("reservoir_type") or "classical"
-        preset_obj = get_model_preset(reservoir_preset)
 
+    elif model_type in ["reservoir", "esn", "classical"]:
+        # Strict parameter resolution (Maps hidden_dim -> n_units)
+        reservoir_params = _get_strict_reservoir_params(config)
+
+        # Feature Engineering Config
         preprocess_steps = []
         effective_input_dim = int(input_shape[-1])
+
         if dataset_name not in {"mnist", "fashion_mnist"} and config.get("use_preprocessing", True):
             preprocess_steps.append(FeatureScaler())
 
-        use_dm = bool(reservoir_params.get("use_design_matrix", config.get("use_design_matrix", False)))
-        degree = int(reservoir_params.get("poly_degree", config.get("poly_degree", 2)))
-        include_bias = bool(reservoir_params.get("poly_bias", config.get("poly_bias", False)))
+        # Design Matrix
+        use_dm = bool(reservoir_params.get("use_design_matrix", False))
         if use_dm:
+            degree = reservoir_params.get("poly_degree")
+            include_bias = reservoir_params.get("poly_bias", False)
+
+            if degree is None:
+                raise ValueError("Configuration Error: 'poly_degree' is required when 'use_design_matrix' is True.")
+
             print(f"Adding DesignMatrix (degree={degree}, bias={include_bias})...")
-            preprocess_steps.append(DesignMatrix(degree=degree, include_bias=include_bias))
-            factor = degree if degree > 0 else 1
+            preprocess_steps.append(DesignMatrix(degree=int(degree), include_bias=bool(include_bias)))
+
+            factor = int(degree) if int(degree) > 0 else 1
             effective_input_dim = effective_input_dim * factor + (1 if include_bias else 0)
+
         preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
         readout_mode = "flatten" if is_classification else "auto"
 
-        n_units = int(reservoir_params.get("n_units", config.get("hidden_dim", 100)))
-        input_scale = float(reservoir_params.get("input_scale", 0.6))
-        spectral_radius = float(reservoir_params.get("spectral_radius", 1.3))
-        leak_rate = float(reservoir_params.get("leak_rate", reservoir_params.get("alpha", 0.2)))
-        connectivity = float(reservoir_params.get("connectivity", 0.1))
-        noise_rc = float(reservoir_params.get("noise_rc", reservoir_params.get("noise_level", 0.0)))
-        bias_scale = float(reservoir_params.get("bias_scale", reservoir_params.get("input_bias", 1.0)))
-        seed = int(reservoir_params.get("seed", config.get("random_seed", 42)))
+        # Instantiate ClassicalReservoir
+        # Dictionary access 'reservoir_params["key"]' ensures we fail fast if keys are missing.
+        try:
+            node = ClassicalReservoir(
+                n_inputs=effective_input_dim,
+                n_units=int(reservoir_params["n_units"]),  # Derived from hidden_dim if not explicit
+                input_scale=float(reservoir_params["input_scale"]),
+                spectral_radius=float(reservoir_params["spectral_radius"]),
+                leak_rate=float(reservoir_params["leak_rate"]),
+                connectivity=float(reservoir_params["connectivity"]),
+                noise_rc=float(reservoir_params["noise_rc"]),
+                bias_scale=float(reservoir_params["bias_scale"]),
+                seed=int(reservoir_params["seed"]),
+            )
+        except KeyError as e:
+            raise ValueError(
+                f"Configuration Error: Missing required reservoir parameter {e}. "
+                f"Preset: '{config.get('reservoir_preset', 'classical')}', Config: {reservoir_params}"
+            )
 
-        print(f"Using reservoir preset '{preset_obj.name}' with {n_units} units.")
-
-        node = ClassicalReservoir(
-            n_inputs=effective_input_dim,
-            n_units=n_units,
-            input_scale=input_scale,
-            spectral_radius=spectral_radius,
-            leak_rate=leak_rate,
-            connectivity=connectivity,
-            noise_rc=noise_rc,
-            bias_scale=bias_scale,
-            seed=seed,
-        )
+        # Readout Config
         readout_cfg = config.get("readout", {})
         readout = RidgeRegression(
             alpha=float(readout_cfg.get("alpha", 1e-3)),
             use_intercept=bool(readout_cfg.get("fit_intercept", True)),
         )
+
         model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
-    # 3. Execution
-    metric = "accuracy" if dataset_name in {"mnist", "fashion_mnist"} else "mse"
+    # --- 3. Execution ---
+    metric = "accuracy" if is_classification else "mse"
     runner = UniversalPipeline(model, config.get("save_path"), metric=metric)
     results = runner.run(train_X, train_y, test_X, test_y)
 
-    # 4. Persistence
+    # --- 4. Persistence ---
     if save_path and hasattr(model, 'save'):
         print(f"Saving model to {save_path}...")
         model.save(save_path)
@@ -264,7 +328,7 @@ def run_rnn_pipeline(config: Dict[str, Any], save_path: Optional[str] = None) ->
     return run_pipeline(config, save_path=save_path)
 
 def run_reservoir_pipeline(config: Dict[str, Any], save_path: Optional[str] = None) -> Dict[str, Any]:
-    if "reservoir_type" not in config:
-        config["reservoir_type"] = "classical"
+    if "reservoir_type" not in config and "reservoir_preset" not in config:
+        config["reservoir_preset"] = "classical"
     config["model_type"] = "reservoir"
     return run_pipeline(config, save_path=save_path)
