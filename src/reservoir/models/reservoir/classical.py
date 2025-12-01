@@ -118,3 +118,6 @@ class ClassicalReservoir(Reservoir):
             )
         except KeyError as exc:
             raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc
+
+    def __repr__(self) -> str:
+        return f"ClassicalReservoir(n_inputs={self.n_inputs}, n_units={self.n_units})"

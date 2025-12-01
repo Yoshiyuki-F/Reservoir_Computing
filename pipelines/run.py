@@ -303,6 +303,25 @@ def run_pipeline(
         )
 
         model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
+
+        # --- Architecture Summary ---
+        raw_input_dim = int(input_shape[-1])
+        res_units = int(node.n_units)
+        out_dim = int(meta_n_outputs)
+
+        print("=" * 40)
+        print(f"🏗️  Model Architecture: {model_type.upper()}")
+        print("=" * 40)
+        print(f"1. Input Data      : {raw_input_dim} features")
+        if preprocess:
+            print(f"2. Preprocessing   : Expanded to {effective_input_dim} (PolyDegree={degree}, Bias={include_bias})")
+        else:
+            print(f"2. Preprocessing   : None (Pass-through)")
+        print(f"3. Reservoir       : {effective_input_dim} -> {res_units} units (Recurrent)")
+        print(f"4. Readout         : {res_units} -> {out_dim} outputs")
+        print("-" * 40)
+        print(f"🔗 Topology String : {raw_input_dim} -> {effective_input_dim} -> {res_units} -> {out_dim}")
+        print("=" * 40)
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
