@@ -190,6 +190,9 @@ def run_pipeline(
 
     meta_n_outputs = int(dataset_preset.config.n_output)
 
+    # Resolve training configuration (needed for ridge search/validation)
+    training_cfg = _resolve_training_config(config, is_classification)
+
     # Shape Adjustment Logic
     model_type = config.get("model_type")
     if not model_type:
@@ -218,7 +221,6 @@ def run_pipeline(
 
     if model_type in ["fnn", "rnn", "lstm", "gru"]:
         model_cfg = dict(config.get("model", {}))
-        training_cfg = _resolve_training_config(config, is_classification)
 
         # Enforce explicit dimensions or fail
         if model_type == "fnn":
@@ -259,9 +261,9 @@ def run_pipeline(
 
         # Design Matrix
         use_dm = bool(reservoir_params.get("use_design_matrix", False))
+        degree = reservoir_params.get("poly_degree")
+        include_bias = reservoir_params.get("poly_bias", False)
         if use_dm:
-            degree = reservoir_params.get("poly_degree")
-            include_bias = reservoir_params.get("poly_bias", False)
 
             if degree is None:
                 raise ValueError("Configuration Error: 'poly_degree' is required when 'use_design_matrix' is True.")
@@ -325,10 +327,49 @@ def run_pipeline(
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
+    # --- 3a. Validation Split for ridge search ---
+    val_tuple = None
+    val_size = float(training_cfg.get("val_size", 0.0)) if training_cfg else 0.0
+    if val_size > 0.0 and len(train_X) > 1:
+        val_count = max(1, int(len(train_X) * val_size))
+        train_count = len(train_X) - val_count
+        if train_count < 1:
+            train_count = len(train_X) - 1
+            val_count = 1
+        val_X = train_X[train_count:]
+        val_y = train_y[train_count:]
+        train_X = train_X[:train_count]
+        train_y = train_y[:train_count]
+        val_tuple = (val_X, val_y)
+
     # --- 3. Execution ---
     metric = "accuracy" if is_classification else "mse"
     runner = UniversalPipeline(model, config.get("save_path"), metric=metric)
-    results = runner.run(train_X, train_y, test_X, test_y)
+    results = runner.run(
+        train_X,
+        train_y,
+        test_X,
+        test_y,
+        validation=val_tuple,
+        training_cfg=training_cfg,
+    )
+
+    # Log ridge search results if available
+    train_res = results.get("train", {}) if isinstance(results, dict) else {}
+    if isinstance(train_res, dict) and "search_history" in train_res:
+        history = train_res.get("search_history", {})
+        best_lam = train_res.get("best_lambda")
+        metric_name = train_res.get("metric", "score")
+
+        print("\n" + "=" * 40)
+        print(f"🔎 Ridge Hyperparameter Search ({metric_name})")
+        print("-" * 40)
+        sorted_lambdas = sorted(history.keys())
+        for lam in sorted_lambdas:
+            score = history[lam]
+            marker = " 🏆 Best" if (best_lam is not None and jnp.isclose(lam, best_lam)) else ""
+            print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
+        print("=" * 40 + "\n")
 
     # --- 4. Persistence ---
     if save_path and hasattr(model, 'save'):

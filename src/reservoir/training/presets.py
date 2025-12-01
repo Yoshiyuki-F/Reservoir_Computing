@@ -31,7 +31,7 @@ class TrainingConfig:
     # Replaces 'ridge_alpha'. Defines the search space for validation.
     # Default is a log-spaced range around typical values.
     ridge_lambdas: List[float] = field(
-        default_factory=lambda: [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0]
+        default_factory=lambda: [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7]
     )
 
     # Data Splitting

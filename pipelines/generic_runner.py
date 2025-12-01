@@ -27,9 +27,17 @@ class UniversalPipeline:
     def _has_attr(self, name: str) -> bool:
         return hasattr(self.model, name)
 
-    def _train(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+    def _train(
+        self,
+        X: jnp.ndarray,
+        y: jnp.ndarray,
+        *,
+        validation: Optional[tuple[Any, Any]] = None,
+        metric: str = "mse",
+        **kwargs: Any,
+    ) -> Dict[str, float]:
         if self._has_attr("train"):
-            return self.model.train(X, y) or {}
+            return self.model.train(X, y, validation=validation, metric=metric, **kwargs) or {}
         if self._has_attr("fit"):
             self.model.fit(X, y)
             return {}
@@ -55,6 +63,7 @@ class UniversalPipeline:
         test_y: Any,
         *,
         validation: Optional[tuple[Any, Any]] = None,
+        training_cfg: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, float]]:
         train_X = jnp.asarray(train_X)
         train_y = jnp.asarray(train_y)
@@ -62,7 +71,8 @@ class UniversalPipeline:
         test_y = jnp.asarray(test_y)
 
         start = time.time()
-        train_metrics = self._train(train_X, train_y)
+        extra_kwargs = training_cfg or {}
+        train_metrics = self._train(train_X, train_y, validation=validation, metric=self.metric_name, **extra_kwargs)
         if not train_metrics:
             train_metrics = {self.metric_name: self._metric_score(train_X, train_y)}
         test_metrics = {self.metric_name: self._metric_score(test_X, test_y)}
