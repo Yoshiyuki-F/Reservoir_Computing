@@ -13,7 +13,7 @@ class ReservoirConfig:
     SSOT: Defaults defined here are the canonical defaults.
     """
 
-    n_units: Optional[int] = None
+    n_units: Optional[int] = None # should be defined in scripts
     spectral_radius: float = 1.3
     leak_rate: float = 0.2
     input_scale: float = 0.6
@@ -56,13 +56,13 @@ MODEL_DEFINITIONS: Dict[str, ModelPreset] = {
         name="classical",
         model_type="reservoir",
         description="Standard classical reservoir (Echo State Network)",
-        reservoir=ReservoirConfig(n_units=100, input_scale=0.6, noise_rc=0.0),
+        reservoir=ReservoirConfig()
     ),
     "quantum_gate_based": ModelPreset(
         name="quantum_gate_based",
         model_type="quantum_gate_based",
         description="Gate-based Quantum Reservoir Computer",
-        reservoir=ReservoirConfig(n_units=4),
+        reservoir=ReservoirConfig(),
         params={
             "n_qubits": 4,
             "circuit_depth": 4,
@@ -76,7 +76,7 @@ MODEL_DEFINITIONS: Dict[str, ModelPreset] = {
         name="quantum_analog",
         model_type="quantum_analog",
         description="Analog Quantum Reservoir parameters",
-        reservoir=ReservoirConfig(n_units=6, dt=0.1),
+        reservoir=ReservoirConfig(dt=0.1),
         params={
             "n_qubits": 6,
             "encoding_scheme": "detuning",

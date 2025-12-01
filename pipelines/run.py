@@ -275,7 +275,6 @@ def run_pipeline(
             effective_input_dim = effective_input_dim * factor + (1 if include_bias else 0)
 
         preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
-        readout_mode = "flatten" if is_classification else "auto"
 
         # Instantiate ClassicalReservoir
         # Dictionary access 'reservoir_params["key"]' ensures we fail fast if keys are missing.
@@ -303,6 +302,13 @@ def run_pipeline(
             alpha=float(readout_cfg.get("alpha", 1e-3)),
             use_intercept=bool(readout_cfg.get("fit_intercept", True)),
         )
+
+        readout_mode = reservoir_params.get("state_aggregation")
+        if not readout_mode:
+            raise ValueError(
+                "Configuration Error: 'state_aggregation' is missing in reservoir_params. "
+                "Define it in the preset or override explicitly."
+            )
 
         model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
 
