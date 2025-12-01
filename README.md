@@ -54,34 +54,29 @@ uv run poe cli-gpu -- --help
 ```bash
 # サイン波 + 古典的リザーバ（GPU, Poe 推奨）
 uv run poe cli-gpu -- \
-  sine \                  # (= sine_wave)
-  cr \                    # (= classical_reservoir)
-  600                     # (= --n-hidden_layer 600)
+  --unified-model reservoir \
+  --dataset sine_wave \
+  --unified-hidden 600 \
+  --reservoir-preset classical
 ```
-
-uv run poe cli-gpu -- m fnn 30
 
 #### 2. ゲート型量子リザーバ
 
 ```bash
 uv run poe cli-gpu -- \
-  lorenz \
-  qr                      # (= quantum_gate_based)
+  --unified-model reservoir \
+  --dataset lorenz \
+  --reservoir-preset quantum_gate_based
 ```
 
 #### 3. MNIST + FNN パイプライン
 
 ```bash
-# 単純FNN
 uv run poe cli-gpu -- \
+  --unified-model fnn \
   --dataset mnist \
-  --model fnn_pretrained \
-  --config presets/fnn_mnist_config.json
-
-# FNN(b') バリアント
-uv run poe cli-gpu -- \
-  --dataset mnist \
-  --model fnn_pretrained_b_dash 
+  --unified-hidden 128 \
+  --training-preset standard
 ```
 
 `--dataset` / `--model` は `src/reservoir/core/identifiers.py` の `Dataset` / `Pipeline` Enum で定義されている識別子の `value` と一致します。  
@@ -126,13 +121,10 @@ uv run poe cli-gpu -- sine cr 600
 ├── src/reservoir/               # メインPythonパッケージ
 │   ├── cli.py                  # コマンドラインインターフェース
 │   ├── core/                   # 設定・識別子・コンポーザ
-│   ├── models/                 # 各種モデル定義
-│   ├── reservoirs/             # リザーバ関連ロジック
+│   ├── models/                 # 各種モデル定義（Pythonベースのプリセットは models/presets.py）
+│   ├── training/               # トレーニング設定プリセット (training/presets.py)
+│   ├── data/                   # データ生成＆プリセット (data/presets.py)
 │   └── utils/                  # GPU・前処理・メトリクス等ユーティリティ
-├── presets/                   # 実験用プリセット（JSON設定群）
-│   ├── models/
-│   ├── training/
-│   └── datasets/
 ├── docs/                       # ドキュメント
 │   ├── TODO.md
 │   └── TROUBLESHOOTING.md
@@ -239,6 +231,5 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 - Jaeger, H. (2001). The "echo state" approach to analysing and training recurrent neural networks.
 - Lukoševičius, M., & Jaeger, H. (2009). Reservoir computing approaches to recurrent neural network training.
 - [JAX CUDA Installation Guide](https://jax.readthedocs.io/en/latest/installation.html)
-
 
 

@@ -33,11 +33,11 @@ class BaseFlaxModel(BaseModel, ABC):
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
-        self.learning_rate: float = float(config.get("learning_rate", 1e-3))
-        self.epochs: int = int(config.get("num_epochs", config.get("epochs", 10)))
-        self.batch_size: int = int(config.get("batch_size", 32))
+        self.learning_rate: float = float(config.get("learning_rate"))
+        self.epochs: int = int(config.get("num_epochs", config.get("epochs")))
+        self.batch_size: int = int(config.get("batch_size"))
         self.classification: bool = bool(config.get("classification", False))
-        self.seed: int = int(config.get("seed", 0))
+        self.seed: int = int(config.get("seed"))
         self._model_def = self._create_model_def()
         self._state: Optional[train_state.TrainState] = None
         self.trained: bool = False

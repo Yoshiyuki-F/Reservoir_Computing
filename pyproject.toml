@@ -59,7 +59,6 @@ include = [
     "src",
     "cli",
     "pipelines",
-    "presets",
 ]
 
 [[tool.uv.index]]

@@ -11,6 +11,14 @@ from .nn.config import (
     FNNPipelineConfig,
     SimpleRNNConfig,
 )
+from .presets import (
+    ModelPreset,
+    ReservoirConfig,
+    MODEL_PRESETS,
+    MODEL_REGISTRY,
+    get_model_preset,
+    normalize_model_name,
+)
 
 __all__ = [
     "SimpleRNN",
@@ -23,4 +31,10 @@ __all__ = [
     "FNNModel",
     "RNNModel",
     "FlaxModelFactory",
+    "ModelPreset",
+    "ReservoirConfig",
+    "MODEL_PRESETS",
+    "MODEL_REGISTRY",
+    "get_model_preset",
+    "normalize_model_name",
 ]

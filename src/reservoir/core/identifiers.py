@@ -21,8 +21,8 @@ class Pipeline(enum.Enum):
     """実験パイプライン（モデルアーキテクチャ）の種類。"""
 
     CLASSICAL_RESERVOIR = "classical"
-    FNN = "fnn"
-    FNN_B_DASH = "fnn-b-dash"
+    FNN = "fnn" # its pipeline is b (fnn with a hidden layer replaced by a reseroir layer) so its not just a fnn
+    RNN = "rnn"
     quantum_gate_based = "gate_based-quantum"
     quantum_analog = "analog-quantum"
 
@@ -100,18 +100,18 @@ def generate_valid_experiments() -> List[ExperimentIdentifier]:
     """実行可能な実験組み合わせをすべて生成する簡易ユーティリティ。
 
     現状は一例として、以下のような制約を入れている:
-    - 量子モデルは MNIST では使わない（分類は classical / FNN 系が担当）
+- 量子モデルは MNIST では使わない（分類は classical / FNN 系が担当）TODO 将来サポートされます。
     - PCA 前処理は MNIST のときだけ有効とする
     """
     all_combinations = itertools.product(Pipeline, Dataset, Preprocessing)
 
     valid_experiments: List[ExperimentIdentifier] = []
     for pipeline, dataset, preprocessing in all_combinations:
-        # 例1: 量子モデルは MNIST を扱わない（将来サポートするならここを緩和）
+        # 例1: 量子モデルは MNIST を扱わない（将来サポートするならここを緩和）TODO
         if pipeline in {Pipeline.quantum_gate_based, Pipeline.quantum_analog} and dataset is Dataset.MNIST:
             continue
 
-        # 例2: PCA は MNIST のときのみ意味がある、と仮定
+        # 例2: PCA は MNIST のときのみ意味がある　TODO
         if preprocessing is Preprocessing.PCA and dataset is not Dataset.MNIST:
             continue
 

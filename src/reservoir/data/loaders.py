@@ -7,22 +7,19 @@ from typing import Dict, Any, Tuple
 
 import jax.numpy as jnp
 
-from reservoir.data.config import DataGenerationConfig
 from reservoir.data.generators import generate_sine_data, generate_mnist_sequence_data, generate_mackey_glass_data
+from reservoir.data.presets import get_dataset_preset
 from reservoir.data.registry import DatasetRegistry
 
 
 @DatasetRegistry.register("sine_wave")
 def load_sine_wave(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
-    params = config.get("data_params", {}) or {}
-    data_cfg = DataGenerationConfig(
-        name="sine_wave",
-        time_steps=int(params.get("time_steps", 400)),
-        dt=float(params.get("dt", 0.01)),
-        noise_level=float(params.get("noise_level", 0.01)),
-        params={"frequencies": params.get("frequencies", [1.0])},
-    )
+    params = dict(config.get("data_params", {}) or {})
+    preset = get_dataset_preset("sine_wave")
+    if preset is None:
+        raise ValueError("Dataset preset 'sine_wave' is missing. Define it in reservoir.data.presets.")
+    data_cfg = preset.build_config(params)
     X, y = generate_sine_data(data_cfg)
     X_arr = jnp.asarray(X, dtype=jnp.float32)
     y_arr = jnp.asarray(y, dtype=jnp.float32)
@@ -40,19 +37,11 @@ def load_mnist(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     if generate_mnist_sequence_data is None:
         raise ImportError("MNIST sequence loader requires torch/torchvision.")
 
-    params = config.get("data_params", {}) or {}
-    time_steps = int(params.get("time_steps", 28))
-    n_input = int(params.get("n_input", 28))
-    n_output = int(params.get("n_output", 10))
-    data_cfg = DataGenerationConfig(
-        name="mnist",
-        time_steps=time_steps,
-        dt=float(params.get("dt", 1.0)),
-        noise_level=float(params.get("noise_level", 0.0)),
-        n_input=n_input,
-        n_output=n_output,
-        params=params,
-    )
+    params = dict(config.get("data_params", {}) or {})
+    preset = get_dataset_preset("mnist")
+    if preset is None:
+        raise ValueError("Dataset preset 'mnist' is missing. Define it in reservoir.data.presets.")
+    data_cfg = preset.build_config(params)
     train_seq, train_labels = generate_mnist_sequence_data(data_cfg, split="train")
     test_seq, test_labels = generate_mnist_sequence_data(data_cfg, split="test")
 
@@ -76,21 +65,11 @@ def load_mnist(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
 @DatasetRegistry.register("mackey_glass")
 def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Mackey-Glass samples (N, 1, 1) compatible with sequence models."""
-    params = config.get("data_params", {}) or {}
-    data_cfg = DataGenerationConfig(
-        name="mackey_glass",
-        time_steps=int(params.get("time_steps", 2000)),
-        dt=float(params.get("dt", 0.1)),
-        noise_level=float(params.get("noise_level", 0.0)),
-        params={
-            "tau": params.get("tau", 17),
-            "beta": params.get("beta", 0.2),
-            "gamma": params.get("gamma", 0.1),
-            "n": params.get("n", 10),
-            "initial_value": params.get("initial_value", 1.2),
-            "warmup_steps": params.get("warmup_steps", 100),
-        },
-    )
+    params = dict(config.get("data_params", {}) or {})
+    preset = get_dataset_preset("mackey_glass")
+    if preset is None:
+        raise ValueError("Dataset preset 'mackey_glass' is missing. Define it in reservoir.data.presets.")
+    data_cfg = preset.build_config(params)
     X, y = generate_mackey_glass_data(data_cfg)
     X_arr = jnp.asarray(X, dtype=jnp.float32)
     y_arr = jnp.asarray(y, dtype=jnp.float32)

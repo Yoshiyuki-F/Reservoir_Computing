@@ -10,8 +10,6 @@ from typing import Optional, Dict, Any, Sequence, Iterable, List, Tuple
 
 import numpy as np
 import pennylane as qml
-import json
-from pathlib import Path
 from functools import lru_cache
 
 from reservoir.utils import ensure_x64_enabled
@@ -20,6 +18,7 @@ ensure_x64_enabled()
 
 import jax.numpy as jnp
 from reservoir.components import RidgeReadoutNumpy
+from reservoir.models.presets import get_model_preset
 
 from .base import BaseReservoirComputer
 from .config import QuantumReservoirConfig, parse_ridge_lambdas
@@ -28,18 +27,13 @@ from reservoir.models.reservoir.training import train_reservoir, predict_reservo
 
 @lru_cache()
 def _load_shared_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "presets/models/shared_reservoir_params.json"
-    data = json.loads(path.read_text())
-    return dict(data.get("params", {}))
+    return dict(get_model_preset("shared_reservoir_params").to_params())
 
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "presets/models/quantum_gate_based.json"
-    data = json.loads(path.read_text())
-    params = data.get('params', {}) or {}
-    base = _load_shared_defaults()
-    merged = {**base, **params}
+    merged = _load_shared_defaults()
+    merged.update(get_model_preset("quantum_gate_based").to_params())
     return merged
 
 
