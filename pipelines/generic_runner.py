@@ -66,7 +66,7 @@ class UniversalPipeline:
             f"min={stats['min']:.4f}, max={stats['max']:.4f}, nans={stats['nans']}"
         )
         if stats["std"] < 1e-6:
-            print("⚠️ Feature matrix has near-zero variance. Model output may be inactive.")
+            print("Feature matrix has near-zero variance. Model output may be inactive.")
 
     def _extract_features(self, inputs: jnp.ndarray) -> jnp.ndarray:
         if hasattr(self.model, "__call__"):
@@ -129,7 +129,7 @@ class UniversalPipeline:
 
         # No validation -> skip search to avoid overfitting
         if val_Z is None or val_y is None:
-            print("⚠️ No validation set provided. Skipping hyperparameter search to prevent overfitting.")
+            print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
             self.readout.fit(train_Z, train_y)
             return float(initial_lambda), {}
 

@@ -23,18 +23,18 @@ class TrainingConfig:
 
     # Training Loop
     batch_size: int = 128
-    epochs: int = 20
+    epochs: int = 10
     learning_rate: float = 0.001
 
     # Readout Regularization (Ridge Regression)
     # 'ridge_lambda' is the canonical default regularization strength when no search is run.
-    ridge_lambda: float = 1e-2
+    ridge_lambda: float = 1e-7 # no use but needed for type consistency
     # Defines the search space for validation. Defaults to a log-spaced range around typical values.
     ridge_lambdas: List[float] = field(
-        default_factory=lambda: [1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3]
+        default_factory=lambda: [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3]
     )
 
-    # Data Splitting
+    # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
     train_size: float = 0.8
     val_size: float = 0.1
     test_ratio: float = 0.1

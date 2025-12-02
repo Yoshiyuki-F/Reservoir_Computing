@@ -47,7 +47,7 @@ def _print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
     details = topo_meta.get("details", {})
 
     print("=" * 40)
-    print(f"🏗️  Model Architecture: {typ or 'MODEL'}")
+    print(f"Model Architecture: {typ or 'MODEL'}")
     print("=" * 40)
 
     input_shape = shapes.get("input")
@@ -101,7 +101,7 @@ def _print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
     print("-" * 40)
     flow_str = " -> ".join(str(p) for p in flow_parts if p)
     if flow_str:
-        print(f"🔗 Tensor Flow     : {flow_str}")
+        print(f"Tensor Flow     : {flow_str}")
     print("=" * 40)
 
 
@@ -540,12 +540,12 @@ def run_pipeline(
         metric_name = train_res.get("metric", "score")
 
         print("\n" + "=" * 40)
-        print(f"🔎 Ridge Hyperparameter Search ({metric_name})")
+        print(f"Ridge Hyperparameter Search ({metric_name})")
         print("-" * 40)
         sorted_lambdas = sorted(history.keys())
         for lam in sorted_lambdas:
             score = history[lam]
-            marker = " 🏆 Best" if (best_lam is not None and lam == best_lam) else ""
+            marker = " Best" if (best_lam is not None and lam == best_lam) else ""
             print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
         print("=" * 40 + "\n")
 
