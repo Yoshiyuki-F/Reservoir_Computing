@@ -8,7 +8,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
+import jax
 import jax.numpy as jnp
+import jax.scipy.linalg as jsp
 
 from reservoir.components.readout.ridge import RidgeRegression
 
@@ -75,6 +77,35 @@ class UniversalPipeline:
             return jnp.asarray(self.model.predict(inputs))
         raise AttributeError("Model must implement __call__ or predict to produce features.")
 
+    def _extract_features_batched(self, inputs: jnp.ndarray, batch_size: int) -> jnp.ndarray:
+        arr = jnp.asarray(inputs)
+        if batch_size is None or batch_size <= 0 or arr.shape[0] <= batch_size:
+            return self._extract_features(arr)
+
+        n = arr.shape[0]
+        pad = (-n) % batch_size
+        pad_width = [(0, pad)] + [(0, 0)] * (arr.ndim - 1)
+        arr_padded = jnp.pad(arr, pad_width)
+        num_batches = arr_padded.shape[0] // batch_size
+        reshaped = arr_padded.reshape((num_batches, batch_size) + arr.shape[1:])
+
+        def batch_fn(batch):
+            return self._extract_features(batch)
+
+        mapped = jax.lax.map(batch_fn, reshaped)  # (num_batches, batch_size, ...)
+        flat = mapped.reshape((arr_padded.shape[0],) + mapped.shape[2:])
+        return flat[:n]
+
+    def _prepare_design(self, Z: jnp.ndarray, y: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        X = jnp.asarray(Z, dtype=jnp.float64)
+        y_arr = jnp.asarray(y, dtype=jnp.float64)
+        if y_arr.ndim == 1:
+            y_arr = y_arr[:, None]
+        if getattr(self.readout, "use_intercept", True):
+            ones = jnp.ones((X.shape[0], 1), dtype=X.dtype)
+            X = jnp.concatenate([ones, X], axis=1)
+        return X, y_arr
+
     def _fit_readout(
         self,
         train_Z: jnp.ndarray,
@@ -84,44 +115,62 @@ class UniversalPipeline:
         ridge_lambdas: Optional[Sequence[float]],
     ) -> tuple[float, Dict[float, float]]:
         lambdas = list(ridge_lambdas) if ridge_lambdas is not None else []
+        # No validation -> skip search to avoid overfitting
+        if val_Z is None or val_y is None:
+            print("⚠️ No validation set provided. Skipping hyperparameter search to prevent overfitting.")
+            self.readout.fit(train_Z, train_y)
+            return float(getattr(self.readout, "alpha", 1.0)), {}
+
         if not lambdas:
             lambdas = [float(getattr(self.readout, "alpha", 1.0))]
+        else:
+            print(
+                f"Search active: overriding initial alpha={getattr(self.readout, 'alpha', None)} "
+                f"with {len(lambdas)} candidates."
+            )
 
-        best_lambda: float = float(lambdas[0])
-        best_score: Optional[float] = None
-        best_readout: Optional[RidgeRegression] = None
-        search_history: Dict[float, float] = {}
+        lambdas_arr = jnp.asarray(lambdas, dtype=jnp.float64)
+        X_train, y_train = self._prepare_design(train_Z, train_y)
+        X_val, y_val = self._prepare_design(val_Z, val_y)
 
-        for lam in lambdas:
-            candidate = RidgeRegression(alpha=float(lam), use_intercept=getattr(self.readout, "use_intercept", True))
-            candidate.fit(train_Z, train_y)
+        XtX = X_train.T @ X_train  # (d,d)
+        Xty = X_train.T @ y_train  # (d,o)
+        d_features = XtX.shape[0]
+        eye = jnp.eye(d_features, dtype=XtX.dtype)
 
-            eval_Z = val_Z if val_Z is not None else train_Z
-            eval_y = val_y if val_y is not None else train_y
-            score = self._score(candidate.predict(eval_Z), eval_y)
-            search_history[float(lam)] = score
+        def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
+            A = XtX + lam * eye
+            return jsp.solve(A, Xty, assume_a="pos")
 
-            if best_score is None:
-                best_score = score
-                best_lambda = float(lam)
-                best_readout = candidate
-            else:
-                if self.metric_name == "accuracy":
-                    if score > best_score:
-                        best_score = score
-                        best_lambda = float(lam)
-                        best_readout = candidate
-                else:
-                    if score < best_score:
-                        best_score = score
-                        best_lambda = float(lam)
-                        best_readout = candidate
+        solve_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)
+        weights_all = solve_all(lambdas_arr)  # (k, d, o)
 
-        if best_readout is None:
-            best_readout = RidgeRegression(alpha=float(best_lambda), use_intercept=getattr(self.readout, "use_intercept", True))
-            best_readout.fit(train_Z, train_y)
+        # Predictions for validation for all lambdas: (k, n_val, o)
+        preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
 
-        self.readout = best_readout
+        if self.metric_name == "accuracy":
+            pred_labels = jnp.argmax(preds_all, axis=-1)  # (k, n_val)
+            true_labels = jnp.argmax(y_val, axis=-1) if y_val.ndim > 1 else y_val
+            accs = jnp.mean(pred_labels == true_labels, axis=-1)
+            best_idx = int(jnp.argmax(accs))
+            best_lambda = float(lambdas_arr[best_idx])
+            search_history = {float(lambdas_arr[i]): float(accs[i]) for i in range(accs.shape[0])}
+        else:
+            errors = jnp.mean((preds_all - y_val[None, ...]) ** 2, axis=(1, 2))
+            best_idx = int(jnp.argmin(errors))
+            best_lambda = float(lambdas_arr[best_idx])
+            search_history = {float(lambdas_arr[i]): float(errors[i]) for i in range(errors.shape[0])}
+
+        best_weights = weights_all[best_idx]  # (d, o)
+        use_intercept = getattr(self.readout, "use_intercept", True)
+        if use_intercept:
+            self.readout.intercept_ = jnp.asarray(best_weights[0], dtype=jnp.float64)
+            self.readout.coef_ = jnp.asarray(best_weights[1:], dtype=jnp.float64)
+        else:
+            self.readout.intercept_ = jnp.zeros(best_weights.shape[1], dtype=jnp.float64)
+            self.readout.coef_ = jnp.asarray(best_weights, dtype=jnp.float64)
+        self.readout.alpha = best_lambda
+
         return best_lambda, search_history
 
     # ------------------------------------------------------------------ #
@@ -143,9 +192,9 @@ class UniversalPipeline:
         test_y = jnp.asarray(test_y)
 
         extra_kwargs = dict(training_cfg or {})
-        dataset_name = str(extra_kwargs.pop("_meta_dataset", "dataset"))
         model_label = str(extra_kwargs.pop("_meta_model_type", self.model.__class__.__name__))
         ridge_lambdas = extra_kwargs.pop("ridge_lambdas", None)
+        feature_batch_size = int(extra_kwargs.pop("feature_batch_size", extra_kwargs.get("batch_size", 0) or 0))
 
         start = time.time()
 
@@ -162,13 +211,13 @@ class UniversalPipeline:
 
         # Phase 2: Feature Extraction
         print("\n=== [Phase 2] Generating Features (Design Matrix) ===")
-        train_Z = self._extract_features(train_X)
-        test_Z = self._extract_features(test_X)
+        train_Z = self._extract_features_batched(train_X, feature_batch_size)
+        test_Z = self._extract_features_batched(test_X, feature_batch_size)
         val_Z = None
         val_y = None
         if validation is not None:
             val_X, val_targets = validation
-            val_Z = self._extract_features(val_X)
+            val_Z = self._extract_features_batched(val_X, feature_batch_size)
             val_y = jnp.asarray(val_targets)
         self._feature_stats(train_Z, stage="post_train_features")
 

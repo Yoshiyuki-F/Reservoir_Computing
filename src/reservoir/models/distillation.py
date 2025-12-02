@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import optax
 from flax.training import train_state
 
+from reservoir.components.projection import InputProjector
 from reservoir.models.nn.base import BaseModel
 from reservoir.models.nn.modules import FNN
 from reservoir.models.presets import DistillationConfig, ReservoirConfig
@@ -29,15 +30,13 @@ class DistillationModel(BaseModel):
             raise ValueError(f"input_dim must be positive, got {self.input_dim}.")
 
         self.teacher_config: ReservoirConfig = config.teacher
-        self.teacher: ClassicalReservoir = self._build_teacher(self.teacher_config)
+        self.projector: InputProjector = self._build_projector(self.teacher_config)
+        self.teacher: ClassicalReservoir = self._build_teacher(self.teacher_config, self.projector)
         self.teacher_output_dim: int = int(self.teacher.n_units)
 
-        student_layers: Tuple[int, ...] = (
-            self.input_dim,
-            *tuple(int(v) for v in config.student_hidden_layers),
-            self.teacher_output_dim,
-        )
-        self.student = FNN(layer_dims=student_layers, return_hidden=False)
+        self.student_hidden: Tuple[int, ...] = tuple(int(v) for v in config.student_hidden_layers)
+        self.student_input_dim: Optional[int] = None
+        self.student: Optional[FNN] = None
 
         self.learning_rate: float = float(config.learning_rate)
         self.epochs: int = int(config.epochs)
@@ -45,7 +44,29 @@ class DistillationModel(BaseModel):
         self._state: Optional[train_state.TrainState] = None
         self._rng = jax.random.PRNGKey(int(self.teacher_config.seed or 0) + 1)
 
-    def _build_teacher(self, cfg: ReservoirConfig) -> ClassicalReservoir:
+    def _ensure_student(self, flat_dim: int) -> None:
+        if self.student_input_dim == flat_dim and self.student is not None:
+            return
+        student_layers: Tuple[int, ...] = (
+            flat_dim,
+            *self.student_hidden,
+            self.teacher_output_dim,
+        )
+        self.student = FNN(layer_dims=student_layers, return_hidden=False)
+        self.student_input_dim = flat_dim
+        self._state = None  # reset state because architecture changed
+
+    def _build_projector(self, cfg: ReservoirConfig) -> InputProjector:
+        return InputProjector(
+            n_inputs=self.input_dim,
+            n_units=int(cfg.n_units),
+            input_scale=float(cfg.input_scale),
+            connectivity=float(cfg.connectivity),
+            bias_scale=float(cfg.bias_scale),
+            seed=int(cfg.seed),
+        )
+
+    def _build_teacher(self, cfg: ReservoirConfig, projector: InputProjector) -> ClassicalReservoir:
         missing = [name for name in ("n_units",) if getattr(cfg, name) is None]
         if missing:
             raise ValueError(
@@ -62,9 +83,12 @@ class DistillationModel(BaseModel):
             noise_rc=float(cfg.noise_rc),
             bias_scale=float(cfg.bias_scale),
             seed=int(cfg.seed),
+            projector=projector,
         )
 
     def _init_train_state(self, key: jnp.ndarray, sample_input: jnp.ndarray) -> train_state.TrainState:
+        if self.student is None:
+            raise RuntimeError("Student network is not initialized.")
         variables = self.student.init(key, sample_input)
         params = variables["params"]
         tx = optax.adam(self.learning_rate)
@@ -87,10 +111,9 @@ class DistillationModel(BaseModel):
 
     def initialize(self, rng_key: jnp.ndarray, sample_input: jnp.ndarray) -> train_state.TrainState:
         sample = jnp.asarray(sample_input, dtype=jnp.float32)
-        if sample.ndim != 2 or sample.shape[1] != self.input_dim:
-            raise ValueError(
-                f"Student initializer expects (batch, features={self.input_dim}), got {sample.shape}."
-            )
+        if sample.ndim != 2:
+            raise ValueError(f"Student initializer expects 2D input, got {sample.shape}.")
+        self._ensure_student(sample.shape[1])
         self._state = self._init_train_state(rng_key, sample)
         return self._state
 
@@ -134,21 +157,26 @@ class DistillationModel(BaseModel):
 
     def train_student(self, inputs: jnp.ndarray) -> Dict[str, Any]:
         inputs_seq = self._ensure_sequence(jnp.asarray(inputs, dtype=jnp.float64))
-        teacher_targets = self._teacher_pass(inputs_seq)
+        projected_inputs = self.projector(inputs_seq)  # (B, T, N_res)
 
-        flat_inputs = jnp.asarray(inputs_seq, dtype=jnp.float32).reshape(-1, self.input_dim)
-        flat_targets = teacher_targets.reshape(-1, self.teacher_output_dim)
+        batch_size = inputs_seq.shape[0]
+        flat_dim = projected_inputs.shape[1] * projected_inputs.shape[2]
+        student_inputs = jnp.asarray(projected_inputs, dtype=jnp.float32).reshape(batch_size, flat_dim)
+        self._ensure_student(flat_dim)
 
-        num_samples = flat_inputs.shape[0]
+        teacher_states = self._teacher_pass(inputs_seq)
+        student_targets = self._aggregate_states(teacher_states)  # (B, N_res)
+
+        num_samples = batch_size
         num_batches = num_samples // self.batch_size
         if num_batches == 0:
             raise ValueError(
-                f"Dataset too small for batch_size={self.batch_size}: only {num_samples} samples available."
+                f"Dataset too small ({num_samples}) for batch_size={self.batch_size}."
             )
 
         usable = num_batches * self.batch_size
-        batched_inputs = flat_inputs[:usable].reshape(num_batches, self.batch_size, self.input_dim)
-        batched_targets = flat_targets[:usable].reshape(num_batches, self.batch_size, self.teacher_output_dim)
+        batched_inputs = student_inputs[:usable].reshape(num_batches, self.batch_size, flat_dim)
+        batched_targets = student_targets[:usable].reshape(num_batches, self.batch_size, self.teacher_output_dim)
 
         if self._state is None:
             self._rng, init_key = jax.random.split(self._rng)
@@ -181,15 +209,16 @@ class DistillationModel(BaseModel):
             raise RuntimeError("Student network is not initialized. Call train_student or initialize first.")
 
         inputs_seq = self._ensure_sequence(jnp.asarray(inputs, dtype=jnp.float32))
-        flat_inputs = inputs_seq.reshape(-1, self.input_dim)
+        projected_inputs = self.projector(inputs_seq)
+        flat_inputs = projected_inputs.reshape(projected_inputs.shape[0], -1)
+        self._ensure_student(flat_inputs.shape[1])
 
         @jax.jit
         def _predict(params, x_batch):
             return self.student.apply({"params": params}, x_batch)
 
         preds = _predict(self._state.params, flat_inputs)
-        preds_3d = preds.reshape(inputs_seq.shape[0], inputs_seq.shape[1], self.teacher_output_dim)
-        return self._aggregate_states(preds_3d)
+        return preds
 
     def predict(self, inputs: jnp.ndarray) -> jnp.ndarray:
         return self.__call__(inputs)

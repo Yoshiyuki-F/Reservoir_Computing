@@ -5,11 +5,12 @@ Standard Echo State Network implementation.
 from __future__ import annotations
 
 from collections import namedtuple
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
 
+from reservoir.components.projection import InputProjector
 from reservoir.models.reservoir.base import Reservoir
 
 StepArtifacts = namedtuple("StepArtifacts", ["states"])
@@ -29,6 +30,7 @@ class ClassicalReservoir(Reservoir):
         noise_rc: float,
         bias_scale: float,
         seed: int,
+        projector: Optional[InputProjector] = None,
     ) -> None:
         super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc)
         self.input_scale = float(input_scale)
@@ -38,26 +40,20 @@ class ClassicalReservoir(Reservoir):
         self.bias_scale = float(bias_scale)
         self.seed = int(seed)
         self._rng = jax.random.PRNGKey(self.seed)
+        self.projector = projector or InputProjector(
+            n_inputs=self.n_inputs,
+            n_units=self.n_units,
+            input_scale=self.input_scale,
+            connectivity=self.connectivity,
+            bias_scale=self.bias_scale,
+            seed=self.seed,
+        )
         self._init_weights()
 
     def _init_weights(self) -> None:
-        k_in, k_res, k_bias, k_mask_in, k_mask_res = jax.random.split(self._rng, 5)
-        self._rng = k_bias
+        k_res, k_mask_res = jax.random.split(self._rng, 2)
+        self._rng = k_res
 
-        boundary = self.input_scale
-        self.Win = jax.random.uniform(
-            k_in,
-            (self.n_inputs, self.n_units),
-            minval=-boundary,
-            maxval=boundary,
-            dtype=jnp.float64,
-        )
-
-        if 0.0 < self.connectivity < 1.0:
-            mask_in = jax.random.bernoulli(k_mask_in, p=self.connectivity, shape=self.Win.shape)
-            self.Win = jnp.where(mask_in, self.Win, 0.0)
-
-        # W (Reservoir) の初期化
         W_dense = jax.random.normal(k_res, (self.n_units, self.n_units), dtype=jnp.float64)
         if 0.0 < self.connectivity < 1.0:
             mask_res = jax.random.bernoulli(k_mask_res, p=self.connectivity, shape=W_dense.shape)
@@ -67,21 +63,13 @@ class ClassicalReservoir(Reservoir):
         scale = self.spectral_radius / eig if eig > 0 else 1.0
         self.W = W_dense * scale
 
-        self.bias = jax.random.uniform(
-            k_bias,
-            (self.n_units,),
-            minval=-self.bias_scale,
-            maxval=self.bias_scale,
-            dtype=jnp.float64,
-        )
-
     def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
         return jnp.zeros((batch_size, self.n_units), dtype=jnp.float64)
 
-    def step(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # 論文の式:   (1 - a) * state + tanh(...)
 
-        pre_activation = jnp.dot(input_data, self.Win) + jnp.dot(state, self.W) + self.bias
+        pre_activation = projected_input + jnp.dot(state, self.W)
         activated = jnp.tanh(pre_activation)
 
         # 論文 Eq(7) 通りの実装
@@ -93,12 +81,13 @@ class ClassicalReservoir(Reservoir):
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
         batch, time, _ = input_data.shape
-        inputs_transposed = jnp.swapaxes(input_data, 0, 1)
+        projected = self.projector(input_data)
+        proj_transposed = jnp.swapaxes(projected, 0, 1)
 
         def scan_fn(carry, x_t):
             return self.step(carry, x_t)
 
-        final_states, stacked = jax.lax.scan(scan_fn, state, inputs_transposed)
+        final_states, stacked = jax.lax.scan(scan_fn, state, proj_transposed)
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, StepArtifacts(states=stacked)
 
