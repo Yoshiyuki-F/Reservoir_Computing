@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, Sequence
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg as jsp
+import numpy as np
 
 from reservoir.components.readout.ridge import RidgeRegression
 
@@ -95,6 +96,15 @@ class UniversalPipeline:
         mapped = jax.lax.map(batch_fn, reshaped)  # (num_batches, batch_size, ...)
         flat = mapped.reshape((arr_padded.shape[0],) + mapped.shape[2:])
         return flat[:n]
+
+    def batch_transform(self, inputs: Any, batch_size: Optional[int] = None, *, to_numpy: bool = True) -> Any:
+        """
+        Public batched feature extraction that optionally moves results to CPU (numpy).
+        """
+        features = self._extract_features_batched(inputs, batch_size or 0)
+        if to_numpy:
+            return np.asarray(features)
+        return features
 
     def _prepare_design(self, Z: jnp.ndarray, y: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         X = jnp.asarray(Z, dtype=jnp.float64)

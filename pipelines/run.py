@@ -291,6 +291,7 @@ def run_pipeline(
     training_cfg = _resolve_training_config(config, is_classification)
     training_cfg["_meta_dataset"] = dataset_name
     training_cfg["_meta_model_type"] = model_type
+    feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
 
     # Shape Adjustment Logic
     reservoir_units_for_plot: Optional[int] = None
@@ -567,18 +568,8 @@ def run_pipeline(
             if test_labels_np.ndim > 1:
                 test_labels_np = np.argmax(test_labels_np, axis=-1)
 
-            def _extract_features(arr: Any) -> np.ndarray:
-                if hasattr(model, "__call__"):
-                    try:
-                        return np.asarray(model(arr))
-                    except TypeError:
-                        pass
-                if hasattr(model, "predict"):
-                    return np.asarray(model.predict(arr))
-                raise AttributeError("Model must implement __call__ or predict for feature extraction.")
-
-            train_features_np = _extract_features(train_X)
-            test_features_np = _extract_features(test_X)
+            train_features_np = runner.batch_transform(train_X, batch_size=feature_batch_size)
+            test_features_np = runner.batch_transform(test_X, batch_size=feature_batch_size)
             train_pred_np = np.asarray(readout.predict(train_features_np))
             test_pred_np = np.asarray(readout.predict(test_features_np))
             if train_pred_np.ndim > 1:
@@ -593,7 +584,7 @@ def run_pipeline(
                 val_labels_np = np.asarray(val_y)
                 if val_labels_np.ndim > 1:
                     val_labels_np = np.argmax(val_labels_np, axis=-1)
-                val_features_np = _extract_features(val_X)
+                val_features_np = runner.batch_transform(val_X, batch_size=feature_batch_size)
                 val_pred_raw = np.asarray(readout.predict(val_features_np))
                 val_pred_np = val_pred_raw
                 if val_pred_np.ndim > 1:
