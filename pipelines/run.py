@@ -136,9 +136,24 @@ def _resolve_training_config(config: Dict[str, Any], is_classification: bool) ->
     except KeyError:
         raise ValueError(f"Configuration Error: Training preset '{preset_name}' not found.")
 
-    merged = preset.to_dict()
     overrides = dict(config.get("training", {}) or {})
-    merged.update(overrides)
+    if "alpha" in overrides:
+        raise ValueError("Ambiguous parameter 'alpha' is forbidden. Use 'ridge_lambda' (readout) or 'leak_rate' (reservoir).")
+    preset_dict = preset.to_dict()
+
+    # Split overrides into validated dataclass fields vs. pass-through extras.
+    allowed_keys = set(TrainingConfig.__dataclass_fields__.keys())
+    field_overrides = {k: v for k, v in overrides.items() if k in allowed_keys}
+    passthrough = {k: v for k, v in overrides.items() if k not in allowed_keys}
+
+    merged_fields = {**preset_dict, **field_overrides}
+    try:
+        validated_cfg = TrainingConfig(**merged_fields)  # Validation happens in __post_init__
+    except TypeError as exc:
+        raise ValueError(f"Configuration Error: Invalid training override keys. {exc}")
+
+    merged = validated_cfg.to_dict()
+    merged.update(passthrough)
 
     if is_classification:
         merged["classification"] = True
@@ -249,7 +264,7 @@ def run_pipeline(
     model_type = model_type.lower()
 
     # Classification/Shape Handling
-    if dataset_name in {"mnist", "fashion_mnist"}:
+    if dataset_name in {"mnist"}:
         num_classes = int(dataset_preset.config.n_output)
         print(f"Converting labels to one-hot vectors (classes={num_classes})...")
         train_y = jax.nn.one_hot(train_y.astype(int), num_classes)
@@ -454,13 +469,6 @@ def run_pipeline(
     # --- Common Architecture Summary Block ---
     _print_topology(topo_meta)
 
-    # Shared Readout (owned by runner)
-    readout_cfg = config.get("readout", {})
-    readout = RidgeRegression(
-        alpha=float(readout_cfg.get("alpha", 1e-3)),
-        use_intercept=bool(readout_cfg.get("fit_intercept", True)),
-    )
-
     # --- 3a. Validation Split for ridge search ---
     val_tuple = None
     val_size = float(training_cfg.get("val_size", 0.0)) if training_cfg else 0.0
@@ -469,12 +477,22 @@ def run_pipeline(
         train_count = len(train_X) - val_count
         if train_count < 1:
             train_count = len(train_X) - 1
-            val_count = 1
         val_X = train_X[train_count:]
         val_y = train_y[train_count:]
         train_X = train_X[:train_count]
         train_y = train_y[:train_count]
         val_tuple = (val_X, val_y)
+
+
+    # Shared Readout (owned by runner)
+    readout_cfg = dict(config.get("readout", {}) or {})
+    ridge_lambda = readout_cfg.get("ridge_lambda", training_cfg["ridge_lambda"])
+
+    fit_intercept_cfg = readout_cfg.get("fit_intercept")
+    use_intercept = True if fit_intercept_cfg is None else bool(fit_intercept_cfg)
+
+    readout = RidgeRegression(ridge_lambda=float(ridge_lambda), use_intercept=use_intercept)
+
 
     # --- 3. Execution ---
     metric = "accuracy" if is_classification else "mse"
@@ -487,6 +505,28 @@ def run_pipeline(
         validation=val_tuple,
         training_cfg=training_cfg,
     )
+
+    filename_parts = [f"{dataset_name}", f"{model_type}", "raw"]
+    if reservoir_units_for_plot is not None:
+        filename_parts.append(f"nr{reservoir_units_for_plot}")
+    if nn_hidden_for_plot:
+        joined_nn = "-".join(str(v) for v in nn_hidden_for_plot)
+        filename_parts.append(f"nn{joined_nn}")
+
+
+    # --- 4a. Distillation Loss Visualization (Phase 1) ---
+    training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}
+    if isinstance(training_logs, dict) and training_logs.get("loss_history"):
+        loss_history = training_logs["loss_history"]
+        try:
+            from pipelines.plotting import plot_loss_history
+        except Exception as exc:  # pragma: no cover - optional dependency
+            print(f"Skipping distillation loss plotting due to import error: {exc}")
+        else:
+            loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_distillation_loss.png"
+            plot_loss_history(loss_history, loss_filename, title=f"{model_type.upper()} Distillation Loss")
+
+
     # Pull fitted readout (runner-owned)
     if isinstance(results, dict) and "readout" in results:
         readout = results["readout"]
@@ -507,18 +547,6 @@ def run_pipeline(
             marker = " 🏆 Best" if (best_lam is not None and lam == best_lam) else ""
             print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
         print("=" * 40 + "\n")
-
-    # --- 4b. Distillation Loss Visualization (Phase 1) ---
-    training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}
-    if isinstance(training_logs, dict) and training_logs.get("loss_history"):
-        loss_history = training_logs["loss_history"]
-        try:
-            from pipelines.plotting import plot_loss_history
-        except Exception as exc:  # pragma: no cover - optional dependency
-            print(f"Skipping distillation loss plotting due to import error: {exc}")
-        else:
-            loss_filename = f"outputs/{dataset_name}_{model_type}_distillation_loss.png"
-            plot_loss_history(loss_history, loss_filename, title=f"{model_type.upper()} Distillation Loss")
 
     # --- 4. Persistence ---
     if save_path and hasattr(model, 'save'):
@@ -571,13 +599,8 @@ def run_pipeline(
                 if val_pred_np.ndim > 1:
                     val_pred_np = np.argmax(val_pred_np, axis=-1)
 
-            filename_parts = [f"{dataset_name}", f"{model_type}", "raw"]
-            if reservoir_units_for_plot is not None:
-                filename_parts.append(f"nr{reservoir_units_for_plot}")
-            if nn_hidden_for_plot:
-                joined_nn = "-".join(str(v) for v in nn_hidden_for_plot)
-                filename_parts.append(f"nn{joined_nn}")
-            filename = f"outputs/{'_'.join(filename_parts)}_confusion.png"
+
+            filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
             plot_classification_results(
                 train_labels=train_labels_np,
                 test_labels=test_labels_np,

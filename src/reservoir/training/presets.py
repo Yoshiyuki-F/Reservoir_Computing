@@ -3,9 +3,8 @@ src/reservoir/training/presets.py
 Training configurations and Hyperparameter search spaces.
 
 V2 Architecture Compliance:
-- Single Source of Truth: The dataclass defines the 'Standard' defaults.
-- No Redundancy: Removed 'ridge_alpha' in favor of 'ridge_lambdas' list.
-- Explicit: Config objects are complete and typed.
+- Single Source of Truth: The dataclass defines the defaults (including ridge_lambda).
+- Explicit: Config objects are complete, typed, and validated.
 """
 
 from __future__ import annotations
@@ -28,8 +27,9 @@ class TrainingConfig:
     learning_rate: float = 0.001
 
     # Readout Regularization (Ridge Regression)
-    # Replaces 'ridge_alpha'. Defines the search space for validation.
-    # Default is a log-spaced range around typical values.
+    # 'ridge_lambda' is the canonical default regularization strength when no search is run.
+    ridge_lambda: float = 1e-2
+    # Defines the search space for validation. Defaults to a log-spaced range around typical values.
     ridge_lambdas: List[float] = field(
         default_factory=lambda: [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7]
     )
@@ -42,6 +42,14 @@ class TrainingConfig:
     # Task Metadata
     task_type: str = "timeseries"  # 'timeseries', 'classification', etc.
 
+    def __post_init__(self) -> None:
+        if self.ridge_lambda is None or float(self.ridge_lambda) <= 0.0:
+            raise ValueError("TrainingConfig.ridge_lambda must be a positive value defined in the preset.")
+        if not self.ridge_lambdas:
+            raise ValueError("TrainingConfig.ridge_lambdas must be a non-empty sequence.")
+        if any(float(lam) <= 0.0 for lam in self.ridge_lambdas):
+            raise ValueError("TrainingConfig.ridge_lambdas must contain only positive values.")
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, ensuring types are JSON-safe."""
         return {
@@ -49,6 +57,7 @@ class TrainingConfig:
             "batch_size": int(self.batch_size),
             "epochs": int(self.epochs),
             "learning_rate": float(self.learning_rate),
+            "ridge_lambda": float(self.ridge_lambda),
             "ridge_lambdas": [float(v) for v in self.ridge_lambdas],
             "train_size": float(self.train_size),
             "val_size": float(self.val_size),
@@ -68,6 +77,7 @@ TRAINING_DEFINITIONS: Dict[str, TrainingConfig] = {
         name="quick_test",
         batch_size=32,
         epochs=1,
+        ridge_lambda=1e-3,
         ridge_lambdas=[1e-3],  # Single value for speed
     ),
 
@@ -76,6 +86,7 @@ TRAINING_DEFINITIONS: Dict[str, TrainingConfig] = {
         batch_size=256,
         epochs=100,
         learning_rate=1e-4,
+        ridge_lambda=1e-2,
         # Finer-grained search space
         ridge_lambdas=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0],
     ),

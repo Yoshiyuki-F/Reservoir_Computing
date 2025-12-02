@@ -1,6 +1,6 @@
 # Repository Guidelines
 ls --recursive --ignore='.*' --ignore='__pycache__' --ignore='node_modules' --ignore='*.lock' --ignore='package*.json' --ignore='outouts/' 
-read ARCHITECTURE.md | sed -n '/## 4\. Key Implementation Patterns/,/## 5\. Directory Structure (Map)/p' >> AGENTS.md
+read docs/ARCHITECTURE.md | sed -n '/## 4\. Key Implementation Patterns/,/## 5\. Directory Structure (Map)/p' >> AGENTS.md
 
 
  Project Handover: Configuration & CLI Architecture V2
@@ -48,4 +48,30 @@ QuantumAnalogReservoir / QuantumGateBasedReservoir の刷新:
 これらを jax.lax.scan を使用した形式に書き換え、StepArtifacts を返すように変更する必要があります。
 ClassicalReservoir と同様に、暗黙のデフォルト値を排除し、SSOTプリセットに従うように修正が必要です。
 FNN/RNN との比較実験:
-UniversalPipeline が抽象化されたため、FNN/RNN モデルも同じフローで動作確認を行う必要があります。
+UniversalPipeline が抽象化されたため、FNN/RNN モデルも同じフローで動作確認を行う必要があります。## 4. Key Implementation Patterns
+
+### 4.1 JAX Scan Pattern
+時系列処理には必ず `jax.lax.scan` を使用します。これにより、JIT コンパイル時にループが最適化され、GPU 上で劇的な高速化が実現されます。
+
+# GOOD: JAX Scan
+def scan_fn(carry, x):
+    new_carry = update(carry, x)
+    return new_carry, new_carry
+final, history = jax.lax.scan(scan_fn, init, inputs)
+
+# BAD: Python Loop
+history = []
+state = init
+for x in inputs:
+    state = update(state, x) # Slow on GPU
+    history.append(state)
+
+
+### 4.2 Dynamic Dependency Injection
+`pipelines/run.py` は、静的なモデル定義ではなく、Config に基づいて動的にパイプラインを構築します。
+*   `use_design_matrix` フラグにより、`DesignMatrix` クラスが動的に注入されます。
+*   これにより、コードを変更することなく、CLI 引数だけでアーキテクチャの構成要素を変更可能です。
+
+---
+
+## 5. Directory Structure (Map)

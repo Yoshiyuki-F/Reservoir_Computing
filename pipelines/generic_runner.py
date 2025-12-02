@@ -115,18 +115,19 @@ class UniversalPipeline:
         ridge_lambdas: Optional[Sequence[float]],
     ) -> tuple[float, Dict[float, float]]:
         lambdas = list(ridge_lambdas) if ridge_lambdas is not None else []
+        initial_lambda = float(self.readout.ridge_lambda)
+
         # No validation -> skip search to avoid overfitting
         if val_Z is None or val_y is None:
             print("⚠️ No validation set provided. Skipping hyperparameter search to prevent overfitting.")
             self.readout.fit(train_Z, train_y)
-            return float(getattr(self.readout, "alpha", 1.0)), {}
+            return float(initial_lambda), {}
 
         if not lambdas:
-            lambdas = [float(getattr(self.readout, "alpha", 1.0))]
+            lambdas = [float(initial_lambda)]
         else:
             print(
-                f"Search active: overriding initial alpha={getattr(self.readout, 'alpha', None)} "
-                f"with {len(lambdas)} candidates."
+                f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambdas)} candidates."
             )
 
         lambdas_arr = jnp.asarray(lambdas, dtype=jnp.float64)
@@ -169,7 +170,7 @@ class UniversalPipeline:
         else:
             self.readout.intercept_ = jnp.zeros(best_weights.shape[1], dtype=jnp.float64)
             self.readout.coef_ = jnp.asarray(best_weights, dtype=jnp.float64)
-        self.readout.alpha = best_lambda
+        self.readout.ridge_lambda = best_lambda
 
         return best_lambda, search_history
 

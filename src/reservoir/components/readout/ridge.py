@@ -15,8 +15,13 @@ from reservoir.core.interfaces import ReadoutModule
 class RidgeRegression(ReadoutModule):
     """Ridge regression readout solved with JAX linear algebra."""
 
-    def __init__(self, alpha: float = 1.0, use_intercept: bool = True) -> None:
-        self.alpha = float(alpha)
+    def __init__(self, ridge_lambda: float, use_intercept: bool = True) -> None:
+        if ridge_lambda is None:
+            raise ValueError("RidgeRegression requires an explicit, positive ridge_lambda.")
+        lambda_val = float(ridge_lambda)
+        if lambda_val <= 0.0:
+            raise ValueError(f"RidgeRegression ridge_lambda must be positive, got {lambda_val}.")
+        self.ridge_lambda = lambda_val
         self.use_intercept = bool(use_intercept)
         self.coef_: Optional[jnp.ndarray] = None
         self.intercept_: Optional[jnp.ndarray] = None
@@ -37,7 +42,7 @@ class RidgeRegression(ReadoutModule):
         XTX = XT @ X_train
         XTy = XT @ y
         diag_idx = jnp.diag_indices(XTX.shape[0])
-        XTX = XTX.at[diag_idx].add(self.alpha)
+        XTX = XTX.at[diag_idx].add(self.ridge_lambda)
         try:
             w = jax.scipy.linalg.solve(XTX, XTy, assume_a="pos")
         except Exception:
@@ -60,7 +65,7 @@ class RidgeRegression(ReadoutModule):
         return X @ self.coef_ + self.intercept_ if self.use_intercept else X @ self.coef_
 
     def to_dict(self) -> Dict[str, Any]:
-        data = {"alpha": self.alpha, "use_intercept": self.use_intercept}
+        data = {"ridge_lambda": self.ridge_lambda, "use_intercept": self.use_intercept}
         if self.coef_ is not None:
             data["coef"] = jnp.asarray(self.coef_).tolist()
             data["intercept"] = jnp.asarray(self.intercept_).tolist()
@@ -68,9 +73,10 @@ class RidgeRegression(ReadoutModule):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RidgeRegression":
-        model = cls(alpha=float(data.get("alpha", 1.0)), use_intercept=bool(data.get("use_intercept", True)))
+        if "ridge_lambda" not in data:
+            raise ValueError("Serialized RidgeRegression is missing required 'ridge_lambda'.")
+        model = cls(ridge_lambda=float(data["ridge_lambda"]), use_intercept=bool(data.get("use_intercept", True)))
         if "coef" in data:
             model.coef_ = jnp.asarray(data["coef"], dtype=jnp.float64)
             model.intercept_ = jnp.asarray(data.get("intercept", 0.0), dtype=jnp.float64)
         return model
-
