@@ -1,5 +1,6 @@
 """Models package."""
 
+from .distillation import DistillationModel
 from .factories import FlaxModelFactory
 from .nn.base import BaseFlaxModel
 from .nn.modules import FNN, SimpleRNN
@@ -14,6 +15,7 @@ from .nn.config import (
 from .presets import (
     ModelPreset,
     ReservoirConfig,
+    DistillationConfig,
     MODEL_PRESETS,
     MODEL_REGISTRY,
     get_model_preset,
@@ -31,8 +33,10 @@ __all__ = [
     "FNNModel",
     "RNNModel",
     "FlaxModelFactory",
+    "DistillationModel",
     "ModelPreset",
     "ReservoirConfig",
+    "DistillationConfig",
     "MODEL_PRESETS",
     "MODEL_REGISTRY",
     "get_model_preset",

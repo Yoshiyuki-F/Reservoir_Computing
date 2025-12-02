@@ -15,9 +15,12 @@ from flax.training import train_state
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
 
-    @abstractmethod
-    def train(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, Any]:
-        ...
+    def train(self, inputs: Any, targets: Optional[Any] = None) -> Dict[str, Any]:
+        """
+        Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
+        Defaults to a no-op so models without a pre-training stage can conform to the interface.
+        """
+        return {}
 
     @abstractmethod
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
@@ -34,7 +37,7 @@ class BaseFlaxModel(BaseModel, ABC):
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
         self.learning_rate: float = float(config.get("learning_rate"))
-        self.epochs: int = int(config.get("num_epochs", config.get("epochs")))
+        self.epochs: int = int(config.get("epochs", config.get("epochs")))
         self.batch_size: int = int(config.get("batch_size"))
         self.classification: bool = bool(config.get("classification", False))
         self.seed: int = int(config.get("seed"))
@@ -80,9 +83,12 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, Any]:
-        X = jnp.asarray(X)
-        y = jnp.asarray(y)
+    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **_: Any) -> Dict[str, Any]:
+        if targets is None:
+            raise ValueError("BaseFlaxModel.train requires 'targets' for supervised optimization.")
+
+        X = jnp.asarray(inputs)
+        y = jnp.asarray(targets)
         num_samples = X.shape[0]
         if num_samples != y.shape[0]:
             raise ValueError(f"Mismatched batch dimension: X {X.shape}, y {y.shape}")

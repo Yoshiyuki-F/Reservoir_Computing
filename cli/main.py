@@ -25,6 +25,13 @@ def main() -> None:
     parser.add_argument("--unified-batch-size", type=int, default=None)
     parser.add_argument("--unified-lr", type=float, default=None)
     parser.add_argument("--unified-seq-len", type=int, default=50)
+    parser.add_argument(
+        "--nn-hidden",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Hidden layer dimensions for FNN (Student in distillation mode).",
+    )
 
     # Presets
     parser.add_argument(
@@ -61,9 +68,10 @@ def main() -> None:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config
+    dataset_name = args.dataset or args.dataset_pos
     config = build_run_config(
         model_type=args.unified_model,
-        dataset=args.dataset or args.dataset_pos or "sine_wave",
+        dataset=dataset_name,
         hidden_dim=args.unified_hidden,
         epochs=args.unified_epochs,
         batch_size=args.unified_batch_size,
@@ -73,6 +81,7 @@ def main() -> None:
         training_preset=args.training_preset,
         use_design_matrix=args.use_design_matrix,
         poly_degree=args.poly_degree,
+        nn_hidden=args.nn_hidden,
     )
 
     print(f"[Unified] Running {config['model_type']} pipeline on {config['dataset']}...")

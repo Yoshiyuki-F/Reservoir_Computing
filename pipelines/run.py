@@ -21,7 +21,7 @@ from reservoir.components import FeatureScaler, DesignMatrix, RidgeRegression, T
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
 from reservoir.data.registry import DatasetRegistry
 from reservoir.models.orchestrator import ReservoirModel
-from reservoir.models.presets import MODEL_REGISTRY, get_model_preset, ModelPreset
+from reservoir.models.presets import get_model_preset, ModelPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 
@@ -166,6 +166,12 @@ def run_pipeline(
         train_X, test_X = X[:split_idx], X[split_idx:]
         train_y, test_y = y[:split_idx], y[split_idx:]
 
+    # Model type (required downstream)
+    model_type = config.get("model_type")
+    if not model_type:
+        raise ValueError("Configuration Error: 'model_type' is required.")
+    model_type = model_type.lower()
+
     # Classification/Shape Handling
     if dataset_name in {"mnist", "fashion_mnist"}:
         num_classes = int(dataset_preset.config.n_output)
@@ -192,52 +198,55 @@ def run_pipeline(
 
     # Resolve training configuration (needed for ridge search/validation)
     training_cfg = _resolve_training_config(config, is_classification)
+    training_cfg["_meta_dataset"] = dataset_name
+    training_cfg["_meta_model_type"] = model_type
 
     # Shape Adjustment Logic
-    model_type = config.get("model_type")
-    if not model_type:
-        raise ValueError("Configuration Error: 'model_type' is required.")
-    model_type = model_type.lower()
+    reservoir_units_for_plot: Optional[int] = None
+    nn_hidden_for_plot: Optional[list[int]] = None
 
-    if model_type == "fnn":
-        if train_X.ndim > 2:
-            print(f"Flattening input for FNN: {train_X.shape} -> (N, Flattened)")
-            train_X = train_X.reshape(train_X.shape[0], -1)
-            if test_X is not None:
-                test_X = test_X.reshape(test_X.shape[0], -1)
+    if train_X.ndim != 3:
+        raise ValueError(
+            f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
+            f"Got shape {train_X.shape}. Please reshape your data source."
+        )
 
-    elif model_type in ["rnn", "reservoir", "esn", "classical"]:
-        if train_X.ndim != 3:
-            raise ValueError(
-                f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
-                f"Got shape {train_X.shape}. Please reshape your data source."
-            )
 
     print(f"Data Shapes -> Train: {train_X.shape}, Test: {test_X.shape if test_X is not None else 'None'}")
     input_shape = train_X.shape[1:]
 
+    hidden_dim = config.get("hidden_dim")
+    if hidden_dim is None:
+        raise ValueError(f"Configuration Error: 'hidden_dim' must be specified.")
+
     # --- 2. Model Creation (Strict) ---
     print(f"Initializing {model_type.upper()} model via Factory...")
 
-    if model_type in ["fnn", "rnn", "lstm", "gru"]:
+    if model_type in ["fnn", "rnn"]:
         model_cfg = dict(config.get("model", {}))
 
         # Enforce explicit dimensions or fail
         if model_type == "fnn":
-            hidden_dim = config.get("hidden_dim")
-            if hidden_dim is None:
-                raise ValueError("Configuration Error: 'hidden_dim' must be specified for FNN.")
+            hidden_layers = model_cfg.get("layer_dims")
+            if hidden_layers:
+                hidden_layers = [int(v) for v in hidden_layers]
+            else:
+                hidden_layers = [int(hidden_dim)]
 
             model_cfg["layer_dims"] = [
                 int(input_shape[-1]),
-                int(hidden_dim),
+                *hidden_layers,
                 int(meta_n_outputs)
             ]
+            nn_hidden_for_plot = hidden_layers.copy() if hidden_layers else None
+
+            teacher_cfg_candidate = config.get("reservoir") or config.get("reservoir_params") or {}
+            teacher_units = teacher_cfg_candidate.get("n_units") or hidden_dim
+            if teacher_units is not None:
+                reservoir_units_for_plot = int(teacher_units)
         else:
             # RNN types
-            hidden_dim = config.get("hidden_dim")
-            if hidden_dim is None:
-                raise ValueError(f"Configuration Error: 'hidden_dim' must be specified for {model_type}.")
+
 
             model_cfg.setdefault("input_dim", int(input_shape[-1]))
             model_cfg["hidden_dim"] = int(hidden_dim)
@@ -245,7 +254,13 @@ def run_pipeline(
             model_cfg.setdefault("return_sequences", False)
             model_cfg.setdefault("return_hidden", False)
 
-        factory_cfg = {"type": model_type, "model": model_cfg, "training": training_cfg}
+        factory_cfg = {
+            "type": model_type,
+            "model": model_cfg,
+            "training": training_cfg,
+            "reservoir": config.get("reservoir", {}),
+            "input_dim": int(input_shape[-1]),
+        }
         model = FlaxModelFactory.create_model(factory_cfg)
 
     elif model_type in ["reservoir", "esn", "classical"]:
@@ -296,13 +311,6 @@ def run_pipeline(
                 f"Preset: '{config.get('reservoir_preset', 'classical')}', Config: {reservoir_params}"
             )
 
-        # Readout Config
-        readout_cfg = config.get("readout", {})
-        readout = RidgeRegression(
-            alpha=float(readout_cfg.get("alpha", 1e-3)),
-            use_intercept=bool(readout_cfg.get("fit_intercept", True)),
-        )
-
         readout_mode = reservoir_params.get("state_aggregation")
         if not readout_mode:
             raise ValueError(
@@ -310,7 +318,8 @@ def run_pipeline(
                 "Define it in the preset or override explicitly."
             )
 
-        model = ReservoirModel(reservoir=node, readout=readout, preprocess=preprocess, readout_mode=readout_mode)
+        model = ReservoirModel(reservoir=node, preprocess=preprocess, readout_mode=readout_mode)
+        reservoir_units_for_plot = int(node.n_units)
 
         # --- Architecture Summary ---
         raw_input_dim = int(input_shape[-1])
@@ -333,6 +342,13 @@ def run_pipeline(
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
+    # Shared Readout (owned by runner)
+    readout_cfg = config.get("readout", {})
+    readout = RidgeRegression(
+        alpha=float(readout_cfg.get("alpha", 1e-3)),
+        use_intercept=bool(readout_cfg.get("fit_intercept", True)),
+    )
+
     # --- 3a. Validation Split for ridge search ---
     val_tuple = None
     val_size = float(training_cfg.get("val_size", 0.0)) if training_cfg else 0.0
@@ -350,7 +366,7 @@ def run_pipeline(
 
     # --- 3. Execution ---
     metric = "accuracy" if is_classification else "mse"
-    runner = UniversalPipeline(model, config.get("save_path"), metric=metric)
+    runner = UniversalPipeline(model, readout, config.get("save_path"), metric=metric)
     results = runner.run(
         train_X,
         train_y,
@@ -359,6 +375,9 @@ def run_pipeline(
         validation=val_tuple,
         training_cfg=training_cfg,
     )
+    # Pull fitted readout (runner-owned)
+    if isinstance(results, dict) and "readout" in results:
+        readout = results["readout"]
 
     # Log ridge search results if available
     train_res = results.get("train", {}) if isinstance(results, dict) else {}
@@ -376,6 +395,18 @@ def run_pipeline(
             marker = " 🏆 Best" if (best_lam is not None and lam == best_lam) else ""
             print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
         print("=" * 40 + "\n")
+
+    # --- 4b. Distillation Loss Visualization (Phase 1) ---
+    training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}
+    if isinstance(training_logs, dict) and training_logs.get("loss_history"):
+        loss_history = training_logs["loss_history"]
+        try:
+            from pipelines.plotting import plot_loss_history
+        except Exception as exc:  # pragma: no cover - optional dependency
+            print(f"Skipping distillation loss plotting due to import error: {exc}")
+        else:
+            loss_filename = f"outputs/{dataset_name}_{model_type}_distillation_loss.png"
+            plot_loss_history(loss_history, loss_filename, title=f"{model_type.upper()} Distillation Loss")
 
     # --- 4. Persistence ---
     if save_path and hasattr(model, 'save'):
@@ -396,8 +427,20 @@ def run_pipeline(
             if test_labels_np.ndim > 1:
                 test_labels_np = np.argmax(test_labels_np, axis=-1)
 
-            train_pred_np = np.asarray(model.predict(train_X))
-            test_pred_np = np.asarray(model.predict(test_X))
+            def _extract_features(arr: Any) -> np.ndarray:
+                if hasattr(model, "__call__"):
+                    try:
+                        return np.asarray(model(arr))
+                    except TypeError:
+                        pass
+                if hasattr(model, "predict"):
+                    return np.asarray(model.predict(arr))
+                raise AttributeError("Model must implement __call__ or predict for feature extraction.")
+
+            train_features_np = _extract_features(train_X)
+            test_features_np = _extract_features(test_X)
+            train_pred_np = np.asarray(readout.predict(train_features_np))
+            test_pred_np = np.asarray(readout.predict(test_features_np))
             if train_pred_np.ndim > 1:
                 train_pred_np = np.argmax(train_pred_np, axis=-1)
             if test_pred_np.ndim > 1:
@@ -410,12 +453,19 @@ def run_pipeline(
                 val_labels_np = np.asarray(val_y)
                 if val_labels_np.ndim > 1:
                     val_labels_np = np.argmax(val_labels_np, axis=-1)
-                val_pred_raw = np.asarray(model.predict(val_X))
+                val_features_np = _extract_features(val_X)
+                val_pred_raw = np.asarray(readout.predict(val_features_np))
                 val_pred_np = val_pred_raw
                 if val_pred_np.ndim > 1:
                     val_pred_np = np.argmax(val_pred_np, axis=-1)
 
-            filename = f"outputs/{dataset_name}_{model_type}_raw_nr{reservoir_params['n_units']}_confusion.png"
+            filename_parts = [f"{dataset_name}", f"{model_type}", "raw"]
+            if reservoir_units_for_plot is not None:
+                filename_parts.append(f"nr{reservoir_units_for_plot}")
+            if nn_hidden_for_plot:
+                joined_nn = "-".join(str(v) for v in nn_hidden_for_plot)
+                filename_parts.append(f"nn{joined_nn}")
+            filename = f"outputs/{'_'.join(filename_parts)}_confusion.png"
             plot_classification_results(
                 train_labels=train_labels_np,
                 test_labels=test_labels_np,

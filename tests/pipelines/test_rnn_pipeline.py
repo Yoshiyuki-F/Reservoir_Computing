@@ -13,7 +13,7 @@ def test_run_rnn_pipeline_regression():
             "return_sequences": False,
             "return_hidden": False,
         },
-        "training": {"learning_rate": 1e-3, "batch_size": 2, "num_epochs": 2, "classification": False},
+        "training": {"learning_rate": 1e-3, "batch_size": 2, "epochs": 2, "classification": False},
     }
 
     X = jnp.array(

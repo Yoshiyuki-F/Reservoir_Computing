@@ -14,7 +14,7 @@
       "training": {
         "learning_rate": 0.001,
         ": 128,
-        "num_epochs": 20,
+        "epochs": 20,
         "weights_path": "outputs/mnist_fnn_raw_h300_vs_res100.msgpack"
       },
       "ridge_lambdas": [

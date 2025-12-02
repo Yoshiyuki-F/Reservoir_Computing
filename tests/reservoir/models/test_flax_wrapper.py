@@ -8,7 +8,7 @@ def test_fnn_classification_train_and_eval():
     config = {
         "type": "fnn",
         "model": {"layer_dims": [3, 4, 2]},
-        "training": {"learning_rate": 1e-3, "batch_size": 2, "num_epochs": 2},
+        "training": {"learning_rate": 1e-3, "batch_size": 2, "epochs": 2},
     }
     model = FlaxModelFactory.create_model(config)
 
@@ -31,7 +31,7 @@ def test_fnn_regression_with_runner():
         "training": {
             "learning_rate": 1e-3,
             "batch_size": 4,
-            "num_epochs": 3,
+            "epochs": 3,
             "classification": False,
         },
     }
@@ -56,7 +56,7 @@ def test_save_and_load_roundtrip(tmp_path):
         "training": {
             "learning_rate": 1e-3,
             "batch_size": 2,
-            "num_epochs": 1,
+            "epochs": 1,
             "classification": False,
         },
     }

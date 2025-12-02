@@ -1,6 +1,7 @@
+# /home/yoshi/PycharmProjects/Reservoir/src/reservoir/core/config_builder.py
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 
 def build_run_config(
@@ -8,6 +9,7 @@ def build_run_config(
     model_type: str,
     dataset: str,
     hidden_dim: Optional[int] = None,
+    nn_hidden: Optional[List[int]] = None,
     epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
     learning_rate: Optional[float] = None,
@@ -24,6 +26,8 @@ def build_run_config(
     Anything left as None is omitted so that downstream preset resolution
     can supply defaults (e.g., TRAINING_PRESETS).
     """
+    if dataset is None:
+        raise ValueError("dataset is required to build a run configuration.")
 
     config: Dict[str, Any] = {
         "model_type": model_type.lower(),
@@ -36,9 +40,11 @@ def build_run_config(
 
     if hidden_dim is not None:
         config["hidden_dim"] = hidden_dim
+    if nn_hidden is not None:
+        config["model"]["layer_dims"] = [int(v) for v in nn_hidden]
 
     if epochs is not None:
-        config["training"]["num_epochs"] = epochs
+        config["training"]["epochs"] = epochs
     if batch_size is not None:
         config["training"]["batch_size"] = batch_size
     if learning_rate is not None:
@@ -52,7 +58,16 @@ def build_run_config(
     if poly_degree is not None:
         config["poly_degree"] = poly_degree
 
-    if config.get("model_type") == "reservoir":
+    model_type_lower = config.get("model_type")
+    if model_type_lower == "fnn":
+        if nn_hidden and hidden_dim is not None:
+            # Distillation intent: teacher size from hidden_dim, student hidden layers from nn_hidden
+            config["reservoir"]["n_units"] = hidden_dim
+        elif hidden_dim is not None and "layer_dims" not in config["model"]:
+            # Standard FNN fallback uses unified_hidden as hidden layer
+            config["model"]["layer_dims"] = [hidden_dim]
+
+    if model_type_lower == "reservoir":
         config["reservoir_preset"] = reservoir_preset or "classical"
 
     config.update(kwargs)

@@ -15,7 +15,7 @@ from .gpu_utils import (  # noqa: F401
     require_gpu,
     print_gpu_info,
 )
-from .metrics import calculate_mse, calculate_mae  # noqa: F401
+from .metrics import calculate_mse, calculate_mae, accuracy_score, mse_score  # noqa: F401
 
 __all__ = [
     "ensure_x64_enabled",
@@ -23,5 +23,7 @@ __all__ = [
     "require_gpu",
     "print_gpu_info",
     "calculate_mse",
+    "accuracy_score",
+    "mse_score",
     "calculate_mae",
 ]

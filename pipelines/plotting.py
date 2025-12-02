@@ -164,3 +164,20 @@ def plot_classification_results(
     fig.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
     print(f"分類結果を '{output_path}' に保存しました。")
+
+
+def plot_loss_history(history: Sequence[float], filename: str, title: str = "Loss Curve") -> None:
+    """Plot a generic loss history curve and save to outputs."""
+    output_path = _resolve_output_path(filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(range(1, len(history) + 1), history, marker="o")
+    plt.title(title)
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Loss curve saved to '{output_path}'.")

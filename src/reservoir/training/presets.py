@@ -24,7 +24,7 @@ class TrainingConfig:
 
     # Training Loop
     batch_size: int = 128
-    num_epochs: int = 20
+    epochs: int = 20
     learning_rate: float = 0.001
 
     # Readout Regularization (Ridge Regression)
@@ -47,7 +47,7 @@ class TrainingConfig:
         return {
             "name": self.name,
             "batch_size": int(self.batch_size),
-            "num_epochs": int(self.num_epochs),
+            "epochs": int(self.epochs),
             "learning_rate": float(self.learning_rate),
             "ridge_lambdas": [float(v) for v in self.ridge_lambdas],
             "train_size": float(self.train_size),
@@ -67,14 +67,14 @@ TRAINING_DEFINITIONS: Dict[str, TrainingConfig] = {
     "quick_test": TrainingConfig(
         name="quick_test",
         batch_size=32,
-        num_epochs=1,
+        epochs=1,
         ridge_lambdas=[1e-3],  # Single value for speed
     ),
 
     "heavy": TrainingConfig(
         name="heavy",
         batch_size=256,
-        num_epochs=100,
+        epochs=100,
         learning_rate=1e-4,
         # Finer-grained search space
         ridge_lambdas=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0],

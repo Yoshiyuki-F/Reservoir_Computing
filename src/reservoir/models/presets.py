@@ -1,7 +1,8 @@
+# /home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/presets.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from reservoir.core.presets import PresetRegistry
 
@@ -33,6 +34,67 @@ class ReservoirConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    def validate(self, *, context: str = "") -> None:
+        prefix = f"{context}: " if context else ""
+        if self.n_units is None or self.n_units <= 0:
+            raise ValueError(f"{prefix}n_units must be explicitly defined and > 0 for reservoir operation.")
+        if not (0.0 < self.spectral_radius):
+            raise ValueError(f"{prefix}spectral_radius must be > 0.")
+        if not (0.0 <= self.leak_rate <= 1.0):
+            raise ValueError(f"{prefix}leak_rate must be in [0, 1].")
+        if not (0.0 < self.input_scale):
+            raise ValueError(f"{prefix}input_scale must be > 0.")
+        if not (0.0 < self.connectivity <= 1.0):
+            raise ValueError(f"{prefix}connectivity must be in (0, 1].")
+        if self.bias_scale < 0.0:
+            raise ValueError(f"{prefix}bias_scale must be >= 0.")
+        if self.noise_rc < 0.0:
+            raise ValueError(f"{prefix}noise_rc must be >= 0.")
+
+
+@dataclass(frozen=True)
+class DistillationConfig:
+    """Configuration for distilling reservoir dynamics into a feed-forward student."""
+
+    teacher: ReservoirConfig = field(default_factory=ReservoirConfig)
+    student_hidden_layers: Tuple[int, ...] = (10,)
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    batch_size: int = 32
+
+    def __post_init__(self) -> None:
+        if not self.student_hidden_layers:
+            raise ValueError("DistillationConfig.student_hidden_layers must contain at least one layer size.")
+        if any(width <= 0 for width in self.student_hidden_layers):
+            raise ValueError("DistillationConfig.student_hidden_layers values must be positive.")
+        if self.learning_rate <= 0:
+            raise ValueError("DistillationConfig.learning_rate must be positive.")
+        if self.epochs <= 0 or self.batch_size <= 0:
+            raise ValueError("DistillationConfig.epochs and batch_size must be positive.")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "teacher": self.teacher.to_dict(),
+            "student_hidden_layers": tuple(int(v) for v in self.student_hidden_layers),
+            "learning_rate": float(self.learning_rate),
+            "epochs": int(self.epochs),
+            "batch_size": int(self.batch_size),
+        }
+
+    def validate(self, *, context: str = "") -> None:
+        prefix = f"{context}: " if context else ""
+        self.teacher.validate(context=f"{prefix}teacher")
+        if not self.student_hidden_layers:
+            raise ValueError(f"{prefix}student_hidden_layers must contain at least one layer size.")
+        if any(width <= 0 for width in self.student_hidden_layers):
+            raise ValueError(f"{prefix}student_hidden_layers values must be positive.")
+        if self.learning_rate <= 0:
+            raise ValueError(f"{prefix}learning_rate must be positive.")
+        if self.epochs <= 0:
+            raise ValueError(f"{prefix}epochs must be positive.")
+        if self.batch_size <= 0:
+            raise ValueError(f"{prefix}batch_size must be positive.")
 
 
 @dataclass(frozen=True)
@@ -83,6 +145,14 @@ MODEL_DEFINITIONS: Dict[str, ModelPreset] = {
             "state_aggregation": "last_mean",
         },
     ),
+    "distillation_bottleneck": ModelPreset(
+        name="distillation_bottleneck",
+        model_type="distillation",
+        description="Distill reservoir trajectories into a compact FNN bottleneck.",
+        params={
+            "distillation": DistillationConfig(),
+        },
+    ),
 }
 
 MODEL_ALIASES: Dict[str, str] = {
@@ -108,6 +178,7 @@ def get_model_preset(name: str) -> ModelPreset:
 
 __all__ = [
     "ReservoirConfig",
+    "DistillationConfig",
     "ModelPreset",
     "MODEL_PRESETS",
     "MODEL_REGISTRY",

@@ -7,7 +7,7 @@ def test_run_fnn_pipeline_classification():
     cfg = {
         "type": "fnn",
         "model": {"layer_dims": [2, 4, 2]},
-        "training": {"learning_rate": 1e-3, "batch_size": 2, "num_epochs": 2, "classification": True},
+        "training": {"learning_rate": 1e-3, "batch_size": 2, "epochs": 2, "classification": True},
     }
 
     # Simple XOR-like dataset

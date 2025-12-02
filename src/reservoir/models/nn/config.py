@@ -14,7 +14,7 @@ class FNNTrainingConfig(BaseModel):
 
     learning_rate: float = Field(..., gt=0.0)
     batch_size: int = Field(..., gt=0)
-    num_epochs: int = Field(..., gt=0)
+    epochs: int = Field(..., gt=0)
     weights_path: str
 
     model_config = ConfigDict(extra="forbid")

@@ -39,6 +39,33 @@ def calculate_mse(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
     return float(jnp.mean((predictions - targets) ** 2))
 
 
+def mse_score(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
+    """Alias to calculate_mse for Runner integration."""
+    return calculate_mse(predictions, targets)
+
+
+def accuracy_score(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
+    """Compute classification accuracy for logits/probabilities or label indices."""
+    preds = jnp.asarray(predictions)
+    targs = jnp.asarray(targets)
+
+    if preds.shape != targs.shape and preds.size == targs.size:
+        preds = preds.reshape(targs.shape)
+
+    if preds.ndim > 1:
+        pred_labels = jnp.argmax(preds, axis=-1)
+    else:
+        pred_labels = preds
+        if preds.dtype in (jnp.float16, jnp.float32, jnp.float64):
+            pred_labels = preds > 0.5
+
+    true_labels = targs
+    if targs.ndim > 1:
+        true_labels = jnp.argmax(targs, axis=-1)
+
+    return float(jnp.mean(pred_labels == true_labels))
+
+
 def calculate_mae(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
     """平均絶対誤差（Mean Absolute Error）を計算。
     

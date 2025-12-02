@@ -38,7 +38,7 @@
     "readout": null,
     "learning_rate": 0.001,
     "batch_size": 128,
-    "num_epochs": 20
+    "epochs": 20
   },
   "demo": {
     "title": "Mackey-Glass Prediction",
