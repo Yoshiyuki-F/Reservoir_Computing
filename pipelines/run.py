@@ -533,19 +533,26 @@ def run_pipeline(
 
     # Log ridge search results if available
     train_res = results.get("train", {}) if isinstance(results, dict) else {}
-    if isinstance(train_res, dict) and "search_history" in train_res:
+    if isinstance(train_res, dict) and "search_history" in train_res and train_res.get("search_history"):
         history = train_res.get("search_history", {})
         best_lam = train_res.get("best_lambda")
-        metric_name = train_res.get("metric", "score")
+        weight_norms = train_res.get("weight_norms", {})
+        metric_label = "Accuracy" if metric == "accuracy" else "MSE"
+        best_by_metric = max(history, key=history.get) if metric == "accuracy" and history else (
+            min(history, key=history.get) if history else None
+        )
+        best_marker = best_lam if best_lam is not None else best_by_metric
 
         print("\n" + "=" * 40)
-        print(f"Ridge Hyperparameter Search ({metric_name})")
+        print(f"Ridge Hyperparameter Search ({metric_label})")
         print("-" * 40)
         sorted_lambdas = sorted(history.keys())
         for lam in sorted_lambdas:
-            score = history[lam]
-            marker = " Best" if (best_lam is not None and lam == best_lam) else ""
-            print(f"   λ = {float(lam):.2e} : Val Score = {float(score):.4f}{marker}")
+            score = float(history[lam])
+            norm = weight_norms.get(lam)
+            norm_str = f"(Norm: {norm:.2e})" if norm is not None else "(Norm: n/a)"
+            marker = " <= best" if (best_marker is not None and abs(float(lam) - float(best_marker)) < 1e-12) else ""
+            print(f"   λ = {float(lam):.2e} : Val Score = {score:.4f} {norm_str}{marker}")
         print("=" * 40 + "\n")
 
     # --- 4. Persistence ---

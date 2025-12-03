@@ -112,7 +112,7 @@ class UniversalPipeline:
         val_Z: Optional[jnp.ndarray],
         val_y: Optional[jnp.ndarray],
         ridge_lambdas: Optional[Sequence[float]],
-    ) -> tuple[float, Dict[float, float]]:
+    ) -> tuple[float, Dict[float, float], Dict[float, float]]:
         lambda_candidates = list(ridge_lambdas) if ridge_lambdas is not None else []
         initial_lambda = float(self.readout.ridge_lambda)
 
@@ -120,7 +120,7 @@ class UniversalPipeline:
         if val_Z is None or val_y is None:
             print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
             self.readout.fit(train_Z, train_y)
-            return float(initial_lambda), {}
+            return float(initial_lambda), {}, {}
 
         if not lambda_candidates:
             lambda_candidates = [initial_lambda]
@@ -129,7 +129,7 @@ class UniversalPipeline:
                 f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates."
             )
 
-        best_lambda, search_history = self.readout.fit_and_search(
+        best_lambda, search_history, weight_norms = self.readout.fit_and_search(
             train_Z,
             train_y,
             val_Z,
@@ -137,7 +137,7 @@ class UniversalPipeline:
             lambda_candidates,
             metric=self.metric_name,
         )
-        return best_lambda, search_history
+        return best_lambda, search_history, weight_norms
 
     # ------------------------------------------------------------------ #
     # Run                                                               #
@@ -151,7 +151,7 @@ class UniversalPipeline:
         *,
         validation: Optional[tuple[Any, Any]] = None,
         training_cfg: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Dict[str, float]]:
+    ) -> Dict[str, Dict[str, Any]]:
         train_X = jnp.asarray(train_X)
         train_y = jnp.asarray(train_y)
         test_X = jnp.asarray(test_X)
@@ -202,7 +202,7 @@ class UniversalPipeline:
             except Exception:
                 print("Training with provided ridge_lambdas configuration.")
 
-        best_lambda, search_history = self._fit_readout(train_Z, train_y, val_Z, val_y, ridge_lambdas)
+        best_lambda, search_history, weight_norms = self._fit_readout(train_Z, train_y, val_Z, val_y, ridge_lambdas)
         print(f"Readout training completed. Best lambda: {best_lambda}")
 
         # Phase 4: Evaluation
@@ -224,6 +224,7 @@ class UniversalPipeline:
                 self.metric_name: train_metric,
                 "best_lambda": best_lambda,
                 "search_history": search_history,
+                "weight_norms": weight_norms,
             },
             "test": {self.metric_name: test_metric},
         }

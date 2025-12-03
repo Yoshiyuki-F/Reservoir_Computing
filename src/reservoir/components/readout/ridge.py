@@ -60,7 +60,7 @@ class RidgeRegression(ReadoutModule):
         lambdas: Optional[jnp.ndarray],
         *,
         metric: str = "mse",
-    ) -> tuple[float, Dict[float, float]]:
+    ) -> tuple[float, Dict[float, float], Dict[float, float]]:
         if val_states is None or val_targets is None:
             raise ValueError("Validation data is required for hyperparameter search.")
 
@@ -95,6 +95,7 @@ class RidgeRegression(ReadoutModule):
             best_idx = int(jnp.argmin(errors))
             search_history = {float(lambdas_arr[i]): float(errors[i]) for i in range(errors.shape[0])}
 
+        weight_norms = {float(lambdas_arr[i]): float(jnp.linalg.norm(weights_all[i])) for i in range(weights_all.shape[0])}
 
         best_lambda = float(lambdas_arr[best_idx])
         best_weights = weights_all[best_idx]
@@ -108,7 +109,7 @@ class RidgeRegression(ReadoutModule):
             self.coef_ = self.coef_.ravel()
             self.intercept_ = self.intercept_.ravel()
         self.ridge_lambda = best_lambda
-        return best_lambda, search_history
+        return best_lambda, search_history, weight_norms
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
         X_train, y, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
