@@ -12,7 +12,7 @@ def test_fnn_classification_train_and_eval():
     }
     model = FlaxModelFactory.create_model(config)
 
-    X = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0]], dtype=jnp.float32)
+    X = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0]], dtype=jnp.float64)
     y = jnp.array([0, 1, 0, 1])
 
     train_metrics = model.train(X, y)
@@ -37,7 +37,7 @@ def test_fnn_regression_with_runner():
     }
     model = FlaxModelFactory.create_model(config)
 
-    X = jnp.array([[0.0, 0.0], [1.0, 0.0], [0.5, 0.5], [1.0, 1.0]], dtype=jnp.float32)
+    X = jnp.array([[0.0, 0.0], [1.0, 0.0], [0.5, 0.5], [1.0, 1.0]], dtype=jnp.float64)
     y = jnp.sum(X, axis=1, keepdims=True)
 
     runner = UniversalPipeline(model)
@@ -61,7 +61,7 @@ def test_save_and_load_roundtrip(tmp_path):
         },
     }
     model = FlaxModelFactory.create_model(config)
-    X = jnp.array([[0.0, 1.0], [1.0, 1.0]], dtype=jnp.float32)
+    X = jnp.array([[0.0, 1.0], [1.0, 1.0]], dtype=jnp.float64)
     y = jnp.sum(X, axis=1, keepdims=True)
 
     model.train(X, y)

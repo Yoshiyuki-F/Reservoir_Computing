@@ -18,7 +18,7 @@ def test_run_fnn_pipeline_classification():
             [1.0, 0.0],
             [1.0, 1.0],
         ],
-        dtype=jnp.float32,
+        dtype=jnp.float64,
     )
     y = jnp.array([0, 1, 1, 0])
 

@@ -5,7 +5,6 @@ from typing import Callable, Any
 import re
 import shutil
 
-from .jax_config import ensure_x64_enabled
 def check_gpu_available() -> bool:
     """JAXがGPUを認識し、利用可能かを確認。
     
@@ -20,9 +19,6 @@ def check_gpu_available() -> bool:
         RuntimeError: GPUが検出されない、または計算テストに失敗した場合
     """
     import jax
-
-    ensure_x64_enabled()
-
     import jax.numpy as jnp
     
     print("=== GPU認識確認 ===")

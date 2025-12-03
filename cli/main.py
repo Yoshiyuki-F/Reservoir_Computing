@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from reservoir.utils.jax_config import ensure_x64_enabled
+ensure_x64_enabled()
+
 from reservoir.utils import check_gpu_available
 from reservoir.core.config_builder import build_run_config
 from pipelines import run_pipeline

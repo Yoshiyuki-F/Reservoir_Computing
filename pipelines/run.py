@@ -270,9 +270,9 @@ def run_pipeline(
         train_y = jax.nn.one_hot(train_y.astype(int), num_classes)
         test_y = jax.nn.one_hot(test_y.astype(int), num_classes)
         print("Normalizing image data to [0, 1] range (div by 255)...")
-        train_X = train_X.astype(jnp.float32) / 255.0
+        train_X = train_X.astype(jnp.float64) / 255.0
         if test_X is not None:
-            test_X = test_X.astype(jnp.float32) / 255.0
+            test_X = test_X.astype(jnp.float64) / 255.0
         config["use_preprocessing"] = False
 
     # Determine Task Type
@@ -493,7 +493,6 @@ def run_pipeline(
     use_intercept = True if fit_intercept_cfg is None else bool(fit_intercept_cfg)
 
     readout = RidgeRegression(ridge_lambda=float(ridge_lambda), use_intercept=use_intercept)
-
 
     # --- 3. Execution ---
     metric = "accuracy" if is_classification else "mse"

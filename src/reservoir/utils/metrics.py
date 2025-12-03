@@ -2,10 +2,6 @@
 Reservoir Computing用の評価メトリクス。
 """
 
-from .jax_config import ensure_x64_enabled
-
-ensure_x64_enabled()
-
 import jax.numpy as jnp
 
 
@@ -56,7 +52,7 @@ def accuracy_score(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
         pred_labels = jnp.argmax(preds, axis=-1)
     else:
         pred_labels = preds
-        if preds.dtype in (jnp.float16, jnp.float32, jnp.float64):
+        if preds.dtype in (jnp.float16, jnp.float64, jnp.float64):
             pred_labels = preds > 0.5
 
     true_labels = targs

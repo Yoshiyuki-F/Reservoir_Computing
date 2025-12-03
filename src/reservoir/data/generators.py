@@ -15,10 +15,6 @@ except ModuleNotFoundError:  # pragma: no cover - torch optional
     get_mnist_datasets = None  # type: ignore
     image_to_sequence = None  # type: ignore
 
-from reservoir.utils import ensure_x64_enabled
-
-ensure_x64_enabled()
-
 from reservoir.data.config import DataGenerationConfig
 
 

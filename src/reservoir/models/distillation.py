@@ -110,7 +110,7 @@ class DistillationModel(BaseModel):
         return new_state, loss
 
     def initialize(self, rng_key: jnp.ndarray, sample_input: jnp.ndarray) -> train_state.TrainState:
-        sample = jnp.asarray(sample_input, dtype=jnp.float32)
+        sample = jnp.asarray(sample_input, dtype=jnp.float64)
         if sample.ndim != 2:
             raise ValueError(f"Student initializer expects 2D input, got {sample.shape}.")
         self._ensure_student(sample.shape[1])
@@ -140,7 +140,7 @@ class DistillationModel(BaseModel):
         init_state = self.teacher.initialize_state(batch_size)
         _, states = self.teacher.forward(init_state, inputs)
         teacher_states = states.states if hasattr(states, "states") else states
-        return jnp.asarray(teacher_states, dtype=jnp.float32)
+        return jnp.asarray(teacher_states, dtype=jnp.float64)
 
     def _aggregate_states(self, states: jnp.ndarray) -> jnp.ndarray:
         if states.ndim != 3:
@@ -161,7 +161,7 @@ class DistillationModel(BaseModel):
 
         batch_size = inputs_seq.shape[0]
         flat_dim = projected_inputs.shape[1] * projected_inputs.shape[2]
-        student_inputs = jnp.asarray(projected_inputs, dtype=jnp.float32).reshape(batch_size, flat_dim)
+        student_inputs = jnp.asarray(projected_inputs, dtype=jnp.float64).reshape(batch_size, flat_dim)
         self._ensure_student(flat_dim)
 
         teacher_states = self._teacher_pass(inputs_seq)
@@ -208,7 +208,7 @@ class DistillationModel(BaseModel):
         if self._state is None:
             raise RuntimeError("Student network is not initialized. Call train_student or initialize first.")
 
-        inputs_seq = self._ensure_sequence(jnp.asarray(inputs, dtype=jnp.float32))
+        inputs_seq = self._ensure_sequence(jnp.asarray(inputs, dtype=jnp.float64))
         projected_inputs = self.projector(inputs_seq)
         flat_inputs = projected_inputs.reshape(projected_inputs.shape[0], -1)
         self._ensure_student(flat_inputs.shape[1])

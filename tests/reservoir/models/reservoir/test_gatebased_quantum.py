@@ -15,7 +15,7 @@ def make_dummy_series(T: int = 120):
     x = np.sin(np.linspace(0, 8 * np.pi, T)).reshape(-1, 1)
     y = np.roll(x, -1)[:-1]
     x = x[:-1]
-    return x.astype(np.float32), y.astype(np.float32)
+    return x.astype(np.float64), y.astype(np.float64)
 
 
 def base_config(**overrides):
@@ -61,7 +61,7 @@ def test_feature_dim_multi_pauli_last_and_last_mean():
     for agg in ("last_mean", "mts"):
         cfg_lm = base_config(state_aggregation=agg)
         qrc_lm = QuantumReservoirComputer(cfg_lm)
-        seq = np.sin(np.linspace(0, 4 * np.pi, 60), dtype=np.float32).reshape(-1, 1)
+        seq = np.sin(np.linspace(0, 4 * np.pi, 60), dtype=np.float64).reshape(-1, 1)
         sequences = np.stack([seq[i : i + 20] for i in range(0, 40, 10)], axis=0)
         labels = np.arange(sequences.shape[0], dtype=np.int32) % 2
         qrc_lm.train_classification(
@@ -122,7 +122,7 @@ def test_detuning_scale_affects_mse():
 def test_state_aggregation_last_mean_doubles_dimension(agg):
     cfg = base_config(state_aggregation=agg)
     qrc = QuantumReservoirComputer(cfg)
-    seq = np.sin(np.linspace(0, 6 * np.pi, 80), dtype=np.float32).reshape(-1, 1)
+    seq = np.sin(np.linspace(0, 6 * np.pi, 80), dtype=np.float64).reshape(-1, 1)
     sequences = np.stack([seq[i : i + 20] for i in range(0, 40, 10)], axis=0)
     labels = np.arange(sequences.shape[0], dtype=np.int32)
     qrc.train_classification(jnp.array(sequences), jnp.array(labels), ridge_lambdas=[1e-3], num_classes=2)

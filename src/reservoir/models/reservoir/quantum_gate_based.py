@@ -12,10 +12,6 @@ import numpy as np
 import pennylane as qml
 from functools import lru_cache
 
-from reservoir.utils import ensure_x64_enabled
-
-ensure_x64_enabled()
-
 import jax.numpy as jnp
 from reservoir.components import RidgeReadoutNumpy
 from reservoir.models.presets import get_model_preset
@@ -224,7 +220,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
             qubits. When the input dimensionality exceeds the number of qubits,
             we fall back to amplitude encoding with padding/truncation.
         """
-        features = jnp.asarray(classical_data, dtype=jnp.float32).reshape(-1)
+        features = jnp.asarray(classical_data, dtype=jnp.float64).reshape(-1)
         n_features = features.shape[0]
 
         if self.encoding_scheme == "amplitude":
@@ -244,7 +240,7 @@ class QuantumReservoirComputer(BaseReservoirComputer):
 
         # Angle-based encodings (detuning currently shares implementation)
         scaled = jnp.tanh(features) * jnp.pi
-        padded = jnp.zeros(self.n_qubits, dtype=jnp.float32)
+        padded = jnp.zeros(self.n_qubits, dtype=jnp.float64)
         padded = padded.at[:min(n_features, self.n_qubits)].set(
             scaled[:min(n_features, self.n_qubits)]
         )

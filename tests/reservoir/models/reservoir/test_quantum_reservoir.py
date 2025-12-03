@@ -23,7 +23,7 @@ def test_pauli_z_measurement_dimension():
     cfg = _base_config()
     qrc = QuantumReservoirComputer(cfg)
 
-    inputs = jnp.ones((5, 1), dtype=jnp.float32)
+    inputs = jnp.ones((5, 1), dtype=jnp.float64)
     states = qrc._run_quantum_reservoir(inputs)
 
     n_q = cfg["n_qubits"]
@@ -35,7 +35,7 @@ def test_multi_pauli_measurement_dimension():
     cfg = _base_config(measurement_basis="multi-pauli")
     qrc = QuantumReservoirComputer(cfg)
 
-    inputs = jnp.linspace(0.0, 1.0, 5, dtype=jnp.float32).reshape(-1, 1)
+    inputs = jnp.linspace(0.0, 1.0, 5, dtype=jnp.float64).reshape(-1, 1)
     states = qrc._run_quantum_reservoir(inputs)
 
     n_q = cfg["n_qubits"]
@@ -49,7 +49,7 @@ def test_multi_pauli_custom_readout_observables():
     cfg["readout_observables"] = ["Z", "ZZ"]
     qrc = QuantumReservoirComputer(cfg)
 
-    inputs = jnp.ones((3, 1), dtype=jnp.float32)
+    inputs = jnp.ones((3, 1), dtype=jnp.float64)
     states = qrc._run_quantum_reservoir(inputs)
 
     n_q = cfg["n_qubits"]
@@ -71,7 +71,7 @@ def test_invalid_readout_for_pauli_z():
 def test_full_entanglement_runs():
     cfg = _base_config(entanglement="full")
     qrc = QuantumReservoirComputer(cfg)
-    inputs = jnp.ones((3, 1), dtype=jnp.float32)
+    inputs = jnp.ones((3, 1), dtype=jnp.float64)
     states = qrc._run_quantum_reservoir(inputs)
     n_q = cfg["n_qubits"]
     expected = n_q + (n_q * (n_q - 1)) // 2
@@ -84,13 +84,13 @@ def test_ridge_lambda_grid_search(monkeypatch):
 
     def fake_run(sequence):
         steps = sequence.shape[0]
-        base = jnp.arange(steps, dtype=jnp.float32).reshape(-1, 1)
+        base = jnp.arange(steps, dtype=jnp.float64).reshape(-1, 1)
         ones = jnp.ones_like(base)
         return jnp.concatenate([base, ones], axis=1)
 
     monkeypatch.setattr(qrc, "_run_quantum_reservoir", fake_run)
 
-    inputs = jnp.arange(5, dtype=jnp.float32).reshape(-1, 1)
+    inputs = jnp.arange(5, dtype=jnp.float64).reshape(-1, 1)
     targets = inputs * 2.0
 
     qrc.train(inputs, targets, ridge_lambdas=[1e-6, 1e-3, 1e-2])

@@ -31,7 +31,7 @@ def image_to_sequence(image: np.ndarray, *, n_steps: int) -> np.ndarray:
         raise ValueError(f"n_steps must be positive and divide {total_pixels}, got {n_steps}")
     features_per_step = total_pixels // n_steps
     flat = image.reshape(total_pixels)
-    return flat.reshape(n_steps, features_per_step).astype(np.float32)
+    return flat.reshape(n_steps, features_per_step).astype(np.float64)
 
 
 def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num_workers: int = 0) -> Tuple[DataLoader, DataLoader]:
@@ -40,4 +40,3 @@ def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, test_loader
-

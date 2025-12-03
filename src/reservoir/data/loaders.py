@@ -21,8 +21,8 @@ def load_sine_wave(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
         raise ValueError("Dataset preset 'sine_wave' is missing. Define it in reservoir.data.presets.")
     data_cfg = preset.build_config(params)
     X, y = generate_sine_data(data_cfg)
-    X_arr = jnp.asarray(X, dtype=jnp.float32)
-    y_arr = jnp.asarray(y, dtype=jnp.float32)
+    X_arr = jnp.asarray(X, dtype=jnp.float64)
+    y_arr = jnp.asarray(y, dtype=jnp.float64)
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -45,8 +45,8 @@ def load_mnist(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     train_seq, train_labels = generate_mnist_sequence_data(data_cfg, split="train")
     test_seq, test_labels = generate_mnist_sequence_data(data_cfg, split="test")
 
-    train_arr = jnp.asarray(train_seq, dtype=jnp.float32)
-    test_arr = jnp.asarray(test_seq, dtype=jnp.float32)
+    train_arr = jnp.asarray(train_seq, dtype=jnp.float64)
+    test_arr = jnp.asarray(test_seq, dtype=jnp.float64)
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
         train_arr = train_arr[..., None]
@@ -71,8 +71,8 @@ def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]
         raise ValueError("Dataset preset 'mackey_glass' is missing. Define it in reservoir.data.presets.")
     data_cfg = preset.build_config(params)
     X, y = generate_mackey_glass_data(data_cfg)
-    X_arr = jnp.asarray(X, dtype=jnp.float32)
-    y_arr = jnp.asarray(y, dtype=jnp.float32)
+    X_arr = jnp.asarray(X, dtype=jnp.float64)
+    y_arr = jnp.asarray(y, dtype=jnp.float64)
     if X_arr.ndim == 2:
         X_arr = X_arr[:, None, :]
     return X_arr, y_arr

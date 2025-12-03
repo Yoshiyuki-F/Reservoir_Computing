@@ -27,9 +27,18 @@ class RidgeRegression(ReadoutModule):
         self.intercept_: Optional[jnp.ndarray] = None
         self.input_dim_: Optional[int] = None
 
+    # TODO(Feature): Add efficient batched fitting for hyperparameter search.
+    # To avoid re-computing XtX for every lambda during search, implement a method that:
+    # 1. Computes XtX and Xty once.
+    # 2. Uses `jax.vmap` to solve for multiple lambda values in parallel.
+    # 3. Optionally evaluates against a validation set and selects the best lambda.
+    #
+    # Signature idea:
+    # def fit_search(self, X_train, y_train, X_val, y_val, candidate_lambdas) -> float: ...
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
         X = jnp.asarray(states, dtype=jnp.float64)
         y = jnp.asarray(targets, dtype=jnp.float64)
+
         if X.ndim != 2:
             raise ValueError(f"States must be 2D, got {X.shape}")
         y_is_1d = y.ndim == 1
@@ -38,15 +47,21 @@ class RidgeRegression(ReadoutModule):
         n_samples, n_features = X.shape
         self.input_dim_ = n_features
         X_train = jnp.concatenate([jnp.ones((n_samples, 1)), X], axis=1) if self.use_intercept else X
-        XT = X_train.T
-        XTX = XT @ X_train
-        XTy = XT @ y
-        diag_idx = jnp.diag_indices(XTX.shape[0])
-        XTX = XTX.at[diag_idx].add(self.ridge_lambda)
-        try:
-            w = jax.scipy.linalg.solve(XTX, XTy, assume_a="pos")
-        except Exception:
-            w = jnp.linalg.solve(XTX, XTy)
+
+        if self.ridge_lambda <1e-7: # Moore-Penrose pseudo-inverse
+            w = jnp.linalg.pinv(X_train, rcond=None) @ y
+        else:
+            XT = X_train.T
+            XTX = XT @ X_train
+            XTy = XT @ y
+            diag_idx = jnp.diag_indices(XTX.shape[0])
+            XTX = XTX.at[diag_idx].add(self.ridge_lambda)
+            try: #  ridge regression closed-form solution
+                w = jax.scipy.linalg.solve(XTX, XTy, assume_a="pos")
+            except Exception: #LU 分解
+                w = jnp.linalg.solve(XTX, XTy)
+
+
         if self.use_intercept:
             self.intercept_ = w[0]
             self.coef_ = w[1:]

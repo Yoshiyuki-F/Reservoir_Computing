@@ -23,7 +23,7 @@ def test_run_rnn_pipeline_regression():
             [[0.5, 0.5], [0.5, 0.0]],
             [[1.0, 0.5], [0.5, 1.0]],
         ],
-        dtype=jnp.float32,
+        dtype=jnp.float64,
     )
     y = jnp.sum(X, axis=(1, 2), keepdims=True)  # simple regression target
 

@@ -116,6 +116,15 @@ class UniversalPipeline:
             X = jnp.concatenate([ones, X], axis=1)
         return X, y_arr
 
+    # TODO(Refactor): Move batched hyperparameter search logic into RidgeRegression class.
+    # Currently, `_fit_readout` manually implements the closed-form Ridge solution and uses
+    # `jax.vmap` to search over multiple lambdas efficiently. This duplicates logic found in
+    # `reservoir.components.readout.ridge.py` and violates encapsulation.
+    #
+    # Proposal:
+    # 1. Implement `RidgeRegression.fit_batched(self, train_X, train_y, val_X, val_y, lambdas)`
+    #    that handles the XtX pre-computation and vmapped solving internally.
+    # 2. Replace the ad-hoc solver logic below with a call to this new method.
     def _fit_readout(
         self,
         train_Z: jnp.ndarray,

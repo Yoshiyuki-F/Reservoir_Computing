@@ -18,7 +18,7 @@ class FNN(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray):
-        x = jnp.asarray(x, dtype=jnp.float32)
+        x = jnp.asarray(x, dtype=jnp.float64)
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
         if len(self.layer_dims) < 2:
@@ -51,7 +51,7 @@ class SimpleRNN(nn.Module):
 
     @nn.compact
     def __call__(self, inputs: jnp.ndarray) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
-        inputs = jnp.asarray(inputs, dtype=jnp.float32)
+        inputs = jnp.asarray(inputs, dtype=jnp.float64)
         if inputs.ndim != 3:
             raise ValueError(
                 f"Expected 3D input (batch, time, features), got shape {inputs.shape}"

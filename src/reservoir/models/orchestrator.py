@@ -80,14 +80,15 @@ class ReservoirModel:
             return states.reshape(-1, hidden)
         raise ValueError(f"Unknown readout_mode '{mode}'")
 
-    def fit(self, inputs: chex.Array, targets: chex.Array, *, init_state: Optional[chex.Array] = None) -> "ReservoirModel":
-        prepared = self._prepare_inputs(inputs, fit=True)
-        states = self._run_reservoir(prepared, init_state)
-        features = self._get_features(states, jnp.asarray(targets))
-        if self.readout is None:
-            raise RuntimeError("No readout attached to ReservoirModel; cannot fit. Use runner-managed readout.")
-        self.readout.fit(features, targets)
-        return self
+    # その orchestrator.py は、単に「入力をリザーバに通して特徴量（状態）を取り出すだけ」の役割であり、Ridge回帰の計算（重みの決定）は行っていません。
+    # def fit(self, inputs: chex.Array, targets: chex.Array, *, init_state: Optional[chex.Array] = None) -> "ReservoirModel":
+    #     prepared = self._prepare_inputs(inputs, fit=True)
+    #     states = self._run_reservoir(prepared, init_state)
+    #     features = self._get_features(states, jnp.asarray(targets))
+    #     if self.readout is None:
+    #         raise RuntimeError("No readout attached to ReservoirModel; cannot fit. Use runner-managed readout.")
+    #     self.readout.fit(features, targets)
+    #     return self
 
     def predict(self, inputs: chex.Array, *, init_state: Optional[chex.Array] = None) -> chex.Array:
         prepared = self._prepare_inputs(inputs, fit=False)

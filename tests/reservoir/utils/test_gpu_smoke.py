@@ -27,10 +27,10 @@ def test_gpu_smoke():
 
     # Run a tiny matmul on the first GPU and check result
     with jax.default_device(gpus[0]):
-        x = jnp.arange(6.0, dtype=jnp.float32).reshape(2, 3)
-        w = jnp.ones((3, 1), dtype=jnp.float32)
+        x = jnp.arange(6.0, dtype=jnp.float64).reshape(2, 3)
+        w = jnp.ones((3, 1), dtype=jnp.float64)
         y = x @ w
         # Expected sums per row: [0+1+2, 3+4+5] = [3, 12]
-        expected = jnp.array([[3.0], [12.0]], dtype=jnp.float32)
+        expected = jnp.array([[3.0], [12.0]], dtype=jnp.float64)
         assert jnp.allclose(y, expected)
 

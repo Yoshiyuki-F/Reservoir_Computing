@@ -27,8 +27,8 @@ class DummyReservoir(BaseModel):
 
 
 def test_run_reservoir_pipeline_with_stub_model():
-    X = jnp.array([[0.0], [1.0], [2.0], [3.0]], dtype=jnp.float32)
-    y = jnp.array([[0.0], [1.0], [2.0], [3.0]], dtype=jnp.float32)
+    X = jnp.array([[0.0], [1.0], [2.0], [3.0]], dtype=jnp.float64)
+    y = jnp.array([[0.0], [1.0], [2.0], [3.0]], dtype=jnp.float64)
 
     train_X, test_X = X[:3], X[3:]
     train_y, test_y = y[:3], y[3:]
