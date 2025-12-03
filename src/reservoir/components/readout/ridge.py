@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional
 
+import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
 
@@ -27,28 +28,92 @@ class RidgeRegression(ReadoutModule):
         self.intercept_: Optional[jnp.ndarray] = None
         self.input_dim_: Optional[int] = None
 
-    # TODO(Feature): Add efficient batched fitting for hyperparameter search.
-    # To avoid re-computing XtX for every lambda during search, implement a method that:
-    # 1. Computes XtX and Xty once.
-    # 2. Uses `jax.vmap` to solve for multiple lambda values in parallel.
-    # 3. Optionally evaluates against a validation set and selects the best lambda.
-    #
-    # Signature idea:
-    # def fit_search(self, X_train, y_train, X_val, y_val, candidate_lambdas) -> float: ...
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
+    def _prepare_xy(self, states: jnp.ndarray, targets: jnp.ndarray, *, update_dim: bool) \
+            -> tuple[jnp.ndarray, jnp.ndarray, bool]:
         X = jnp.asarray(states, dtype=jnp.float64)
-        y = jnp.asarray(targets, dtype=jnp.float64)
-
         if X.ndim != 2:
             raise ValueError(f"States must be 2D, got {X.shape}")
-        y_is_1d = y.ndim == 1
+        y_arr = jnp.asarray(targets, dtype=jnp.float64)
+        y_is_1d = y_arr.ndim == 1
         if y_is_1d:
-            y = y[:, None]
-        n_samples, n_features = X.shape
-        self.input_dim_ = n_features
-        X_train = jnp.concatenate([jnp.ones((n_samples, 1)), X], axis=1) if self.use_intercept else X
+            y_arr = y_arr[:, None]
+        if y_arr.shape[0] != X.shape[0]:
+            raise ValueError(f"Mismatched samples: states have {X.shape[0]}, targets have {y_arr.shape[0]}.")
 
-        if self.ridge_lambda <1e-7: # Moore-Penrose pseudo-inverse
+        n_samples, n_features = X.shape
+        if update_dim:
+            self.input_dim_ = n_features
+        elif self.input_dim_ is not None and n_features != self.input_dim_:
+            raise ValueError(f"Expected states with {self.input_dim_} features, got {n_features}.")
+
+        if self.use_intercept:
+            ones = jnp.ones((n_samples, 1), dtype=X.dtype)
+            X = jnp.concatenate([ones, X], axis=1)
+        return X, y_arr, y_is_1d
+
+    def fit_and_search(
+        self,
+        train_states: jnp.ndarray,
+        train_targets: jnp.ndarray,
+        val_states: jnp.ndarray,
+        val_targets: jnp.ndarray,
+        lambdas: Optional[jnp.ndarray],
+        *,
+        metric: str = "mse",
+    ) -> tuple[float, Dict[float, float]]:
+        if val_states is None or val_targets is None:
+            raise ValueError("Validation data is required for hyperparameter search.")
+
+        lambda_candidates = [float(lam) for lam in (lambdas or [self.ridge_lambda])]
+        if not lambda_candidates:
+            raise ValueError("At least one lambda candidate must be provided.")
+        if any(lam <= 0.0 for lam in lambda_candidates):
+            raise ValueError(f"All ridge lambdas must be positive, got {lambda_candidates}.")
+        lambdas_arr = jnp.asarray(lambda_candidates, dtype=jnp.float64)
+
+        X_train, y_train, y_is_1d = self._prepare_xy(train_states, train_targets, update_dim=True)
+        X_val, y_val, y_val_is_1d = self._prepare_xy(val_states, val_targets, update_dim=False)
+
+        XtX = X_train.T @ X_train
+        Xty = X_train.T @ y_train
+        eye = jnp.eye(XtX.shape[0], dtype=XtX.dtype)
+
+        def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
+            return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
+
+        weights_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)(lambdas_arr)
+        preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
+
+        if metric == "accuracy":
+            true_labels = y_val.ravel() if y_val_is_1d else jnp.argmax(y_val, axis=-1)
+            pred_labels = preds_all if preds_all.ndim == 2 else jnp.argmax(preds_all, axis=-1)
+            accs = jnp.mean(pred_labels == true_labels, axis=-1)
+            best_idx = int(jnp.argmax(accs))
+            search_history = {float(lambdas_arr[i]): float(accs[i]) for i in range(accs.shape[0])}
+        else:
+            errors = jnp.mean((preds_all - y_val[None, ...]) ** 2, axis=(1, 2))
+            best_idx = int(jnp.argmin(errors))
+            search_history = {float(lambdas_arr[i]): float(errors[i]) for i in range(errors.shape[0])}
+
+
+        best_lambda = float(lambdas_arr[best_idx])
+        best_weights = weights_all[best_idx]
+        if self.use_intercept:
+            self.intercept_ = jnp.asarray(best_weights[0], dtype=jnp.float64)
+            self.coef_ = jnp.asarray(best_weights[1:], dtype=jnp.float64)
+        else:
+            self.intercept_ = jnp.zeros(best_weights.shape[1], dtype=jnp.float64)
+            self.coef_ = jnp.asarray(best_weights, dtype=jnp.float64)
+        if y_is_1d:
+            self.coef_ = self.coef_.ravel()
+            self.intercept_ = self.intercept_.ravel()
+        self.ridge_lambda = best_lambda
+        return best_lambda, search_history
+
+    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
+        X_train, y, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
+
+        if self.ridge_lambda < 1e-7: # Moore-Penrose pseudo-inverse
             w = jnp.linalg.pinv(X_train, rcond=None) @ y
         else:
             XT = X_train.T

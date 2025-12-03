@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional, Sequence
 
 import jax
 import jax.numpy as jnp
-import jax.scipy.linalg as jsp
 import numpy as np
 
 from reservoir.components.readout.ridge import RidgeRegression
@@ -106,25 +105,6 @@ class UniversalPipeline:
             return np.asarray(features)
         return features
 
-    def _prepare_design(self, Z: jnp.ndarray, y: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        X = jnp.asarray(Z, dtype=jnp.float64)
-        y_arr = jnp.asarray(y, dtype=jnp.float64)
-        if y_arr.ndim == 1:
-            y_arr = y_arr[:, None]
-        if getattr(self.readout, "use_intercept", True):
-            ones = jnp.ones((X.shape[0], 1), dtype=X.dtype)
-            X = jnp.concatenate([ones, X], axis=1)
-        return X, y_arr
-
-    # TODO(Refactor): Move batched hyperparameter search logic into RidgeRegression class.
-    # Currently, `_fit_readout` manually implements the closed-form Ridge solution and uses
-    # `jax.vmap` to search over multiple lambdas efficiently. This duplicates logic found in
-    # `reservoir.components.readout.ridge.py` and violates encapsulation.
-    #
-    # Proposal:
-    # 1. Implement `RidgeRegression.fit_batched(self, train_X, train_y, val_X, val_y, lambdas)`
-    #    that handles the XtX pre-computation and vmapped solving internally.
-    # 2. Replace the ad-hoc solver logic below with a call to this new method.
     def _fit_readout(
         self,
         train_Z: jnp.ndarray,
@@ -133,7 +113,7 @@ class UniversalPipeline:
         val_y: Optional[jnp.ndarray],
         ridge_lambdas: Optional[Sequence[float]],
     ) -> tuple[float, Dict[float, float]]:
-        lambdas = list(ridge_lambdas) if ridge_lambdas is not None else []
+        lambda_candidates = list(ridge_lambdas) if ridge_lambdas is not None else []
         initial_lambda = float(self.readout.ridge_lambda)
 
         # No validation -> skip search to avoid overfitting
@@ -142,55 +122,21 @@ class UniversalPipeline:
             self.readout.fit(train_Z, train_y)
             return float(initial_lambda), {}
 
-        if not lambdas:
-            lambdas = [float(initial_lambda)]
+        if not lambda_candidates:
+            lambda_candidates = [initial_lambda]
         else:
             print(
-                f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambdas)} candidates."
+                f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates."
             )
 
-        lambdas_arr = jnp.asarray(lambdas, dtype=jnp.float64)
-        X_train, y_train = self._prepare_design(train_Z, train_y)
-        X_val, y_val = self._prepare_design(val_Z, val_y)
-
-        XtX = X_train.T @ X_train  # (d,d)
-        Xty = X_train.T @ y_train  # (d,o)
-        d_features = XtX.shape[0]
-        eye = jnp.eye(d_features, dtype=XtX.dtype)
-
-        def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
-            A = XtX + lam * eye
-            return jsp.solve(A, Xty, assume_a="pos")
-
-        solve_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)
-        weights_all = solve_all(lambdas_arr)  # (k, d, o)
-
-        # Predictions for validation for all lambdas: (k, n_val, o)
-        preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
-
-        if self.metric_name == "accuracy":
-            pred_labels = jnp.argmax(preds_all, axis=-1)  # (k, n_val)
-            true_labels = jnp.argmax(y_val, axis=-1) if y_val.ndim > 1 else y_val
-            accs = jnp.mean(pred_labels == true_labels, axis=-1)
-            best_idx = int(jnp.argmax(accs))
-            best_lambda = float(lambdas_arr[best_idx])
-            search_history = {float(lambdas_arr[i]): float(accs[i]) for i in range(accs.shape[0])}
-        else:
-            errors = jnp.mean((preds_all - y_val[None, ...]) ** 2, axis=(1, 2))
-            best_idx = int(jnp.argmin(errors))
-            best_lambda = float(lambdas_arr[best_idx])
-            search_history = {float(lambdas_arr[i]): float(errors[i]) for i in range(errors.shape[0])}
-
-        best_weights = weights_all[best_idx]  # (d, o)
-        use_intercept = getattr(self.readout, "use_intercept", True)
-        if use_intercept:
-            self.readout.intercept_ = jnp.asarray(best_weights[0], dtype=jnp.float64)
-            self.readout.coef_ = jnp.asarray(best_weights[1:], dtype=jnp.float64)
-        else:
-            self.readout.intercept_ = jnp.zeros(best_weights.shape[1], dtype=jnp.float64)
-            self.readout.coef_ = jnp.asarray(best_weights, dtype=jnp.float64)
-        self.readout.ridge_lambda = best_lambda
-
+        best_lambda, search_history = self.readout.fit_and_search(
+            train_Z,
+            train_y,
+            val_Z,
+            val_y,
+            lambda_candidates,
+            metric=self.metric_name,
+        )
         return best_lambda, search_history
 
     # ------------------------------------------------------------------ #
