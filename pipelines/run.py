@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import Array
 
 # Core Imports
 from reservoir.models import FlaxModelFactory
@@ -208,18 +209,13 @@ def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
     return merged
 
 
-def load_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
+def load_dataset(config: Dict[str, Any]) -> list[Array]:
     """Public dataset loader used by pipelines.__getattr__."""
     X, y = _load_dataset(config)
     split_idx = int(0.8 * len(X))
     train_X, test_X = X[:split_idx], X[split_idx:]
     train_y, test_y = y[:split_idx], y[split_idx:]
-    return {
-        "train_X": train_X,
-        "train_y": train_y,
-        "test_X": test_X,
-        "test_y": test_y,
-    }
+    return [train_X, train_y, test_X, test_y]
 
 
 def _load_dataset(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -237,31 +233,45 @@ def _load_dataset(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def run_pipeline(
-    config: Dict[str, Any],
-    train_X: Optional[jnp.ndarray] = None,
-    train_y: Optional[jnp.ndarray] = None,
-    test_X: Optional[jnp.ndarray] = None,
-    test_y: Optional[jnp.ndarray] = None,
-    save_path: Optional[str] = None
-) -> Dict[str, Any]:
+    config: Dict[str, Any]) -> Dict[str, Any]:
     """
     The Unified Entry Point (V2 Strict Mode).
     """
-    # --- 1. Data Preparation & Metadata Validation ---
+    # --- 1. loading presets ---
     dataset_name, dataset_preset = _get_strict_dataset_meta(config)
 
-    if train_X is None or train_y is None:
-        print(f"Loading dataset: {dataset_name}...")
-        X, y = _load_dataset(config)
-        split_idx = int(0.8 * len(X))
-        train_X, test_X = X[:split_idx], X[split_idx:]
-        train_y, test_y = y[:split_idx], y[split_idx:]
+    preset_type = dataset_preset.task_type.lower()
+    override_cls = config.get("is_classification")
+    if override_cls is not None:
+        is_classification = bool(override_cls)
+    elif preset_type in {"classification", "regression"}:
+        is_classification = preset_type == "classification"
+    else:
+        raise ValueError(f"Unknown preset task type: {preset_type}")
 
     # Model type (required downstream)
     model_type = config.get("model_type")
     if not model_type:
         raise ValueError("Configuration Error: 'model_type' is required.")
     model_type = model_type.lower()
+
+    # Resolve training configuration (needed for ridge search/validation)
+    training_cfg = _resolve_training_config(config, is_classification)
+    training_cfg["_meta_dataset"] = dataset_name
+    training_cfg["_meta_model_type"] = model_type
+    feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
+
+    print(f"Loading dataset: {dataset_name}...")
+    train_X, train_y, test_X, test_y = load_dataset(config)
+
+    print(f"Data Shapes -> Train: {train_X.shape}, "
+          f"Test: {test_X.shape if test_X is not None else 'None'}")
+
+    if train_X.ndim != 3:
+        raise ValueError(
+            f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
+            f"Got shape {train_X.shape}. Please reshape your data source."
+        )
 
     # Classification/Shape Handling
     if dataset_name in {"mnist"}:
@@ -275,36 +285,33 @@ def run_pipeline(
             test_X = test_X.astype(jnp.float64) / 255.0
         config["use_preprocessing"] = False
 
-    # Determine Task Type
-    preset_type = dataset_preset.task_type.lower()
-    override_cls = config.get("is_classification")
-    if override_cls is not None:
-        is_classification = bool(override_cls)
-    elif preset_type in {"classification", "regression"}:
-        is_classification = preset_type == "classification"
-    else:
-        raise ValueError(f"Unknown preset task type: {preset_type}")
+
+    val_X = None
+    val_y = None
+    val_size = float(training_cfg.get("val_size")) if training_cfg else 0.0
+    if val_size > 0.0 and len(train_X) > 1:
+        val_count = max(1, int(len(train_X) * val_size))
+        train_count = len(train_X) - val_count
+        if train_count < 1:
+            train_count = len(train_X) - 1
+        val_X = train_X[train_count:]
+        val_y = train_y[train_count:]
+        train_X = train_X[:train_count]
+        train_y = train_y[:train_count]
+
+
+    print(f"Data Shapes -> Train: {train_X.shape}, "
+          f"Val: {val_X.shape if val_X is not None else "None"}, "
+          f"Test: {test_X.shape if test_X is not None else 'None'}")
+
+
 
     meta_n_outputs = int(dataset_preset.config.n_output)
-
-    # Resolve training configuration (needed for ridge search/validation)
-    training_cfg = _resolve_training_config(config, is_classification)
-    training_cfg["_meta_dataset"] = dataset_name
-    training_cfg["_meta_model_type"] = model_type
-    feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
 
     # Shape Adjustment Logic
     reservoir_units_for_plot: Optional[int] = None
     nn_hidden_for_plot: Optional[list[int]] = None
 
-    if train_X.ndim != 3:
-        raise ValueError(
-            f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
-            f"Got shape {train_X.shape}. Please reshape your data source."
-        )
-
-
-    print(f"Data Shapes -> Train: {train_X.shape}, Test: {test_X.shape if test_X is not None else 'None'}")
     input_shape = train_X.shape[1:]
 
     hidden_dim = config.get("hidden_dim")
@@ -471,20 +478,6 @@ def run_pipeline(
     _print_topology(topo_meta)
 
     # --- 3a. Validation Split for ridge search ---
-    val_tuple = None
-    val_size = float(training_cfg.get("val_size", 0.0)) if training_cfg else 0.0
-    if val_size > 0.0 and len(train_X) > 1:
-        val_count = max(1, int(len(train_X) * val_size))
-        train_count = len(train_X) - val_count
-        if train_count < 1:
-            train_count = len(train_X) - 1
-        val_X = train_X[train_count:]
-        val_y = train_y[train_count:]
-        train_X = train_X[:train_count]
-        train_y = train_y[:train_count]
-        val_tuple = (val_X, val_y)
-
-
     # Shared Readout (owned by runner)
     readout_cfg = dict(config.get("readout", {}) or {})
     ridge_lambda = readout_cfg.get("ridge_lambda", training_cfg["ridge_lambda"])
@@ -502,7 +495,7 @@ def run_pipeline(
         train_y,
         test_X,
         test_y,
-        validation=val_tuple,
+        validation=(val_X, val_y),
         training_cfg=training_cfg,
     )
 
@@ -555,11 +548,6 @@ def run_pipeline(
             print(f"   λ = {float(lam):.2e} : Val Score = {score:.4f} {norm_str}{marker}")
         print("=" * 40 + "\n")
 
-    # --- 4. Persistence ---
-    if save_path and hasattr(model, 'save'):
-        print(f"Saving model to {save_path}...")
-        model.save(save_path)
-
     # --- 5. Visualization (classification only) ---
     if is_classification and test_X is not None and test_y is not None:
         try:
@@ -585,8 +573,7 @@ def run_pipeline(
 
             val_labels_np = None
             val_pred_np = None
-            if val_tuple is not None:
-                val_X, val_y = val_tuple
+            if val_X is not None:
                 val_labels_np = np.asarray(val_y)
                 if val_labels_np.ndim > 1:
                     val_labels_np = np.argmax(val_labels_np, axis=-1)
