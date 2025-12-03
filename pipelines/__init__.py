@@ -9,10 +9,6 @@ depend on individual pipeline modules.
 __all__ = [
     "UniversalPipeline",
     "run_pipeline",
-    "run_rnn_pipeline",
-    "run_fnn_pipeline",
-    "run_reservoir_pipeline",
-    "load_dataset",
     "prepare_experiment_data",
     "ExperimentDataset",
 ]
@@ -29,14 +25,10 @@ def __getattr__(name):
         return {"prepare_experiment_data": prepare_experiment_data, "ExperimentDataset": ExperimentDataset}[
             name
         ]
-    if name in {"run_pipeline", "run_rnn_pipeline", "run_fnn_pipeline", "run_reservoir_pipeline", "load_dataset"}:
-        from .run import run_pipeline, run_rnn_pipeline, run_fnn_pipeline, run_reservoir_pipeline, load_dataset
+    if name in {"run_pipeline", "run_rnn_pipeline", "run_fnn_pipeline", "run_reservoir_pipeline"}:
+        from .run import run_pipeline
 
         return {
             "run_pipeline": run_pipeline,
-            "run_rnn_pipeline": run_rnn_pipeline,
-            "run_fnn_pipeline": run_fnn_pipeline,
-            "run_reservoir_pipeline": run_reservoir_pipeline,
-            "load_dataset": load_dataset,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

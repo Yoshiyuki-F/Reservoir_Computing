@@ -10,17 +10,14 @@ V2 Architecture Compliance:
 
 from typing import Dict, Any, Optional, Tuple
 
-import jax
-import jax.numpy as jnp
 import numpy as np
-from jax import Array
 
 # Core Imports
 from reservoir.models import FlaxModelFactory
 from pipelines.generic_runner import UniversalPipeline
 from reservoir.components import FeatureScaler, DesignMatrix, RidgeRegression, TransformerSequence
+from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
-from reservoir.data.registry import DatasetRegistry
 from reservoir.models.orchestrator import ReservoirModel
 from reservoir.models.presets import get_model_preset, ModelPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
@@ -208,32 +205,9 @@ def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
 
     return merged
 
-
-def load_dataset(config: Dict[str, Any]) -> list[Array]:
-    """Public dataset loader used by pipelines.__getattr__."""
-    X, y = _load_dataset(config)
-    split_idx = int(0.8 * len(X))
-    train_X, test_X = X[:split_idx], X[split_idx:]
-    train_y, test_y = y[:split_idx], y[split_idx:]
-    return [train_X, train_y, test_X, test_y]
-
-
-def _load_dataset(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """Load dataset via registry."""
-    dataset_name = config.get("dataset")
-    if not dataset_name:
-        raise ValueError("Configuration Error: 'dataset' key missing in config.")
-
-    normalized_name = DATASET_REGISTRY.normalize_name(dataset_name)
-    loader = DatasetRegistry.get(normalized_name)
-    if not loader:
-        raise ValueError(f"Registry Error: No loader found for dataset '{normalized_name}'.")
-
-    return loader(config)
-
-
 def run_pipeline(
-    config: Dict[str, Any]) -> Dict[str, Any]:
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
     """
     The Unified Entry Point (V2 Strict Mode).
     """
@@ -261,50 +235,15 @@ def run_pipeline(
     training_cfg["_meta_model_type"] = model_type
     feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
 
-    print(f"Loading dataset: {dataset_name}...")
-    train_X, train_y, test_X, test_y = load_dataset(config)
+    train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
+        config,
+        dataset_preset,
+        training_cfg,
+        model_type=model_type,
+        require_3d=True,
+    )
 
-    print(f"Data Shapes -> Train: {train_X.shape}, "
-          f"Test: {test_X.shape if test_X is not None else 'None'}")
-
-    if train_X.ndim != 3:
-        raise ValueError(
-            f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
-            f"Got shape {train_X.shape}. Please reshape your data source."
-        )
-
-    # Classification/Shape Handling
-    if dataset_name in {"mnist"}:
-        num_classes = int(dataset_preset.config.n_output)
-        print(f"Converting labels to one-hot vectors (classes={num_classes})...")
-        train_y = jax.nn.one_hot(train_y.astype(int), num_classes)
-        test_y = jax.nn.one_hot(test_y.astype(int), num_classes)
-        print("Normalizing image data to [0, 1] range (div by 255)...")
-        train_X = train_X.astype(jnp.float64) / 255.0
-        if test_X is not None:
-            test_X = test_X.astype(jnp.float64) / 255.0
-        config["use_preprocessing"] = False
-
-
-    val_X = None
-    val_y = None
-    val_size = float(training_cfg.get("val_size")) if training_cfg else 0.0
-    if val_size > 0.0 and len(train_X) > 1:
-        val_count = max(1, int(len(train_X) * val_size))
-        train_count = len(train_X) - val_count
-        if train_count < 1:
-            train_count = len(train_X) - 1
-        val_X = train_X[train_count:]
-        val_y = train_y[train_count:]
-        train_X = train_X[:train_count]
-        train_y = train_y[:train_count]
-
-
-    print(f"Data Shapes -> Train: {train_X.shape}, "
-          f"Val: {val_X.shape if val_X is not None else "None"}, "
-          f"Test: {test_X.shape if test_X is not None else 'None'}")
-
-
+    print(f"Data Shapes -> Train: {train_X.shape}, Val: {val_X.shape}, Test: {test_X.shape}")
 
     meta_n_outputs = int(dataset_preset.config.n_output)
 
@@ -598,19 +537,3 @@ def run_pipeline(
             )
 
     return results
-
-# --- Convenience Wrappers ---
-
-def run_fnn_pipeline(config: Dict[str, Any], save_path: Optional[str] = None) -> Dict[str, Any]:
-    config["model_type"] = "fnn"
-    return run_pipeline(config, save_path=save_path)
-
-def run_rnn_pipeline(config: Dict[str, Any], save_path: Optional[str] = None) -> Dict[str, Any]:
-    config["model_type"] = "rnn"
-    return run_pipeline(config, save_path=save_path)
-
-def run_reservoir_pipeline(config: Dict[str, Any], save_path: Optional[str] = None) -> Dict[str, Any]:
-    if "reservoir_type" not in config and "reservoir_preset" not in config:
-        config["reservoir_preset"] = "classical"
-    config["model_type"] = "reservoir"
-    return run_pipeline(config, save_path=save_path)

@@ -3,12 +3,17 @@ Registry for dataset loader functions."""
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Tuple, Any
+from typing import Any, Callable, Dict, Tuple, Union
 
 import jax.numpy as jnp
 
+from reservoir.data.structs import SplitDataset
+
 # Dataset loader signature: takes config dict, returns (X, y)
-DatasetLoaderFn = Callable[[Dict[str, Any]], Tuple[jnp.ndarray, jnp.ndarray]]
+DatasetLoaderFn = Callable[
+    [Dict[str, Any]],
+    Union[Tuple[jnp.ndarray, jnp.ndarray], SplitDataset],
+]
 
 
 class DatasetRegistry:
