@@ -17,7 +17,7 @@ StepArtifacts = namedtuple("StepArtifacts", ["states"])
 
 
 class ClassicalReservoir(Reservoir):
-    """Minimal ESN-style reservoir implementing the ReservoirNode protocol."""
+    """Minimal ESN-style reservoir built on the Reservoir base class."""
 
     def __init__(
         self,
@@ -32,13 +32,12 @@ class ClassicalReservoir(Reservoir):
         seed: int,
         projector: Optional[InputProjector] = None,
     ) -> None:
-        super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc)
+        super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc, seed=seed)
         self.input_scale = float(input_scale)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
         self.connectivity = float(connectivity)
         self.bias_scale = float(bias_scale)
-        self.seed = int(seed)
         self._rng = jax.random.PRNGKey(self.seed)
         self.projector = projector or InputProjector(
             n_inputs=self.n_inputs,
@@ -84,10 +83,7 @@ class ClassicalReservoir(Reservoir):
         projected = self.projector(input_data)
         proj_transposed = jnp.swapaxes(projected, 0, 1)
 
-        def scan_fn(carry, x_t):
-            return self.step(carry, x_t)
-
-        final_states, stacked = jax.lax.scan(scan_fn, state, proj_transposed)
+        final_states, stacked = jax.lax.scan(self.step, state, proj_transposed)
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, StepArtifacts(states=stacked)
 

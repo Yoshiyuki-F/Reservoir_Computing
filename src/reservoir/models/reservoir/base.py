@@ -6,16 +6,16 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any, Dict
 
 import jax.numpy as jnp
-from reservoir.core.interfaces import ReservoirNode
 
 
-class Reservoir(ReservoirNode, ABC):
+class Reservoir(ABC):
     """Abstract base class providing common scan-based trajectory generation."""
 
-    def __init__(self, n_inputs: int, n_units: int, noise_rc: float = 0.0) -> None:
+    def __init__(self, n_inputs: int, n_units: int, noise_rc: float, seed: int) -> None:
         self.n_inputs = n_inputs
         self.n_units = n_units
         self.noise_rc = noise_rc
+        self.seed = seed
 
     @property
     def output_dim(self) -> int:

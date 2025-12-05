@@ -10,7 +10,8 @@ from typing import Optional, Dict, Any
 import chex
 import jax.numpy as jnp
 
-from reservoir.core.interfaces import ReservoirNode, Transformer
+from reservoir.core.interfaces import Transformer
+from reservoir.models.reservoir.base import Reservoir
 
 
 @dataclass
@@ -25,7 +26,7 @@ class ReservoirModel:
     def __init__(
         self,
         *,
-        reservoir: ReservoirNode,
+        reservoir: Reservoir,
         preprocess: Optional[Transformer] = None,
         readout_mode: str = "auto",
     ) -> None:

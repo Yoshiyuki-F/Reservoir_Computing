@@ -43,7 +43,7 @@ flowchart LR
     
     subgraph Pipeline [ReservoirModel Pipeline]
         Input((Input X)) --> Pre[TransformerSequence]
-        Pre --> Node[ReservoirNode (Physics)]
+        Pre --> Node[Reservoir (Physics)]
         Node --> |States H| Strategy{Readout Strategy}
         Strategy --> |"Last / Mean / Flatten"| Features[Feature Vector]
         Features --> Readout[ReadoutModule (Ridge)]
@@ -124,7 +124,7 @@ src/reservoir/
 │   ├── readout/         # RidgeRegression, LinearModels
 │   └── utils/           # RNG helpers
 ├── core/                # Core Interfaces & Types (Abstract Base Classes)
-│   ├── interfaces.py    # Protocol definitions (ReservoirNode, Transformer...)
+│   ├── interfaces.py    # Protocol definitions (Transformer, Readout...)
 │   └── ...
 ├── data/                # Data Access Layer
 │   ├── registry.py      # Dataset Registry
@@ -169,5 +169,4 @@ src/reservoir/
 ## 7. Current Limitations & Future Work
 
 *   **Quantum Implementations:** `QuantumAnalog` および `QuantumGateBased` は現在リファクタリング待ちの状態であり、V2アーキテクチャ（`scan`対応）に準拠していません。使用する際は `ClassicalReservoir` を参照実装として書き換える必要があります。
-*   **Multi-layer Reservoirs:** 現在の Orchestrator は単層リザバーを想定しています。Deep ESN を実装する場合、`ReservoirNode` をコンポジットパターンで拡張する必要があります。
-
+*   **Multi-layer Reservoirs:** 現在の Orchestrator は単層リザバーを想定しています。Deep ESN を実装する場合、`Reservoir` 抽象クラスをコンポジットパターンで拡張する必要があります。
