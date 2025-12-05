@@ -57,7 +57,7 @@ flowchart LR
 
 ## 3. Component Details
 
-### 3.1 The Orchestrator (`src/reservoir/models/orchestrator.py`)
+### 3.1 The Orchestrator (`src/reservoir/models/reservoir/model.py`)
 システムの中核です。`scikit-learn` ライクな `fit(X, y)` / `predict(X)` インターフェースを提供します。
 *   **役割:**
     *   前処理 (`preprocess`) の適用。
@@ -132,7 +132,7 @@ src/reservoir/
 │   ├── generators.py    # Mackey-Glass, Sine Wave
 │   └── config.py        # DataConfigs
 ├── models/              # High-level Models
-│   ├── orchestrator.py  # ReservoirModel (The Main Class)
+│   ├── reservoir/model.py  # ReservoirModel (The Main Class)
 │   ├── reservoir/       # Physics Implementations
 │   │   ├── base.py      # Base Class
 │   │   ├── classical.py # ESN / Echo State Network

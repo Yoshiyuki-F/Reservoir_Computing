@@ -1,5 +1,4 @@
 """
-src/reservoir/models/distillation.py
 Distill reservoir trajectories into a compact feed-forward network.
 """
 
@@ -12,18 +11,24 @@ import jax.numpy as jnp
 import optax
 from flax.training import train_state
 
-from reservoir.components.projection import InputProjector
 from reservoir.models.nn.base import BaseModel
 from reservoir.models.nn.fnn import FNN
-from reservoir.models.presets import DistillationConfig, ReservoirConfig
 from reservoir.training.presets import TrainingConfig
-from reservoir.models.reservoir.classical import ClassicalReservoir
+from reservoir.models.distillation.config import DistillationConfig
+from reservoir.models.reservoir.config import ReservoirConfig
+from reservoir.models.reservoir.model import ReservoirModel
 
 
 class DistillationModel(BaseModel):
     """Train a student FNN to mimic the state trajectory of a reservoir teacher."""
 
-    def __init__(self, config: DistillationConfig, training_config: TrainingConfig, input_dim: int):
+    def __init__(
+        self,
+        config: DistillationConfig,
+        training_config: TrainingConfig,
+        input_dim: int,
+        teacher_model: ReservoirModel,
+    ):
         config.validate(context="distillation")
         self.config = config
         self.training_config = training_config
@@ -32,8 +37,11 @@ class DistillationModel(BaseModel):
             raise ValueError(f"input_dim must be positive, got {self.input_dim}.")
 
         self.teacher_config: ReservoirConfig = config.teacher
-        self.projector: InputProjector = self._build_projector(self.teacher_config)
-        self.teacher: ClassicalReservoir = self._build_teacher(self.teacher_config, self.projector)
+        self.teacher_model = teacher_model
+        self.teacher = teacher_model.reservoir
+        if not hasattr(self.teacher, "projector"):
+            raise AttributeError("Teacher reservoir must expose a 'projector' for distillation.")
+        self.projector = self.teacher.projector
         self.teacher_output_dim: int = int(self.teacher.n_units)
 
         self.student_hidden: Tuple[int, ...] = tuple(int(v) for v in config.student_hidden_layers)
@@ -57,37 +65,6 @@ class DistillationModel(BaseModel):
         self.student = FNN(layer_dims=student_layers, return_hidden=False)
         self.student_input_dim = flat_dim
         self._state = None  # reset state because architecture changed
-
-    def _build_projector(self, cfg: ReservoirConfig) -> InputProjector:
-        return InputProjector(
-            n_inputs=self.input_dim,
-            n_units=int(cfg.n_units),
-            input_scale=float(cfg.input_scale),
-            connectivity=float(cfg.input_connectivity),
-            bias_scale=float(cfg.bias_scale),
-            seed=int(cfg.seed),
-        )
-
-    def _build_teacher(self, cfg: ReservoirConfig, projector: InputProjector) -> ClassicalReservoir:
-        missing = [name for name in ("n_units",) if getattr(cfg, name) is None]
-        if missing:
-            raise ValueError(
-                f"Distillation requires teacher parameters {missing} to be defined in ReservoirConfig."
-            )
-
-        return ClassicalReservoir(
-            n_inputs=self.input_dim,
-            n_units=int(cfg.n_units),
-            input_scale=float(cfg.input_scale),
-            spectral_radius=float(cfg.spectral_radius),
-            leak_rate=float(cfg.leak_rate),
-            input_connectivity=float(cfg.input_connectivity),
-            rc_connectivity=float(cfg.rc_connectivity),
-            noise_rc=float(cfg.noise_rc),
-            bias_scale=float(cfg.bias_scale),
-            seed=int(cfg.seed),
-            projector=projector,
-        )
 
     def _init_train_state(self, key: jnp.ndarray, sample_input: jnp.ndarray) -> train_state.TrainState:
         if self.student is None:
@@ -160,15 +137,12 @@ class DistillationModel(BaseModel):
 
     def train_student(self, inputs: jnp.ndarray) -> Dict[str, Any]:
         inputs_seq = self._ensure_sequence(jnp.asarray(inputs, dtype=jnp.float64))
-        projected_inputs = self.projector(inputs_seq)  # (B, T, N_res)
-
-        batch_size = inputs_seq.shape[0]
-        flat_dim = projected_inputs.shape[1] * projected_inputs.shape[2]
-        student_inputs = jnp.asarray(projected_inputs, dtype=jnp.float64).reshape(batch_size, flat_dim)
-        self._ensure_student(flat_dim)
-
         teacher_states = self._teacher_pass(inputs_seq)
         student_targets = self._aggregate_states(teacher_states)  # (B, N_res)
+
+        batch_size = inputs_seq.shape[0]
+        flat_dim = self.teacher_output_dim * inputs_seq.shape[1]
+        self._ensure_student(flat_dim)
 
         num_samples = batch_size
         num_batches = num_samples // self.batch_size
@@ -178,18 +152,22 @@ class DistillationModel(BaseModel):
             )
 
         usable = num_batches * self.batch_size
-        batched_inputs = student_inputs[:usable].reshape(num_batches, self.batch_size, flat_dim)
         batched_targets = student_targets[:usable].reshape(num_batches, self.batch_size, self.teacher_output_dim)
+        batched_inputs_seq = inputs_seq[:usable].reshape(num_batches, self.batch_size, *inputs_seq.shape[1:])
 
         if self._state is None:
             self._rng, init_key = jax.random.split(self._rng)
-            self.initialize(init_key, batched_inputs[0])
+            sample_proj = self.projector(batched_inputs_seq[0])
+            sample_flat = sample_proj.reshape(sample_proj.shape[0], -1)
+            self.initialize(init_key, sample_flat)
 
         @jax.jit
         def train_epoch(state, xs, ys):
             def body(carry, batch):
-                b_x, b_y = batch
-                new_state, loss_val = DistillationModel._train_step(carry, b_x, b_y)
+                seq_x, b_y = batch
+                proj = self.projector(seq_x)
+                flat = proj.reshape(proj.shape[0], -1)
+                new_state, loss_val = DistillationModel._train_step(carry, flat, b_y)
                 return new_state, loss_val
 
             new_state, losses = jax.lax.scan(body, state, (xs, ys))
@@ -197,7 +175,7 @@ class DistillationModel(BaseModel):
 
         loss_history = []
         for _ in range(self.epochs):
-            self._state, epoch_loss = train_epoch(self._state, batched_inputs, batched_targets)
+            self._state, epoch_loss = train_epoch(self._state, batched_inputs_seq, batched_targets)
             loss_history.append(float(epoch_loss))
 
         final_loss = loss_history[-1] if loss_history else None

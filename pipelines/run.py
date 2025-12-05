@@ -13,94 +13,22 @@ from typing import Dict, Any, Optional, Tuple
 import numpy as np
 
 # Core Imports
-from reservoir.models import FlaxModelFactory
+from reservoir.models import ModelFactory
+from reservoir.models.distillation import DistillationModel
+from reservoir.models.reservoir.model import ReservoirModel
+from reservoir.models.nn.fnn import FNNModel
+from reservoir.utils.printing import print_topology
 from pipelines.generic_runner import UniversalPipeline
-from reservoir.components import FeatureScaler, DesignMatrix, RidgeRegression, TransformerSequence
+from reservoir.components import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
-from reservoir.models.orchestrator import ReservoirModel
 from reservoir.models.presets import get_model_preset, ModelPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
-from reservoir.models.reservoir.classical import ClassicalReservoir
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
 
 
-def _format_shape(shape: Optional[tuple[int, ...]]) -> str:
-    if shape is None:
-        return "None"
-    if len(shape) == 1:
-        return f"[{shape[0]}]"
-    return f"[{'x'.join(str(d) for d in shape)}]"
-
-
-def _print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
-    if not topo_meta:
-        return
-
-    flow_parts = []
-    shapes = topo_meta.get("shapes", {})
-    typ = topo_meta.get("type", "").upper()
-    details = topo_meta.get("details", {})
-
-    print("=" * 40)
-    print(f"Model Architecture: {typ or 'MODEL'}")
-    print("=" * 40)
-
-    input_shape = shapes.get("input")
-    projected = shapes.get("projected")
-    internal = shapes.get("internal")
-    feature = shapes.get("feature")
-    output = shapes.get("output")
-
-    preprocess = details.get("preprocess") or "None (Pass-through)"
-    agg_mode = details.get("agg_mode")
-    student_layers = details.get("student_layers")
-
-    print(f"1. Input Data      : { _format_shape(input_shape) }")
-    print(f"2. Preprocessing   : { preprocess }")
-
-    if typ == "FNN_DISTILLATION":
-        flow_parts.append(_format_shape(input_shape))
-        flow_parts.append(_format_shape(projected))
-        if isinstance(internal, tuple):
-            flat_shape = internal
-            flow_parts.append(_format_shape(flat_shape))
-        else:
-            flat_shape = None
-        hidden_str = "-".join(str(h) for h in (student_layers or [])) or "None"
-        print(f"3. Input Projection: {_format_shape(input_shape)} -> {_format_shape(projected)} (time-distributed)")
-        print(f"4. Student Model   : {_format_shape(flat_shape)} -> [{hidden_str}] -> {_format_shape(feature)}")
-        print(f"5. Readout         : {_format_shape(feature)} -> {_format_shape(output)} outputs")
-        flow_parts.append(f"[{hidden_str}]")
-        flow_parts.append(_format_shape(feature))
-        flow_parts.append(_format_shape(output))
-    elif typ in {"RESERVOIR", "ESN", "CLASSICAL"}:
-        flow_parts.append(_format_shape(input_shape))
-        flow_parts.append(_format_shape(projected))
-        flow_parts.append(_format_shape(internal))
-        agg_desc = f"{_format_shape(internal)} -> {_format_shape(feature)}"
-        if agg_mode:
-            agg_desc += f" (mode={agg_mode})"
-        print(f"3. Reservoir       : {_format_shape(projected)} -> {_format_shape(internal)} (Recurrent)")
-        print(f"4. Aggregation     : {agg_desc}")
-        print(f"5. Readout         : {_format_shape(feature)} -> {_format_shape(output)} outputs")
-        flow_parts.append(_format_shape(feature))
-        flow_parts.append(_format_shape(output))
-    else:
-        flow_parts.append(_format_shape(input_shape))
-        flow_parts.append(_format_shape(internal))
-        flow_parts.append(_format_shape(feature))
-        flow_parts.append(_format_shape(output))
-        print(f"3. Internal Struct : {_format_shape(internal)}")
-        print(f"4. Readout         : {_format_shape(feature)} -> {_format_shape(output)} outputs")
-
-    print("-" * 40)
-    flow_str = " -> ".join(str(p) for p in flow_parts if p)
-    if flow_str:
-        print(f"Tensor Flow     : {flow_str}")
-    print("=" * 40)
 
 
 def _get_strict_dataset_meta(config: Dict[str, Any]) -> Tuple[str, DatasetPreset]:
@@ -273,185 +201,149 @@ def run_pipeline(
             require_3d=True,
         )
 
+    # Flatten for pure FNN (non-distillation) so the student sees vector inputs.
+    is_distillation_intent = model_type == "fnn" and bool(config.get("reservoir") or config.get("reservoir_params"))
+    if model_type == "fnn" and not is_distillation_intent:
+        def _flatten(arr: Optional[Any]) -> Optional[Any]:
+            if arr is None:
+                return None
+            arr_np = np.asarray(arr)
+            if arr_np.ndim == 3:
+                return arr_np.reshape(arr_np.shape[0], -1)
+            return arr
+
+        train_X = _flatten(train_X)
+        val_X = _flatten(val_X)
+        test_X = _flatten(test_X)
+
     print(f"Data Shapes -> Train: {train_X.shape}, Val: {getattr(val_X, 'shape', None)}, Test: {test_X.shape}")
 
+    preset_input_dim: Optional[int] = None
+    preset_output_dim: Optional[int] = None
     if dataset_preset is not None:
-        meta_n_outputs = int(dataset_preset.config.n_output)
+        if dataset_preset.config.n_input:
+            preset_input_dim = int(dataset_preset.config.n_input)
+        if dataset_preset.config.n_output:
+            preset_output_dim = int(dataset_preset.config.n_output)
+
+    if preset_output_dim is not None:
+        meta_n_outputs = preset_output_dim
     else:
         target_sample = train_y if train_y is not None else test_y
         if target_sample is None:
             raise ValueError("Unable to infer output dimension without targets.")
         meta_n_outputs = int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
 
-    # Shape Adjustment Logic
-    reservoir_units_for_plot: Optional[int] = None
-    is_distillation: Optional[list[int]] = None
-
     input_shape = train_X.shape[1:]
+    input_dim_for_model = int(input_shape[-1])
+    if preset_input_dim is not None and is_distillation_intent:
+        input_dim_for_model = preset_input_dim
 
     hidden_dim = config.get("hidden_dim")
-    if hidden_dim is None:
-        raise ValueError(f"Configuration Error: 'hidden_dim' must be specified.")
+    if hidden_dim is None and model_type in ["reservoir", "classical", "esn"]:
+        raise ValueError("Configuration Error: 'hidden_dim' must be specified for reservoir models.")
 
-    # --- 2. Model Creation (Strict) ---
+    model_cfg = dict(config.get("model", {}) or {})
+    if model_type == "fnn":
+        hidden_layers = model_cfg.get("layer_dims") or config.get("nn_hidden") or []
+        model_cfg["layer_dims"] = [
+            input_dim_for_model,
+            *[int(v) for v in hidden_layers],
+            int(preset_output_dim if preset_output_dim is not None else meta_n_outputs),
+        ]
+    elif model_type == "rnn":
+        if "input_dim" not in model_cfg:
+            model_cfg["input_dim"] = input_dim_for_model
+        if "output_dim" not in model_cfg and preset_output_dim is not None:
+            model_cfg["output_dim"] = int(preset_output_dim)
+
+    # --- 2. Model Creation (Strict & Simplified) ---
     print(f"Initializing {model_type.upper()} model via Factory...")
 
-    if model_type in ["fnn", "rnn"]: #Distillation Modes (there are no standard FNN/RNN models in this codebase)
-        model_cfg = dict(config.get("model", {}))
+    factory_cfg = {
+        "type": model_type,
+        "input_dim": int(input_dim_for_model),
+        "model": model_cfg,
+        "training": training_obj,
+        "reservoir": _get_strict_reservoir_params(config) if model_type in ["reservoir", "classical", "esn"] else config.get("reservoir"),
+        "reservoir_params": config.get("reservoir_params"),
+        "use_preprocessing": config.get("use_preprocessing", True),
+        "dataset": dataset_name,
+        "hidden_dim": config.get("hidden_dim"),
+    }
 
-        # Enforce explicit dimensions or fail
-        if model_type == "fnn":
-            hidden_layers = model_cfg.get("layer_dims")
-            if hidden_layers:
-                hidden_layers = [int(v) for v in hidden_layers]
-            else:
-                hidden_layers = [int(hidden_dim)]
+    model = ModelFactory.create_model(factory_cfg)
 
-            model_cfg["layer_dims"] = [
-                int(input_shape[-1]),
-                *hidden_layers,
-                int(meta_n_outputs)
-            ]
-            is_distillation = hidden_layers.copy() if hidden_layers else None
+    topo_meta: Optional[Dict[str, Any]] = None
+    filename_res_units: Optional[int] = None
+    filename_student_hidden: Optional[list[int]] = None
 
-            teacher_cfg_candidate = config.get("reservoir") or config.get("reservoir_params") or {}
-            teacher_units = teacher_cfg_candidate.get("n_units") or hidden_dim
-            if teacher_units is not None:
-                reservoir_units_for_plot = int(teacher_units)
-        else:
-            # RNN types
+    t_steps = input_shape[0] if len(input_shape) > 1 else 1
+    f_dim = int(input_shape[-1])
 
-
-            model_cfg.setdefault("input_dim", int(input_shape[-1]))
-            model_cfg["hidden_dim"] = int(hidden_dim)
-            model_cfg.setdefault("output_dim", int(meta_n_outputs))
-            model_cfg.setdefault("return_sequences", False)
-            model_cfg.setdefault("return_hidden", False)
-
-        factory_cfg = {
-            "type": model_type,
-            "model": model_cfg,
-            "training": training_obj,
-            "reservoir": config.get("reservoir", {}),
-            "input_dim": int(input_shape[-1]),
-        }
-        model = FlaxModelFactory.create_model(factory_cfg)
-
-        raw_in = int(input_shape[-1])
-        out_d = int(meta_n_outputs)
-        feat_d = int(reservoir_units_for_plot) if reservoir_units_for_plot else (hidden_layers[-1] if hidden_layers else 0)
-
-        t_steps = input_shape[0] if len(input_shape) > 1 else 1
-        f_dim = raw_in
-        flat_dim = t_steps * feat_d
+    if isinstance(model, DistillationModel):
+        teacher_units = int(model.teacher_output_dim)
+        student_hidden = [int(v) for v in model.student_hidden]
+        projected_units = teacher_units
+        internal_flat = t_steps * projected_units
 
         topo_meta = {
             "type": "FNN_DISTILLATION",
             "shapes": {
                 "input": (t_steps, f_dim),
-                "projected": (t_steps, feat_d),
-                "internal": (flat_dim,),
-                "feature": (feat_d,),
-                "output": (out_d,),
+                "projected": (t_steps, projected_units),
+                "internal": (internal_flat,),
+                "feature": (projected_units,),
+                "output": (int(meta_n_outputs),),
             },
             "details": {
                 "preprocess": None,
-                "agg_mode": None,
-                "student_layers": hidden_layers,
+                "agg_mode": getattr(model, "teacher_config", None) and model.teacher_config.state_aggregation,
+                "student_layers": student_hidden or None,
             },
         }
-
-
-
-    elif model_type in ["reservoir", "esn", "classical"]:
-        # Strict parameter resolution (Maps hidden_dim -> n_units)
-        reservoir_params = _get_strict_reservoir_params(config)
-
-        # Feature Engineering Config
-        preprocess_steps = []
-        effective_input_dim = int(input_shape[-1])
-
-        if dataset_name not in {"mnist", "fashion_mnist"} and config.get("use_preprocessing", True):
-            preprocess_steps.append(FeatureScaler())
-
-        # Design Matrix
-        use_dm = bool(reservoir_params.get("use_design_matrix", False))
-        degree = reservoir_params.get("poly_degree")
-        include_bias = reservoir_params.get("poly_bias", False)
-        if use_dm:
-
-            if degree is None:
-                raise ValueError("Configuration Error: 'poly_degree' is required when 'use_design_matrix' is True.")
-
-            print(f"Adding DesignMatrix (degree={degree}, bias={include_bias})...")
-            preprocess_steps.append(DesignMatrix(degree=int(degree), include_bias=bool(include_bias)))
-
-            factor = int(degree) if int(degree) > 0 else 1
-            effective_input_dim = effective_input_dim * factor + (1 if include_bias else 0)
-
-        preprocess = TransformerSequence(preprocess_steps) if preprocess_steps else None
-
-        # Instantiate ClassicalReservoir
-        # Dictionary access 'reservoir_params["key"]' ensures we fail fast if keys are missing.
-        try:
-            node = ClassicalReservoir(
-                n_inputs=effective_input_dim,
-                n_units=int(reservoir_params["n_units"]),  # Derived from hidden_dim if not explicit
-                input_scale=float(reservoir_params["input_scale"]),
-                spectral_radius=float(reservoir_params["spectral_radius"]),
-                leak_rate=float(reservoir_params["leak_rate"]),
-                input_connectivity=float(reservoir_params["input_connectivity"]),
-                rc_connectivity=float(reservoir_params["rc_connectivity"]),
-                noise_rc=float(reservoir_params["noise_rc"]),
-                bias_scale=float(reservoir_params["bias_scale"]),
-                seed=int(reservoir_params["seed"]),
-            )
-        except KeyError as e:
-            raise ValueError(
-                f"Configuration Error: Missing required reservoir parameter {e}. "
-                f"Preset: '{config.get('reservoir_preset', 'classical')}', Config: {reservoir_params}"
-            )
-
-        readout_mode = reservoir_params.get("state_aggregation")
-        if not readout_mode:
-            raise ValueError(
-                "Configuration Error: 'state_aggregation' is missing in reservoir_params. "
-                "Define it in the preset or override explicitly."
-            )
-
-        model = ReservoirModel(reservoir=node, preprocess=preprocess, readout_mode=readout_mode)
-        reservoir_units_for_plot = int(node.n_units)
-
-        raw_input_dim = int(input_shape[-1])
-        res_units = int(node.n_units)
-        out_dim = int(meta_n_outputs)
-        prep_msg = None
-        if preprocess:
-            prep_msg = f"Expanded to {effective_input_dim} (PolyDegree={degree}, Bias={include_bias})"
-
-        t_steps = input_shape[0] if len(input_shape) > 1 else 1
-        f_dim = raw_input_dim
-        agg_dim = res_units if str(readout_mode) != "flatten" else t_steps * res_units
+        filename_res_units = projected_units
+        filename_student_hidden = student_hidden
+    elif isinstance(model, ReservoirModel):
+        res_units = int(getattr(model.reservoir, "n_units"))
+        filename_res_units = res_units
+        agg_mode = getattr(model, "readout_mode", None)
         topo_meta = {
             "type": model_type.upper(),
             "shapes": {
                 "input": (t_steps, f_dim),
                 "projected": (t_steps, res_units),
                 "internal": (t_steps, res_units),
-                "feature": (agg_dim,),
-                "output": (out_dim,),
+                "feature": (res_units,),
+                "output": (int(meta_n_outputs),),
             },
             "details": {
-                "preprocess": prep_msg or "None (Pass-through)",
-                "agg_mode": readout_mode,
+                "preprocess": None,
+                "agg_mode": agg_mode,
                 "student_layers": None,
             },
         }
-    else:
-        raise ValueError(f"Unsupported model_type: {model_type}")
+    elif isinstance(model, FNNModel):
+        layer_dims = [int(v) for v in getattr(model, "layer_dims", [])]
+        feature_units = layer_dims[-2] if len(layer_dims) >= 2 else None
+        topo_meta = {
+            "type": model_type.upper(),
+            "shapes": {
+                "input": (t_steps, f_dim),
+                "projected": None,
+                "internal": None,
+                "feature": (feature_units,) if feature_units else None,
+                "output": (int(meta_n_outputs),),
+            },
+            "details": {
+                "preprocess": None,
+                "agg_mode": None,
+                "student_layers": layer_dims[1:-1] if len(layer_dims) > 2 else None,
+            },
+        }
 
     # --- Common Architecture Summary Block ---
-    _print_topology(topo_meta)
+    print_topology(topo_meta)
 
     # --- 3a. Validation Split for ridge search ---
     # Shared Readout (owned by runner)
@@ -476,10 +368,10 @@ def run_pipeline(
     )
 
     filename_parts = [f"{model_type}", "raw"]
-    if reservoir_units_for_plot is not None:
-        filename_parts.append(f"nr{reservoir_units_for_plot}")
-    if is_distillation:
-        joined_nn = "-".join(str(v) for v in is_distillation)
+    if filename_res_units is not None:
+        filename_parts.append(f"nr{filename_res_units}")
+    if filename_student_hidden:
+        joined_nn = "-".join(str(v) for v in filename_student_hidden)
         filename_parts.append(f"nn{joined_nn}")
         filename_parts.append(f"epochs{training_cfg.get('epochs')}")
 

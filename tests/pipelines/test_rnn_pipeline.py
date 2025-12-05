@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from reservoir.models import FlaxModelFactory
+from reservoir.models import ModelFactory
 
 
 def test_run_rnn_pipeline_regression():
@@ -27,7 +27,7 @@ def test_run_rnn_pipeline_regression():
     )
     y = jnp.sum(X, axis=(1, 2), keepdims=True)  # simple regression target
 
-    model = FlaxModelFactory.create_model(cfg)
+    model = ModelFactory.create_model(cfg)
     train_metrics = model.train(X, y)
     test_metrics = model.evaluate(X, y)
 

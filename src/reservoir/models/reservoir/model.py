@@ -1,5 +1,4 @@
-"""
-src/reservoir/models/orchestrator.py
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/reservoir/model.py
 High-level orchestration of preprocessing, reservoir dynamics, and readout.
 """
 from __future__ import annotations

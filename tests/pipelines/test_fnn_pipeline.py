@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from reservoir.models import FlaxModelFactory
+from reservoir.models import ModelFactory
 
 
 def test_run_fnn_pipeline_classification():
@@ -22,7 +22,7 @@ def test_run_fnn_pipeline_classification():
     )
     y = jnp.array([0, 1, 1, 0])
 
-    model = FlaxModelFactory.create_model(cfg)
+    model = ModelFactory.create_model(cfg)
     train_metrics = model.train(X, y)
     test_metrics = model.evaluate(X, y)
 

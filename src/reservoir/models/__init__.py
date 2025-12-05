@@ -1,10 +1,11 @@
 """Models package."""
 
 from .distillation import DistillationModel
-from .factories import FlaxModelFactory
+from .factory import ModelFactory
 from .nn.base import BaseFlaxModel, BaseModel
 from .nn.fnn import FNNModel, FNN
 from .nn.rnn import RNNModel, SimpleRNN
+from .reservoir import ReservoirModel, ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
     ModelPreset,
     ReservoirConfig,
@@ -12,7 +13,6 @@ from .presets import (
     MODEL_PRESETS,
     MODEL_REGISTRY,
     get_model_preset,
-    normalize_model_name,
 )
 
 __all__ = [
@@ -22,13 +22,16 @@ __all__ = [
     "FNNModel",
     "RNNModel",
     "BaseModel",
-    "FlaxModelFactory",
+    "ModelFactory",
     "DistillationModel",
+    "ReservoirModel",
+    "ReservoirFactory",
+    "Reservoir",
+    "ClassicalReservoir",
     "ModelPreset",
     "ReservoirConfig",
     "DistillationConfig",
     "MODEL_PRESETS",
     "MODEL_REGISTRY",
     "get_model_preset",
-    "normalize_model_name",
 ]

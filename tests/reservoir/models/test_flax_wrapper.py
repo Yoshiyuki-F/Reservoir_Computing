@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from reservoir.models.factories import FlaxModelFactory
+from reservoir.models import ModelFactory
 from pipelines.generic_runner import UniversalPipeline
 
 
@@ -10,7 +10,7 @@ def test_fnn_classification_train_and_eval():
         "model": {"layer_dims": [3, 4, 2]},
         "training": {"learning_rate": 1e-3, "batch_size": 2, "epochs": 2},
     }
-    model = FlaxModelFactory.create_model(config)
+    model = ModelFactory.create_model(config)
 
     X = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0]], dtype=jnp.float64)
     y = jnp.array([0, 1, 0, 1])
@@ -35,7 +35,7 @@ def test_fnn_regression_with_runner():
             "classification": False,
         },
     }
-    model = FlaxModelFactory.create_model(config)
+    model = ModelFactory.create_model(config)
 
     X = jnp.array([[0.0, 0.0], [1.0, 0.0], [0.5, 0.5], [1.0, 1.0]], dtype=jnp.float64)
     y = jnp.sum(X, axis=1, keepdims=True)
@@ -60,7 +60,7 @@ def test_save_and_load_roundtrip(tmp_path):
             "classification": False,
         },
     }
-    model = FlaxModelFactory.create_model(config)
+    model = ModelFactory.create_model(config)
     X = jnp.array([[0.0, 1.0], [1.0, 1.0]], dtype=jnp.float64)
     y = jnp.sum(X, axis=1, keepdims=True)
 
@@ -70,7 +70,7 @@ def test_save_and_load_roundtrip(tmp_path):
     save_path = tmp_path / "params.msgpack"
     model.save(save_path)
 
-    loaded_model = FlaxModelFactory.create_model(config)
+    loaded_model = ModelFactory.create_model(config)
     loaded_model.load(save_path, sample_input=X)
     preds_after = loaded_model.predict(X)
 
