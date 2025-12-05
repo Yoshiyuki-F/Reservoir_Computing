@@ -248,6 +248,13 @@ def run_pipeline(
     training_cfg["_meta_dataset"] = dataset_name
     training_cfg["_meta_model_type"] = model_type
     feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
+    training_obj = TrainingConfig(
+        **{
+            key: training_cfg[key]
+            for key in TrainingConfig.__dataclass_fields__.keys()
+            if key in training_cfg
+        }
+    )
     if has_provided_data:
         train_X = provided["train_X"]
         train_y = provided["train_y"]
@@ -324,7 +331,7 @@ def run_pipeline(
         factory_cfg = {
             "type": model_type,
             "model": model_cfg,
-            "training": training_cfg,
+            "training": training_obj,
             "reservoir": config.get("reservoir", {}),
             "input_dim": int(input_shape[-1]),
         }

@@ -16,15 +16,17 @@ from reservoir.components.projection import InputProjector
 from reservoir.models.nn.base import BaseModel
 from reservoir.models.nn.fnn import FNN
 from reservoir.models.presets import DistillationConfig, ReservoirConfig
+from reservoir.training.presets import TrainingConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 
 
 class DistillationModel(BaseModel):
     """Train a student FNN to mimic the state trajectory of a reservoir teacher."""
 
-    def __init__(self, config: DistillationConfig, input_dim: int):
+    def __init__(self, config: DistillationConfig, training_config: TrainingConfig, input_dim: int):
         config.validate(context="distillation")
         self.config = config
+        self.training_config = training_config
         self.input_dim = int(input_dim)
         if self.input_dim <= 0:
             raise ValueError(f"input_dim must be positive, got {self.input_dim}.")
@@ -38,9 +40,9 @@ class DistillationModel(BaseModel):
         self.student_input_dim: Optional[int] = None
         self.student: Optional[FNN] = None
 
-        self.learning_rate: float = float(config.learning_rate)
-        self.epochs: int = int(config.epochs)
-        self.batch_size: int = int(config.batch_size)
+        self.learning_rate: float = float(training_config.learning_rate)
+        self.epochs: int = int(training_config.epochs)
+        self.batch_size: int = int(training_config.batch_size)
         self._state: Optional[train_state.TrainState] = None
         self._rng = jax.random.PRNGKey(int(self.teacher_config.seed or 0) + 1)
 

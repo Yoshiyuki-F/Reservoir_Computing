@@ -62,27 +62,17 @@ class DistillationConfig:
 
     teacher: ReservoirConfig = field(default_factory=ReservoirConfig)
     student_hidden_layers: Tuple[int, ...] = (10,)
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    batch_size: int = 32
 
     def __post_init__(self) -> None:
         if not self.student_hidden_layers:
             raise ValueError("DistillationConfig.student_hidden_layers must contain at least one layer size.")
         if any(width <= 0 for width in self.student_hidden_layers):
             raise ValueError("DistillationConfig.student_hidden_layers values must be positive.")
-        if self.learning_rate <= 0:
-            raise ValueError("DistillationConfig.learning_rate must be positive.")
-        if self.epochs <= 0 or self.batch_size <= 0:
-            raise ValueError("DistillationConfig.epochs and batch_size must be positive.")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "teacher": self.teacher.to_dict(),
             "student_hidden_layers": tuple(int(v) for v in self.student_hidden_layers),
-            "learning_rate": float(self.learning_rate),
-            "epochs": int(self.epochs),
-            "batch_size": int(self.batch_size),
         }
 
     def validate(self, *, context: str = "") -> None:
@@ -92,12 +82,6 @@ class DistillationConfig:
             raise ValueError(f"{prefix}student_hidden_layers must contain at least one layer size.")
         if any(width <= 0 for width in self.student_hidden_layers):
             raise ValueError(f"{prefix}student_hidden_layers values must be positive.")
-        if self.learning_rate <= 0:
-            raise ValueError(f"{prefix}learning_rate must be positive.")
-        if self.epochs <= 0:
-            raise ValueError(f"{prefix}epochs must be positive.")
-        if self.batch_size <= 0:
-            raise ValueError(f"{prefix}batch_size must be positive.")
 
 
 @dataclass(frozen=True)
