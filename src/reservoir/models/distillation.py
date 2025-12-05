@@ -61,7 +61,7 @@ class DistillationModel(BaseModel):
             n_inputs=self.input_dim,
             n_units=int(cfg.n_units),
             input_scale=float(cfg.input_scale),
-            connectivity=float(cfg.connectivity),
+            connectivity=float(cfg.input_connectivity),
             bias_scale=float(cfg.bias_scale),
             seed=int(cfg.seed),
         )
@@ -79,7 +79,8 @@ class DistillationModel(BaseModel):
             input_scale=float(cfg.input_scale),
             spectral_radius=float(cfg.spectral_radius),
             leak_rate=float(cfg.leak_rate),
-            connectivity=float(cfg.connectivity),
+            input_connectivity=float(cfg.input_connectivity),
+            rc_connectivity=float(cfg.rc_connectivity),
             noise_rc=float(cfg.noise_rc),
             bias_scale=float(cfg.bias_scale),
             seed=int(cfg.seed),

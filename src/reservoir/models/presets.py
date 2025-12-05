@@ -18,7 +18,8 @@ class ReservoirConfig:
     spectral_radius: float = 1.3
     leak_rate: float = 0.2
     input_scale: float = 0.6
-    connectivity: float = 0.1
+    input_connectivity: float = 0.9 # 0.09 # optimised for rs100? sus
+    rc_connectivity: float = 0.1  #0.59 # optimised for rs100
     bias_scale: float = 1.0
     noise_rc: float = 0.001
     seed: int = 42
@@ -45,8 +46,10 @@ class ReservoirConfig:
             raise ValueError(f"{prefix}leak_rate must be in [0, 1].")
         if not (0.0 < self.input_scale):
             raise ValueError(f"{prefix}input_scale must be > 0.")
-        if not (0.0 < self.connectivity <= 1.0):
-            raise ValueError(f"{prefix}connectivity must be in (0, 1].")
+        if not (0.0 < self.input_connectivity <= 1.0):
+            raise ValueError(f"{prefix}input_connectivity must be in (0, 1].")
+        if not (0.0 < self.rc_connectivity <= 1.0):
+            raise ValueError(f"{prefix}rc_connectivity must be in (0, 1].")
         if self.bias_scale < 0.0:
             raise ValueError(f"{prefix}bias_scale must be >= 0.")
         if self.noise_rc < 0.0:

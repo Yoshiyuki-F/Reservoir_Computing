@@ -26,7 +26,8 @@ class ClassicalReservoir(Reservoir):
         input_scale: float,
         spectral_radius: float,
         leak_rate: float,
-        connectivity: float,
+        input_connectivity: float,
+        rc_connectivity: float,
         noise_rc: float,
         bias_scale: float,
         seed: int,
@@ -36,14 +37,15 @@ class ClassicalReservoir(Reservoir):
         self.input_scale = float(input_scale)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
-        self.connectivity = float(connectivity)
+        self.input_connectivity = float(input_connectivity)
+        self.rc_connectivity = float(rc_connectivity)
         self.bias_scale = float(bias_scale)
         self._rng = jax.random.PRNGKey(self.seed)
         self.projector = projector or InputProjector(
             n_inputs=self.n_inputs,
             n_units=self.n_units,
             input_scale=self.input_scale,
-            connectivity=self.connectivity,
+            connectivity=self.input_connectivity,
             bias_scale=self.bias_scale,
             seed=self.seed,
         )
@@ -54,8 +56,8 @@ class ClassicalReservoir(Reservoir):
         self._rng = k_res
 
         W_dense = jax.random.normal(k_res, (self.n_units, self.n_units), dtype=jnp.float64)
-        if 0.0 < self.connectivity < 1.0:
-            mask_res = jax.random.bernoulli(k_mask_res, p=self.connectivity, shape=W_dense.shape)
+        if 0.0 < self.rc_connectivity < 1.0:
+            mask_res = jax.random.bernoulli(k_mask_res, p=self.rc_connectivity, shape=W_dense.shape)
             W_dense = jnp.where(mask_res, W_dense, 0.0)
 
         eig = jnp.max(jnp.abs(jnp.linalg.eigvals(W_dense)))
@@ -94,7 +96,8 @@ class ClassicalReservoir(Reservoir):
                 "input_scale": self.input_scale,
                 "spectral_radius": self.spectral_radius,
                 "leak_rate": self.leak_rate,
-                "connectivity": self.connectivity,
+                "input_connectivity": self.input_connectivity,
+                "rc_connectivity": self.rc_connectivity,
                 "bias_scale": self.bias_scale,
                 "seed": self.seed,
             }
@@ -110,7 +113,8 @@ class ClassicalReservoir(Reservoir):
                 input_scale=float(data["input_scale"]),
                 spectral_radius=float(data["spectral_radius"]),
                 leak_rate=float(data["leak_rate"]),
-                connectivity=float(data["connectivity"]),
+                input_connectivity=float(data["input_connectivity"]),
+                rc_connectivity=float(data["rc_connectivity"]),
                 noise_rc=float(data["noise_rc"]),
                 bias_scale=float(data["bias_scale"]),
                 seed=int(data["seed"]),
