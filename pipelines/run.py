@@ -17,12 +17,12 @@ from reservoir.models import ModelFactory
 from reservoir.models.distillation import DistillationModel
 from reservoir.models.reservoir.model import ReservoirModel
 from reservoir.models.nn.fnn import FNNModel
+from reservoir.models.presets import get_model_preset, ModelConfig, DistillationConfig, MODEL_PRESETS
 from reservoir.utils.printing import print_topology
 from pipelines.generic_runner import UniversalPipeline
 from reservoir.components import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
-from reservoir.models.presets import get_model_preset, ModelPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 
 # Ensure dataset loaders are registered
@@ -46,6 +46,8 @@ def _get_strict_dataset_meta(config: Dict[str, Any]) -> Tuple[str, DatasetPreset
     if preset is None:
         raise ValueError(f"Configuration Error: Dataset '{name}' is not registered in DATASET_REGISTRY.")
 
+    if preset.config.n_input is None:
+        raise ValueError(f"Preset Error: Dataset '{name}' is missing 'n_input' in its definition.")
     if preset.config.n_output is None:
         raise ValueError(f"Preset Error: Dataset '{name}' is missing 'n_output' in its definition.")
 
@@ -88,21 +90,30 @@ def _resolve_training_config(config: Dict[str, Any], is_classification: bool) ->
 
 def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Merge ModelPreset parameters with User Configuration.
+    Merge ModelConfig parameters with User Configuration.
     Maps generic CLI args (hidden_dim) to model specific args (n_units).
     """
     # 1. Identify Preset
-    preset_name = config.get("reservoir_preset") or config.get("reservoir_type")
+    preset_name = config.get("reservoir_preset") or config.get("reservoir_type") or config.get("model_type")
     if not preset_name:
         preset_name = "classical"
 
     try:
-        preset: ModelPreset = get_model_preset(preset_name)
+        preset: ModelConfig = get_model_preset(preset_name)
     except KeyError:
         raise ValueError(f"Configuration Error: Model Preset '{preset_name}' not found.")
 
     # 2. Base params from Preset (Canonical names only)
-    base_params = preset.to_params()
+    if preset.distillation is not None:
+        # Distillation preset: use teacher as reservoir params
+        teacher_cfg = preset.distillation.teacher
+        teacher_cfg.validate(context=f"{preset_name}.teacher")
+        base_params = teacher_cfg.to_dict()
+    elif preset.reservoir is not None:
+        preset.reservoir.validate(context=preset_name)
+        base_params = preset.reservoir.to_dict()
+    else:
+        base_params = preset.to_params()
 
     # 3. Overrides from User (Canonical names only expected)
     user_overrides = dict(config.get("reservoir", {}) or {})
@@ -133,6 +144,41 @@ def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     return merged
+
+
+def _resolve_distillation_from_preset(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Resolve distillation-related settings from a model preset if provided.
+    Returns teacher parameters and student hidden layers when the preset encodes a DistillationConfig.
+    """
+    preset_name = config.get("reservoir_preset") or config.get("reservoir_type")
+    if not preset_name:
+        return None
+
+    preset = MODEL_PRESETS.get(preset_name)
+    if preset is None:
+        return None
+    distill_cfg = preset.distillation or (preset.params.get("distillation") if preset.params else None)
+    if distill_cfg is None:
+        return None
+    if not isinstance(distill_cfg, DistillationConfig):
+        raise ValueError(f"Preset '{preset_name}' must use DistillationConfig for distillation workflows.")
+
+    teacher_cfg = distill_cfg.teacher
+    teacher_cfg.validate(context=f"preset.{preset_name}.teacher")
+    teacher_params = teacher_cfg.to_dict()
+    if "hidden_dim" in config and config["hidden_dim"] is not None:
+        teacher_params["n_units"] = int(config["hidden_dim"])
+
+    student_hidden = tuple(int(v) for v in distill_cfg.student_hidden_layers)
+    if not student_hidden:
+        raise ValueError(f"Preset '{preset_name}' distillation must define at least one student hidden layer.")
+
+    return {
+        "preset": preset,
+        "teacher_params": teacher_params,
+        "student_hidden": student_hidden,
+    }
 
 def run_pipeline(
     config: Dict[str, Any],
@@ -169,7 +215,25 @@ def run_pipeline(
     model_type = config.get("model_type")
     if not model_type:
         raise ValueError("Configuration Error: 'model_type' is required.")
-    model_type = model_type.lower()
+    raw_model_type = str(model_type).lower()
+
+    preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(raw_model_type)
+
+    distill_ctx = None
+    if preset_for_model and preset_for_model.distillation:
+        distill_cfg: DistillationConfig = preset_for_model.distillation
+        teacher_params = distill_cfg.teacher.to_dict()
+        if "hidden_dim" in config and config["hidden_dim"] is not None:
+            teacher_params["n_units"] = int(config["hidden_dim"])
+        distill_ctx = {
+            "preset": preset_for_model,
+            "teacher_params": teacher_params,
+            "student_hidden": tuple(int(v) for v in distill_cfg.student_hidden_layers),
+        }
+        model_type = str(preset_for_model.model_type).lower()
+    else:
+        model_type = raw_model_type.lower()
+        distill_ctx = _resolve_distillation_from_preset(config) if model_type.startswith("fnn") else None
 
     # Resolve training configuration (needed for ridge search/validation)
     training_cfg = _resolve_training_config(config, is_classification)
@@ -202,8 +266,10 @@ def run_pipeline(
         )
 
     # Flatten for pure FNN (non-distillation) so the student sees vector inputs.
-    is_distillation_intent = model_type == "fnn" and bool(config.get("reservoir") or config.get("reservoir_params"))
-    if model_type == "fnn" and not is_distillation_intent:
+    is_distillation_intent = model_type.startswith("fnn") and (
+        distill_ctx is not None or bool(config.get("reservoir") or config.get("reservoir_params"))
+    )
+    if model_type.startswith("fnn") and not is_distillation_intent:
         def _flatten(arr: Optional[Any]) -> Optional[Any]:
             if arr is None:
                 return None
@@ -240,22 +306,43 @@ def run_pipeline(
         input_dim_for_model = preset_input_dim
 
     hidden_dim = config.get("hidden_dim")
-    if hidden_dim is None and model_type in ["reservoir", "classical", "esn"]:
-        raise ValueError("Configuration Error: 'hidden_dim' must be specified for reservoir models.")
+    if hidden_dim is None and model_type in ["reservoir", "classical", "classical_reservoir", "esn"]:
+        # Allow preset-provided n_units; _get_strict_reservoir_params will validate presence.
+        pass
 
     model_cfg = dict(config.get("model", {}) or {})
-    if model_type == "fnn":
+    reservoir_cfg_for_factory: Optional[Dict[str, Any]] = None
+
+    if model_type.startswith("fnn"):
         hidden_layers = model_cfg.get("layer_dims") or config.get("nn_hidden") or []
-        model_cfg["layer_dims"] = [
-            input_dim_for_model,
-            *[int(v) for v in hidden_layers],
-            int(preset_output_dim if preset_output_dim is not None else meta_n_outputs),
-        ]
+        if distill_ctx is not None:
+            hidden_layers = hidden_layers or list(distill_ctx["student_hidden"])
+            teacher_units = int(distill_ctx["teacher_params"]["n_units"])
+            model_cfg["layer_dims"] = [
+                input_dim_for_model,
+                *[int(v) for v in hidden_layers],
+                teacher_units,
+            ]
+            reservoir_cfg_for_factory = distill_ctx["teacher_params"]
+        else:
+            model_cfg["layer_dims"] = [
+                input_dim_for_model,
+                *[int(v) for v in hidden_layers],
+                int(preset_output_dim if preset_output_dim is not None else meta_n_outputs),
+            ]
+            reservoir_cfg_for_factory = config.get("reservoir")
     elif model_type == "rnn":
         if "input_dim" not in model_cfg:
             model_cfg["input_dim"] = input_dim_for_model
         if "output_dim" not in model_cfg and preset_output_dim is not None:
             model_cfg["output_dim"] = int(preset_output_dim)
+        reservoir_cfg_for_factory = config.get("reservoir")
+    else:
+        reservoir_cfg_for_factory = (
+            _get_strict_reservoir_params(config)
+            if model_type in ["reservoir", "classical", "classical_reservoir", "esn"]
+            else config.get("reservoir")
+        )
 
     # --- 2. Model Creation (Strict & Simplified) ---
     print(f"Initializing {model_type.upper()} model via Factory...")
@@ -265,7 +352,7 @@ def run_pipeline(
         "input_dim": int(input_dim_for_model),
         "model": model_cfg,
         "training": training_obj,
-        "reservoir": _get_strict_reservoir_params(config) if model_type in ["reservoir", "classical", "esn"] else config.get("reservoir"),
+        "reservoir": reservoir_cfg_for_factory,
         "reservoir_params": config.get("reservoir_params"),
         "use_preprocessing": config.get("use_preprocessing", True),
         "dataset": dataset_name,

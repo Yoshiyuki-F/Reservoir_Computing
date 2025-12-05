@@ -15,51 +15,9 @@ from pipelines import run_pipeline
 def main() -> None:
     parser = argparse.ArgumentParser(description="Unified ML Framework CLI")
 
-    # Required
-    parser.add_argument("--unified-model", choices=["fnn", "rnn", "reservoir"], required=True)
-
-    # Dataset
-    parser.add_argument("--dataset", type=str, default=None)
-    parser.add_argument("dataset_pos", nargs="?", type=str, help="Positional alias for dataset")
-
-    # Hyperparameters
-    parser.add_argument("--unified-hidden", type=int, default=None)
-    parser.add_argument("--unified-epochs", type=int, default=None)
-    parser.add_argument("--unified-batch-size", type=int, default=None)
-    parser.add_argument("--unified-lr", type=float, default=None)
-    parser.add_argument("--unified-seq-len", type=int, default=50)
-    parser.add_argument(
-        "--nn-hidden",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Hidden layer dimensions for FNN (Student in distillation mode).",
-    )
-
-    # Presets
-    parser.add_argument(
-        "--reservoir-preset",
-        type=str,
-        default="classical",
-        help="Reservoir preset name (classical, quantum_gate_based, etc.)",
-    )
-    parser.add_argument(
-        "--training-preset",
-        type=str,
-        default="standard",
-        help="Training preset name (standard, quick_test, heavy)",
-    )
-
-    # Features
-    parser.add_argument(
-        "--use-design-matrix",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Enable polynomial feature expansion (override preset)",
-    )
-    parser.add_argument("--poly-degree", type=int, default=None, help="Polynomial expansion degree (override preset)")
-
-    # Environment
+    # Required dont add more!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! other things should be defined in presets.py(training/ or models/ or data/)
+    parser.add_argument("--model", type=str, required=True, help="Model preset name (e.g., classical, fnn-distillation)")
+    parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--force-cpu", action="store_true")
 
     args = parser.parse_args()
@@ -70,22 +28,8 @@ def main() -> None:
         except Exception as exc:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
-    # Build Config
-    dataset_name = args.dataset or args.dataset_pos
-    config = build_run_config(
-        model_type=args.unified_model,
-        dataset=dataset_name,
-        hidden_dim=args.unified_hidden,
-        epochs=args.unified_epochs,
-        batch_size=args.unified_batch_size,
-        learning_rate=args.unified_lr,
-        seq_len=args.unified_seq_len,
-        reservoir_preset=args.reservoir_preset,
-        training_preset=args.training_preset,
-        use_design_matrix=args.use_design_matrix,
-        poly_degree=args.poly_degree,
-        nn_hidden=args.nn_hidden,
-    )
+    # Build Config (strict preset + dataset only)
+    config = build_run_config(preset_name=args.model, dataset_name=args.dataset)
 
     print(f"[Unified] Running {config['model_type']} pipeline on {config['dataset']}...")
 

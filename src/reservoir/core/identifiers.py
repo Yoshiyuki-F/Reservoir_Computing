@@ -17,14 +17,15 @@ from dataclasses import dataclass
 from typing import List
 
 
-class Pipeline(enum.Enum):
+class Pipeline(str, enum.Enum):
     """実験パイプライン（モデルアーキテクチャ）の種類。"""
 
-    CLASSICAL_RESERVOIR = "classical"
-    FNN = "fnn" # its pipeline is b (fnn with a hidden layer replaced by a reseroir layer) so its not just a fnn
+    CLASSICAL_RESERVOIR = "classical_reservoir"
+    FNN = "fnn"
+    FNN_DISTILLATION = "fnn-distillation"
     RNN = "rnn"
-    quantum_gate_based = "gate_based-quantum"
-    quantum_analog = "analog-quantum"
+    QUANTUM_GATE_BASED = "gate_based-quantum"
+    QUANTUM_ANALOG = "analog-quantum"
 
     def __str__(self) -> str:
         return self.value
@@ -34,7 +35,7 @@ class TaskType(enum.Enum):
     """タスクの種類。"""
 
     REGRESSION = "regression"
-    CLASSIFICATION = "classification"
+    CLASSIFICATION = "classification" # TODO shoudl be definied by dataset (data/configs)
 
     def __str__(self) -> str:
         return self.value
@@ -108,7 +109,7 @@ def generate_valid_experiments() -> List[ExperimentIdentifier]:
     valid_experiments: List[ExperimentIdentifier] = []
     for pipeline, dataset, preprocessing in all_combinations:
         # 例1: 量子モデルは MNIST を扱わない（将来サポートするならここを緩和）TODO
-        if pipeline in {Pipeline.quantum_gate_based, Pipeline.quantum_analog} and dataset is Dataset.MNIST:
+        if pipeline in {Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG} and dataset is Dataset.MNIST:
             continue
 
         # 例2: PCA は MNIST のときのみ意味がある　TODO
@@ -126,7 +127,7 @@ if __name__ == "__main__":
     # 簡単な動作確認
     print("--- Individual Identifier Example ---")
     exp_id = ExperimentIdentifier(
-        pipeline=Pipeline.FNN_B_DASH,
+        pipeline=Pipeline.FNN,
         dataset=Dataset.MNIST,
         preprocessing=Preprocessing.RAW,
     )
@@ -137,4 +138,3 @@ if __name__ == "__main__":
     print("\n--- Generating All Valid Experiments ---")
     for exp in generate_valid_experiments():
         print(exp)
-

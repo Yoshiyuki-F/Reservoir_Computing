@@ -15,7 +15,7 @@ from reservoir.models.nn.base import BaseModel
 from reservoir.models.nn.fnn import FNN
 from reservoir.training.presets import TrainingConfig
 from reservoir.models.distillation.config import DistillationConfig
-from reservoir.models.reservoir.config import ReservoirConfig
+from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.model import ReservoirModel
 
 
@@ -36,7 +36,7 @@ class DistillationModel(BaseModel):
         if self.input_dim <= 0:
             raise ValueError(f"input_dim must be positive, got {self.input_dim}.")
 
-        self.teacher_config: ReservoirConfig = config.teacher
+        self.teacher_config: ClassicalReservoirConfig = config.teacher
         self.teacher_model = teacher_model
         self.teacher = teacher_model.reservoir
         if not hasattr(self.teacher, "projector"):

@@ -7,12 +7,11 @@ from .nn.fnn import FNNModel, FNN
 from .nn.rnn import RNNModel, SimpleRNN
 from .reservoir import ReservoirModel, ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
-    ModelPreset,
-    ReservoirConfig,
-    DistillationConfig,
+    ModelConfig,
     MODEL_PRESETS,
     MODEL_REGISTRY,
     get_model_preset,
+    DistillationConfig,
 )
 
 __all__ = [
@@ -28,10 +27,9 @@ __all__ = [
     "ReservoirFactory",
     "Reservoir",
     "ClassicalReservoir",
-    "ModelPreset",
-    "ReservoirConfig",
-    "DistillationConfig",
+    "ModelConfig",
     "MODEL_PRESETS",
     "MODEL_REGISTRY",
     "get_model_preset",
+    "DistillationConfig",
 ]

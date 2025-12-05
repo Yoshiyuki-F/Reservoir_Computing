@@ -9,6 +9,7 @@ from typing import Any, Dict, Literal, Optional
 
 import chex
 import jax.numpy as jnp
+
 from reservoir.core.interfaces import Transformer
 
 PolyMode = Literal["none", "square", "poly_k"]

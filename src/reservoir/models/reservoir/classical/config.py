@@ -4,13 +4,13 @@ from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
-class ReservoirConfig:
+class ClassicalReservoirConfig:
     """
     Configuration for reservoir nodes (Classical/Quantum).
     SSOT: Defaults defined here are the canonical defaults.
     """
 
-    n_units: Optional[int] = None  # defined in scripts/CLI
+    n_units: int = 100  # SSOT default
     spectral_radius: float = 1.3
     leak_rate: float = 0.2
     input_scale: float = 0.6
@@ -22,12 +22,6 @@ class ReservoirConfig:
     use_design_matrix: bool = False
     poly_degree: int = 1
     state_aggregation: str = "mean"
-
-    # Quantum / advanced parameters
-    nonlinearity: Optional[str] = None
-    encode_batch_size: Optional[int] = None
-    coupling: Optional[float] = None
-    dt: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {k: v for k, v in self.__dict__.items() if v is not None}

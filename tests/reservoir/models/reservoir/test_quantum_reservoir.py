@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from reservoir.models.reservoir.quantum_gate_based import QuantumReservoirComputer
+from reservoir.models.reservoir.quantum.quantum_gate_based import QuantumReservoirComputer
 
 
 def _base_config(**overrides):

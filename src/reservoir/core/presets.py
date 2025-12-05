@@ -41,5 +41,9 @@ class PresetRegistry(Generic[T]):
     def available_keys(self) -> List[str]:
         return list(self._items.keys())
 
+    def list_keys(self) -> List[str]:
+        """Backward-compatible accessor for registry keys."""
+        return self.available_keys
+
 
 __all__ = ["PresetRegistry"]

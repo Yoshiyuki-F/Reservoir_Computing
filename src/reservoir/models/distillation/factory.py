@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 from reservoir.training.presets import TrainingConfig
 from reservoir.models.distillation.config import DistillationConfig
-from reservoir.models.reservoir.config import ReservoirConfig
+from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.factory import ReservoirFactory
 from reservoir.models.reservoir.model import ReservoirModel
 from .model import DistillationModel
@@ -33,7 +33,7 @@ class DistillationFactory:
             reservoir_cfg_dict = dict(reservoir_cfg_dict)
             reservoir_cfg_dict.setdefault("n_units", hidden_dim_override)
 
-        teacher_cfg = ReservoirConfig(**reservoir_cfg_dict)
+        teacher_cfg = ClassicalReservoirConfig(**reservoir_cfg_dict)
         teacher_cfg.validate(context="distillation.teacher")
 
         # 2. Prepare Student Configuration

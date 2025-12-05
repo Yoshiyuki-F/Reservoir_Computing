@@ -16,8 +16,8 @@ import jax.numpy as jnp
 from reservoir.components import RidgeReadoutNumpy
 from reservoir.models.presets import get_model_preset
 
-from .base import BaseReservoirComputer
-from .config import QuantumReservoirConfig, parse_ridge_lambdas
+from reservoir.models.reservoir.base import BaseReservoirComputer
+from reservoir.models.reservoir.classical.config import QuantumReservoirConfig, parse_ridge_lambdas
 from reservoir.models.reservoir.training import train_reservoir, predict_reservoir
 
 

@@ -14,8 +14,8 @@ import numpy as np
 import jax.numpy as jnp
 import qutip as qt
 
-from .base import BaseReservoirComputer
-from .config import AnalogQuantumReservoirConfig, parse_ridge_lambdas
+from reservoir.models.reservoir.base import BaseReservoirComputer
+from reservoir.models.reservoir.classical.config import AnalogQuantumReservoirConfig, parse_ridge_lambdas
 from reservoir.components import RidgeReadoutNumpy
 from reservoir.models.reservoir.training import train_reservoir, predict_reservoir
 

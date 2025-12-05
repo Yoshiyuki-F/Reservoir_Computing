@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import jax.numpy as jnp
 
-from reservoir.models.reservoir.quantum_gate_based import (
+from reservoir.models.reservoir.quantum.quantum_gate_based import (
     QuantumReservoirComputer,
     compute_feature_dim,
 )

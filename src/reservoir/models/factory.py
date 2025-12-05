@@ -21,16 +21,26 @@ class ModelFactory:
         if not isinstance(training_cfg, TrainingConfig):
             raise TypeError("ModelFactory expects 'training' to be a TrainingConfig instance.")
 
+        normalized_type = str(model_type).lower() if model_type is not None else ""
+
         # Reservoir family
-        if model_type in ("reservoir", "classical", "quantum_gate_based", "quantum_analog"):
+        if normalized_type in (
+            "reservoir",
+            "classical",
+            "classical_reservoir",
+            "quantum_gate_based",
+            "gate_based-quantum",
+            "quantum_analog",
+            "analog-quantum",
+        ):
             return ReservoirFactory.create_model(config)
 
         # RNN (no distillation path here)
-        if model_type == "rnn":
+        if normalized_type == "rnn":
             return NNModelFactory.create_rnn(model_cfg, training_cfg)
 
         # FNN (pure or distillation)
-        if model_type == "fnn":
+        if normalized_type in ("fnn", "fnn-distillation", "fnn_distillation"):
             has_reservoir = bool(config.get("reservoir") or config.get("reservoir_params"))
             if has_reservoir:
                 return DistillationFactory.create(model_cfg, training_cfg, config)

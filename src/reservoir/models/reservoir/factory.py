@@ -10,7 +10,7 @@ from reservoir.components.projection import InputProjector
 from reservoir.components import FeatureScaler, DesignMatrix, TransformerSequence
 from reservoir.models.reservoir.base import Reservoir
 from reservoir.models.reservoir.classical import ClassicalReservoir
-from reservoir.models.reservoir.config import ReservoirConfig
+from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.model import ReservoirModel
 
 
@@ -24,8 +24,8 @@ class ReservoirFactory:
         """
         res_cfg_dict = config.get("reservoir") or config.get("reservoir_params")
         if not res_cfg_dict:
-            res_cfg_dict = {k: v for k, v in config.items() if hasattr(ReservoirConfig, k)}
-        reservoir_config = ReservoirConfig(**res_cfg_dict)
+            res_cfg_dict = {k: v for k, v in config.items() if hasattr(ClassicalReservoirConfig, k)}
+        reservoir_config = ClassicalReservoirConfig(**res_cfg_dict)
 
         raw_input_dim = config.get("input_dim")
         if raw_input_dim is None:
@@ -57,7 +57,7 @@ class ReservoirFactory:
 
     @staticmethod # for distillation use
     def create_node(
-        config: ReservoirConfig,
+        config: ClassicalReservoirConfig,
         input_dim: int,
         projector: Optional[InputProjector] = None,
     ) -> Reservoir:

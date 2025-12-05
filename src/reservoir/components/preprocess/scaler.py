@@ -1,76 +1,59 @@
 """
-src/reservoir/components/preprocess/scaler.py
-Feature scaling with persistent statistics.
+Feature scaling transformer (standardization) compatible with the Transformer protocol.
 """
-
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import jax.numpy as jnp
+
 from reservoir.core.interfaces import Transformer
 
 
-@dataclass
-class ScalerState:
-    mu: Optional[jnp.ndarray] = None
-    sigma: Optional[jnp.ndarray] = None
-
-
 class FeatureScaler(Transformer):
-    """Simple z-score scaler with epsilon stabilization."""
+    """Simple standard scaler that centers and scales per feature."""
 
-    def __init__(self, eps: float = 1e-8) -> None:
-        self.eps = float(eps)
-        self.state = ScalerState()
+    def __init__(self, epsilon: float = 1e-8) -> None:
+        self.epsilon = float(epsilon)
+        self._mean: Optional[jnp.ndarray] = None
+        self._std: Optional[jnp.ndarray] = None
 
-    def fit(self, features: jnp.ndarray) -> "FeatureScaler":
+    def fit(self, features: jnp.ndarray, y: Any = None) -> "FeatureScaler":
         arr = jnp.asarray(features, dtype=jnp.float64)
-        if arr.ndim not in (2, 3):
-            raise ValueError(f"Feature matrix must be 2D or 3D, got shape {arr.shape}")
-        if arr.ndim == 3:
-            arr = arr.reshape(-1, arr.shape[-1])
-        mu = jnp.mean(arr, axis=0)
-        sigma = jnp.std(arr, axis=0) + self.eps
-        self.state = ScalerState(mu=mu, sigma=sigma)
+        if arr.ndim < 2:
+            raise ValueError(f"FeatureScaler expects array with feature dimension, got shape {arr.shape}")
+        self._mean = jnp.mean(arr, axis=0)
+        self._std = jnp.std(arr, axis=0)
+        self._std = jnp.where(self._std < self.epsilon, 1.0, self._std)
         return self
 
     def transform(self, features: jnp.ndarray) -> jnp.ndarray:
-        if self.state.mu is None or self.state.sigma is None:
-            raise RuntimeError("Scaler has not been fitted.")
+        if self._mean is None or self._std is None:
+            raise RuntimeError("FeatureScaler must be fitted before calling transform.")
         arr = jnp.asarray(features, dtype=jnp.float64)
-        if arr.ndim not in (2, 3):
-            raise ValueError(f"Feature matrix must be 2D or 3D, got shape {arr.shape}")
-        if arr.ndim == 3:
-            batch, time, feat = arr.shape
-            arr = arr.reshape(-1, feat)
-            transformed = (arr - self.state.mu) / self.state.sigma
-            return transformed.reshape(batch, time, feat)
-        return (arr - self.state.mu) / self.state.sigma
+        return (arr - self._mean) / self._std
 
     def fit_transform(self, features: jnp.ndarray) -> jnp.ndarray:
         return self.fit(features).transform(features)
 
     def to_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"eps": self.eps}
-        if self.state.mu is not None and self.state.sigma is not None:
-            data.update(
-                {
-                    "mu": jnp.asarray(self.state.mu).tolist(),
-                    "sigma": jnp.asarray(self.state.sigma).tolist(),
-                }
-            )
+        data: Dict[str, Any] = {"epsilon": self.epsilon}
+        if self._mean is not None:
+            data["mean"] = jnp.asarray(self._mean).tolist()
+        if self._std is not None:
+            data["std"] = jnp.asarray(self._std).tolist()
         return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FeatureScaler":
-        scaler = cls(eps=float(data.get("eps", 1e-8)))
-        mu = data.get("mu")
-        sigma = data.get("sigma")
-        if mu is not None and sigma is not None:
-            scaler.state = ScalerState(
-                mu=jnp.asarray(mu, dtype=jnp.float64),
-                sigma=jnp.asarray(sigma, dtype=jnp.float64),
-            )
+        scaler = cls(epsilon=float(data.get("epsilon", 1e-8)))
+        mean = data.get("mean")
+        std = data.get("std")
+        if mean is not None:
+            scaler._mean = jnp.asarray(mean, dtype=jnp.float64)
+        if std is not None:
+            scaler._std = jnp.asarray(std, dtype=jnp.float64)
         return scaler
+
+
+__all__ = ["FeatureScaler"]
