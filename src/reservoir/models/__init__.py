@@ -2,16 +2,9 @@
 
 from .distillation import DistillationModel
 from .factories import FlaxModelFactory
-from .nn.base import BaseFlaxModel
-from .nn.modules import FNN, SimpleRNN
-from .nn.fnn import FNNModel
-from .nn.rnn import RNNModel
-from .nn.config import (
-    FNNModelConfig,
-    FNNTrainingConfig,
-    FNNPipelineConfig,
-    SimpleRNNConfig,
-)
+from .nn.base import BaseFlaxModel, BaseModel
+from .nn.fnn import FNNModel, FNN
+from .nn.rnn import RNNModel, SimpleRNN
 from .presets import (
     ModelPreset,
     ReservoirConfig,
@@ -24,14 +17,11 @@ from .presets import (
 
 __all__ = [
     "SimpleRNN",
-    "SimpleRNNConfig",
     "FNN",
-    "FNNModelConfig",
-    "FNNTrainingConfig",
-    "FNNPipelineConfig",
     "BaseFlaxModel",
     "FNNModel",
     "RNNModel",
+    "BaseModel",
     "FlaxModelFactory",
     "DistillationModel",
     "ModelPreset",

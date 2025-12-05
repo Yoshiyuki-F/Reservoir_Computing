@@ -208,21 +208,34 @@ def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def run_pipeline(
     config: Dict[str, Any],
+    data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     The Unified Entry Point (V2 Strict Mode).
     """
     # --- 1. loading presets ---
-    dataset_name, dataset_preset = _get_strict_dataset_meta(config)
+    dataset_name: Optional[str] = None
+    dataset_preset: Optional[DatasetPreset] = None
+    provided = data or {}
+    provided_splits = (
+        provided.get("train_X"),
+        provided.get("train_y"),
+        provided.get("test_X"),
+        provided.get("test_y"),
+    )
+    has_provided_data = all(split is not None for split in provided_splits)
 
-    preset_type = dataset_preset.task_type.lower()
+    if config.get("dataset"):
+        dataset_name, dataset_preset = _get_strict_dataset_meta(config)
+
+    preset_type = dataset_preset.task_type.lower() if dataset_preset else None
     override_cls = config.get("is_classification")
     if override_cls is not None:
         is_classification = bool(override_cls)
     elif preset_type in {"classification", "regression"}:
         is_classification = preset_type == "classification"
     else:
-        raise ValueError(f"Unknown preset task type: {preset_type}")
+        is_classification = bool(config.get("classification", False))
 
     # Model type (required downstream)
     model_type = config.get("model_type")
@@ -235,18 +248,33 @@ def run_pipeline(
     training_cfg["_meta_dataset"] = dataset_name
     training_cfg["_meta_model_type"] = model_type
     feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
+    if has_provided_data:
+        train_X = provided["train_X"]
+        train_y = provided["train_y"]
+        test_X = provided["test_X"]
+        test_y = provided["test_y"]
+        val_X = provided.get("val_X")
+        val_y = provided.get("val_y")
+    else:
+        if dataset_preset is None:
+            raise ValueError("Configuration Error: dataset must be specified when data splits are not provided.")
+        train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
+            config,
+            dataset_preset,
+            training_cfg,
+            model_type=model_type,
+            require_3d=True,
+        )
 
-    train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
-        config,
-        dataset_preset,
-        training_cfg,
-        model_type=model_type,
-        require_3d=True,
-    )
+    print(f"Data Shapes -> Train: {train_X.shape}, Val: {getattr(val_X, 'shape', None)}, Test: {test_X.shape}")
 
-    print(f"Data Shapes -> Train: {train_X.shape}, Val: {val_X.shape}, Test: {test_X.shape}")
-
-    meta_n_outputs = int(dataset_preset.config.n_output)
+    if dataset_preset is not None:
+        meta_n_outputs = int(dataset_preset.config.n_output)
+    else:
+        target_sample = train_y if train_y is not None else test_y
+        if target_sample is None:
+            raise ValueError("Unable to infer output dimension without targets.")
+        meta_n_outputs = int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
 
     # Shape Adjustment Logic
     reservoir_units_for_plot: Optional[int] = None

@@ -25,6 +25,8 @@ class TrainingConfig:
     batch_size: int = 128
     epochs: int = 10
     learning_rate: float = 0.001
+    classification: bool = False
+    seed: int = 0
 
     # Readout Regularization (Ridge Regression)
     # 'ridge_lambda' is the canonical default regularization strength when no search is run.
@@ -57,6 +59,8 @@ class TrainingConfig:
             "batch_size": int(self.batch_size),
             "epochs": int(self.epochs),
             "learning_rate": float(self.learning_rate),
+            "classification": bool(self.classification),
+            "seed": int(self.seed),
             "ridge_lambda": float(self.ridge_lambda),
             "ridge_lambdas": [float(v) for v in self.ridge_lambdas],
             "train_size": float(self.train_size),

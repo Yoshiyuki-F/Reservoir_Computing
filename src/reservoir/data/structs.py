@@ -5,16 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
+import jax.numpy as jnp
 
 
 @dataclass
 class SplitDataset:
     """Canonical dataset split container."""
 
-    train_X: np.ndarray
-    train_y: np.ndarray
-    test_X: np.ndarray
-    test_y: np.ndarray
-    val_X: Optional[np.ndarray] = None
-    val_y: Optional[np.ndarray] = None
+    train_X: jnp.ndarray
+    train_y: jnp.ndarray
+    test_X: jnp.ndarray
+    test_y: jnp.ndarray
+    val_X: Optional[jnp.ndarray] = None
+    val_y: Optional[jnp.ndarray] = None

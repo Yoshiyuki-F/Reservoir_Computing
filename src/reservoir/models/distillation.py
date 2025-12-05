@@ -14,7 +14,7 @@ from flax.training import train_state
 
 from reservoir.components.projection import InputProjector
 from reservoir.models.nn.base import BaseModel
-from reservoir.models.nn.modules import FNN
+from reservoir.models.nn.fnn import FNN
 from reservoir.models.presets import DistillationConfig, ReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 

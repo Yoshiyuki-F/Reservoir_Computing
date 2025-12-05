@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax.training import train_state
+from reservoir.training.presets import TrainingConfig
 
 
 class BaseModel(ABC):
@@ -34,13 +35,14 @@ class BaseModel(ABC):
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
 
-    def __init__(self, config: Dict[str, Any]) -> None:
-        self.config = config
-        self.learning_rate: float = float(config.get("learning_rate"))
-        self.epochs: int = int(config.get("epochs", config.get("epochs")))
-        self.batch_size: int = int(config.get("batch_size"))
-        self.classification: bool = bool(config.get("classification", False))
-        self.seed: int = int(config.get("seed"))
+    def __init__(self, model_config: Dict[str, Any], training_config: TrainingConfig) -> None:
+        self.model_config = model_config
+        self.training_config = training_config
+        self.learning_rate: float = float(training_config.learning_rate)
+        self.epochs: int = int(training_config.epochs)
+        self.batch_size: int = int(training_config.batch_size)
+        self.classification: bool = bool(training_config.classification)
+        self.seed: int = int(model_config.get("seed", training_config.seed))
         self._model_def = self._create_model_def()
         self._state: Optional[train_state.TrainState] = None
         self.trained: bool = False
@@ -86,6 +88,11 @@ class BaseFlaxModel(BaseModel, ABC):
     def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **_: Any) -> Dict[str, Any]:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets' for supervised optimization.")
+        if self.batch_size != self.training_config.batch_size:
+            raise ValueError(
+                f"Batch size mismatch between model ({self.batch_size}) and training_config "
+                f"({self.training_config.batch_size})."
+            )
 
         X = jnp.asarray(inputs)
         y = jnp.asarray(targets)
