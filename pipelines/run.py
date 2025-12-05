@@ -522,6 +522,28 @@ def run_pipeline(
                 if val_pred_np.ndim > 1:
                     val_pred_np = np.argmax(val_pred_np, axis=-1)
 
+            selected_lambda = None
+            lambda_norm = None
+            if isinstance(train_res, dict):
+                selected_lambda = train_res.get("best_lambda")
+                weight_norms = train_res.get("weight_norms") or {}
+                if selected_lambda is not None:
+                    lambda_norm = weight_norms.get(selected_lambda)
+                    if lambda_norm is None:
+                        lambda_norm = weight_norms.get(float(selected_lambda))
+            if lambda_norm is None and hasattr(readout, "coef_"):
+                coef_arr = getattr(readout, "coef_", None)
+                if coef_arr is not None:
+                    components = [np.asarray(coef_arr).ravel()]
+                    intercept_arr = getattr(readout, "intercept_", None)
+                    if intercept_arr is not None:
+                        components.append(np.asarray(intercept_arr).ravel())
+                    if components:
+                        stacked = np.concatenate(components)
+                        if stacked.size > 0:
+                            lambda_norm = float(np.linalg.norm(stacked))
+
+            metrics_payload = dict(results.get("test", {})) if isinstance(results, dict) else {}
 
             filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
             plot_classification_results(
@@ -533,7 +555,9 @@ def run_pipeline(
                 val_predictions=val_pred_np,
                 title=f"{model_type.upper()} on {dataset_name}",
                 filename=filename,
-                metrics_info=results.get("test", {}),
+                metrics_info=metrics_payload,
+                best_lambda=selected_lambda,
+                lambda_norm=lambda_norm,
             )
 
     return results

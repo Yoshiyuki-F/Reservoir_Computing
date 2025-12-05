@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-
+import numpy as np
 from reservoir.core.presets import PresetRegistry
 
 
@@ -31,7 +31,7 @@ class TrainingConfig:
     ridge_lambda: float = 1e-7 # no use but needed for type consistency
     # Defines the search space for validation. Defaults to a log-spaced range around typical values.
     ridge_lambdas: List[float] = field(
-        default_factory=lambda: [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3]
+        default_factory=lambda: np.logspace(-9, -5, 30).tolist()
     )
 
     # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?

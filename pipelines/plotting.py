@@ -42,8 +42,13 @@ def plot_classification_results(
     class_names: Optional[Sequence[str]] = None,
     val_labels: Optional[np.ndarray] = None,
     val_predictions: Optional[np.ndarray] = None,
+    best_lambda: Optional[float] = None,
+    lambda_norm: Optional[float] = None,
 ) -> None:
-    """Visualize classification results with confusion matrix and accuracy bars, with optional validation."""
+    """
+    Visualize classification results with confusion matrix and accuracy bars, with optional validation.
+    Annotates the selected ridge lambda and weight norm when provided.
+    """
 
     def _to_numpy(array: np.ndarray, dtype: Optional[np.dtype] = None) -> np.ndarray:
         if dtype is None:
@@ -152,9 +157,13 @@ def plot_classification_results(
             fontsize=10,
         )
 
-    if metrics_info:
-        info_text = " | ".join([f"{k}: {v}" for k, v in metrics_info.items()])
-        fig.text(0.5, 0.92, info_text, ha='center', fontsize=10, color='gray')
+    summary_parts = []
+    if best_lambda is not None:
+        lambda_str = f"lambda*: {best_lambda:.3e}"
+        norm_str = f" ||w||={float(lambda_norm):.3e}" if lambda_norm is not None else ""
+        summary_parts.append(lambda_str + norm_str)
+    if summary_parts:
+        fig.text(0.5, 0.92, " | ".join(summary_parts), ha='center', fontsize=10, color='gray')
 
     fig.suptitle(title, fontsize=16)
     fig.tight_layout(rect=(0, 0.05, 1, 0.92))

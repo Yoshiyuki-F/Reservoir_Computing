@@ -79,9 +79,37 @@ class RidgeRegression(ReadoutModule):
         eye = jnp.eye(XtX.shape[0], dtype=XtX.dtype)
 
         def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
-            return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
+            # ラムダが小さすぎる場合は pinv (擬似逆行列) を使うロジックを追加
+            # あるいは、try-except的な動きをさせる
 
-        weights_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)(lambdas_arr)
+            # 方法A: 条件分岐 (JAXのjit内だとifは使えないので、whereを使うか、Pythonループならifが使える)
+            # 今回はPythonループに変更したので if が使えます
+            lam_val = float(lam)
+            if lam_val < 1e-7:  # 閾値は適宜調整
+                # 正則化なしに近い場合は擬似逆行列で解く（安定するが遅い）
+                # XtX + lam*I の逆行列ではなく、Xそのもののpinvを使うのが一般的ですが
+                # ここでは簡易的に「解けなかったら0」や「コレスキー分解失敗回避」などを想定します
+
+                # JAXで最も安定しているのは jnp.linalg.solve (LU分解) ですが
+                # 特異行列には pinv が最強です。ただし pinv は (XtX) ではなく X に対して行うのが普通です。
+
+                # 簡易対策: Cholesky(pos) ではなく LU分解(solve) を試す
+                return jax.scipy.linalg.solve(XtX + lam * eye, Xty)  # assume_a="pos" を外す
+            else:
+                return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
+
+
+        # --- 【修正前】 vmapで一括解決 ---
+        # weights_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)(lambdas_arr)
+
+        # --- 【修正後】 Pythonループで1つずつ解く ---
+        weights_list = []
+        for lam in lambdas_arr:
+            # 1つ解く -> メモリ解放 を繰り返すことでピークメモリを抑える
+            w = solve_lambda(lam)
+            weights_list.append(w)
+
+        weights_all = jnp.stack(weights_list)
         preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
 
         if metric == "accuracy":
@@ -110,34 +138,6 @@ class RidgeRegression(ReadoutModule):
             self.intercept_ = self.intercept_.ravel()
         self.ridge_lambda = best_lambda
         return best_lambda, search_history, weight_norms
-
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
-        X_train, y, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
-
-        if self.ridge_lambda < 1e-7: # Moore-Penrose pseudo-inverse
-            w = jnp.linalg.pinv(X_train, rcond=None) @ y
-        else:
-            XT = X_train.T
-            XTX = XT @ X_train
-            XTy = XT @ y
-            diag_idx = jnp.diag_indices(XTX.shape[0])
-            XTX = XTX.at[diag_idx].add(self.ridge_lambda)
-            try: #  ridge regression closed-form solution
-                w = jax.scipy.linalg.solve(XTX, XTy, assume_a="pos")
-            except Exception: #LU 分解
-                w = jnp.linalg.solve(XTX, XTy)
-
-
-        if self.use_intercept:
-            self.intercept_ = w[0]
-            self.coef_ = w[1:]
-        else:
-            self.intercept_ = jnp.zeros(w.shape[1], dtype=w.dtype)
-            self.coef_ = w
-        if y_is_1d:
-            self.coef_ = self.coef_.ravel()
-            self.intercept_ = self.intercept_.ravel()
-        return self
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
         if self.coef_ is None:
