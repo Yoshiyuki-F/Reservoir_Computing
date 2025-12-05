@@ -79,23 +79,15 @@ class RidgeRegression(ReadoutModule):
         eye = jnp.eye(XtX.shape[0], dtype=XtX.dtype)
 
         def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
-            # ラムダが小さすぎる場合は pinv (擬似逆行列) を使うロジックを追加
-            # あるいは、try-except的な動きをさせる
-
-            # 方法A: 条件分岐 (JAXのjit内だとifは使えないので、whereを使うか、Pythonループならifが使える)
-            # 今回はPythonループに変更したので if が使えます
             lam_val = float(lam)
             if lam_val < 1e-7:  # 閾値は適宜調整
-                # 正則化なしに近い場合は擬似逆行列で解く（安定するが遅い）
-                # XtX + lam*I の逆行列ではなく、Xそのもののpinvを使うのが一般的ですが
-                # ここでは簡易的に「解けなかったら0」や「コレスキー分解失敗回避」などを想定します
-
-                # JAXで最も安定しているのは jnp.linalg.solve (LU分解) ですが
-                # 特異行列には pinv が最強です。ただし pinv は (XtX) ではなく X に対して行うのが普通です。
-
-                # 簡易対策: Cholesky(pos) ではなく LU分解(solve) を試す
-                return jax.scipy.linalg.solve(XtX + lam * eye, Xty)  # assume_a="pos" を外す
-            else:
+                # 簡易対策: LU分解(solve) 遅いお
+                # default = "gem" (一般行列)
+                # A = L*U not root calculation
+                return jax.scipy.linalg.solve(XtX + lam * eye, Xty)  # assume_a="gen"
+            else: # positive-definite matrix Cholesky(pos)
+                # A = LL^T calculation
+                # (it might be doing root calculation of negative number internally) which might cause NaN
                 return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
 
 
