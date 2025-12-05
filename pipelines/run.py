@@ -250,7 +250,7 @@ def run_pipeline(
 
     # Shape Adjustment Logic
     reservoir_units_for_plot: Optional[int] = None
-    nn_hidden_for_plot: Optional[list[int]] = None
+    is_distillation: Optional[list[int]] = None
 
     input_shape = train_X.shape[1:]
 
@@ -277,7 +277,7 @@ def run_pipeline(
                 *hidden_layers,
                 int(meta_n_outputs)
             ]
-            nn_hidden_for_plot = hidden_layers.copy() if hidden_layers else None
+            is_distillation = hidden_layers.copy() if hidden_layers else None
 
             teacher_cfg_candidate = config.get("reservoir") or config.get("reservoir_params") or {}
             teacher_units = teacher_cfg_candidate.get("n_units") or hidden_dim
@@ -440,12 +440,13 @@ def run_pipeline(
         training_cfg=training_cfg,
     )
 
-    filename_parts = [f"{dataset_name}", f"{model_type}", "raw"]
+    filename_parts = [f"{model_type}", "raw"]
     if reservoir_units_for_plot is not None:
         filename_parts.append(f"nr{reservoir_units_for_plot}")
-    if nn_hidden_for_plot:
-        joined_nn = "-".join(str(v) for v in nn_hidden_for_plot)
+    if is_distillation:
+        joined_nn = "-".join(str(v) for v in is_distillation)
         filename_parts.append(f"nn{joined_nn}")
+        filename_parts.append(f"epochs{training_cfg.get('epochs')}")
 
 
     # --- 4a. Distillation Loss Visualization (Phase 1) ---

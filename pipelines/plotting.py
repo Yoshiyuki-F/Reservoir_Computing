@@ -182,6 +182,7 @@ def plot_loss_history(history: Sequence[float], filename: str, title: str = "Los
 
     plt.figure(figsize=(6, 4))
     plt.plot(range(1, len(history) + 1), history, marker="o")
+    plt.yscale("log")
     plt.title(title)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
