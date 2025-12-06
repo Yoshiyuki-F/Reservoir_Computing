@@ -30,5 +30,8 @@ def __getattr__(name):
 
         return {
             "run_pipeline": run_pipeline,
+            "run_rnn_pipeline": run_pipeline,
+            "run_fnn_pipeline": run_pipeline,
+            "run_reservoir_pipeline": run_pipeline,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

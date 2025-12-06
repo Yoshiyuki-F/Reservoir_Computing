@@ -5,7 +5,7 @@ from typing import Any, Dict
 import jax.numpy as jnp
 
 from reservoir.models import BaseModel
-from pipelines.run import run_pipeline
+from reservoir.pipelines.run import run_pipeline
 
 
 class DummyReservoir(BaseModel):
@@ -36,10 +36,10 @@ def test_dynamic_runner_reservoir_wiring(monkeypatch):
         return dummy_model
 
     # Patch reservoir factory
-    monkeypatch.setattr("pipelines.run.ReservoirFactory.create", fake_create)
+    monkeypatch.setattr("reservoir.pipelines.run.ReservoirFactory.create", fake_create)
     config = {
-        "model_type": "reservoir",
-        "reservoir_type": "classical",
+        "model_type": "classical-reservoir",
+        "reservoir_type": "classical-reservoir",
         "reservoir_config": {"params": {"n_hidden_layer": 5}},
     }
     data = {

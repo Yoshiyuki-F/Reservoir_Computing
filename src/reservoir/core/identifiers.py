@@ -20,12 +20,12 @@ from typing import List
 class Pipeline(str, enum.Enum):
     """実験パイプライン（モデルアーキテクチャ）の種類。"""
 
-    CLASSICAL_RESERVOIR = "classical_reservoir"
+    CLASSICAL_RESERVOIR = "classical-reservoir"
     FNN = "fnn"
     FNN_DISTILLATION = "fnn-distillation"
-    RNN = "rnn"
-    QUANTUM_GATE_BASED = "gate_based-quantum"
-    QUANTUM_ANALOG = "analog-quantum"
+    RNN_DISTILLATION = "rnn-distillation"
+    QUANTUM_GATE_BASED = "gate_based-quantum-reservoir"
+    QUANTUM_ANALOG = "analog-quantum-reservoir"
 
     def __str__(self) -> str:
         return self.value

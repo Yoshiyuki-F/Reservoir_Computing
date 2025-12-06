@@ -192,7 +192,7 @@ uv run poe cli-gpu -- sine cr 600
 ### CLI エントリポイント（`cli/`）
 
 #### `cli/main.py`
-- **main**: `argparse`を用いてコマンドライン引数を解析し、`pipelines.dynamic_runner` を呼び出すアプリケーション層のエントリーポイント。
+- **main**: `argparse`を用いてコマンドライン引数を解析し、`reservoir.pipelines` を呼び出すアプリケーション層のエントリーポイント。
 
 ## ReservoirComputerクラスのパラメータ
 
@@ -231,5 +231,4 @@ Reservoir Computingの性能は以下のパラメータで調整できます：
 - Jaeger, H. (2001). The "echo state" approach to analysing and training recurrent neural networks.
 - Lukoševičius, M., & Jaeger, H. (2009). Reservoir computing approaches to recurrent neural network training.
 - [JAX CUDA Installation Guide](https://jax.readthedocs.io/en/latest/installation.html)
-
 

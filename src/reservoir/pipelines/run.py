@@ -14,13 +14,15 @@ import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
+from reservoir.models.reservoir.factory import ReservoirFactory
 from reservoir.models.distillation import DistillationModel
 from reservoir.models.reservoir.model import ReservoirModel
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.presets import get_model_preset, ModelConfig, DistillationConfig, MODEL_PRESETS
+from reservoir.core.identifiers import Pipeline
 from reservoir.utils.printing import print_topology
-from pipelines.generic_runner import UniversalPipeline
+from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.components import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
@@ -217,9 +219,8 @@ def run_pipeline(
     model_type = config.get("model_type")
     if not model_type:
         raise ValueError("Configuration Error: 'model_type' is required.")
-    raw_model_type = str(model_type).lower()
-
-    preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(raw_model_type)
+    pipeline_enum = model_type if isinstance(model_type, Pipeline) else Pipeline(str(model_type))
+    preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(pipeline_enum.value)
 
     distill_ctx = None
     if preset_for_model and isinstance(preset_for_model.config, DistillationConfig):
@@ -232,15 +233,14 @@ def run_pipeline(
             "teacher_params": teacher_params,
             "student_hidden": tuple(int(v) for v in distill_cfg.student_hidden_layers),
         }
-        model_type = str(preset_for_model.model_type).lower()
+        pipeline_enum = preset_for_model.model_type
     else:
-        model_type = raw_model_type.lower()
-        distill_ctx = _resolve_distillation_from_preset(config) if model_type.startswith("fnn") else None
+        distill_ctx = _resolve_distillation_from_preset(config) if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} else None
 
     # Resolve training configuration (needed for ridge search/validation)
     training_cfg = _resolve_training_config(config, is_classification)
     training_cfg["_meta_dataset"] = dataset_name
-    training_cfg["_meta_model_type"] = model_type
+    training_cfg["_meta_model_type"] = pipeline_enum.value
     feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
     training_obj = TrainingConfig(
         **{
@@ -268,10 +268,12 @@ def run_pipeline(
         )
 
     # Flatten for pure FNN (non-distillation) so the student sees vector inputs.
-    is_distillation_intent = model_type.startswith("fnn") and (
+    model_type = pipeline_enum.value
+
+    is_distillation_intent = pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} and (
         distill_ctx is not None or bool(config.get("reservoir") or config.get("reservoir_params"))
     )
-    if model_type.startswith("fnn") and not is_distillation_intent:
+    if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} and not is_distillation_intent:
         def _flatten(arr: Optional[Any]) -> Optional[Any]:
             if arr is None:
                 return None
@@ -315,7 +317,7 @@ def run_pipeline(
     model_cfg = dict(config.get("model", {}) or {})
     reservoir_cfg_for_factory: Optional[Dict[str, Any]] = None
 
-    if model_type.startswith("fnn"):
+    if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION}:
         hidden_layers = model_cfg.get("layer_dims") or config.get("nn_hidden") or []
         if distill_ctx is not None:
             hidden_layers = hidden_layers or list(distill_ctx["student_hidden"])
@@ -333,7 +335,7 @@ def run_pipeline(
                 int(preset_output_dim if preset_output_dim is not None else meta_n_outputs),
             ]
             reservoir_cfg_for_factory = config.get("reservoir")
-    elif model_type == "rnn":
+    elif pipeline_enum == Pipeline.RNN_DISTILLATION:
         if "input_dim" not in model_cfg:
             model_cfg["input_dim"] = input_dim_for_model
         if "output_dim" not in model_cfg and preset_output_dim is not None:
@@ -342,7 +344,7 @@ def run_pipeline(
     else:
         reservoir_cfg_for_factory = (
             _get_strict_reservoir_params(config)
-            if model_type in ["reservoir", "classical", "classical_reservoir", "esn"]
+            if pipeline_enum in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}
             else config.get("reservoir")
         )
 
@@ -350,7 +352,7 @@ def run_pipeline(
     print(f"Initializing {model_type.upper()} model via Factory...")
 
     factory_cfg = {
-        "type": model_type,
+        "type": pipeline_enum,
         "input_dim": int(input_dim_for_model),
         "model": model_cfg,
         "training": training_obj,
@@ -447,12 +449,13 @@ def run_pipeline(
     # --- 3. Execution ---
     metric = "accuracy" if is_classification else "mse"
     runner = UniversalPipeline(model, readout, config.get("save_path"), metric=metric)
+    validation_tuple = (val_X, val_y) if (val_X is not None and val_y is not None) else None
     results = runner.run(
         train_X,
         train_y,
         test_X,
         test_y,
-        validation=(val_X, val_y),
+        validation=validation_tuple,
         training_cfg=training_cfg,
     )
 
@@ -470,7 +473,7 @@ def run_pipeline(
     if isinstance(training_logs, dict) and training_logs.get("loss_history"):
         loss_history = training_logs["loss_history"]
         try:
-            from pipelines.plotting import plot_loss_history
+            from reservoir.utils.plotting import plot_loss_history
         except Exception as exc:  # pragma: no cover - optional dependency
             print(f"Skipping distillation loss plotting due to import error: {exc}")
         else:
@@ -509,7 +512,7 @@ def run_pipeline(
     # --- 5. Visualization (classification only) ---
     if is_classification and test_X is not None and test_y is not None:
         try:
-            from pipelines.plotting import plot_classification_results
+            from reservoir.utils.plotting import plot_classification_results
         except Exception as exc:  # pragma: no cover - optional dependency
             print(f"Skipping plotting due to import error: {exc}")
         else:

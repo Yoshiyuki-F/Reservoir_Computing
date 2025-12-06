@@ -55,7 +55,7 @@ class ReservoirFactory:
             readout_mode=reservoir_config.state_aggregation or "mean",
         )
 
-    @staticmethod # for distillation use
+    @staticmethod  # for distillation use
     def create_node(
         config: ClassicalReservoirConfig,
         input_dim: int,
@@ -80,3 +80,7 @@ class ReservoirFactory:
             seed=int(config.seed),
             projector=projector,
         )
+
+
+# Backward-compatible alias expected by older pipeline/test code
+ReservoirFactory.create = staticmethod(ReservoirFactory.create_model)

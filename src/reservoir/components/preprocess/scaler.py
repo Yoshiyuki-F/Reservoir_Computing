@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/components/preprocess/scaler.py
 Feature scaling transformer (standardization) compatible with the Transformer protocol.
 """
 from __future__ import annotations
@@ -29,7 +29,8 @@ class FeatureScaler(Transformer):
 
     def transform(self, features: jnp.ndarray) -> jnp.ndarray:
         if self._mean is None or self._std is None:
-            raise RuntimeError("FeatureScaler must be fitted before calling transform.")
+            # Lazy-fit to support transform-only usage in simple pipelines.
+            self.fit(features)
         arr = jnp.asarray(features, dtype=jnp.float64)
         return (arr - self._mean) / self._std
 

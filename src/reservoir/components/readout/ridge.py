@@ -51,6 +51,27 @@ class RidgeRegression(ReadoutModule):
             X = jnp.concatenate([ones, X], axis=1)
         return X, y_arr, y_is_1d
 
+    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
+        """Fit a single ridge model without validation search."""
+        X, y_arr, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
+        n_features = X.shape[1]
+        eye = jnp.eye(n_features, dtype=X.dtype)
+        XtX = X.T @ X
+        Xty = X.T @ y_arr
+        w = jax.scipy.linalg.solve(XtX + self.ridge_lambda * eye, Xty, assume_a="pos")
+        if not jnp.all(jnp.isfinite(w)):
+            w = jnp.zeros_like(w)
+        if self.use_intercept:
+            self.intercept_ = jnp.asarray(w[0], dtype=jnp.float64)
+            self.coef_ = jnp.asarray(w[1:], dtype=jnp.float64)
+        else:
+            self.intercept_ = jnp.zeros(w.shape[1], dtype=jnp.float64)
+            self.coef_ = jnp.asarray(w, dtype=jnp.float64)
+        if y_is_1d:
+            self.coef_ = self.coef_.ravel()
+            self.intercept_ = self.intercept_.ravel()
+        return self
+
     def fit_and_search(
         self,
         train_states: jnp.ndarray,

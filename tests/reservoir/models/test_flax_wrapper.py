@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 
 from reservoir.models import ModelFactory
-from pipelines.generic_runner import UniversalPipeline
+from reservoir.pipelines.generic_runner import UniversalPipeline
 
 
 def test_fnn_classification_train_and_eval():

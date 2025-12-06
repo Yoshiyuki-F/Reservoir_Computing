@@ -1,5 +1,5 @@
 # Repository Guidelines
-ls --recursive --ignore='.*' --ignore='__pycache__' --ignore='node_modules' --ignore='*.lock' --ignore='package*.json' --ignore='outouts/' 
+cd src/reservoir && ls --recursive
 read docs/ARCHITECTURE.md | sed -n '/## 4\. Key Implementation Patterns/,/## 5\. Directory Structure (Map)/p' >> AGENTS.md
 
 

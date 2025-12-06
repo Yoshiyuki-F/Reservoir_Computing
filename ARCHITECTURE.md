@@ -32,6 +32,15 @@
         *   **Reservoir State:** `(Batch, Time, Hidden)`
         *   **Readout Input:** `(Batch, Hidden)` (Flattened or Last-State) or `(Batch, Time, Hidden)`
 
+5. 1. src に入れるかどうかの境界線 (The "Source" Boundary)
+判定基準はシンプルです。
+判定基準	場所	理由
+Pythonコードであり、アプリの一部か？	src/reservoir/	ライブラリとしてインポート可能にするため。
+再利用されるロジックか？	src/reservoir/	from reservoir.xxx import yyy で呼び出すため。
+テストコードか？	tests/	本番コードには含めないため。
+設定ファイル/ドキュメントか？	Root (docs/ etc)	コードではないため。
+生成物 (ログ, 画像, モデル)か？	outputs/	ソースコード管理（Git）の対象外だから。
+巨大なデータセットか？	data/	ソースコードではないから。
 ---
 
 ## 2. System Overview

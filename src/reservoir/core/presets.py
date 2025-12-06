@@ -14,7 +14,7 @@ class PresetRegistry(Generic[T]):
 
     def normalize_name(self, name: str) -> str:
         """Normalize preset names to a canonical key."""
-        key = str(name).strip().lower().replace("-", "_")
+        key = str(name).strip().lower()
         return self._aliases.get(key, key)
 
     def get(self, name: str) -> Optional[T]:

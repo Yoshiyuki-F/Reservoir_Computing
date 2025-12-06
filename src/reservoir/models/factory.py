@@ -4,6 +4,7 @@ Global entry point for model creation. Routes requests to specialized factories.
 from typing import Any, Dict
 
 from reservoir.training.presets import TrainingConfig
+from reservoir.core.identifiers import Pipeline
 from reservoir.models.nn.factory import NNModelFactory
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
@@ -21,26 +22,29 @@ class ModelFactory:
         if not isinstance(training_cfg, TrainingConfig):
             raise TypeError("ModelFactory expects 'training' to be a TrainingConfig instance.")
 
-        normalized_type = str(model_type).lower() if model_type is not None else ""
+        pipeline_enum = model_type if isinstance(model_type, Pipeline) else Pipeline(str(model_type))
 
         # Reservoir family
-        if normalized_type in (
-            "reservoir",
-            "classical",
-            "classical_reservoir",
-            "quantum_gate_based",
-            "gate_based-quantum",
-            "quantum_analog",
-            "analog-quantum",
-        ):
-            return ReservoirFactory.create_model(config)
+        if pipeline_enum in {
+            Pipeline.CLASSICAL_RESERVOIR,
+            Pipeline.QUANTUM_GATE_BASED,
+            Pipeline.QUANTUM_ANALOG,
+        }:
+            creator = getattr(ReservoirFactory, "create", ReservoirFactory.create_model)
+            try:
+                return creator(config)
+            except TypeError:
+                input_shape = config.get("input_dim")
+                reservoir_type = config.get("reservoir_type") or pipeline_enum.value
+                backend = config.get("backend")
+                return creator(config, input_shape, reservoir_type=reservoir_type, backend=backend)
 
         # RNN (no distillation path here)
-        if normalized_type == "rnn":
+        if pipeline_enum == Pipeline.RNN_DISTILLATION:
             return NNModelFactory.create_rnn(model_cfg, training_cfg)
 
         # FNN (pure or distillation)
-        if normalized_type in ("fnn", "fnn-distillation", "fnn_distillation"):
+        if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION}:
             has_reservoir = bool(config.get("reservoir") or config.get("reservoir_params"))
             if has_reservoir:
                 return DistillationFactory.create(model_cfg, training_cfg, config)

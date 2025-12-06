@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 
 from reservoir.models import BaseModel
-from pipelines import run_reservoir_pipeline
+from reservoir.pipelines import run_reservoir_pipeline
 
 
 class DummyReservoir(BaseModel):

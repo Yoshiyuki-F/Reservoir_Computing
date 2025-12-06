@@ -102,47 +102,27 @@ MODEL_DEFINITIONS: Dict[str, ModelConfig] = {
 
 
 # -----------------------------------------------------------------------------
-# Aliases
-# -----------------------------------------------------------------------------
-
-MODEL_ALIASES: Dict[str, str] = {
-    # Classical
-    "classical": Pipeline.CLASSICAL_RESERVOIR.value,
-    "reservoir": Pipeline.CLASSICAL_RESERVOIR.value,
-    "esn": Pipeline.CLASSICAL_RESERVOIR.value,
-    "classical_reservoir": Pipeline.CLASSICAL_RESERVOIR.value,
-    # FNN / Distillation
-    "fnn": Pipeline.FNN_DISTILLATION.value,
-    "distillation": Pipeline.FNN_DISTILLATION.value,
-    "fnn_distillation": Pipeline.FNN_DISTILLATION.value,
-    "fnn-distillation": Pipeline.FNN_DISTILLATION.value,
-}
-
-
-# -----------------------------------------------------------------------------
 # Registry Setup
 # -----------------------------------------------------------------------------
 
-MODEL_REGISTRY = PresetRegistry(MODEL_DEFINITIONS, aliases=MODEL_ALIASES)
+MODEL_REGISTRY = PresetRegistry(MODEL_DEFINITIONS, aliases=None)
 
-# Flattened dictionary for compatibility (direct .get access without registry)
-MODEL_PRESETS: Dict[str, ModelConfig] = {}
-MODEL_PRESETS.update(MODEL_DEFINITIONS)
-for alias, target_key in MODEL_ALIASES.items():
-    if target_key in MODEL_DEFINITIONS:
-        MODEL_PRESETS[alias] = MODEL_DEFINITIONS[target_key]
+MODEL_PRESETS: Dict[str, ModelConfig] = dict(MODEL_DEFINITIONS)
 
 
 def get_model_preset(name: str) -> ModelConfig:
-    """Retrieves a model preset by name or alias."""
-    return MODEL_REGISTRY.get_or_default(name, default_key=Pipeline.CLASSICAL_RESERVOIR.value)
+    """Retrieves a model preset by enum key; raises on invalid names."""
+    pipeline = Pipeline(name)
+    preset = MODEL_REGISTRY.get(pipeline.value)
+    if preset is None:
+        raise KeyError(f"Model preset '{name}' not found.")
+    return preset
 
 
 __all__ = [
     "ModelConfig",
     "ModelConfiguration",
     "MODEL_DEFINITIONS",
-    "MODEL_ALIASES",
     "MODEL_REGISTRY",
     "MODEL_PRESETS",
     "get_model_preset",
