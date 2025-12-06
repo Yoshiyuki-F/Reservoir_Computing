@@ -12,9 +12,16 @@ This module centralizes the definition of:
 from __future__ import annotations
 
 import enum
-import itertools
 from dataclasses import dataclass
-from typing import List
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    dataset: Dataset  # SSOT: The Data Source
+    model_type: Pipeline  # SSOT: The Model Architecture
+    task_type: TaskType  # SSOT: The Problem Category
+    preprocessing: Preprocessing  # SSOT: Feature Engineering
+    readout_type: ReadOutType  # SSOT: The Decoder
 
 
 class Pipeline(str, enum.Enum):
@@ -31,7 +38,7 @@ class Pipeline(str, enum.Enum):
         return self.value
 
 
-class TaskType(enum.Enum):
+class TaskType(str, enum.Enum):
     """タスクの種類。"""
 
     REGRESSION = "regression"
@@ -41,8 +48,8 @@ class TaskType(enum.Enum):
         return self.value
 
 
-class Dataset(enum.Enum):
-    """データセットの種類。"""
+class Dataset(str, enum.Enum):
+    """データセットの種類。Values must match DATASET_REGISTRY keys exactly."""
 
     SINE_WAVE = "sine_wave"
     LORENZ = "lorenz"
@@ -60,7 +67,7 @@ class Dataset(enum.Enum):
         return self.value
 
 
-class Preprocessing(enum.Enum):
+class Preprocessing(str, enum.Enum):
     """前処理の種類（将来的な拡張も想定）。"""
 
     RAW = "raw"
@@ -69,72 +76,12 @@ class Preprocessing(enum.Enum):
     def __str__(self) -> str:
         return self.value
 
+class ReadOutType(str, enum.Enum):
+    """リードアウト層の種類。"""
 
-@dataclass(frozen=True)
-class ExperimentIdentifier:
-    """単一の実験をユニークに識別するためのキー。"""
-
-    pipeline: Pipeline
-    dataset: Dataset
-    preprocessing: Preprocessing
+    RidgeRegression = "ridge_regression"
+    FNN = "fnn"
 
     def __str__(self) -> str:
-        """実験IDとして使える文字列を生成 (例: mnist-fnn-b-dash-raw)。"""
-        return f"{self.dataset.value}-{self.pipeline.value}-{self.preprocessing.value}"
+        return self.value
 
-    @classmethod
-    def from_strings(
-        cls,
-        pipeline: str,
-        dataset: str,
-        preprocessing: str,
-    ) -> ExperimentIdentifier:
-        """文字列から ExperimentIdentifier インスタンスを生成する。"""
-        return cls(
-            pipeline=Pipeline(pipeline),
-            dataset=Dataset(dataset),
-            preprocessing=Preprocessing(preprocessing),
-        )
-
-
-def generate_valid_experiments() -> List[ExperimentIdentifier]:
-    """実行可能な実験組み合わせをすべて生成する簡易ユーティリティ。
-
-    現状は一例として、以下のような制約を入れている:
-- 量子モデルは MNIST では使わない（分類は classical / FNN 系が担当）TODO 将来サポートされます。
-    - PCA 前処理は MNIST のときだけ有効とする
-    """
-    all_combinations = itertools.product(Pipeline, Dataset, Preprocessing)
-
-    valid_experiments: List[ExperimentIdentifier] = []
-    for pipeline, dataset, preprocessing in all_combinations:
-        # 例1: 量子モデルは MNIST を扱わない（将来サポートするならここを緩和）TODO
-        if pipeline in {Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG} and dataset is Dataset.MNIST:
-            continue
-
-        # 例2: PCA は MNIST のときのみ意味がある　TODO
-        if preprocessing is Preprocessing.PCA and dataset is not Dataset.MNIST:
-            continue
-
-        valid_experiments.append(
-            ExperimentIdentifier(pipeline=pipeline, dataset=dataset, preprocessing=preprocessing)
-        )
-
-    return valid_experiments
-
-
-if __name__ == "__main__":
-    # 簡単な動作確認
-    print("--- Individual Identifier Example ---")
-    exp_id = ExperimentIdentifier(
-        pipeline=Pipeline.FNN,
-        dataset=Dataset.MNIST,
-        preprocessing=Preprocessing.RAW,
-    )
-    print(f"Identifier object: {exp_id!r}")
-    print(f"String representation: {str(exp_id)}")
-    print(f"Task type: {exp_id.dataset.task_type}")
-
-    print("\n--- Generating All Valid Experiments ---")
-    for exp in generate_valid_experiments():
-        print(exp)
