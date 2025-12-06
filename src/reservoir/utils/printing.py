@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from reservoir.core.identifiers import Pipeline
+
 
 def format_shape(shape: Optional[tuple[int, ...]]) -> str:
     if shape is None:
@@ -19,11 +21,16 @@ def print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
 
     flow_parts = []
     shapes = topo_meta.get("shapes", {})
-    typ = topo_meta.get("type", "").upper()
+    typ_raw = topo_meta.get("type", "")
+    try:
+        pipeline = Pipeline(str(typ_raw).replace("_", "-").lower())
+    except Exception:
+        pipeline = None
+    typ_label = pipeline.value.upper() if pipeline else str(typ_raw).upper()
     details = topo_meta.get("details", {})
 
     print("=" * 40)
-    print(f"Model Architecture: {typ or 'MODEL'}")
+    print(f"Model Architecture: {typ_label or 'MODEL'}")
     print("=" * 40)
 
     input_shape = shapes.get("input")
@@ -39,7 +46,7 @@ def print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
     print(f"1. Input Data      : { format_shape(input_shape) }")
     print(f"2. Preprocessing   : { preprocess }")
 
-    if typ == "FNN_DISTILLATION": #TODO identifier for PIPELINE.FNN_DISTILLATION
+    if pipeline == Pipeline.FNN_DISTILLATION:
         flow_parts.append(format_shape(input_shape))
         flow_parts.append(format_shape(projected))
         if isinstance(internal, tuple):
@@ -54,7 +61,7 @@ def print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
         flow_parts.append(f"[{hidden_str}]")
         flow_parts.append(format_shape(feature))
         flow_parts.append(format_shape(output))
-    elif typ in {"RESERVOIR", "ESN", "CLASSICAL"}:
+    elif pipeline == Pipeline.CLASSICAL_RESERVOIR:
         flow_parts.append(format_shape(input_shape))
         flow_parts.append(format_shape(projected))
         flow_parts.append(format_shape(internal))

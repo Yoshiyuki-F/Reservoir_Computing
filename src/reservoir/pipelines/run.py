@@ -222,7 +222,6 @@ def run_pipeline(
     pipeline_enum = model_type if isinstance(model_type, Pipeline) else Pipeline(str(model_type))
     preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(pipeline_enum.value)
 
-    distill_ctx = None
     if preset_for_model and isinstance(preset_for_model.config, DistillationConfig):
         distill_cfg: DistillationConfig = preset_for_model.config
         teacher_params = distill_cfg.teacher.to_dict()
@@ -315,7 +314,6 @@ def run_pipeline(
         pass
 
     model_cfg = dict(config.get("model", {}) or {})
-    reservoir_cfg_for_factory: Optional[Dict[str, Any]] = None
 
     if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION}:
         hidden_layers = model_cfg.get("layer_dims") or config.get("nn_hidden") or []
@@ -379,7 +377,7 @@ def run_pipeline(
         internal_flat = t_steps * projected_units
 
         topo_meta = {
-            "type": "FNN_DISTILLATION",
+            "type": model_type.upper(),
             "shapes": {
                 "input": (t_steps, f_dim),
                 "projected": (t_steps, projected_units),
