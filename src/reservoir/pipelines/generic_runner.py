@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 from dataclasses import asdict
 
-from reservoir.components.readout.ridge import RidgeRegression
+from reservoir.readout.ridge import RidgeRegression
 from reservoir.training.presets import TrainingConfig
 
 

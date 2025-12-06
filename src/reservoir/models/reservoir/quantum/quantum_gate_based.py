@@ -13,7 +13,7 @@ import pennylane as qml
 from functools import lru_cache
 
 import jax.numpy as jnp
-from reservoir.components import RidgeReadoutNumpy
+from reservoir.readout import RidgeReadoutNumpy
 from reservoir.models.presets import get_model_preset
 from reservoir.core.identifiers import Pipeline
 

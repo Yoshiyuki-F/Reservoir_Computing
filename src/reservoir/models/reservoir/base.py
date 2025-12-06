@@ -46,3 +46,15 @@ class Reservoir(ABC):
 
     def to_dict(self) -> Dict[str, Any]:
         return {"n_inputs": self.n_inputs, "n_units": self.n_units, "noise_rc": self.noise_rc}
+
+    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+        """
+        Allow reservoir nodes to be used directly in SequentialModel.
+        Automatically initializes state and runs trajectory generation.
+        """
+        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        if arr.ndim not in (2, 3):
+            raise ValueError(f"Reservoir input must be 2D or 3D, got {arr.shape}")
+        batch_size = arr.shape[0] if arr.ndim == 3 else 1
+        init_state = self.initialize_state(batch_size)
+        return self.generate_trajectory(init_state, arr)

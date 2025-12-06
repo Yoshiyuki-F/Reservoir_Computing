@@ -1,5 +1,4 @@
 """
-src/reservoir/components/preprocess/aggregator.py
 State aggregation components compatible with Transformer protocol.
 """
 
@@ -67,6 +66,9 @@ class StateAggregator(Transformer):
         return StateAggregator.aggregate(features, self.mode)
 
     def fit_transform(self, features: jnp.ndarray) -> jnp.ndarray:
+        return self.transform(features)
+
+    def __call__(self, features: jnp.ndarray) -> jnp.ndarray:
         return self.transform(features)
 
     def to_dict(self) -> Dict[str, Any]:

@@ -1,88 +1,77 @@
-"""Topology and shape printing utilities for pipeline summaries."""
-
-from __future__ import annotations
-
-from typing import Any, Dict, Optional
-
-from reservoir.core.identifiers import Pipeline
+"""
+printing.py
+Utilities for pretty-printing model topology and status.
+"""
+from typing import Dict, Any, Tuple, Optional, Iterable
 
 
-def format_shape(shape: Optional[tuple[int, ...]]) -> str:
+def _fmt_dim(shape: Optional[Tuple[int, ...]]) -> str:
     if shape is None:
+        return "?"
+    return "[" + "x".join(str(d) for d in shape) + "]"
+
+
+def _fmt_layers(layers: Optional[Iterable[int]]) -> str:
+    if not layers:
         return "None"
-    if len(shape) == 1:
-        return f"[{shape[0]}]"
-    return f"[{'x'.join(str(d) for d in shape)}]"
+    return "-".join(str(int(v)) for v in layers)
 
 
-def print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
-    if not topo_meta:
+def print_topology(meta: Dict[str, Any]) -> None:
+    """
+    Prints a detailed 6-step topology report:
+      1. Input
+      2. Preprocessing
+      3. Input Projection
+      4. Model
+      5. Aggregation
+      6. Readout
+    """
+    if not meta:
         return
 
-    flow_parts = []
-    shapes = topo_meta.get("shapes", {})
-    typ_raw = topo_meta.get("type", "")
-    try:
-        pipeline = Pipeline(str(typ_raw).replace("_", "-").lower())
-    except Exception:
-        pipeline = None
-    typ_label = pipeline.value.upper() if pipeline else str(typ_raw).upper()
-    details = topo_meta.get("details", {})
+    shapes = meta.get("shapes", {}) or {}
+    details = meta.get("details", {}) or {}
 
-    print("=" * 40)
-    print(f"Model Architecture: {typ_label or 'MODEL'}")
-    print("=" * 40)
+    s_in = shapes.get("input")
+    s_pre = shapes.get("preprocessed") or s_in
+    s_proj = shapes.get("projected")
+    s_internal = shapes.get("internal")
+    s_adapter = shapes.get("adapter")
+    s_feat = shapes.get("feature")
+    s_out = shapes.get("output")
 
-    input_shape = shapes.get("input")
-    projected = shapes.get("projected")
-    internal = shapes.get("internal")
-    feature = shapes.get("feature")
-    output = shapes.get("output")
+    preprocess_method = details.get("preprocess") or "None"
+    agg_mode = details.get("agg_mode") or "None"
+    student_layers = _fmt_layers(details.get("student_layers"))
 
-    preprocess = details.get("preprocess") or "None (Pass-through)"
-    agg_mode = details.get("agg_mode")
-    student_layers = details.get("student_layers")
-
-    print(f"1. Input Data      : { format_shape(input_shape) }")
-    print(f"2. Preprocessing   : { preprocess }")
-
-    if pipeline == Pipeline.FNN_DISTILLATION:
-        flow_parts.append(format_shape(input_shape))
-        flow_parts.append(format_shape(projected))
-        if isinstance(internal, tuple):
-            flat_shape = internal
-            flow_parts.append(format_shape(flat_shape))
-        else:
-            flat_shape = None
-        hidden_str = "-".join(str(h) for h in (student_layers or [])) or "None"
-        print(f"3. Input Projection: {format_shape(input_shape)} -> {format_shape(projected)} (time-distributed)")
-        print(f"4. Student Model   : {format_shape(flat_shape)} -> [{hidden_str}] -> {format_shape(feature)}")
-        print(f"5. Readout         : {format_shape(feature)} -> {format_shape(output)} outputs")
-        flow_parts.append(f"[{hidden_str}]")
-        flow_parts.append(format_shape(feature))
-        flow_parts.append(format_shape(output))
-    elif pipeline == Pipeline.CLASSICAL_RESERVOIR:
-        flow_parts.append(format_shape(input_shape))
-        flow_parts.append(format_shape(projected))
-        flow_parts.append(format_shape(internal))
-        agg_desc = f"{format_shape(internal)} -> {format_shape(feature)}"
-        if agg_mode:
-            agg_desc += f" (mode={agg_mode})"
-        print(f"3. Reservoir       : {format_shape(projected)} -> {format_shape(internal)} (Recurrent)")
-        print(f"4. Aggregation     : {agg_desc}")
-        print(f"5. Readout         : {format_shape(feature)} -> {format_shape(output)} outputs")
-        flow_parts.append(format_shape(feature))
-        flow_parts.append(format_shape(output))
+    print(f"=== Model Topology: {meta.get('type', 'UNKNOWN')} ===")
+    print(f"1. Input Data      : {_fmt_dim(s_in)}")
+    print(f"2. Preprocessing   : {_fmt_dim(s_in)} -> {_fmt_dim(s_pre)} (Method: {preprocess_method})")
+    if s_proj is not None:
+        print(f"3. Input Projection: {_fmt_dim(s_pre)} -> {_fmt_dim(s_proj)}")
     else:
-        flow_parts.append(format_shape(input_shape))
-        flow_parts.append(format_shape(internal))
-        flow_parts.append(format_shape(feature))
-        flow_parts.append(format_shape(output))
-        print(f"3. Internal Struct : {format_shape(internal)}")
-        print(f"4. Readout         : {format_shape(feature)} -> {format_shape(output)} outputs")
+        print("3. Input Projection: Skipped")
 
-    print("-" * 40)
-    flow_str = " -> ".join(str(p) for p in flow_parts if p)
-    if flow_str:
-        print(f"Tensor Flow     : {flow_str}")
-    print("=" * 40)
+    if s_adapter is not None:
+        print(f"   (Adapter)       : {_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_adapter)}")
+
+    model_desc = ""
+    if student_layers != "None" and s_adapter is not None:
+        model_desc = f"{_fmt_dim(s_adapter)} -> [{student_layers}] -> {_fmt_dim(s_internal or s_feat)}"
+    elif student_layers != "None":
+        model_desc = f"Student Layers: {student_layers}"
+    elif s_internal is not None:
+        model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
+    else:
+        model_desc = "n/a"
+    print(f"4. Model           : {model_desc}")
+
+    prev_dim = s_internal or s_proj or s_pre
+    if not agg_mode or agg_mode == "None":
+        print("5. Aggregation     : Skipped (Architecture implies flat output)")
+    else:
+        print(f"5. Aggregation     : {_fmt_dim(prev_dim)} -> {_fmt_dim(s_feat)} (Mode: {agg_mode})")
+
+    print(f"6. Readout         : {_fmt_dim(s_feat)} -> {_fmt_dim(s_out)} (Ridge Regression)")
+    print("=" * 60)

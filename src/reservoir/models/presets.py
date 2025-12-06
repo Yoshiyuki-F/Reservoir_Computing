@@ -1,4 +1,4 @@
-"""src/reservoir/models/presets.py
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/presets.py
 Central Registry for Model Presets.
 Aggregates configurations from sub-modules into named presets for the CLI.
 Uses shared identifiers from reservoir.core.identifiers.
@@ -85,45 +85,35 @@ class ModelConfig:
 # Definitions
 # -----------------------------------------------------------------------------
 
+CRCONFIG: ClassicalReservoirConfig = ClassicalReservoirConfig(
+    n_units=100,
+    spectral_radius=1.3,
+    leak_rate=0.2,
+    input_scale=0.6,
+    input_connectivity=0.9,
+    rc_connectivity=0.1,
+    bias_scale=1.0,
+    noise_rc=0.001,
+    seed=42,
+    use_design_matrix=False,
+    poly_degree=1,
+    state_aggregation=AggregationMode.MEAN,
+)
+
+
 MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
     Pipeline.CLASSICAL_RESERVOIR: ModelConfig(
         name="classical",
         model_type=Pipeline.CLASSICAL_RESERVOIR,
         description="Standard classical reservoir (Echo State Network)",
-        config=ClassicalReservoirConfig(
-            n_units=100,
-            spectral_radius=1.3,
-            leak_rate=0.2,
-            input_scale=0.6,
-            input_connectivity=0.9,
-            rc_connectivity=0.1,
-            bias_scale=1.0,
-            noise_rc=0.001,
-            seed=42,
-            use_design_matrix=False,
-            poly_degree=1,
-            state_aggregation=AggregationMode.MEAN,
-        ),
+        config=CRCONFIG,
     ),
     Pipeline.FNN_DISTILLATION: ModelConfig(
         name="fnn-distillation",
         model_type=Pipeline.FNN_DISTILLATION,
         description="Feedforward Neural Network with Reservoir Distillation",
         config=DistillationConfig(
-            teacher=ClassicalReservoirConfig(
-                n_units=100,
-                spectral_radius=1.3,
-                leak_rate=0.2,
-                input_scale=0.6,
-                input_connectivity=0.9,
-                rc_connectivity=0.1,
-                bias_scale=1.0,
-                noise_rc=0.001,
-                seed=42,
-                use_design_matrix=False,
-                poly_degree=1,
-                state_aggregation=AggregationMode.MEAN,
-            ),
+            teacher=CRCONFIG,
             student_hidden_layers=(300,),
         ),
     ),

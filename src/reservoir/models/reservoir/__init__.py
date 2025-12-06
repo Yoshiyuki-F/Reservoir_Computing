@@ -2,7 +2,6 @@
 
 from .base import Reservoir
 from reservoir.models.reservoir.classical.classical import ClassicalReservoir
-from .model import ReservoirModel
 from .factory import ReservoirFactory
 
-__all__ = ["Reservoir", "ClassicalReservoir", "ReservoirModel", "ReservoirFactory"]
+__all__ = ["Reservoir", "ClassicalReservoir", "ReservoirFactory"]

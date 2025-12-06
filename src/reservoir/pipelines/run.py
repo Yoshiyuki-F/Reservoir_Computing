@@ -18,15 +18,13 @@ from reservoir.models import ModelFactory
 from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
-from reservoir.components import RidgeRegression
+from reservoir.readout.ridge import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
-
-
 
 
 def _get_strict_dataset_meta(dataset: Dataset) -> Tuple[Dataset, DatasetPreset]:

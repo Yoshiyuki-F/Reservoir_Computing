@@ -7,6 +7,7 @@ Transformer / Readout contracts referenced throughout the codebase.
 from __future__ import annotations
 
 from typing import Any, Dict, Protocol, runtime_checkable, Sequence, Tuple
+import jax.numpy as jnp
 
 
 @runtime_checkable
@@ -54,4 +55,14 @@ class ReadoutModule(Protocol):
         ...
 
 
-__all__ = ["Transformer", "ReadoutModule"]
+__all__ = ["Transformer", "ReadoutModule", "Component"]
+
+
+class Component(Protocol):
+    """Minimal component contract for sequential composition."""
+
+    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+        ...
+
+    def get_topology_meta(self) -> Dict[str, Any]:
+        ...

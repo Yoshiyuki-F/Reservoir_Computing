@@ -5,12 +5,11 @@ Standard Echo State Network implementation.
 from __future__ import annotations
 
 from collections import namedtuple
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple
 
 import jax
 import jax.numpy as jnp
 
-from reservoir.components.projection import InputProjector
 from reservoir.models.reservoir.base import Reservoir
 
 StepArtifacts = namedtuple("StepArtifacts", ["states"])
@@ -23,32 +22,17 @@ class ClassicalReservoir(Reservoir):
         self,
         n_inputs: int,
         n_units: int,
-        input_scale: float,
         spectral_radius: float,
         leak_rate: float,
-        input_connectivity: float,
         rc_connectivity: float,
         noise_rc: float,
-        bias_scale: float,
         seed: int,
-        projector: Optional[InputProjector] = None,
     ) -> None:
         super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc, seed=seed)
-        self.input_scale = float(input_scale)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
-        self.input_connectivity = float(input_connectivity)
         self.rc_connectivity = float(rc_connectivity)
-        self.bias_scale = float(bias_scale)
         self._rng = jax.random.PRNGKey(self.seed)
-        self.projector = projector or InputProjector(
-            n_inputs=self.n_inputs,
-            n_units=self.n_units,
-            input_scale=self.input_scale,
-            connectivity=self.input_connectivity,
-            bias_scale=self.bias_scale,
-            seed=self.seed,
-        )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -81,8 +65,10 @@ class ClassicalReservoir(Reservoir):
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, StepArtifacts]:
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
-        batch, time, _ = input_data.shape
-        projected = self.projector(input_data)
+        batch, time, feat = input_data.shape
+        if feat != self.n_units:
+            raise ValueError(f"Reservoir expects feature dim {self.n_units}, got {feat}")
+        projected = input_data
         proj_transposed = jnp.swapaxes(projected, 0, 1)
 
         final_states, stacked = jax.lax.scan(self.step, state, proj_transposed)
@@ -93,12 +79,9 @@ class ClassicalReservoir(Reservoir):
         data = super().to_dict()
         data.update(
             {
-                "input_scale": self.input_scale,
                 "spectral_radius": self.spectral_radius,
                 "leak_rate": self.leak_rate,
-                "input_connectivity": self.input_connectivity,
                 "rc_connectivity": self.rc_connectivity,
-                "bias_scale": self.bias_scale,
                 "seed": self.seed,
             }
         )
@@ -110,13 +93,10 @@ class ClassicalReservoir(Reservoir):
             return cls(
                 n_inputs=int(data["n_inputs"]),
                 n_units=int(data["n_units"]),
-                input_scale=float(data["input_scale"]),
                 spectral_radius=float(data["spectral_radius"]),
                 leak_rate=float(data["leak_rate"]),
-                input_connectivity=float(data["input_connectivity"]),
                 rc_connectivity=float(data["rc_connectivity"]),
                 noise_rc=float(data["noise_rc"]),
-                bias_scale=float(data["bias_scale"]),
                 seed=int(data["seed"]),
             )
         except KeyError as exc:

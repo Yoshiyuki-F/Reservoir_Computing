@@ -16,7 +16,7 @@ import qutip as qt
 
 from reservoir.models.reservoir.base import BaseReservoirComputer
 from reservoir.models.reservoir.classical.config import AnalogQuantumReservoirConfig, parse_ridge_lambdas
-from reservoir.components import RidgeReadoutNumpy
+from reservoir.readout import RidgeReadoutNumpy
 from reservoir.models.reservoir.training import train_reservoir, predict_reservoir
 
 # --------------------------------------------------------------------------- #
