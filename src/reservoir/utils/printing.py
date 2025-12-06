@@ -39,7 +39,7 @@ def print_topology(topo_meta: Optional[Dict[str, Any]]) -> None:
     print(f"1. Input Data      : { format_shape(input_shape) }")
     print(f"2. Preprocessing   : { preprocess }")
 
-    if typ == "FNN_DISTILLATION":
+    if typ == "FNN_DISTILLATION": #TODO identifier for PIPELINE.FNN_DISTILLATION
         flow_parts.append(format_shape(input_shape))
         flow_parts.append(format_shape(projected))
         if isinstance(internal, tuple):
