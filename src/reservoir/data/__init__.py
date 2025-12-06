@@ -11,7 +11,6 @@ from .presets import (
     DATASET_REGISTRY,
     DatasetPreset,
     get_dataset_preset,
-    normalize_dataset_name,
 )
 from .structs import SplitDataset
 from .registry import DatasetRegistry  # noqa: F401
@@ -27,7 +26,6 @@ __all__ = [
     "DATASET_REGISTRY",
     "DatasetPreset",
     "get_dataset_preset",
-    "normalize_dataset_name",
     "SplitDataset",
     "DatasetRegistry",
     "get_mnist_datasets",

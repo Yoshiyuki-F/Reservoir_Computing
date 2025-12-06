@@ -9,7 +9,8 @@ import jax
 import jax.numpy as jnp
 
 from reservoir.data.generators import generate_sine_data, generate_mnist_sequence_data, generate_mackey_glass_data
-from reservoir.data.presets import DatasetPreset, get_dataset_preset, normalize_dataset_name
+from reservoir.data.presets import DatasetPreset, get_dataset_preset
+from reservoir.core.identifiers import Dataset
 from reservoir.data.registry import DatasetRegistry
 from reservoir.data.structs import SplitDataset
 
@@ -18,7 +19,7 @@ from reservoir.data.structs import SplitDataset
 def load_sine_wave(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset("sine_wave")
+    preset = get_dataset_preset(Dataset.SINE_WAVE)
     if preset is None:
         raise ValueError("Dataset preset 'sine_wave' is missing. Define it in reservoir.data.presets.")
     data_cfg = preset.build_config(params)
@@ -40,7 +41,7 @@ def load_mnist(config: Dict[str, Any]) -> SplitDataset:
         raise ImportError("MNIST sequence loader requires torch/torchvision.")
 
     params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset("mnist")
+    preset = get_dataset_preset(Dataset.MNIST)
     if preset is None:
         raise ValueError("Dataset preset 'mnist' is missing. Define it in reservoir.data.presets.")
     data_cfg = preset.build_config(params)
@@ -74,7 +75,7 @@ def load_mnist(config: Dict[str, Any]) -> SplitDataset:
 def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Mackey-Glass samples (N, 1, 1) compatible with sequence models."""
     params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset("mackey_glass")
+    preset = get_dataset_preset(Dataset.MACKEY_GLASS)
     if preset is None:
         raise ValueError("Dataset preset 'mackey_glass' is missing. Define it in reservoir.data.presets.")
     data_cfg = preset.build_config(params)
@@ -97,7 +98,11 @@ def load_dataset_with_validation_split(
     """
     Load dataset via registry, apply task-specific preprocessing, and split into train/val/test.
     """
-    dataset_name = normalize_dataset_name(config.get("dataset", ""))
+    dataset_name = config.get("dataset")
+    if isinstance(dataset_name, Dataset):
+        dataset_name = dataset_name.value
+    elif not isinstance(dataset_name, str):
+        dataset_name = str(dataset_name)
     loader = DatasetRegistry.get(dataset_name)
 
     print(f"Loading dataset: {dataset_name}...")
@@ -201,6 +206,6 @@ def load_dataset_with_validation_split(
             test_X = jnp.asarray(test_X, dtype=jnp.float64) / 255.0
 
         # Downstream scalers should be skipped for already-normalized vision data.
-        config["use_preprocessing"] = False
+        # config["use_preprocessing"] = False
 
     return train_X, train_y, val_X, val_y, test_X, test_y

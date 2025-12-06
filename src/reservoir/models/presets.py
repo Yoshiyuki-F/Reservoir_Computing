@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Optional, Union
 
-from reservoir.core.presets import PresetRegistry
+from reservoir.core.presets import StrictRegistry
 from reservoir.core.identifiers import Pipeline
 from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.distillation.config import DistillationConfig
@@ -85,14 +85,14 @@ class ModelConfig:
 # Definitions
 # -----------------------------------------------------------------------------
 
-MODEL_DEFINITIONS: Dict[str, ModelConfig] = {
-    Pipeline.CLASSICAL_RESERVOIR.value: ModelConfig(
+MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
+    Pipeline.CLASSICAL_RESERVOIR: ModelConfig(
         name="classical",
         model_type=Pipeline.CLASSICAL_RESERVOIR,
         description="Standard classical reservoir (Echo State Network)",
         config=ClassicalReservoirConfig(),
     ),
-    Pipeline.FNN_DISTILLATION.value: ModelConfig(
+    Pipeline.FNN_DISTILLATION: ModelConfig(
         name="fnn-distillation",
         model_type=Pipeline.FNN_DISTILLATION,
         description="Feedforward Neural Network with Reservoir Distillation",
@@ -105,17 +105,16 @@ MODEL_DEFINITIONS: Dict[str, ModelConfig] = {
 # Registry Setup
 # -----------------------------------------------------------------------------
 
-MODEL_REGISTRY = PresetRegistry(MODEL_DEFINITIONS, aliases=None)
+MODEL_REGISTRY = StrictRegistry(MODEL_DEFINITIONS)
 
-MODEL_PRESETS: Dict[str, ModelConfig] = dict(MODEL_DEFINITIONS)
+MODEL_PRESETS: Dict[Pipeline, ModelConfig] = dict(MODEL_DEFINITIONS)
 
 
-def get_model_preset(name: str) -> ModelConfig:
+def get_model_preset(pipeline: Pipeline) -> ModelConfig:
     """Retrieves a model preset by enum key; raises on invalid names."""
-    pipeline = Pipeline(name)
-    preset = MODEL_REGISTRY.get(pipeline.value)
+    preset = MODEL_REGISTRY.get(pipeline)
     if preset is None:
-        raise KeyError(f"Model preset '{name}' not found.")
+        raise KeyError(f"Model preset '{pipeline}' not found.")
     return preset
 
 

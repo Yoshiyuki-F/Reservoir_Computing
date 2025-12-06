@@ -204,7 +204,10 @@ class DistillationModel(BaseModel):
     def predict(self, inputs: jnp.ndarray) -> jnp.ndarray:
         return self.__call__(inputs)
 
-    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **_: Any) -> Dict[str, Any]:
+    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **kwargs: Any) -> Dict[str, Any]:
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs.keys()))
+            raise TypeError(f"DistillationModel.train received unexpected parameters: {unexpected}")
         return self.train_student(inputs)
 
     def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:

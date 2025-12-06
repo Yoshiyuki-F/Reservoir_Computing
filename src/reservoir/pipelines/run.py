@@ -8,19 +8,17 @@ V2 Architecture Compliance:
 - Fail Fast: Dictionary access raises KeyError if parameters are missing.
 """
 
+from dataclasses import replace
 from typing import Dict, Any, Optional, Tuple
 
 import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.models.reservoir.factory import ReservoirFactory
 from reservoir.models.distillation import DistillationModel
 from reservoir.models.reservoir.model import ReservoirModel
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
-from reservoir.models.presets import get_model_preset, ModelConfig, DistillationConfig, MODEL_PRESETS
-from reservoir.core.identifiers import Pipeline
+from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.components import RidgeRegression
@@ -34,335 +32,103 @@ from reservoir.data import loaders as _data_loaders  # noqa: F401
 
 
 
-def _get_strict_dataset_meta(config: Dict[str, Any]) -> Tuple[str, DatasetPreset]:
+def _get_strict_dataset_meta(dataset: Dataset) -> Tuple[Dataset, DatasetPreset]:
     """
     Retrieve dataset metadata.
     Raises ValueError if the dataset is unknown or metadata is incomplete.
     """
-    name = config.get("dataset")
-    if not name:
-        raise ValueError("Configuration Error: 'dataset' name is missing.")
+    if not isinstance(dataset, Dataset):
+        raise TypeError(f"Configuration Error: 'dataset' must be a Dataset Enum, got {type(dataset)}.")
 
-    normalized_name = DATASET_REGISTRY.normalize_name(name)
-    preset = DATASET_REGISTRY.get(normalized_name)
-
+    preset = DATASET_REGISTRY.get(dataset)
     if preset is None:
-        raise ValueError(f"Configuration Error: Dataset '{name}' is not registered in DATASET_REGISTRY.")
+        raise ValueError(f"Configuration Error: Dataset '{dataset}' is not registered in DATASET_REGISTRY.")
 
     if preset.config.n_input is None:
-        raise ValueError(f"Preset Error: Dataset '{name}' is missing 'n_input' in its definition.")
+        raise ValueError(f"Preset Error: Dataset '{dataset}' is missing 'n_input' in its definition.")
     if preset.config.n_output is None:
-        raise ValueError(f"Preset Error: Dataset '{name}' is missing 'n_output' in its definition.")
+        raise ValueError(f"Preset Error: Dataset '{dataset}' is missing 'n_output' in its definition.")
 
-    return normalized_name, preset
+    return dataset, preset
 
 
-def _resolve_training_config(config: Dict[str, Any], is_classification: bool) -> Dict[str, Any]:
+def _resolve_training_config(task_type: TaskType) -> TrainingConfig:
     """
-    Resolve training configuration strictly.
+    Resolve training configuration strictly from presets.
     """
-    preset_name = config.get("training_preset", "standard")
-    try:
-        preset: TrainingConfig = get_training_preset(preset_name)
-    except KeyError:
-        raise ValueError(f"Configuration Error: Training preset '{preset_name}' not found.")
-
-    overrides = dict(config.get("training", {}) or {})
-    if "alpha" in overrides:
-        raise ValueError("Ambiguous parameter 'alpha' is forbidden. Use 'ridge_lambda' (readout) or 'leak_rate' (reservoir).")
-    preset_dict = preset.to_dict()
-
-    # Split overrides into validated dataclass fields vs. pass-through extras.
-    allowed_keys = set(TrainingConfig.__dataclass_fields__.keys())
-    field_overrides = {k: v for k, v in overrides.items() if k in allowed_keys}
-    passthrough = {k: v for k, v in overrides.items() if k not in allowed_keys}
-
-    merged_fields = {**preset_dict, **field_overrides}
-    try:
-        validated_cfg = TrainingConfig(**merged_fields)  # Validation happens in __post_init__
-    except TypeError as exc:
-        raise ValueError(f"Configuration Error: Invalid training override keys. {exc}")
-
-    merged = validated_cfg.to_dict()
-    merged.update(passthrough)
-
-    if is_classification:
-        merged["classification"] = True
-    return merged
+    preset = get_training_preset("standard")
+    classification = task_type is TaskType.CLASSIFICATION
+    return replace(preset, classification=classification)
 
 
-def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge ModelConfig parameters with User Configuration.
-    Maps generic CLI args (hidden_dim) to model specific args (n_units).
-    """
-    # 1. Identify Preset
-    preset_name = config.get("reservoir_preset") or config.get("reservoir_type") or config.get("model_type")
-    if not preset_name:
-        preset_name = "classical"
-
-    try:
-        preset: ModelConfig = get_model_preset(preset_name)
-    except KeyError:
-        raise ValueError(f"Configuration Error: Model Preset '{preset_name}' not found.")
-
-    # 2. Base params from Preset (Canonical names only)
-    if isinstance(preset.config, DistillationConfig):
-        teacher_cfg = preset.config.teacher
-        teacher_cfg.validate(context=f"{preset_name}.teacher")
-        base_params = teacher_cfg.to_dict()
-    elif isinstance(preset.config, ClassicalReservoirConfig):
-        preset.config.validate(context=preset_name)
-        base_params = preset.config.to_dict()
-    else:
-        base_params = preset.to_params()
-
-    # 3. Overrides from User (Canonical names only expected)
-    user_overrides = dict(config.get("reservoir", {}) or {})
-
-    # Map generic CLI 'hidden_dim' to 'n_units' (explicit override)
-    if "hidden_dim" in config and config["hidden_dim"] is not None:
-        user_overrides["n_units"] = config["hidden_dim"]
-
-    # 4. Merge
-    merged = {**base_params, **user_overrides}
-
-    required = [
-        "n_units",
-        "input_scale",
-        "spectral_radius",
-        "leak_rate",
-        "input_connectivity",
-        "rc_connectivity",
-        "bias_scale",
-        "noise_rc",
-        "seed",
-    ]
-    missing = [key for key in required if key not in merged or merged[key] is None]
-    if missing:
-        raise ValueError(
-            f"Configuration Error: Missing required reservoir parameters {missing}. "
-            "Provide them via preset or explicit overrides."
-        )
-
-    return merged
-
-
-def _resolve_distillation_from_preset(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """
-    Resolve distillation-related settings from a model preset if provided.
-    Returns teacher parameters and student hidden layers when the preset encodes a DistillationConfig.
-    """
-    preset_name = config.get("reservoir_preset") or config.get("reservoir_type")
-    if not preset_name:
-        return None
-
-    preset = MODEL_PRESETS.get(preset_name)
-    if preset is None:
-        return None
-    distill_cfg = preset.config if isinstance(preset.config, DistillationConfig) else (
-        preset.params.get("distillation") if preset.params else None
-    )
-    if distill_cfg is None:
-        return None
-    if not isinstance(distill_cfg, DistillationConfig):
-        raise ValueError(f"Preset '{preset_name}' must use DistillationConfig for distillation workflows.")
-
-    teacher_cfg = distill_cfg.teacher
-    teacher_cfg.validate(context=f"preset.{preset_name}.teacher")
-    teacher_params = teacher_cfg.to_dict()
-    if "hidden_dim" in config and config["hidden_dim"] is not None:
-        teacher_params["n_units"] = int(config["hidden_dim"])
-
-    student_hidden = tuple(int(v) for v in distill_cfg.student_hidden_layers)
-    if not student_hidden:
-        raise ValueError(f"Preset '{preset_name}' distillation must define at least one student hidden layer.")
-
-    return {
-        "preset": preset,
-        "teacher_params": teacher_params,
-        "student_hidden": student_hidden,
-    }
-
-def run_pipeline(
-    config: Dict[str, Any],
-    data: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     """
     The Unified Entry Point (V2 Strict Mode).
     """
-    # --- 1. loading presets ---
-    dataset_name: Optional[str] = None
-    dataset_preset: Optional[DatasetPreset] = None
-    provided = data or {}
-    provided_splits = (
-        provided.get("train_X"),
-        provided.get("train_y"),
-        provided.get("test_X"),
-        provided.get("test_y"),
+    if not isinstance(config, RunConfig):
+        raise TypeError(f"run_pipeline requires RunConfig, got {type(config)}.")
+
+    dataset_enum, dataset_preset = _get_strict_dataset_meta(config.dataset)
+    dataset_name = dataset_enum.value
+    task_type = config.task_type
+
+    training_obj = _resolve_training_config(task_type)
+    feature_batch_size = int(training_obj.batch_size or 0)
+
+    train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
+        {"dataset": dataset_enum},
+        dataset_preset,
+        training_obj.to_dict(),
+        model_type=config.model_type.value,
+        require_3d=True,
     )
-    has_provided_data = all(split is not None for split in provided_splits)
 
-    if config.get("dataset"):
-        dataset_name, dataset_preset = _get_strict_dataset_meta(config)
+    input_shape = train_X.shape[1:]
+    input_dim = int(input_shape[-1])
 
-    preset_type = dataset_preset.task_type.lower() if dataset_preset else None
-    override_cls = config.get("is_classification")
-    if override_cls is not None:
-        is_classification = bool(override_cls)
-    elif preset_type in {"classification", "regression"}:
-        is_classification = preset_type == "classification"
-    else:
-        is_classification = bool(config.get("classification", False))
+    def _flatten(arr: Optional[Any]) -> Optional[Any]:
+        if arr is None:
+            return None
+        arr_np = np.asarray(arr)
+        if arr_np.ndim == 3:
+            return arr_np.reshape(arr_np.shape[0], -1)
+        return arr
 
-    # Model type (required downstream)
-    model_type = config.get("model_type")
-    if not model_type:
-        raise ValueError("Configuration Error: 'model_type' is required.")
-    pipeline_enum = model_type if isinstance(model_type, Pipeline) else Pipeline(str(model_type))
-    preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(pipeline_enum.value)
-
-    if preset_for_model and isinstance(preset_for_model.config, DistillationConfig):
-        distill_cfg: DistillationConfig = preset_for_model.config
-        teacher_params = distill_cfg.teacher.to_dict()
-        if "hidden_dim" in config and config["hidden_dim"] is not None:
-            teacher_params["n_units"] = int(config["hidden_dim"])
-        distill_ctx = {
-            "preset": preset_for_model,
-            "teacher_params": teacher_params,
-            "student_hidden": tuple(int(v) for v in distill_cfg.student_hidden_layers),
-        }
-        pipeline_enum = preset_for_model.model_type
-    else:
-        distill_ctx = _resolve_distillation_from_preset(config) if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} else None
-
-    # Resolve training configuration (needed for ridge search/validation)
-    training_cfg = _resolve_training_config(config, is_classification)
-    training_cfg["_meta_dataset"] = dataset_name
-    training_cfg["_meta_model_type"] = pipeline_enum.value
-    feature_batch_size = int(training_cfg.get("feature_batch_size", training_cfg.get("batch_size", 0) or 0))
-    training_obj = TrainingConfig(
-        **{
-            key: training_cfg[key]
-            for key in TrainingConfig.__dataclass_fields__.keys()
-            if key in training_cfg
-        }
-    )
-    if has_provided_data:
-        train_X = provided["train_X"]
-        train_y = provided["train_y"]
-        test_X = provided["test_X"]
-        test_y = provided["test_y"]
-        val_X = provided.get("val_X")
-        val_y = provided.get("val_y")
-    else:
-        if dataset_preset is None:
-            raise ValueError("Configuration Error: dataset must be specified when data splits are not provided.")
-        train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
-            config,
-            dataset_preset,
-            training_cfg,
-            model_type=model_type,
-            require_3d=True,
-        )
-
-    # Flatten for pure FNN (non-distillation) so the student sees vector inputs.
-    model_type = pipeline_enum.value
-
-    is_distillation_intent = pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} and (
-        distill_ctx is not None or bool(config.get("reservoir") or config.get("reservoir_params"))
-    )
-    if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION} and not is_distillation_intent:
-        def _flatten(arr: Optional[Any]) -> Optional[Any]:
-            if arr is None:
-                return None
-            arr_np = np.asarray(arr)
-            if arr_np.ndim == 3:
-                return arr_np.reshape(arr_np.shape[0], -1)
-            return arr
-
+    if config.model_type is Pipeline.FNN:
         train_X = _flatten(train_X)
         val_X = _flatten(val_X)
         test_X = _flatten(test_X)
+        input_shape = train_X.shape[1:]
+        input_dim = int(input_shape[-1])
 
-    print(f"Data Shapes -> Train: {train_X.shape}, Val: {getattr(val_X, 'shape', None)}, Test: {test_X.shape}")
-
-    preset_input_dim: Optional[int] = None
-    preset_output_dim: Optional[int] = None
-    if dataset_preset is not None:
-        if dataset_preset.config.n_input:
-            preset_input_dim = int(dataset_preset.config.n_input)
-        if dataset_preset.config.n_output:
-            preset_output_dim = int(dataset_preset.config.n_output)
-
-    if preset_output_dim is not None:
-        meta_n_outputs = preset_output_dim
+    if dataset_preset.config.n_output is not None:
+        meta_n_outputs = int(dataset_preset.config.n_output)
     else:
         target_sample = train_y if train_y is not None else test_y
         if target_sample is None:
             raise ValueError("Unable to infer output dimension without targets.")
         meta_n_outputs = int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
 
-    input_shape = train_X.shape[1:]
-    input_dim_for_model = int(input_shape[-1])
-    if preset_input_dim is not None and is_distillation_intent:
-        input_dim_for_model = preset_input_dim
+    print(f"Data Shapes -> Train: {train_X.shape}, Val: {getattr(val_X, 'shape', None)}, Test: {test_X.shape}")
 
-    hidden_dim = config.get("hidden_dim")
-    if hidden_dim is None and model_type in ["reservoir", "classical", "classical_reservoir", "esn"]:
-        # Allow preset-provided n_units; _get_strict_reservoir_params will validate presence.
-        pass
+    # Build model via Factory (all domain logic lives there)
+    model = ModelFactory.create_model(
+        config,
+        dataset_preset=dataset_preset,
+        training=training_obj,
+        input_dim=input_dim,
+        output_dim=meta_n_outputs,
+    )
 
-    model_cfg = dict(config.get("model", {}) or {})
+    # Flatten sequences for pure FNN students only (reservoir/distillation keep sequences)
+    if isinstance(model, FNNModel):
+        train_X = _flatten(train_X)
+        val_X = _flatten(val_X)
+        test_X = _flatten(test_X)
+        input_shape = train_X.shape[1:]
+        input_dim = int(input_shape[-1])
 
-    if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION}:
-        hidden_layers = model_cfg.get("layer_dims") or config.get("nn_hidden") or []
-        if distill_ctx is not None:
-            hidden_layers = hidden_layers or list(distill_ctx["student_hidden"])
-            teacher_units = int(distill_ctx["teacher_params"]["n_units"])
-            model_cfg["layer_dims"] = [
-                input_dim_for_model,
-                *[int(v) for v in hidden_layers],
-                teacher_units,
-            ]
-            reservoir_cfg_for_factory = distill_ctx["teacher_params"]
-        else:
-            model_cfg["layer_dims"] = [
-                input_dim_for_model,
-                *[int(v) for v in hidden_layers],
-                int(preset_output_dim if preset_output_dim is not None else meta_n_outputs),
-            ]
-            reservoir_cfg_for_factory = config.get("reservoir")
-    elif pipeline_enum == Pipeline.RNN_DISTILLATION:
-        if "input_dim" not in model_cfg:
-            model_cfg["input_dim"] = input_dim_for_model
-        if "output_dim" not in model_cfg and preset_output_dim is not None:
-            model_cfg["output_dim"] = int(preset_output_dim)
-        reservoir_cfg_for_factory = config.get("reservoir")
-    else:
-        reservoir_cfg_for_factory = (
-            _get_strict_reservoir_params(config)
-            if pipeline_enum in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}
-            else config.get("reservoir")
-        )
-
-    # --- 2. Model Creation (Strict & Simplified) ---
-    print(f"Initializing {model_type.upper()} model via Factory...")
-
-    factory_cfg = {
-        "type": pipeline_enum,
-        "input_dim": int(input_dim_for_model),
-        "model": model_cfg,
-        "training": training_obj,
-        "reservoir": reservoir_cfg_for_factory,
-        "reservoir_params": config.get("reservoir_params"),
-        "use_preprocessing": config.get("use_preprocessing", True),
-        "dataset": dataset_name,
-        "hidden_dim": config.get("hidden_dim"),
-    }
-
-    model = ModelFactory.create_model(factory_cfg)
-
+    model_type_str = config.model_type.value
     topo_meta: Optional[Dict[str, Any]] = None
     filename_res_units: Optional[int] = None
     filename_student_hidden: Optional[list[int]] = None
@@ -377,7 +143,7 @@ def run_pipeline(
         internal_flat = t_steps * projected_units
 
         topo_meta = {
-            "type": model_type.upper(),
+            "type": model_type_str.upper(),
             "shapes": {
                 "input": (t_steps, f_dim),
                 "projected": (t_steps, projected_units),
@@ -398,7 +164,7 @@ def run_pipeline(
         filename_res_units = res_units
         agg_mode = getattr(model, "readout_mode", None)
         topo_meta = {
-            "type": model_type.upper(),
+            "type": model_type_str.upper(),
             "shapes": {
                 "input": (t_steps, f_dim),
                 "projected": (t_steps, res_units),
@@ -416,7 +182,7 @@ def run_pipeline(
         layer_dims = [int(v) for v in getattr(model, "layer_dims", [])]
         feature_units = layer_dims[-2] if len(layer_dims) >= 2 else None
         topo_meta = {
-            "type": model_type.upper(),
+            "type": model_type_str.upper(),
             "shapes": {
                 "input": (t_steps, f_dim),
                 "projected": None,
@@ -431,22 +197,12 @@ def run_pipeline(
             },
         }
 
-    # --- Common Architecture Summary Block ---
     print_topology(topo_meta)
 
-    # --- 3a. Validation Split for ridge search ---
-    # Shared Readout (owned by runner)
-    readout_cfg = dict(config.get("readout", {}) or {})
-    ridge_lambda = readout_cfg.get("ridge_lambda", training_cfg["ridge_lambda"])
+    readout = RidgeRegression(ridge_lambda=float(training_obj.ridge_lambda), use_intercept=True)
 
-    fit_intercept_cfg = readout_cfg.get("fit_intercept")
-    use_intercept = True if fit_intercept_cfg is None else bool(fit_intercept_cfg)
-
-    readout = RidgeRegression(ridge_lambda=float(ridge_lambda), use_intercept=use_intercept)
-
-    # --- 3. Execution ---
-    metric = "accuracy" if is_classification else "mse"
-    runner = UniversalPipeline(model, readout, config.get("save_path"), metric=metric)
+    metric = "accuracy" if task_type is TaskType.CLASSIFICATION else "mse"
+    runner = UniversalPipeline(model, readout, None, metric=metric)
     validation_tuple = (val_X, val_y) if (val_X is not None and val_y is not None) else None
     results = runner.run(
         train_X,
@@ -454,19 +210,19 @@ def run_pipeline(
         test_X,
         test_y,
         validation=validation_tuple,
-        training_cfg=training_cfg,
+        training_cfg=training_obj,
+        training_extras={},
+        model_label=model_type_str,
     )
 
-    filename_parts = [f"{model_type}", "raw"]
+    filename_parts = [f"{model_type_str}", "raw"]
     if filename_res_units is not None:
         filename_parts.append(f"nr{filename_res_units}")
     if filename_student_hidden:
         joined_nn = "-".join(str(v) for v in filename_student_hidden)
         filename_parts.append(f"nn{joined_nn}")
-        filename_parts.append(f"epochs{training_cfg.get('epochs')}")
+        filename_parts.append(f"epochs{training_obj.epochs}")
 
-
-    # --- 4a. Distillation Loss Visualization (Phase 1) ---
     training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}
     if isinstance(training_logs, dict) and training_logs.get("loss_history"):
         loss_history = training_logs["loss_history"]
@@ -476,14 +232,8 @@ def run_pipeline(
             print(f"Skipping distillation loss plotting due to import error: {exc}")
         else:
             loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_distillation_loss.png"
-            plot_loss_history(loss_history, loss_filename, title=f"{model_type.upper()} Distillation Loss")
+            plot_loss_history(loss_history, loss_filename, title=f"{model_type_str.upper()} Distillation Loss")
 
-
-    # Pull fitted readout (runner-owned)
-    if isinstance(results, dict) and "readout" in results:
-        readout = results["readout"]
-
-    # Log ridge search results if available
     train_res = results.get("train", {}) if isinstance(results, dict) else {}
     if isinstance(train_res, dict) and "search_history" in train_res and train_res.get("search_history"):
         history = train_res.get("search_history", {})
@@ -507,8 +257,7 @@ def run_pipeline(
             print(f"   λ = {float(lam):.2e} : Val Score = {score:.4f} {norm_str}{marker}")
         print("=" * 40 + "\n")
 
-    # --- 5. Visualization (classification only) ---
-    if is_classification and test_X is not None and test_y is not None:
+    if task_type is TaskType.CLASSIFICATION and test_X is not None and test_y is not None:
         try:
             from reservoir.utils.plotting import plot_classification_results
         except Exception as exc:  # pragma: no cover - optional dependency
@@ -573,7 +322,7 @@ def run_pipeline(
                 test_predictions=test_pred_np,
                 val_labels=val_labels_np,
                 val_predictions=val_pred_np,
-                title=f"{model_type.upper()} on {dataset_name}",
+                title=f"{model_type_str.upper()} on {dataset_name}",
                 filename=filename,
                 metrics_info=metrics_payload,
                 best_lambda=selected_lambda,

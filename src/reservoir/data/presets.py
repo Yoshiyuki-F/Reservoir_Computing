@@ -4,8 +4,9 @@ import copy
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
-from reservoir.core.presets import PresetRegistry
+from reservoir.core.presets import StrictRegistry
 from .config import DataGenerationConfig
+from reservoir.core.identifiers import Dataset
 
 _CONFIG_FIELDS = set(DataGenerationConfig.__dataclass_fields__.keys())
 
@@ -57,8 +58,8 @@ class DatasetPreset:
         return _coerce_data_config(config_copy)
 
 
-DATASET_DEFINITIONS: Dict[str, DatasetPreset] = {
-    "sine_wave": DatasetPreset(
+DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
+    Dataset.SINE_WAVE: DatasetPreset(
         name="sine_wave",
         description="Multi-frequency sine wave composite",
         task_type="regression",
@@ -72,7 +73,7 @@ DATASET_DEFINITIONS: Dict[str, DatasetPreset] = {
             params={"frequencies": [1.0, 2.0, 5.0]},
         ),
     ),
-    "lorenz": DatasetPreset(
+    Dataset.LORENZ: DatasetPreset(
         name="lorenz",
         description="Lorenz attractor chaotic time series",
         task_type="regression",
@@ -87,7 +88,7 @@ DATASET_DEFINITIONS: Dict[str, DatasetPreset] = {
         ),
         use_dimensions=(0,),
     ),
-    "mackey_glass": DatasetPreset(
+    Dataset.MACKEY_GLASS: DatasetPreset(
         name="mackey_glass",
         description="Mackey-Glass chaotic time series",
         task_type="regression",
@@ -108,7 +109,7 @@ DATASET_DEFINITIONS: Dict[str, DatasetPreset] = {
             },
         ),
     ),
-    "mnist": DatasetPreset(
+    Dataset.MNIST: DatasetPreset(
         name="mnist",
         description="MNIST digit classification",
         task_type="classification",
@@ -124,31 +125,18 @@ DATASET_DEFINITIONS: Dict[str, DatasetPreset] = {
     ),
 }
 
-DATASET_ALIASES: Dict[str, str] = {
-    "sine": "sine_wave",
-    "sw": "sine_wave",
-    "m": "mnist",
-}
 
-DATASET_REGISTRY = PresetRegistry(DATASET_DEFINITIONS, DATASET_ALIASES)
-
-# Backwards-compatible shorthands
+DATASET_REGISTRY = StrictRegistry(DATASET_DEFINITIONS)
 DATASET_PRESETS = DATASET_DEFINITIONS
 
 
-def normalize_dataset_name(name: str) -> str:
-    return DATASET_REGISTRY.normalize_name(name)
-
-
-def get_dataset_preset(name: str) -> Optional[DatasetPreset]:
-    return DATASET_REGISTRY.get(name)
+def get_dataset_preset(dataset: Dataset) -> Optional[DatasetPreset]:
+    return DATASET_REGISTRY.get(dataset)
 
 
 __all__ = [
-    "DATASET_PRESETS",
     "DATASET_REGISTRY",
-    "DATASET_ALIASES",
+    "DATASET_PRESETS",
     "DatasetPreset",
     "get_dataset_preset",
-    "normalize_dataset_name",
 ]

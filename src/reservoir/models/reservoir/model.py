@@ -63,5 +63,7 @@ class ReservoirModel:
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Reservoir model has no internal training; runner handles readout and evaluation."""
-        # _ = (inputs, targets, init_state, kwargs)
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs.keys()))
+            raise TypeError(f"ReservoirModel.train received unexpected parameters: {unexpected}")
         return {}

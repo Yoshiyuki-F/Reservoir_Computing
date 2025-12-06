@@ -5,7 +5,6 @@ from .presets import (
     TRAINING_REGISTRY,
     TrainingConfig,
     get_training_preset,
-    normalize_training_name,
 )
 
 __all__ = [
@@ -13,5 +12,4 @@ __all__ = [
     "TRAINING_REGISTRY",
     "TrainingConfig",
     "get_training_preset",
-    "normalize_training_name",
 ]

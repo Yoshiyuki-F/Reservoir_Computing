@@ -11,8 +11,10 @@ from typing import Any, Dict, Optional, Sequence
 import jax
 import jax.numpy as jnp
 import numpy as np
+from dataclasses import asdict
 
 from reservoir.components.readout.ridge import RidgeRegression
+from reservoir.training.presets import TrainingConfig
 
 
 class UniversalPipeline:
@@ -150,17 +152,38 @@ class UniversalPipeline:
         test_y: Any,
         *,
         validation: Optional[tuple[Any, Any]] = None,
-        training_cfg: Optional[Dict[str, Any]] = None,
+        training_cfg: Optional[TrainingConfig] = None,
+        training_extras: Optional[Dict[str, Any]] = None,
+        model_label: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
         train_X = jnp.asarray(train_X)
         train_y = jnp.asarray(train_y)
         test_X = jnp.asarray(test_X)
         test_y = jnp.asarray(test_y)
 
-        extra_kwargs = dict(training_cfg or {})
-        model_label = str(extra_kwargs.pop("_meta_model_type", self.model.__class__.__name__))
-        ridge_lambdas = extra_kwargs.pop("ridge_lambdas", None)
-        feature_batch_size = int(extra_kwargs.pop("feature_batch_size", extra_kwargs.get("batch_size", 0) or 0))
+        cfg = training_cfg or TrainingConfig()
+        extras = dict(training_extras or {})
+        model_label = model_label or self.model.__class__.__name__
+        ridge_lambdas = cfg.ridge_lambdas
+        feature_batch_size = int(extras.get("feature_batch_size", cfg.batch_size or 0))
+
+        cfg_dict = asdict(cfg)
+        # Model owns its TrainingConfig (injected via Factory). Do not pass duplicate params to train().
+        exclude_keys = {
+            "ridge_lambda",
+            "ridge_lambdas",
+            "batch_size",
+            "epochs",
+            "learning_rate",
+            "seed",
+            "classification",
+            "train_size",
+            "val_size",
+            "test_ratio",
+            "task_type",
+            "name",
+        }
+        train_params = {k: v for k, v in cfg_dict.items() if k not in exclude_keys}
 
         start = time.time()
 
@@ -168,7 +191,7 @@ class UniversalPipeline:
         print(f"\n=== [Phase 1] Pre-training Model ({model_label}) ===")
 
         start_train = time.time()
-        train_logs = self.model.train(train_X, train_y, validation=validation, metric=self.metric_name, **extra_kwargs)
+        train_logs = self.model.train(train_X, train_y, **train_params) or {}
         train_time = time.time() - start_train
 
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")

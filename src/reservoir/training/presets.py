@@ -12,7 +12,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 import numpy as np
-from reservoir.core.presets import PresetRegistry
 
 
 @dataclass(frozen=True)
@@ -96,29 +95,21 @@ TRAINING_DEFINITIONS: Dict[str, TrainingConfig] = {
     ),
 }
 
-TRAINING_ALIASES: Dict[str, str] = {
-    "std": "standard",
-    "quick": "quick_test",
-    "debug": "quick_test",
-}
-
-TRAINING_REGISTRY = PresetRegistry(TRAINING_DEFINITIONS, TRAINING_ALIASES)
 TRAINING_PRESETS = TRAINING_DEFINITIONS
-
-
-def normalize_training_name(name: str) -> str:
-    return TRAINING_REGISTRY.normalize_name(name)
+TRAINING_REGISTRY = TRAINING_PRESETS  # Legacy alias; no aliasing/normalization in V2.
 
 
 def get_training_preset(name: str) -> TrainingConfig:
-    return TRAINING_REGISTRY.get_or_default(name, "standard")
+    # Training presets remain string-keyed; StrictRegistry enforces Enum keys, so use direct dict access.
+    preset = TRAINING_PRESETS.get(name)
+    if preset is None:
+        raise KeyError(f"Training preset '{name}' not found.")
+    return preset
 
 
 __all__ = [
     "TrainingConfig",
     "TRAINING_PRESETS",
     "TRAINING_REGISTRY",
-    "TRAINING_ALIASES",
     "get_training_preset",
-    "normalize_training_name",
 ]

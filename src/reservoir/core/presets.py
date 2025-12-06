@@ -1,49 +1,41 @@
+#/home/yoshi/PycharmProjects/Reservoir/src/reservoir/core/presets.py
 from __future__ import annotations
 
-from typing import Dict, Generic, List, Optional, TypeVar
+from enum import Enum
+from typing import Dict, Generic, Optional, TypeVar
 
 T = TypeVar("T")
+K = TypeVar("K", bound=Enum)
 
 
-class PresetRegistry(Generic[T]):
-    """Unified registry for configuration presets with alias handling."""
+class StrictRegistry(Generic[K, T]):
+    """
+    V2 Strict Registry.
+    Maps typed Enums (K) to Config Objects (T).
+    No strings, no aliases, no normalization.
+    """
 
-    def __init__(self, items: Dict[str, T], aliases: Optional[Dict[str, str]] = None):
+    def __init__(self, items: Dict[K, T]):
         self._items = dict(items)
-        self._aliases = dict(aliases or {})
 
-    def normalize_name(self, name: str) -> str:
-        """Normalize preset names to a canonical key."""
-        key = str(name).strip().lower()
-        return self._aliases.get(key, key)
-
-    def get(self, name: str) -> Optional[T]:
-        """Retrieve a preset by name or alias."""
-        key = self.normalize_name(name)
+    def get(self, key: K) -> Optional[T]:
+        if not isinstance(key, Enum):
+            raise TypeError(f"Registry lookup requires an Enum, got {type(key)}")
         return self._items.get(key)
 
-    def get_or_default(self, name: str, default_key: str) -> T:
-        """Retrieve a preset, falling back to a default key."""
-        item = self.get(name)
-        if item is not None:
-            return item
-        return self._items[default_key]
+    def __getitem__(self, key: K) -> T:
+        if key not in self._items:
+            raise KeyError(f"Key {key} not found in registry.")
+        return self._items[key]
 
-    def register(self, name: str, item: T, aliases: Optional[List[str]] = None) -> None:
-        """Dynamically register a new preset with optional aliases."""
-        key = self.normalize_name(name)
+    def register(self, key: K, item: T) -> None:
+        if not isinstance(key, Enum):
+            raise TypeError(f"Registry key must be an Enum, got {type(key)}")
         self._items[key] = item
-        if aliases:
-            for alias in aliases:
-                self._aliases[self.normalize_name(alias)] = key
 
     @property
-    def available_keys(self) -> List[str]:
+    def available_keys(self) -> list[K]:
         return list(self._items.keys())
 
-    def list_keys(self) -> List[str]:
-        """Backward-compatible accessor for registry keys."""
-        return self.available_keys
 
-
-__all__ = ["PresetRegistry"]
+__all__ = ["StrictRegistry"]

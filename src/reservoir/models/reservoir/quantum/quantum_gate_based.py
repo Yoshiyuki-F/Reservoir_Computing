@@ -15,6 +15,7 @@ from functools import lru_cache
 import jax.numpy as jnp
 from reservoir.components import RidgeReadoutNumpy
 from reservoir.models.presets import get_model_preset
+from reservoir.core.identifiers import Pipeline
 
 from reservoir.models.reservoir.base import BaseReservoirComputer
 from reservoir.models.reservoir.classical.config import QuantumReservoirConfig, parse_ridge_lambdas
@@ -23,13 +24,13 @@ from reservoir.models.reservoir.training import train_reservoir, predict_reservo
 
 @lru_cache()
 def _load_shared_defaults() -> Dict[str, Any]:
-    return dict(get_model_preset("shared_reservoir_params").to_params())
+    return dict(get_model_preset(Pipeline.QUANTUM_GATE_BASED).to_params())
 
 
 @lru_cache()
 def _load_quantum_defaults() -> Dict[str, Any]:
     merged = _load_shared_defaults()
-    merged.update(get_model_preset("quantum_gate_based").to_params())
+    merged.update(get_model_preset(Pipeline.QUANTUM_GATE_BASED).to_params())
     return merged
 
 
