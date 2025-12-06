@@ -166,15 +166,11 @@ class UniversalPipeline:
 
         # Phase 1: Pre-training
         print(f"\n=== [Phase 1] Pre-training Model ({model_label}) ===")
+
         start_train = time.time()
-        try:
-            train_logs = self.model.train(
-                train_X, train_y, validation=validation, metric=self.metric_name, **extra_kwargs
-            ) or {}
-        except TypeError:
-            # Fallback for simple models that do not accept optional kwargs
-            train_logs = self.model.train(train_X, train_y) or {}
+        train_logs = self.model.train(train_X, train_y, validation=validation, metric=self.metric_name, **extra_kwargs)
         train_time = time.time() - start_train
+
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
         print(
             f"Pre-training completed. Duration: {train_time:.2f}s."
