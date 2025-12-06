@@ -1,3 +1,6 @@
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/adapters.py
+Step 4 Adapters between architectural steps.
+"""
 import jax.numpy as jnp
 
 class Flatten:

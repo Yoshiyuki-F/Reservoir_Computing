@@ -1,5 +1,5 @@
-"""
-Input projection module shared across reservoir-based models.
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/projection.py
+Step 3 Input projection module shared across reservoir-based models.
 """
 from __future__ import annotations
 

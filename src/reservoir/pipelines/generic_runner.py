@@ -1,7 +1,6 @@
 """/home/yoshi/PycharmProjects/Reservoir/pipelines/generic_runner.py
 Universal pipeline that treats models as feature extractors and owns the readout.
 """
-
 from __future__ import annotations
 
 import time
@@ -187,77 +186,58 @@ class UniversalPipeline:
 
         start = time.time()
 
-        # Phase 1: Pre-training
-        print(f"\n=== [Phase 1] Pre-training Model ({model_label}) ===")
-
+        print(f"\n=== Step 5: Train Model ({model_label}) ===")
         start_train = time.time()
         train_logs = self.model.train(train_X, train_y, **train_params) or {}
         train_time = time.time() - start_train
 
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
-        print(
-            f"Pre-training completed. Duration: {train_time:.2f}s."
-            + (f" Final Loss: {final_loss}" if final_loss is not None else "")
-        )
+        if final_loss is not None:
+            print(f"Model training completed in {train_time:.2f}s. Final Loss: {final_loss}")
+        else:
+            print(f"Model training completed in {train_time:.2f}s.")
 
-        # Phase 2: Feature Extraction
-        print("\n=== [Phase 2] Generating Features (Design Matrix) ===")
-        train_Z = self._extract_features_batched(train_X, feature_batch_size)
-        test_Z = self._extract_features_batched(test_X, feature_batch_size)
+        print("\n=== Step 6: Extract Features (Aggregated Model Output) ===")
+        train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
+        self._feature_stats(train_features, "post_train_features")
+
         val_Z = None
         val_y = None
-        if validation is not None:
-            val_X, val_targets = validation
-            val_Z = self._extract_features_batched(val_X, feature_batch_size)
-            val_y = jnp.asarray(val_targets)
-        self._feature_stats(train_Z, stage="post_train_features")
+        if validation:
+            val_X, val_y = validation
+            val_Z = self.batch_transform(val_X, batch_size=feature_batch_size)
 
-        # Phase 3: Readout Training
-        print("\n=== [Phase 3] Ridge Regression (Readout Training) ===")
-        if ridge_lambdas is None:
-            print("Training with default lambda (no search provided).")
-        else:
-            try:
-                num_candidates = len(list(ridge_lambdas))
-                if num_candidates > 1:
-                    print(f"Searching optimal lambda over {num_candidates} candidates...")
-                else:
-                    first_val = list(ridge_lambdas)[0]
-                    print(f"Training with fixed lambda: {first_val}...")
-            except Exception:
-                print("Training with provided ridge_lambdas configuration.")
+        test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
 
-        best_lambda, search_history, weight_norms = self._fit_readout(train_Z, train_y, val_Z, val_y, ridge_lambdas)
-        print(f"Readout training completed. Best lambda: {best_lambda}")
+        print("\n=== Step 7: Fit Readout (Ridge Regression) ===")
+        best_lambda, search_history, weight_norms = self._fit_readout(
+            train_features,
+            train_y,
+            val_Z,
+            val_y,
+            ridge_lambdas,
+        )
+        if search_history:
+            print(f"Search complete. Best lambda: {best_lambda}")
+        self.readout.ridge_lambda = best_lambda
 
-        # Phase 4: Evaluation
-        train_pred = self.readout.predict(train_Z)
-        test_pred = self.readout.predict(test_Z)
-        val_pred = self.readout.predict(val_Z) if val_Z is not None else None
+        # Evaluate
+        train_pred = self.readout.predict(train_features)
+        test_pred = self.readout.predict(test_features)
 
-        train_metric = self._score(train_pred, train_y)
-        test_metric = self._score(test_pred, test_y)
-        val_metric = self._score(val_pred, val_y) if val_pred is not None and val_y is not None else None
-
-        if self.save_path is not None and hasattr(self.model, "save"):
-            self.model.save(self.save_path)
+        results = {
+            "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
+            "test": {self.metric_name: self._score(test_pred, test_y)},
+        }
+        if validation:
+            results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
 
         elapsed = time.time() - start
-
-        results: Dict[str, Dict[str, float]] = {
-            "train": {
-                self.metric_name: train_metric,
-                "best_lambda": best_lambda,
-                "search_history": search_history,
-                "weight_norms": weight_norms,
-            },
-            "test": {self.metric_name: test_metric},
-        }
-        if val_metric is not None:
-            results["validation"] = {self.metric_name: val_metric}
-        if train_logs:
-            results["training_logs"] = train_logs
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
-        # Expose fitted readout for downstream consumers (e.g., plotting)
-        results["readout"] = self.readout
+
+        # Optional: save model/readout if a path is provided
+        if self.save_path:
+            self.save_path.mkdir(parents=True, exist_ok=True)
+            # Placeholder for save logic
+
         return results

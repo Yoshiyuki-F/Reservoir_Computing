@@ -1,4 +1,5 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/aggregation.py
+Step 6 aggregation layers.
 State aggregation components compatible with Transformer protocol.
 """
 

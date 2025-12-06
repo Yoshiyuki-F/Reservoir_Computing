@@ -1,8 +1,8 @@
-#/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/preprocessing.py
-"""Preprocessing layers for Reservoir Computing models. 2nd layer read README."""
+"""Step 2 Preprocessing layers."""
 import numpy as np
 import jax.numpy as jnp
-from typing import Optional, Union
+from typing import Optional, Union, List
+from reservoir.core.identifiers import Preprocessing
 
 
 class FeatureScaler:
@@ -63,3 +63,25 @@ class DesignMatrix:
 
     def __call__(self, X):
         return self.transform(X)
+
+
+def create_preprocessor(p_type: Preprocessing, **kwargs) -> List[object]:
+    """
+    Build a list of preprocessing transformers for Step 2 based on Enum only.
+    RAW: no-op
+    STANDARD_SCALER: FeatureScaler
+    DESIGN_MATRIX: FeatureScaler + DesignMatrix
+    """
+    layers: List[object] = []
+    if p_type == Preprocessing.STANDARD_SCALER:
+        layers.append(FeatureScaler())
+    elif p_type == Preprocessing.DESIGN_MATRIX:
+        #多項式拡張はスケーリング必須のため
+        layers.append(FeatureScaler())
+        degree = int(kwargs.get("poly_degree", 2))
+        layers.append(DesignMatrix(degree=degree))
+    # RAW -> no layers
+    return layers
+
+
+__all__ = ["FeatureScaler", "DesignMatrix", "create_preprocessor"]

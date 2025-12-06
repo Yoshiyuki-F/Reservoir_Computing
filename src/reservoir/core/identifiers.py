@@ -85,6 +85,8 @@ class Preprocessing(str, enum.Enum):
 
     RAW = "raw"
     PCA = "pca"
+    STANDARD_SCALER = "standard_scaler"
+    DESIGN_MATRIX = "design_matrix"
 
     def __str__(self) -> str:
         return self.value

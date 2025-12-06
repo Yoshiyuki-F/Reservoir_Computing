@@ -10,18 +10,23 @@ V2 Architecture Compliance:
 
 from dataclasses import replace
 from typing import Dict, Any, Optional, Tuple
+from typing import Any as _Any
 
 import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig
+from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig, Preprocessing
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.ridge import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
 from reservoir.training.presets import get_training_preset, TrainingConfig
+from reservoir.layers.preprocessing import create_preprocessor
+from reservoir.layers.projection import InputProjection
+from reservoir.models.presets import get_model_preset, DistillationConfig
+from reservoir.utils.reporting import generate_report
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
@@ -56,6 +61,24 @@ def _resolve_training_config(task_type: TaskType) -> TrainingConfig:
     return replace(preset, classification=classification)
 
 
+def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
+    """Sequentially apply preprocessing layers."""
+    arr = data
+    for layer in layers:
+        if fit and hasattr(layer, "fit_transform"):
+            arr = layer.fit_transform(arr)
+            fit = False
+        elif fit and hasattr(layer, "fit") and hasattr(layer, "transform"):
+            layer.fit(arr)
+            arr = layer.transform(arr)
+            fit = False
+        elif hasattr(layer, "transform"):
+            arr = layer.transform(arr)
+        else:
+            arr = layer(arr)
+    return np.asarray(arr)
+
+
 def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     """
     The Unified Entry Point (V2 Strict Mode).
@@ -63,12 +86,16 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     if not isinstance(config, RunConfig):
         raise TypeError(f"run_pipeline requires RunConfig, got {type(config)}.")
 
+    print("=== Step 1: Loading Dataset ===")
     dataset_enum, dataset_preset = _get_strict_dataset_meta(config.dataset)
     dataset_name = dataset_enum.value
     task_type = config.task_type
 
     training_obj = _resolve_training_config(task_type)
-    feature_batch_size = int(training_obj.batch_size or 0)
+
+    preset_model = get_model_preset(config.model_type)
+    if preset_model is None or preset_model.config is None:
+        raise ValueError(f"Model preset for {config.model_type} is missing configuration.")
 
     dataset_split = load_dataset_with_validation_split(
         config,
@@ -83,13 +110,68 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     val_X = dataset_split.val_X
     val_y = dataset_split.val_y
 
-    input_shape = train_X.shape[1:]
-    input_dim = int(input_shape[-1])
-    input_dim_for_factory = input_dim
-    input_shape_for_meta: tuple[int, ...] = input_shape
-    if config.model_type is Pipeline.FNN:
-        input_dim_for_factory = int(np.prod(input_shape))
-        input_shape_for_meta = (input_dim_for_factory,)
+    input_shape_original = train_X.shape[1:]
+
+    print("\n=== Step 2: Preprocessing ===")
+    poly_degree = int(getattr(preset_model.config, "poly_degree", 1))
+    preprocessing_enum = config.preprocessing
+    preprocess_labels: list[str] = []
+    if preprocessing_enum == Preprocessing.STANDARD_SCALER:
+        preprocess_labels.append("scaler")
+    elif preprocessing_enum == Preprocessing.DESIGN_MATRIX:
+        preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
+    pre_layers = create_preprocessor(preprocessing_enum, poly_degree=poly_degree)
+    if pre_layers:
+        train_X = _apply_layers(pre_layers, train_X, fit=True)
+        if val_X is not None:
+            val_X = _apply_layers(pre_layers, val_X, fit=False)
+        if test_X is not None:
+            test_X = _apply_layers(pre_layers, test_X, fit=False)
+    preprocessed_shape = train_X.shape[1:]
+
+
+    print("\n=== Step 3: Projection (for reservoir/distillation) ===")
+    projected_shape: Optional[tuple[int, ...]] = None
+    if config.model_type in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
+        res_cfg = preset_model.config
+        projection = InputProjection(
+            input_dim=int(preprocessed_shape[-1]),
+            output_dim=int(res_cfg.n_units),
+            input_scale=float(res_cfg.input_scale),
+            input_connectivity=float(res_cfg.input_connectivity),
+            seed=int(res_cfg.seed or 0),
+            bias_scale=float(res_cfg.bias_scale),
+        )
+        train_X = projection(train_X)
+        if val_X is not None:
+            val_X = projection(val_X)
+        if test_X is not None:
+            test_X = projection(test_X)
+        projected_shape = train_X.shape[1:]
+    elif config.model_type is Pipeline.FNN_DISTILLATION:
+        distill_cfg = preset_model.config
+        if not isinstance(distill_cfg, DistillationConfig):
+            raise ValueError("FNN_DISTILLATION preset must define DistillationConfig.")
+        teacher_cfg = distill_cfg.teacher
+        projection = InputProjection(
+            input_dim=int(preprocessed_shape[-1]),
+            output_dim=int(teacher_cfg.n_units),
+            input_scale=float(teacher_cfg.input_scale),
+            input_connectivity=float(teacher_cfg.input_connectivity),
+            seed=int(teacher_cfg.seed or 0),
+            bias_scale=float(teacher_cfg.bias_scale),
+        )
+        train_X = projection(train_X)
+        if val_X is not None:
+            val_X = projection(val_X)
+        if test_X is not None:
+            test_X = projection(test_X)
+        projected_shape = train_X.shape[1:]
+
+    # Determine model input dimensions after preprocessing/projection
+    transformed_shape = projected_shape or preprocessed_shape
+    input_dim_for_factory = int(np.prod(transformed_shape)) if config.model_type is Pipeline.FNN else int(transformed_shape[-1])
+    input_shape_for_meta: tuple[int, ...] = transformed_shape
 
     if dataset_preset.config.n_output is not None:
         meta_n_outputs = int(dataset_preset.config.n_output)
@@ -113,6 +195,17 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
 
     model_type_str = config.model_type.value
     topo_meta = model.get_topology_meta() if hasattr(model, "get_topology_meta") else {}
+    if not isinstance(topo_meta, dict):
+        topo_meta = {}
+    shapes_meta = topo_meta.get("shapes", {}) or {}
+    shapes_meta["input"] = input_shape_original
+    shapes_meta["preprocessed"] = preprocessed_shape
+    shapes_meta["projected"] = projected_shape
+    shapes_meta["output"] = (meta_n_outputs,)
+    topo_meta["shapes"] = shapes_meta
+    details_meta = topo_meta.get("details", {}) or {}
+    details_meta["preprocess"] = "-".join(preprocess_labels) if preprocess_labels else None
+    topo_meta["details"] = details_meta
     print_topology(topo_meta)
 
     readout = RidgeRegression(ridge_lambda=float(training_obj.ridge_lambda), use_intercept=True)
@@ -131,124 +224,21 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
         model_label=model_type_str,
     )
 
-    filename_parts = [f"{model_type_str}", "raw"]
-    feature_shape = None
-    student_layers = None
-    if isinstance(topo_meta, dict):
-        shapes = topo_meta.get("shapes") or {}
-        feature_shape = shapes.get("feature")
-        details = topo_meta.get("details") or {}
-        student_layers = details.get("student_layers")
-    if isinstance(feature_shape, tuple) and feature_shape:
-        filename_parts.append(f"nr{int(feature_shape[0])}")
-    if student_layers:
-        filename_parts.append(f"nn{'-'.join(str(int(v)) for v in student_layers)}")
-        filename_parts.append(f"epochs{training_obj.epochs}")
-
-    training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}
-    if isinstance(training_logs, dict) and training_logs.get("loss_history"):
-        loss_history = training_logs["loss_history"]
-        try:
-            from reservoir.utils.plotting import plot_loss_history
-        except Exception as exc:  # pragma: no cover - optional dependency
-            print(f"Skipping distillation loss plotting due to import error: {exc}")
-        else:
-            loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_distillation_loss.png"
-            plot_loss_history(loss_history, loss_filename, title=f"{model_type_str.upper()} Distillation Loss")
-
-    train_res = results.get("train", {}) if isinstance(results, dict) else {}
-    if isinstance(train_res, dict) and "search_history" in train_res and train_res.get("search_history"):
-        history = train_res.get("search_history", {})
-        best_lam = train_res.get("best_lambda")
-        weight_norms = train_res.get("weight_norms", {})
-        metric_label = "Accuracy" if metric == "accuracy" else "MSE"
-        best_by_metric = max(history, key=history.get) if metric == "accuracy" and history else (
-            min(history, key=history.get) if history else None
-        )
-        best_marker = best_lam if best_lam is not None else best_by_metric
-
-        print("\n" + "=" * 40)
-        print(f"Ridge Hyperparameter Search ({metric_label})")
-        print("-" * 40)
-        sorted_lambdas = sorted(history.keys())
-        for lam in sorted_lambdas:
-            score = float(history[lam])
-            norm = weight_norms.get(lam)
-            norm_str = f"(Norm: {norm:.2e})" if norm is not None else "(Norm: n/a)"
-            marker = " <= best" if (best_marker is not None and abs(float(lam) - float(best_marker)) < 1e-12) else ""
-            print(f"   λ = {float(lam):.2e} : Val Score = {score:.4f} {norm_str}{marker}")
-        print("=" * 40 + "\n")
-
-    if task_type is TaskType.CLASSIFICATION and test_X is not None and test_y is not None:
-        try:
-            from reservoir.utils.plotting import plot_classification_results
-        except Exception as exc:  # pragma: no cover - optional dependency
-            print(f"Skipping plotting due to import error: {exc}")
-        else:
-            train_labels_np = np.asarray(train_y)
-            test_labels_np = np.asarray(test_y)
-            if train_labels_np.ndim > 1:
-                train_labels_np = np.argmax(train_labels_np, axis=-1)
-            if test_labels_np.ndim > 1:
-                test_labels_np = np.argmax(test_labels_np, axis=-1)
-
-            train_features_np = runner.batch_transform(train_X, batch_size=feature_batch_size)
-            test_features_np = runner.batch_transform(test_X, batch_size=feature_batch_size)
-            train_pred_np = np.asarray(readout.predict(train_features_np))
-            test_pred_np = np.asarray(readout.predict(test_features_np))
-            if train_pred_np.ndim > 1:
-                train_pred_np = np.argmax(train_pred_np, axis=-1)
-            if test_pred_np.ndim > 1:
-                test_pred_np = np.argmax(test_pred_np, axis=-1)
-
-            val_labels_np = None
-            val_pred_np = None
-            if val_X is not None:
-                val_labels_np = np.asarray(val_y)
-                if val_labels_np.ndim > 1:
-                    val_labels_np = np.argmax(val_labels_np, axis=-1)
-                val_features_np = runner.batch_transform(val_X, batch_size=feature_batch_size)
-                val_pred_raw = np.asarray(readout.predict(val_features_np))
-                val_pred_np = val_pred_raw
-                if val_pred_np.ndim > 1:
-                    val_pred_np = np.argmax(val_pred_np, axis=-1)
-
-            selected_lambda = None
-            lambda_norm = None
-            if isinstance(train_res, dict):
-                selected_lambda = train_res.get("best_lambda")
-                weight_norms = train_res.get("weight_norms") or {}
-                if selected_lambda is not None:
-                    lambda_norm = weight_norms.get(selected_lambda)
-                    if lambda_norm is None:
-                        lambda_norm = weight_norms.get(float(selected_lambda))
-            if lambda_norm is None and hasattr(readout, "coef_"):
-                coef_arr = getattr(readout, "coef_", None)
-                if coef_arr is not None:
-                    components = [np.asarray(coef_arr).ravel()]
-                    intercept_arr = getattr(readout, "intercept_", None)
-                    if intercept_arr is not None:
-                        components.append(np.asarray(intercept_arr).ravel())
-                    if components:
-                        stacked = np.concatenate(components)
-                        if stacked.size > 0:
-                            lambda_norm = float(np.linalg.norm(stacked))
-
-            metrics_payload = dict(results.get("test", {})) if isinstance(results, dict) else {}
-
-            filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
-            plot_classification_results(
-                train_labels=train_labels_np,
-                test_labels=test_labels_np,
-                train_predictions=train_pred_np,
-                test_predictions=test_pred_np,
-                val_labels=val_labels_np,
-                val_predictions=val_pred_np,
-                title=f"{model_type_str.upper()} on {dataset_name}",
-                filename=filename,
-                metrics_info=metrics_payload,
-                best_lambda=selected_lambda,
-                lambda_norm=lambda_norm,
-            )
+    generate_report(
+        results,
+        config,
+        topo_meta,
+        runner=runner,
+        readout=readout,
+        train_X=train_X,
+        train_y=train_y,
+        test_X=test_X,
+        test_y=test_y,
+        val_X=val_X,
+        val_y=val_y,
+        training_obj=training_obj,
+        dataset_name=dataset_name,
+        model_type_str=model_type_str,
+    )
 
     return results

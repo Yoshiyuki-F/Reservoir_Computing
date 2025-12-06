@@ -1,4 +1,5 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/factory.py
+STEP 4, 5, 6 read README.md
 Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
@@ -7,7 +8,7 @@ from dataclasses import replace
 from typing import Any, Dict, Optional
 
 from reservoir.training.presets import TrainingConfig, get_training_preset
-from reservoir.core.identifiers import Dataset, Pipeline, RunConfig, TaskType, Preprocessing, AggregationMode
+from reservoir.core.identifiers import Dataset, Pipeline, RunConfig, TaskType, AggregationMode
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
 from reservoir.models.presets import get_model_preset, DistillationConfig
 from reservoir.models.nn.factory import NNModelFactory
@@ -38,7 +39,6 @@ class ModelFactory:
             raise ValueError(f"Dataset '{preset.name}' must define n_output > 0.")
 
         training_cfg = training or ModelFactory._build_training(config.task_type)
-        use_preprocessing = config.preprocessing != Preprocessing.RAW
         pipeline_enum = config.model_type
 
         if pipeline_enum in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
@@ -47,7 +47,6 @@ class ModelFactory:
                 reservoir_cfg,
                 input_dim=resolved_input_dim,
                 output_dim=resolved_output_dim,
-                use_preprocessing=use_preprocessing,
                 input_shape=input_shape,
                 pipeline=pipeline_enum,
             )
@@ -60,7 +59,6 @@ class ModelFactory:
                 input_dim=resolved_input_dim,
                 output_dim=resolved_output_dim,
                 input_shape=input_shape,
-                use_preprocessing=use_preprocessing,
             )
 
         if pipeline_enum == Pipeline.FNN:
@@ -68,14 +66,14 @@ class ModelFactory:
             fnn_cfg = {"layer_dims": layer_dims}
             model = NNModelFactory.create_fnn(fnn_cfg, training_cfg)
             in_shape = input_shape or (1, resolved_input_dim)
-            projected_shape = (resolved_input_dim,)
+            projected_shape = None
             internal_shape = (layer_dims[-2],) if len(layer_dims) >= 2 else None
             feature_units = layer_dims[-2] if len(layer_dims) >= 2 else resolved_input_dim
             topo_meta = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": in_shape,
-                    "preprocessed": in_shape,
+                    "preprocessed": None,
                     "projected": projected_shape,
                     "internal": internal_shape,
                     "feature": (feature_units,),

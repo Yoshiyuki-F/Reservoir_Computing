@@ -95,7 +95,6 @@ CRCONFIG: ClassicalReservoirConfig = ClassicalReservoirConfig(
     bias_scale=1.0,
     noise_rc=0.001,
     seed=42,
-    use_design_matrix=False,
     poly_degree=1,
     state_aggregation=AggregationMode.MEAN,
 )
