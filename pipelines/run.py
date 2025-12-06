@@ -17,6 +17,7 @@ from reservoir.models import ModelFactory
 from reservoir.models.distillation import DistillationModel
 from reservoir.models.reservoir.model import ReservoirModel
 from reservoir.models.nn.fnn import FNNModel
+from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.presets import get_model_preset, ModelConfig, DistillationConfig, MODEL_PRESETS
 from reservoir.utils.printing import print_topology
 from pipelines.generic_runner import UniversalPipeline
@@ -104,14 +105,13 @@ def _get_strict_reservoir_params(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"Configuration Error: Model Preset '{preset_name}' not found.")
 
     # 2. Base params from Preset (Canonical names only)
-    if preset.distillation is not None:
-        # Distillation preset: use teacher as reservoir params
-        teacher_cfg = preset.distillation.teacher
+    if isinstance(preset.config, DistillationConfig):
+        teacher_cfg = preset.config.teacher
         teacher_cfg.validate(context=f"{preset_name}.teacher")
         base_params = teacher_cfg.to_dict()
-    elif preset.reservoir is not None:
-        preset.reservoir.validate(context=preset_name)
-        base_params = preset.reservoir.to_dict()
+    elif isinstance(preset.config, ClassicalReservoirConfig):
+        preset.config.validate(context=preset_name)
+        base_params = preset.config.to_dict()
     else:
         base_params = preset.to_params()
 
@@ -158,7 +158,9 @@ def _resolve_distillation_from_preset(config: Dict[str, Any]) -> Optional[Dict[s
     preset = MODEL_PRESETS.get(preset_name)
     if preset is None:
         return None
-    distill_cfg = preset.distillation or (preset.params.get("distillation") if preset.params else None)
+    distill_cfg = preset.config if isinstance(preset.config, DistillationConfig) else (
+        preset.params.get("distillation") if preset.params else None
+    )
     if distill_cfg is None:
         return None
     if not isinstance(distill_cfg, DistillationConfig):
@@ -220,8 +222,8 @@ def run_pipeline(
     preset_for_model: Optional[ModelConfig] = MODEL_PRESETS.get(raw_model_type)
 
     distill_ctx = None
-    if preset_for_model and preset_for_model.distillation:
-        distill_cfg: DistillationConfig = preset_for_model.distillation
+    if preset_for_model and isinstance(preset_for_model.config, DistillationConfig):
+        distill_cfg: DistillationConfig = preset_for_model.config
         teacher_params = distill_cfg.teacher.to_dict()
         if "hidden_dim" in config and config["hidden_dim"] is not None:
             teacher_params["n_units"] = int(config["hidden_dim"])
