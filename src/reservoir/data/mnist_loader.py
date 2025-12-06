@@ -1,4 +1,5 @@
-"""MNIST dataset utilities used by reservoir.data.* modules."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/data/mnist_loader.py
+MNIST dataset utilities used by reservoir.data.* modules."""
 from __future__ import annotations
 
 from pathlib import Path

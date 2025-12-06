@@ -13,7 +13,6 @@ from .presets import (
     get_dataset_preset,
 )
 from .structs import SplitDataset
-from .registry import DatasetRegistry  # noqa: F401
 from . import loaders  # noqa: F401
 from .mnist_loader import get_mnist_datasets, image_to_sequence  # noqa: F401
 
@@ -27,7 +26,6 @@ __all__ = [
     "DatasetPreset",
     "get_dataset_preset",
     "SplitDataset",
-    "DatasetRegistry",
     "get_mnist_datasets",
     "image_to_sequence",
 ]

@@ -15,10 +15,15 @@ except ModuleNotFoundError:  # pragma: no cover - torch optional
     get_mnist_datasets = None  # type: ignore
     image_to_sequence = None  # type: ignore
 
-from reservoir.data.config import DataGenerationConfig
+from reservoir.data.config import (
+    SineWaveConfig,
+    LorenzConfig,
+    MackeyGlassConfig,
+    MNISTConfig,
+)
 
 
-def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_sine_data(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """複数周波数のサイン波を合成した時系列データを生成。
     
     複数の正弦波を重ね合わせて合成信号を作成し、ガウシアンノイズを
@@ -26,7 +31,7 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
     テスト用データとして使用されます。
     
     Args:
-        config: DataGenerationConfig オブジェクト
+        config: SineWaveConfig オブジェクト
             
     Returns:
         tuple: (入力データ, 目標データ) のペア
@@ -38,10 +43,10 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
     
     # 複数の周波数のサインwave合成
     signal = np.zeros(config.time_steps, dtype=np.float64)
-    frequencies = config.get_param('frequencies')
+    frequencies = config.frequencies
     if not frequencies:
-        raise ValueError("sine_wave requires 'frequencies' parameter in config.params")
-    
+        raise ValueError("sine_wave requires non-empty frequencies.")
+
     for freq in frequencies:
         signal += np.sin(2 * np.pi * freq * t)
     
@@ -56,7 +61,7 @@ def generate_sine_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.n
     return input_data, target_data
 
 
-def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Lorenz方程式による決定論的カオス時系列データを生成。
     
     Lorenzアトラクターは気象学から生まれた有名なカオス系で、
@@ -69,7 +74,7 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
         dz/dt = xy - βz
         
     Args:
-        config: DataGenerationConfig オブジェクト
+        config: LorenzConfig オブジェクト
         
     Returns:
         tuple: (入力データ, 目標データ) のペア
@@ -82,24 +87,17 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
         Runge-Kutta法の実装を検討してください。
     """
     # 初期値（互換性のためオプショナル）
-    x = config.get_param('initial_x', 1.0)
-    y = config.get_param('initial_y', 1.0) 
-    z = config.get_param('initial_z', 1.0)
+    x = 1.0
+    y = 1.0
+    z = 1.0
     
     data = np.zeros((config.time_steps, 3), dtype=np.float64)
     
     for i in range(config.time_steps):
         # Lorenz方程式の数値積分（オイラー法）
-        sigma = config.get_param('sigma')
-        rho = config.get_param('rho')
-        beta = config.get_param('beta')
-        
-        if sigma is None or rho is None or beta is None:
-            raise ValueError("lorenz requires 'sigma', 'rho', 'beta' parameters in config.params")
-            
-        dx = sigma * (y - x)
-        dy = x * (rho - z) - y
-        dz = x * y - beta * z
+        dx = config.sigma * (y - x)
+        dy = x * (config.rho - z) - y
+        dz = x * y - config.beta * z
         
         x += dx * config.dt
         y += dy * config.dt
@@ -114,12 +112,12 @@ def generate_lorenz_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp
     return input_data, target_data
 
 
-def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Mackey-Glassカオス時系列データを生成します。
 
     Args:
-        config: DataGenerationConfig オブジェクト
+        config: MackeyGlassConfig オブジェクト
 
     Returns:
         (input_data, target_data): 入力データとターゲットデータのタプル
@@ -128,14 +126,10 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
         トランジェント除去が不要な場合は`warmup_steps`を省略（または0）できます。
         tauは連続時間の遅延として解釈され、離散化ステップdtで割ることでサンプル遅延数に変換されます。
     """
-    # Mackey-Glassのパラメータ（configから取得）
-    tau = config.get_param('tau')
-    beta = config.get_param('beta')
-    gamma = config.get_param('gamma')
-    n = config.get_param('n')
-
-    if any(param is None for param in [tau, beta, gamma, n]):
-        raise ValueError("mackey_glass requires 'tau', 'beta', 'gamma', 'n' parameters in config.params")
+    tau = int(config.tau)
+    beta = float(config.beta)
+    gamma = float(config.gamma)
+    n = float(config.n)
 
     dt = float(config.dt)
     if dt <= 0:
@@ -148,15 +142,11 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
 
     # 初期化とトランジェント除去用のウォームアップ（省略可）
     history_length = delay_steps + 1
-    warmup_source = config.warmup_steps
-    if warmup_source is None:
-        warmup_source = config.get_param('warmup_steps', 0)
-
-    warmup_steps = max(int(warmup_source), 0)
+    warmup_steps = max(int(config.warmup_steps), 0)
     total_steps = config.time_steps + history_length + warmup_steps
 
     x = np.full(total_steps, fill_value=0.0, dtype=np.float64)
-    initial_value = config.get_param('initial_value', 1.2)
+    initial_value = 1.2
     x[:history_length] = initial_value
 
     for i in range(history_length, total_steps):
@@ -185,7 +175,7 @@ def generate_mackey_glass_data(config: DataGenerationConfig) -> Tuple[jnp.ndarra
 
 
 def generate_mnist_sequence_data(
-    config: DataGenerationConfig,
+    config: MNISTConfig,
     *,
     split: Optional[str] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -193,10 +183,9 @@ def generate_mnist_sequence_data(
     Generate MNIST-based sequence data by scanning images as time series.
 
     Args:
-        config: DataGenerationConfig with params such as:
+        config: MNISTConfig with:
             - split: str, 'train' or 'test' (default 'train')
-            - train_fraction/test_fraction/fraction: optional floats in (0, 1]
-        and fields:
+            - train_fraction/test_fraction: optional floats in (0, 1]
             - time_steps: Number of time steps to reshape each image into.
 
     Returns:
@@ -211,13 +200,10 @@ def generate_mnist_sequence_data(
             "Install them to enable this feature."
         )
 
-    split_name = split or config.get_param("split", "train")
+    split_name = split or config.split
 
     total_pixels = 28 * 28
-    time_steps = getattr(config, "time_steps", None)
-    if time_steps is None:
-        raise ValueError("MNIST configuration must specify time_steps")
-    n_steps = int(time_steps)
+    n_steps = int(config.time_steps)
     if n_steps <= 0:
         raise ValueError(f"time_steps must be positive, got {n_steps}")
     if total_pixels % n_steps != 0:
@@ -232,17 +218,11 @@ def generate_mnist_sequence_data(
 
     max_available = len(dataset)
     fraction_key = f"{split_name}_fraction"
-    fraction_param = config.get_param(fraction_key)
-    if fraction_param is None:
-        fraction_param = config.get_param("fraction")
-
-    if fraction_param is None:
-        limit = max_available
-    else:
-        fraction_val = float(fraction_param)
-        if fraction_val <= 0 or fraction_val > 1:
-            raise ValueError(f"{fraction_key if config.get_param(fraction_key) is not None else 'fraction'} must be in (0, 1], got {fraction_val}")
-        limit = max(1, min(max_available, int(max_available * fraction_val)))
+    fraction_param = config.train_fraction if split_name == "train" else config.test_fraction
+    fraction_val = float(fraction_param)
+    if fraction_val <= 0 or fraction_val > 1:
+        raise ValueError(f"{fraction_key} must be in (0, 1], got {fraction_val}")
+    limit = max(1, min(max_available, int(max_available * fraction_val)))
 
     sequences = []
     labels = []

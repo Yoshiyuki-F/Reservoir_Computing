@@ -67,3 +67,6 @@ class ReservoirModel:
             unexpected = ", ".join(sorted(kwargs.keys()))
             raise TypeError(f"ReservoirModel.train received unexpected parameters: {unexpected}")
         return {}
+
+    def get_topology_meta(self) -> Dict[str, Any]:
+        return getattr(self, "topology_meta", {})

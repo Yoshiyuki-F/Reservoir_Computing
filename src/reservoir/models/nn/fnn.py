@@ -22,6 +22,26 @@ class FNNModel(BaseFlaxModel):
             raise ValueError("FNNModel.layer_dims must include at least input and output dimensions.")
         super().__init__(model_config, training_config)
 
+    def _flatten_inputs(self, X: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(X)
+        if arr.ndim == 3:
+            return arr.reshape(arr.shape[0], -1)
+        if arr.ndim != 2:
+            raise ValueError(f"FNNModel expects 2D or 3D input, got shape {arr.shape}")
+        return arr
+
+    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **kwargs: Any) -> Dict[str, Any]:
+        flat_inputs = self._flatten_inputs(inputs)
+        return super().train(flat_inputs, targets, **kwargs)
+
+    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        flat_inputs = self._flatten_inputs(X)
+        return super().predict(flat_inputs)
+
+    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+        flat_inputs = self._flatten_inputs(X)
+        return super().evaluate(flat_inputs, y)
+
     def _create_model_def(self) -> nn.Module:
         return FNN(layer_dims=self.layer_dims, return_hidden=False)
 
@@ -61,5 +81,4 @@ class FNN(nn.Module):
         if self.return_hidden:
             return x, hidden_output
         return x
-
 

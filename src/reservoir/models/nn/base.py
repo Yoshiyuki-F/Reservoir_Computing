@@ -31,6 +31,10 @@ class BaseModel(ABC):
     def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
         ...
 
+    def get_topology_meta(self) -> Dict[str, Any]:
+        """Optional topology metadata for visualization."""
+        return {}
+
 
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
@@ -160,3 +164,6 @@ class BaseFlaxModel(BaseModel, ABC):
         mse = float(jnp.mean((preds - y_arr) ** 2))
         mae = float(jnp.mean(jnp.abs(preds - y_arr)))
         return {"mse": mse, "mae": mae}
+
+    def get_topology_meta(self) -> Dict[str, Any]:
+        return getattr(self, "topology_meta", {})

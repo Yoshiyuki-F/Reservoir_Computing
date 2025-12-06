@@ -1,4 +1,5 @@
-"""Data container structures for dataset splits."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/data/structs.py
+Data container structures for dataset splits."""
 
 from __future__ import annotations
 

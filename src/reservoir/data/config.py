@@ -1,21 +1,44 @@
+#/home/yoshi/PycharmProjects/Reservoir/src/reservoir/data/config.py
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Optional, Tuple
 
 
-@dataclass
-class DataGenerationConfig:
-    """Lightweight configuration for dataset generators."""
+@dataclass(frozen=True)
+class BaseDatasetConfig:
+    n_input: int
+    n_output: int
+    time_steps: int
+    dt: float
+    noise_level: float
+    seed: int
 
-    name: str = "sine_wave"
-    time_steps: int = 1000
-    dt: float = 0.01
-    noise_level: float = 0.0
-    n_input: Optional[int] = None
-    n_output: Optional[int] = None
-    warmup_steps: Optional[int] = None
-    params: Optional[dict] = None
 
-    def get_param(self, key: str, default=None):
-        if not self.params:
-            return default
-        return self.params.get(key, default)
+@dataclass(frozen=True)
+class SineWaveConfig(BaseDatasetConfig):
+    frequencies: Tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class LorenzConfig(BaseDatasetConfig):
+    sigma: float
+    rho: float
+    beta: float
+    warmup_steps: int
+
+
+@dataclass(frozen=True)
+class MackeyGlassConfig(BaseDatasetConfig):
+    tau: int
+    beta: float
+    gamma: float
+    n: int
+    warmup_steps: int
+
+
+@dataclass(frozen=True)
+class MNISTConfig(BaseDatasetConfig):
+    split: str
+    train_fraction: float
+    test_fraction: float

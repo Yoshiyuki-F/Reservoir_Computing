@@ -24,25 +24,25 @@ class ModelFactory:
 
     @staticmethod
     def create_model(
-        config: Union[RunConfig, Dict[str, Any]],
+        config: RunConfig,
         *,
         dataset_preset: Optional[DatasetPreset] = None,
         training: Optional[TrainingConfig] = None,
         input_dim: Optional[int] = None,
         output_dim: Optional[int] = None,
+        input_shape: Optional[tuple[int, ...]] = None,
     ) -> Any:
         """
-        Primary entrypoint. Accepts modern RunConfig (preferred) or legacy dictionaries.
+        Primary entrypoint for V2: strict RunConfig + explicit dimensions.
         """
-        if isinstance(config, RunConfig):
-            return ModelFactory._create_from_run_config(
-                config,
-                dataset_preset=dataset_preset,
-                training=training,
-                input_dim=input_dim,
-                output_dim=output_dim,
-            )
-        return ModelFactory._create_from_dict(config)
+        return ModelFactory._create_from_run_config(
+            config,
+            dataset_preset=dataset_preset,
+            training=training,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            input_shape=input_shape,
+        )
 
     # ------------------------------------------------------------------ #
     # RunConfig path                                                     #
@@ -55,6 +55,7 @@ class ModelFactory:
         training: Optional[TrainingConfig],
         input_dim: Optional[int],
         output_dim: Optional[int],
+        input_shape: Optional[tuple[int, ...]],
     ) -> Any:
         preset = dataset_preset or ModelFactory._get_dataset_preset(config.dataset)
         data_cfg = preset.config
@@ -82,14 +83,14 @@ class ModelFactory:
                 "use_preprocessing": use_preprocessing,
                 "training": training_cfg,
             }
-            return ReservoirFactory.create_model(factory_cfg)
+            model = ReservoirFactory.create_model(factory_cfg)
+            ModelFactory._attach_topology_meta(model, pipeline_enum, input_shape, resolved_input_dim, resolved_output_dim)
+            return model
 
         if pipeline_enum == Pipeline.FNN_DISTILLATION:
-            distill_ctx = ModelFactory._resolve_distillation_from_preset(pipeline_enum)
-            if distill_ctx is None:
-                raise ValueError("FNN_DISTILLATION requires a DistillationConfig preset.")
-            teacher_params = distill_ctx["teacher_params"]
-            student_hidden = distill_ctx["student_hidden"]
+            distill_cfg = ModelFactory._resolve_distillation_config(pipeline_enum)
+            teacher_params = distill_cfg["teacher_params"]
+            student_hidden = distill_cfg["student_hidden"]
             fnn_cfg = {
                 "layer_dims": [resolved_input_dim, *student_hidden, int(teacher_params["n_units"])],
             }
@@ -98,11 +99,15 @@ class ModelFactory:
                 "input_dim": resolved_input_dim,
                 "student_hidden": student_hidden,
             }
-            return DistillationFactory.create(fnn_cfg, training_cfg, distill_config)
+            model = DistillationFactory.create(fnn_cfg, training_cfg, distill_config)
+            ModelFactory._attach_topology_meta(model, pipeline_enum, input_shape, resolved_input_dim, resolved_output_dim)
+            return model
 
         if pipeline_enum == Pipeline.FNN:
             fnn_cfg = {"layer_dims": [resolved_input_dim, resolved_output_dim]}
-            return NNModelFactory.create_fnn(fnn_cfg, training_cfg)
+            model = NNModelFactory.create_fnn(fnn_cfg, training_cfg)
+            ModelFactory._attach_topology_meta(model, pipeline_enum, input_shape, resolved_input_dim, resolved_output_dim)
+            return model
 
         if pipeline_enum == Pipeline.RNN_DISTILLATION:
             model_cfg = {
@@ -129,31 +134,6 @@ class ModelFactory:
         pipeline_enum = model_type if isinstance(model_type, Pipeline) else Pipeline(str(model_type))
 
         # Reservoir family
-        if pipeline_enum in {
-            Pipeline.CLASSICAL_RESERVOIR,
-            Pipeline.QUANTUM_GATE_BASED,
-            Pipeline.QUANTUM_ANALOG,
-        }:
-            creator = getattr(ReservoirFactory, "create", ReservoirFactory.create_model)
-            try:
-                return creator(config)
-            except TypeError:
-                input_shape = config.get("input_dim")
-                reservoir_type = config.get("reservoir_type") or pipeline_enum.value
-                backend = config.get("backend")
-                return creator(config, input_shape, reservoir_type=reservoir_type, backend=backend)
-
-        # RNN (no distillation path here)
-        if pipeline_enum == Pipeline.RNN_DISTILLATION:
-            return NNModelFactory.create_rnn(model_cfg, training_cfg)
-
-        # FNN (pure or distillation)
-        if pipeline_enum in {Pipeline.FNN, Pipeline.FNN_DISTILLATION}:
-            has_reservoir = bool(config.get("reservoir") or config.get("reservoir_params"))
-            if has_reservoir:
-                return DistillationFactory.create(model_cfg, training_cfg, config)
-            return NNModelFactory.create_fnn(model_cfg, training_cfg)
-
         raise ValueError(f"Unsupported model_type: {model_type}")
 
     # ------------------------------------------------------------------ #
@@ -177,15 +157,15 @@ class ModelFactory:
         return preset.config.to_dict()
 
     @staticmethod
-    def _resolve_distillation_from_preset(pipeline: Pipeline) -> Optional[Dict[str, Any]]:
+    def _resolve_distillation_config(pipeline: Pipeline) -> Dict[str, Any]:
         preset = MODEL_PRESETS.get(pipeline)
         if preset is None:
-            return None
+            raise ValueError(f"Model preset '{pipeline}' not found for distillation.")
         distill_cfg = preset.config if isinstance(preset.config, DistillationConfig) else (
             preset.params.get("distillation") if preset.params else None
         )
         if distill_cfg is None:
-            return None
+            raise ValueError(f"Preset '{preset.name}' must define DistillationConfig.")
         if not isinstance(distill_cfg, DistillationConfig):
             raise ValueError(f"Preset '{preset.name}' must use DistillationConfig for distillation workflows.")
 
@@ -213,3 +193,74 @@ class ModelFactory:
         if preset.config.n_input is None or preset.config.n_output is None:
             raise ValueError(f"Dataset preset '{dataset}' must define n_input and n_output.")
         return preset
+
+    @staticmethod
+    def _attach_topology_meta(
+        model: Any,
+        pipeline: Pipeline,
+        input_shape: Optional[tuple[int, ...]],
+        input_dim: int,
+        output_dim: int,
+    ) -> None:
+        if input_shape is None:
+            input_shape = (1, input_dim)
+        t_steps = input_shape[0] if len(input_shape) > 1 else 1
+        f_dim = int(input_shape[-1])
+
+        topo_meta: Dict[str, Any] = {}
+        if pipeline == Pipeline.FNN:
+            layer_dims = [int(v) for v in getattr(model, "layer_dims", [])]
+            feature_units = layer_dims[-2] if len(layer_dims) >= 2 else None
+            topo_meta = {
+                "type": pipeline.value.upper(),
+                "shapes": {
+                    "input": input_shape,
+                    "projected": None,
+                    "internal": None,
+                    "feature": (feature_units,) if feature_units else None,
+                    "output": (output_dim,),
+                },
+                "details": {
+                    "preprocess": None,
+                    "agg_mode": None,
+                    "student_layers": layer_dims[1:-1] if len(layer_dims) > 2 else None,
+                },
+            }
+        elif pipeline in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
+            res_units = int(getattr(model.reservoir, "n_units", input_dim))
+            topo_meta = {
+                "type": pipeline.value.upper(),
+                "shapes": {
+                    "input": input_shape,
+                    "projected": (t_steps, res_units),
+                    "internal": (t_steps, res_units),
+                    "feature": (res_units,),
+                    "output": (output_dim,),
+                },
+                "details": {
+                    "preprocess": None,
+                    "agg_mode": getattr(model, "readout_mode", None),
+                    "student_layers": None,
+                },
+            }
+        elif pipeline == Pipeline.FNN_DISTILLATION:
+            teacher_units = int(getattr(model, "teacher_output_dim", output_dim))
+            student_hidden = [int(v) for v in getattr(model, "student_hidden", [])]
+            topo_meta = {
+                "type": pipeline.value.upper(),
+                "shapes": {
+                    "input": input_shape,
+                    "projected": (t_steps, teacher_units),
+                    "internal": (t_steps * teacher_units,),
+                    "feature": (teacher_units,),
+                    "output": (output_dim,),
+                },
+                "details": {
+                    "preprocess": None,
+                    "agg_mode": getattr(model, "teacher_config", None)
+                    and getattr(model.teacher_config, "state_aggregation", None),
+                    "student_layers": student_hidden or None,
+                },
+            }
+        if topo_meta:
+            setattr(model, "topology_meta", topo_meta)

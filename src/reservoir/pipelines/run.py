@@ -15,9 +15,6 @@ import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.models.distillation import DistillationModel
-from reservoir.models.reservoir.model import ReservoirModel
-from reservoir.models.nn.fnn import FNNModel
 from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
@@ -75,31 +72,26 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     training_obj = _resolve_training_config(task_type)
     feature_batch_size = int(training_obj.batch_size or 0)
 
-    train_X, train_y, val_X, val_y, test_X, test_y = load_dataset_with_validation_split(
-        {"dataset": dataset_enum},
-        dataset_preset,
-        training_obj.to_dict(),
+    dataset_split = load_dataset_with_validation_split(
+        config,
+        training_obj,
         model_type=config.model_type.value,
         require_3d=True,
     )
+    train_X = dataset_split.train_X
+    train_y = dataset_split.train_y
+    test_X = dataset_split.test_X
+    test_y = dataset_split.test_y
+    val_X = dataset_split.val_X
+    val_y = dataset_split.val_y
 
     input_shape = train_X.shape[1:]
     input_dim = int(input_shape[-1])
-
-    def _flatten(arr: Optional[Any]) -> Optional[Any]:
-        if arr is None:
-            return None
-        arr_np = np.asarray(arr)
-        if arr_np.ndim == 3:
-            return arr_np.reshape(arr_np.shape[0], -1)
-        return arr
-
+    input_dim_for_factory = input_dim
+    input_shape_for_meta: tuple[int, ...] = input_shape
     if config.model_type is Pipeline.FNN:
-        train_X = _flatten(train_X)
-        val_X = _flatten(val_X)
-        test_X = _flatten(test_X)
-        input_shape = train_X.shape[1:]
-        input_dim = int(input_shape[-1])
+        input_dim_for_factory = int(np.prod(input_shape))
+        input_shape_for_meta = (input_dim_for_factory,)
 
     if dataset_preset.config.n_output is not None:
         meta_n_outputs = int(dataset_preset.config.n_output)
@@ -113,90 +105,16 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
 
     # Build model via Factory (all domain logic lives there)
     model = ModelFactory.create_model(
-        config,
+        config=config,
         dataset_preset=dataset_preset,
         training=training_obj,
-        input_dim=input_dim,
+        input_dim=input_dim_for_factory,
         output_dim=meta_n_outputs,
+        input_shape=input_shape_for_meta,
     )
 
-    # Flatten sequences for pure FNN students only (reservoir/distillation keep sequences)
-    if isinstance(model, FNNModel):
-        train_X = _flatten(train_X)
-        val_X = _flatten(val_X)
-        test_X = _flatten(test_X)
-        input_shape = train_X.shape[1:]
-        input_dim = int(input_shape[-1])
-
     model_type_str = config.model_type.value
-    topo_meta: Optional[Dict[str, Any]] = None
-    filename_res_units: Optional[int] = None
-    filename_student_hidden: Optional[list[int]] = None
-
-    t_steps = input_shape[0] if len(input_shape) > 1 else 1
-    f_dim = int(input_shape[-1])
-
-    if isinstance(model, DistillationModel):
-        teacher_units = int(model.teacher_output_dim)
-        student_hidden = [int(v) for v in model.student_hidden]
-        projected_units = teacher_units
-        internal_flat = t_steps * projected_units
-
-        topo_meta = {
-            "type": model_type_str.upper(),
-            "shapes": {
-                "input": (t_steps, f_dim),
-                "projected": (t_steps, projected_units),
-                "internal": (internal_flat,),
-                "feature": (projected_units,),
-                "output": (int(meta_n_outputs),),
-            },
-            "details": {
-                "preprocess": None,
-                "agg_mode": getattr(model, "teacher_config", None) and model.teacher_config.state_aggregation,
-                "student_layers": student_hidden or None,
-            },
-        }
-        filename_res_units = projected_units
-        filename_student_hidden = student_hidden
-    elif isinstance(model, ReservoirModel):
-        res_units = int(getattr(model.reservoir, "n_units"))
-        filename_res_units = res_units
-        agg_mode = getattr(model, "readout_mode", None)
-        topo_meta = {
-            "type": model_type_str.upper(),
-            "shapes": {
-                "input": (t_steps, f_dim),
-                "projected": (t_steps, res_units),
-                "internal": (t_steps, res_units),
-                "feature": (res_units,),
-                "output": (int(meta_n_outputs),),
-            },
-            "details": {
-                "preprocess": None,
-                "agg_mode": agg_mode,
-                "student_layers": None,
-            },
-        }
-    elif isinstance(model, FNNModel):
-        layer_dims = [int(v) for v in getattr(model, "layer_dims", [])]
-        feature_units = layer_dims[-2] if len(layer_dims) >= 2 else None
-        topo_meta = {
-            "type": model_type_str.upper(),
-            "shapes": {
-                "input": (t_steps, f_dim),
-                "projected": None,
-                "internal": None,
-                "feature": (feature_units,) if feature_units else None,
-                "output": (int(meta_n_outputs),),
-            },
-            "details": {
-                "preprocess": None,
-                "agg_mode": None,
-                "student_layers": layer_dims[1:-1] if len(layer_dims) > 2 else None,
-            },
-        }
-
+    topo_meta = model.get_topology_meta() if hasattr(model, "get_topology_meta") else {}
     print_topology(topo_meta)
 
     readout = RidgeRegression(ridge_lambda=float(training_obj.ridge_lambda), use_intercept=True)
@@ -216,11 +134,17 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     )
 
     filename_parts = [f"{model_type_str}", "raw"]
-    if filename_res_units is not None:
-        filename_parts.append(f"nr{filename_res_units}")
-    if filename_student_hidden:
-        joined_nn = "-".join(str(v) for v in filename_student_hidden)
-        filename_parts.append(f"nn{joined_nn}")
+    feature_shape = None
+    student_layers = None
+    if isinstance(topo_meta, dict):
+        shapes = topo_meta.get("shapes") or {}
+        feature_shape = shapes.get("feature")
+        details = topo_meta.get("details") or {}
+        student_layers = details.get("student_layers")
+    if isinstance(feature_shape, tuple) and feature_shape:
+        filename_parts.append(f"nr{int(feature_shape[0])}")
+    if student_layers:
+        filename_parts.append(f"nn{'-'.join(str(int(v)) for v in student_layers)}")
         filename_parts.append(f"epochs{training_obj.epochs}")
 
     training_logs = results.get("training_logs", {}) if isinstance(results, dict) else {}

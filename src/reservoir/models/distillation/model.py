@@ -235,3 +235,6 @@ class DistillationModel(BaseModel):
         if metric != "mse":
             raise ValueError(f"Unsupported metric '{metric}' for DistillationModel.")
         return float(jnp.mean((preds - resolved_targets) ** 2))
+
+    def get_topology_meta(self) -> Dict[str, Any]:
+        return getattr(self, "topology_meta", {})

@@ -3,27 +3,48 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 
-from reservoir.data.generators import generate_sine_data, generate_mnist_sequence_data, generate_mackey_glass_data
-from reservoir.data.presets import DatasetPreset, get_dataset_preset
-from reservoir.core.identifiers import Dataset
-from reservoir.data.registry import DatasetRegistry
+from reservoir.data.generators import (
+    generate_sine_data,
+    generate_mnist_sequence_data,
+    generate_mackey_glass_data,
+    generate_lorenz_data,
+)
+from reservoir.data.presets import get_dataset_preset
+from reservoir.core.identifiers import Dataset, RunConfig
+from reservoir.data.config import (
+    BaseDatasetConfig,
+    SineWaveConfig,
+    MackeyGlassConfig,
+    LorenzConfig,
+    MNISTConfig,
+)
+from reservoir.core.presets import StrictRegistry
+from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
 
-@DatasetRegistry.register("sine_wave")
-def load_sine_wave(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
+LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[jnp.ndarray, jnp.ndarray], SplitDataset]]] = StrictRegistry(
+    {}
+)
+
+
+def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig], Any]], Callable[[BaseDatasetConfig], Any]]:
+    def decorator(fn: Callable[[BaseDatasetConfig], Any]) -> Callable[[BaseDatasetConfig], Any]:
+        LOADER_REGISTRY.register(dataset, fn)
+        return fn
+
+    return decorator
+
+
+@register_loader(Dataset.SINE_WAVE)
+def load_sine_wave(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
-    params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset(Dataset.SINE_WAVE)
-    if preset is None:
-        raise ValueError("Dataset preset 'sine_wave' is missing. Define it in reservoir.data.presets.")
-    data_cfg = preset.build_config(params)
-    X, y = generate_sine_data(data_cfg)
+    X, y = generate_sine_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
 
@@ -34,19 +55,13 @@ def load_sine_wave(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
     return X_arr, y_arr
 
 
-@DatasetRegistry.register("mnist")
-def load_mnist(config: Dict[str, Any]) -> SplitDataset:
+@register_loader(Dataset.MNIST)
+def load_mnist(config: MNISTConfig) -> SplitDataset:
     """Load MNIST sequence dataset as canonical train/test splits."""
     if generate_mnist_sequence_data is None:
         raise ImportError("MNIST sequence loader requires torch/torchvision.")
-
-    params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset(Dataset.MNIST)
-    if preset is None:
-        raise ValueError("Dataset preset 'mnist' is missing. Define it in reservoir.data.presets.")
-    data_cfg = preset.build_config(params)
-    train_seq, train_labels = generate_mnist_sequence_data(data_cfg, split="train")
-    test_seq, test_labels = generate_mnist_sequence_data(data_cfg, split="test")
+    train_seq, train_labels = generate_mnist_sequence_data(config, split=config.split)
+    test_seq, test_labels = generate_mnist_sequence_data(config, split="test")
 
     train_arr = jnp.asarray(train_seq, dtype=jnp.float64)
     test_arr = jnp.asarray(test_seq, dtype=jnp.float64)
@@ -60,8 +75,9 @@ def load_mnist(config: Dict[str, Any]) -> SplitDataset:
     train_arr = train_arr.reshape(train_arr.shape[0], train_arr.shape[1], -1)
     test_arr = test_arr.reshape(test_arr.shape[0], test_arr.shape[1], -1)
 
-    train_labels_arr = jnp.asarray(train_labels)
-    test_labels_arr = jnp.asarray(test_labels)
+    num_classes = int(config.n_output)
+    train_labels_arr = jax.nn.one_hot(jnp.asarray(train_labels).astype(int), num_classes)
+    test_labels_arr = jax.nn.one_hot(jnp.asarray(test_labels).astype(int), num_classes)
 
     return SplitDataset(
         train_X=train_arr,
@@ -71,15 +87,10 @@ def load_mnist(config: Dict[str, Any]) -> SplitDataset:
     )
 
 
-@DatasetRegistry.register("mackey_glass")
-def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]:
+@register_loader(Dataset.MACKEY_GLASS)
+def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Mackey-Glass samples (N, 1, 1) compatible with sequence models."""
-    params = dict(config.get("data_params", {}) or {})
-    preset = get_dataset_preset(Dataset.MACKEY_GLASS)
-    if preset is None:
-        raise ValueError("Dataset preset 'mackey_glass' is missing. Define it in reservoir.data.presets.")
-    data_cfg = preset.build_config(params)
-    X, y = generate_mackey_glass_data(data_cfg)
+    X, y = generate_mackey_glass_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
     if X_arr.ndim == 2:
@@ -87,28 +98,44 @@ def load_mackey_glass(config: Dict[str, Any]) -> Tuple[jnp.ndarray, jnp.ndarray]
     return X_arr, y_arr
 
 
+@register_loader(Dataset.LORENZ)
+def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Generate Lorenz attractor sequences."""
+    X, y = generate_lorenz_data(config)
+    X_arr = jnp.asarray(X, dtype=jnp.float64)
+    y_arr = jnp.asarray(y, dtype=jnp.float64)
+    if X_arr.ndim == 2:
+        X_arr = X_arr[:, None, :]
+    if y_arr.ndim == 2:
+        y_arr = y_arr[:, None, :]
+    return X_arr, y_arr
+
+
 def load_dataset_with_validation_split(
-    config: Dict[str, Any],
-    dataset_preset: DatasetPreset,
-    training_cfg: Dict[str, Any],
+    config: RunConfig,
+    training_cfg: Optional[TrainingConfig] = None,
     *,
     model_type: str,
     require_3d: bool = True,
-) -> tuple[jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray], jnp.ndarray, jnp.ndarray]:
+) -> SplitDataset:
     """
     Load dataset via registry, apply task-specific preprocessing, and split into train/val/test.
     """
-    dataset_name = config.get("dataset")
-    if isinstance(dataset_name, Dataset):
-        dataset_name = dataset_name.value
-    elif not isinstance(dataset_name, str):
-        dataset_name = str(dataset_name)
-    loader = DatasetRegistry.get(dataset_name)
+    if training_cfg is None:
+        training_cfg = get_training_preset("standard")
 
-    print(f"Loading dataset: {dataset_name}...")
-    dataset = loader(config)
+    dataset_enum = config.dataset
+    preset = get_dataset_preset(dataset_enum)
+    if preset is None:
+        raise ValueError(f"Dataset preset '{dataset_enum}' is not registered.")
+    loader = LOADER_REGISTRY.get(dataset_enum)
+    if loader is None:
+        raise ValueError(f"No loader registered for dataset '{dataset_enum}'.")
 
-    val_size = float(training_cfg.get("val_size")) if training_cfg else 0.0
+    print(f"Loading dataset: {dataset_enum.value}...")
+    dataset = loader(preset.config)
+
+    val_size = float(training_cfg.val_size)
 
     def _split_validation(features: jnp.ndarray, labels: jnp.ndarray) -> tuple[
         jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray]
@@ -145,14 +172,14 @@ def load_dataset_with_validation_split(
         try:
             X, y = dataset
         except (TypeError, ValueError):
-            raise ValueError(f"Loader for dataset '{dataset_name}' must return (X, y) tuple or SplitDataset.")
+            raise ValueError(f"Loader for dataset '{dataset_enum}' must return (X, y) tuple or SplitDataset.")
 
         total = len(X)
         if total < 2:
-            raise ValueError(f"Dataset '{dataset_name}' is too small to split (size={total}).")
+            raise ValueError(f"Dataset '{dataset_enum}' is too small to split (size={total}).")
 
-        train_ratio = float(training_cfg.get("train_size", 0.8)) if training_cfg else 0.8
-        test_ratio = float(training_cfg.get("test_ratio", 0.0)) if training_cfg else 0.0
+        train_ratio = float(training_cfg.train_size)
+        test_ratio = float(training_cfg.test_ratio)
 
         if not (0.0 < train_ratio < 1.0):
             raise ValueError(f"train_size must be in (0,1), got {train_ratio}.")
@@ -189,23 +216,4 @@ def load_dataset_with_validation_split(
                     f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
                 )
 
-    # Dataset-specific preprocessing
-    if dataset_name in {"mnist"}:
-        num_classes = int(dataset_preset.config.n_output)
-        print(f"Converting labels to one-hot vectors (classes={num_classes})...")
-        train_y = jax.nn.one_hot(jnp.asarray(train_y).astype(int), num_classes)
-        if val_y is not None:
-            val_y = jax.nn.one_hot(jnp.asarray(val_y).astype(int), num_classes)
-        test_y = jax.nn.one_hot(jnp.asarray(test_y).astype(int), num_classes)
-
-        print("Normalizing image data to [0, 1] range (div by 255)...")
-        train_X = jnp.asarray(train_X, dtype=jnp.float64) / 255.0
-        if val_X is not None:
-            val_X = jnp.asarray(val_X, dtype=jnp.float64) / 255.0
-        if test_X is not None:
-            test_X = jnp.asarray(test_X, dtype=jnp.float64) / 255.0
-
-        # Downstream scalers should be skipped for already-normalized vision data.
-        # config["use_preprocessing"] = False
-
-    return train_X, train_y, val_X, val_y, test_X, test_y
+    return SplitDataset(train_X, train_y, test_X, test_y, val_X, val_y)
