@@ -125,14 +125,24 @@ class DistillationModel(BaseModel):
     def _aggregate_states(self, states: jnp.ndarray) -> jnp.ndarray:
         if states.ndim != 3:
             raise ValueError(f"Expected 3D states (batch, time, units), got {states.shape}.")
-        mode = self.teacher_config.state_aggregation or "mean"
-        if mode == "mean":
+        mode = self.teacher_config.state_aggregation
+        if isinstance(mode, str):
+            from reservoir.core.identifiers import AggregationMode  # local import to avoid cycle
+            try:
+                mode = AggregationMode(mode)
+            except Exception as exc:
+                raise ValueError(f"Invalid aggregation mode '{mode}' for distillation.") from exc
+        if mode == AggregationMode.MEAN:
             return jnp.mean(states, axis=1)
-        if mode == "last":
+        if mode == AggregationMode.LAST:
             return states[:, -1, :]
-        if mode == "flatten":
+        if mode == AggregationMode.CONCAT:
             batch, time, feat = states.shape
             return states.reshape(batch, time * feat)
+        if mode in {AggregationMode.LAST_MEAN, AggregationMode.MTS}:
+            last = states[:, -1, :]
+            mean = jnp.mean(states, axis=1)
+            return jnp.concatenate([last, mean], axis=1)
         raise ValueError(f"Unsupported aggregation mode '{mode}' for DistillationModel.")
 
     def train_student(self, inputs: jnp.ndarray) -> Dict[str, Any]:

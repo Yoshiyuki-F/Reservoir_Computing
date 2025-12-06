@@ -1,5 +1,5 @@
 """src/reservoir/models/distillation/config.py"""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
@@ -9,8 +9,8 @@ from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 class DistillationConfig:
     """Configuration for distilling reservoir dynamics into a Student FNN."""
 
-    teacher: ClassicalReservoirConfig = field(default_factory=ClassicalReservoirConfig)
-    student_hidden_layers: Tuple[int, ...] = (300,)
+    teacher: ClassicalReservoirConfig
+    student_hidden_layers: Tuple[int, ...]
 
     def __post_init__(self) -> None:
         self.validate()

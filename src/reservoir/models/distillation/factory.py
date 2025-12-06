@@ -56,7 +56,7 @@ class DistillationFactory:
         teacher_model = ReservoirModel(
             reservoir=teacher_node, 
             preprocess=None, 
-            readout_mode=teacher_cfg.state_aggregation or "mean"
+            readout_mode=teacher_cfg.state_aggregation
         )
 
         print(">> DistillationFactory: Assembled Teacher (Reservoir) + Student (FNN).")
@@ -102,5 +102,4 @@ class DistillationFactory:
                 return tuple(layer_dims[1:-1])
             return tuple(layer_dims)
 
-        # Fallback to default from DistillationConfig
-        return DistillationConfig().student_hidden_layers
+        raise ValueError("Distillation requires explicit student_hidden_layers.")

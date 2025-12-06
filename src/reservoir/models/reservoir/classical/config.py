@@ -1,30 +1,43 @@
-"""src/reservoir/models/reservoir/config.py"""
+"""src/reservoir/models/reservoir/classical/config.py"""
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+
+from reservoir.core.identifiers import AggregationMode
 
 
 @dataclass(frozen=True)
 class ClassicalReservoirConfig:
     """
     Configuration for reservoir nodes (Classical/Quantum).
-    SSOT: Defaults defined here are the canonical defaults.
+    Strict Schema: physical hyperparameters are required; no implicit defaults.
     """
 
-    n_units: int = 100  # SSOT default
-    spectral_radius: float = 1.3
-    leak_rate: float = 0.2
-    input_scale: float = 0.6
-    input_connectivity: float = 0.9
-    rc_connectivity: float = 0.1
-    bias_scale: float = 1.0
-    noise_rc: float = 0.001
-    seed: int = 42
+    n_units: int
+    spectral_radius: float
+    leak_rate: float
+    input_scale: float
+    input_connectivity: float
+    rc_connectivity: float
+    bias_scale: float
+    noise_rc: float = 0.0
+    seed: Optional[int] = None
     use_design_matrix: bool = False
     poly_degree: int = 1
-    state_aggregation: str = "mean"
+    state_aggregation: AggregationMode = AggregationMode.MEAN
+
+    def __post_init__(self) -> None:
+        if isinstance(self.state_aggregation, str):
+            try:
+                object.__setattr__(self, "state_aggregation", AggregationMode(self.state_aggregation))
+            except Exception as exc:
+                raise ValueError(f"Invalid state_aggregation '{self.state_aggregation}'") from exc
 
     def to_dict(self) -> Dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items() if v is not None}
+        data = dict(self.__dict__)
+        mode = data.get("state_aggregation")
+        if isinstance(mode, AggregationMode):
+            data["state_aggregation"] = mode.value
+        return data
 
     def validate(self, *, context: str = "") -> None:
         prefix = f"{context}: " if context else ""
@@ -38,3 +51,5 @@ class ClassicalReservoirConfig:
             raise ValueError(f"{prefix}input_scale must be > 0.")
         if self.bias_scale < 0.0:
             raise ValueError(f"{prefix}bias_scale must be >= 0.")
+        if not isinstance(self.state_aggregation, AggregationMode):
+            raise TypeError(f"{prefix}state_aggregation must be AggregationMode, got {type(self.state_aggregation)}.")

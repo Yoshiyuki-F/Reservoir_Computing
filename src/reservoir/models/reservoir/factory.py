@@ -52,7 +52,7 @@ class ReservoirFactory:
         return ReservoirModel(
             reservoir=node,
             preprocess=preprocessor,
-            readout_mode=reservoir_config.state_aggregation or "mean",
+            readout_mode=reservoir_config.state_aggregation,
         )
 
     @staticmethod  # for distillation use
@@ -67,6 +67,8 @@ class ReservoirFactory:
         """
         config.validate(context="reservoir")
 
+        seed_val = 0 if config.seed is None else int(config.seed)
+
         return ClassicalReservoir(
             n_inputs=int(input_dim),
             n_units=int(config.n_units),
@@ -77,7 +79,7 @@ class ReservoirFactory:
             rc_connectivity=float(config.rc_connectivity),
             noise_rc=float(config.noise_rc),
             bias_scale=float(config.bias_scale),
-            seed=int(config.seed),
+            seed=seed_val,
             projector=projector,
         )
 

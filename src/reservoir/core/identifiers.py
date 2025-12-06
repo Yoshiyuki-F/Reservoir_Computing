@@ -67,6 +67,19 @@ class Dataset(str, enum.Enum):
         return self.value
 
 
+class AggregationMode(str, enum.Enum):
+    """State aggregation strategies for sequence-to-feature reduction."""
+
+    LAST = "last"
+    MEAN = "mean"
+    LAST_MEAN = "last_mean"
+    MTS = "mts"
+    CONCAT = "concat"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class Preprocessing(str, enum.Enum):
     """前処理の種類（将来的な拡張も想定）。"""
 
@@ -84,4 +97,3 @@ class ReadOutType(str, enum.Enum):
 
     def __str__(self) -> str:
         return self.value
-

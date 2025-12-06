@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/core/interfaces.py
 Lightweight protocol interfaces used across preprocessing and readout components.
 
 This module was removed unintentionally; it is restored here as the SSOT for

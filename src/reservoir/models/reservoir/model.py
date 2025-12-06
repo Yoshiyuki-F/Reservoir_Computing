@@ -10,6 +10,7 @@ import chex
 import jax.numpy as jnp
 
 from reservoir.core.interfaces import Transformer
+from reservoir.core.identifiers import AggregationMode
 from reservoir.components.preprocess.aggregator import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
 
@@ -28,7 +29,7 @@ class ReservoirModel:
         *,
         reservoir: Reservoir,
         preprocess: Optional[Transformer] = None,
-        readout_mode: str = "last",
+        readout_mode: AggregationMode,
     ) -> None:
         self.reservoir = reservoir
         self.preprocess = preprocess

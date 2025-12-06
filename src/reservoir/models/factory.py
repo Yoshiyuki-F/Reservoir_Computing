@@ -228,6 +228,9 @@ class ModelFactory:
             }
         elif pipeline in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
             res_units = int(getattr(model.reservoir, "n_units", input_dim))
+            agg_mode = getattr(model, "readout_mode", None)
+            if hasattr(agg_mode, "value"):
+                agg_mode = agg_mode.value
             topo_meta = {
                 "type": pipeline.value.upper(),
                 "shapes": {
@@ -239,13 +242,16 @@ class ModelFactory:
                 },
                 "details": {
                     "preprocess": None,
-                    "agg_mode": getattr(model, "readout_mode", None),
+                    "agg_mode": agg_mode,
                     "student_layers": None,
                 },
             }
         elif pipeline == Pipeline.FNN_DISTILLATION:
             teacher_units = int(getattr(model, "teacher_output_dim", output_dim))
             student_hidden = [int(v) for v in getattr(model, "student_hidden", [])]
+            agg_mode = getattr(model, "teacher_config", None) and getattr(model.teacher_config, "state_aggregation", None)
+            if hasattr(agg_mode, "value"):
+                agg_mode = agg_mode.value
             topo_meta = {
                 "type": pipeline.value.upper(),
                 "shapes": {
@@ -257,8 +263,7 @@ class ModelFactory:
                 },
                 "details": {
                     "preprocess": None,
-                    "agg_mode": getattr(model, "teacher_config", None)
-                    and getattr(model.teacher_config, "state_aggregation", None),
+                    "agg_mode": agg_mode,
                     "student_layers": student_hidden or None,
                 },
             }
