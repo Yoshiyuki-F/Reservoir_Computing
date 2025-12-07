@@ -1,5 +1,6 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/distillation/model.py
 Distill a teacher feature extractor into a student feed-forward network.
+Implements strict teacher-student distillation: student mimics teacher outputs, labels are ignored.
 """
 
 from __future__ import annotations

@@ -113,7 +113,7 @@ MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
         description="Feedforward Neural Network with Reservoir Distillation",
         config=DistillationConfig(
             teacher=CRCONFIG,
-            student_hidden_layers=(300,),
+            student_hidden_layers=(100,),
         ),
     ),
 }
