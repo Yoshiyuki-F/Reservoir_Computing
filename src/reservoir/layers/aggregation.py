@@ -11,17 +11,14 @@ import jax.numpy as jnp
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
 
-_ModeInput = Union[AggregationMode, str]
-
-
 class StateAggregator(Transformer):
     """Stateless transformer that reduces the time axis using a configured mode."""
 
-    def __init__(self, mode: _ModeInput = AggregationMode.LAST) -> None:
+    def __init__(self, mode: AggregationMode) -> None:
         self.mode = self._resolve_mode(mode)
 
     @staticmethod
-    def _resolve_mode(mode: _ModeInput) -> AggregationMode:
+    def _resolve_mode(mode: AggregationMode) -> AggregationMode:
         if isinstance(mode, AggregationMode):
             return mode
         if isinstance(mode, str):
@@ -32,7 +29,7 @@ class StateAggregator(Transformer):
         raise TypeError(f"Aggregation mode must be AggregationMode or str, got {type(mode)}.")
 
     @staticmethod
-    def aggregate(states: jnp.ndarray, mode: _ModeInput) -> jnp.ndarray:
+    def aggregate(states: jnp.ndarray, mode: AggregationMode) -> jnp.ndarray:
         """Static aggregator for reuse in functional contexts."""
         agg_mode = StateAggregator._resolve_mode(mode)
         arr = jnp.asarray(states, dtype=jnp.float64)
