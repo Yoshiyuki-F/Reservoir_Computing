@@ -8,8 +8,8 @@ V2 Architecture Compliance:
 - Fail Fast: Dictionary access raises KeyError if parameters are missing.
 """
 
-from dataclasses import replace
-from typing import Dict, Any, Optional, Tuple
+from dataclasses import dataclass, replace
+from typing import Any, Dict, Optional
 from typing import Any as _Any
 
 import numpy as np
@@ -22,17 +22,49 @@ from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.ridge import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
+from reservoir.data.structs import SplitDataset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.layers.preprocessing import create_preprocessor
 from reservoir.layers.projection import InputProjection
-from reservoir.models.presets import get_model_preset, DistillationConfig
+from reservoir.models.presets import get_model_preset, DistillationConfig, ModelConfig
 from reservoir.utils.reporting import generate_report
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
 
 
-def _get_strict_dataset_meta(dataset: Dataset) -> Tuple[Dataset, DatasetPreset]:
+@dataclass(frozen=True)
+class DatasetContext:
+    dataset: Dataset
+    preset: DatasetPreset
+    model_preset: ModelConfig
+    training: TrainingConfig
+    split: SplitDataset
+    dataset_name: str
+    task_type: TaskType
+    input_shape: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class FrontendContext:
+    processed_split: SplitDataset
+    preprocess_labels: list[str]
+    preprocessed_shape: tuple[int, ...]
+    projected_shape: Optional[tuple[int, ...]]
+    input_shape_for_meta: tuple[int, ...]
+    input_dim_for_factory: int
+
+
+@dataclass(frozen=True)
+class ModelStack:
+    model: Any
+    readout: RidgeRegression
+    topo_meta: Dict[str, Any]
+    metric: str
+    model_label: str
+
+
+def _get_strict_dataset_meta(dataset: Dataset) -> tuple[Dataset, DatasetPreset]:
     """
     Retrieve dataset metadata.
     Raises ValueError if the dataset is unknown or metadata is incomplete.
@@ -79,41 +111,42 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
     return np.asarray(arr)
 
 
-def run_pipeline(config: RunConfig) -> Dict[str, Any]:
-    """
-    The Unified Entry Point (V2 Strict Mode).
-    """
+def _prepare_dataset(config: RunConfig) -> DatasetContext:
+    """Step 1: Resolve presets and load dataset without mutating inputs later."""
     if not isinstance(config, RunConfig):
         raise TypeError(f"run_pipeline requires RunConfig, got {type(config)}.")
 
     print("=== Step 1: Loading Dataset ===")
     dataset_enum, dataset_preset = _get_strict_dataset_meta(config.dataset)
-    dataset_name = dataset_enum.value
-    task_type = config.task_type
-
-    training_obj = _resolve_training_config(task_type)
-
-    preset_model = get_model_preset(config.model_type)
-    if preset_model is None or preset_model.config is None:
+    model_preset = get_model_preset(config.model_type)
+    if model_preset is None or model_preset.config is None:
         raise ValueError(f"Model preset for {config.model_type} is missing configuration.")
-
+    training_cfg = _resolve_training_config(config.task_type)
     dataset_split = load_dataset_with_validation_split(
         config,
-        training_obj,
+        training_cfg,
         model_type=config.model_type.value,
         require_3d=True,
     )
-    train_X = dataset_split.train_X
-    train_y = dataset_split.train_y
-    test_X = dataset_split.test_X
-    test_y = dataset_split.test_y
-    val_X = dataset_split.val_X
-    val_y = dataset_split.val_y
+    return DatasetContext(
+        dataset=dataset_enum,
+        preset=dataset_preset,
+        model_preset=model_preset,
+        training=training_cfg,
+        split=dataset_split,
+        dataset_name=dataset_enum.value,
+        task_type=config.task_type,
+        input_shape=dataset_split.train_X.shape[1:],
+    )
 
-    input_shape_original = train_X.shape[1:]
 
+def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset: ModelConfig) -> FrontendContext:
+    """
+    Step 2 & 3: Apply preprocessing and projection without mutating raw splits.
+    Returns processed datasets and shape metadata for model creation.
+    """
     print("\n=== Step 2: Preprocessing ===")
-    poly_degree = int(getattr(preset_model.config, "poly_degree", 1))
+    poly_degree = int(getattr(model_preset.config, "poly_degree", 1))
     preprocessing_enum = config.preprocessing
     preprocess_labels: list[str] = []
     if preprocessing_enum == Preprocessing.STANDARD_SCALER:
@@ -121,6 +154,11 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
     elif preprocessing_enum == Preprocessing.DESIGN_MATRIX:
         preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
     pre_layers = create_preprocessor(preprocessing_enum, poly_degree=poly_degree)
+
+    train_X = np.asarray(data_split.train_X)
+    val_X = np.asarray(data_split.val_X) if data_split.val_X is not None else None
+    test_X = np.asarray(data_split.test_X) if data_split.test_X is not None else None
+
     if pre_layers:
         train_X = _apply_layers(pre_layers, train_X, fit=True)
         if val_X is not None:
@@ -129,11 +167,13 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
             test_X = _apply_layers(pre_layers, test_X, fit=False)
     preprocessed_shape = train_X.shape[1:]
 
-
     print("\n=== Step 3: Projection (for reservoir/distillation) ===")
     projected_shape: Optional[tuple[int, ...]] = None
+    projected_train = train_X
+    projected_val = val_X
+    projected_test = test_X
     if config.model_type in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
-        res_cfg = preset_model.config
+        res_cfg = model_preset.config
         projection = InputProjection(
             input_dim=int(preprocessed_shape[-1]),
             output_dim=int(res_cfg.n_units),
@@ -142,14 +182,14 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
             seed=int(res_cfg.seed or 0),
             bias_scale=float(res_cfg.bias_scale),
         )
-        train_X = projection(train_X)
+        projected_train = projection(train_X)
         if val_X is not None:
-            val_X = projection(val_X)
+            projected_val = projection(val_X)
         if test_X is not None:
-            test_X = projection(test_X)
-        projected_shape = train_X.shape[1:]
+            projected_test = projection(test_X)
+        projected_shape = projected_train.shape[1:]
     elif config.model_type is Pipeline.FNN_DISTILLATION:
-        distill_cfg = preset_model.config
+        distill_cfg = model_preset.config
         if not isinstance(distill_cfg, DistillationConfig):
             raise ValueError("FNN_DISTILLATION preset must define DistillationConfig.")
         teacher_cfg = distill_cfg.teacher
@@ -161,84 +201,134 @@ def run_pipeline(config: RunConfig) -> Dict[str, Any]:
             seed=int(teacher_cfg.seed or 0),
             bias_scale=float(teacher_cfg.bias_scale),
         )
-        train_X = projection(train_X)
+        projected_train = projection(train_X)
         if val_X is not None:
-            val_X = projection(val_X)
+            projected_val = projection(val_X)
         if test_X is not None:
-            test_X = projection(test_X)
-        projected_shape = train_X.shape[1:]
+            projected_test = projection(test_X)
+        projected_shape = projected_train.shape[1:]
 
-    # Determine model input dimensions after preprocessing/projection
     transformed_shape = projected_shape or preprocessed_shape
-    input_dim_for_factory = int(np.prod(transformed_shape)) if config.model_type is Pipeline.FNN else int(transformed_shape[-1])
     input_shape_for_meta: tuple[int, ...] = transformed_shape
-
-    if dataset_preset.config.n_output is not None:
-        meta_n_outputs = int(dataset_preset.config.n_output)
-    else:
-        target_sample = train_y if train_y is not None else test_y
-        if target_sample is None:
-            raise ValueError("Unable to infer output dimension without targets.")
-        meta_n_outputs = int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
-
-    print(f"Data Shapes -> Train: {train_X.shape}, Val: {getattr(val_X, 'shape', None)}, Test: {test_X.shape}")
-
-    # Build model via Factory (all domain logic lives there)
-    model = ModelFactory.create_model(
-        config=config,
-        dataset_preset=dataset_preset,
-        training=training_obj,
-        input_dim=input_dim_for_factory,
-        output_dim=meta_n_outputs,
-        input_shape=input_shape_for_meta,
+    input_dim_for_factory = (
+        int(np.prod(transformed_shape)) if config.model_type is Pipeline.FNN else int(transformed_shape[-1])
     )
 
-    model_type_str = config.model_type.value
+    processed_split = SplitDataset(
+        train_X=projected_train,
+        train_y=data_split.train_y,
+        test_X=projected_test,
+        test_y=data_split.test_y,
+        val_X=projected_val,
+        val_y=data_split.val_y,
+    )
+    print(f"Data Shapes -> Train: {processed_split.train_X.shape}, Val: {getattr(processed_split.val_X, 'shape', None)}, Test: {processed_split.test_X.shape}")
+
+    return FrontendContext(
+        processed_split=processed_split,
+        preprocess_labels=preprocess_labels,
+        preprocessed_shape=preprocessed_shape,
+        projected_shape=projected_shape,
+        input_shape_for_meta=input_shape_for_meta,
+        input_dim_for_factory=input_dim_for_factory,
+    )
+
+
+def _build_model_stack(
+    config: RunConfig,
+    dataset_ctx: DatasetContext,
+    frontend_ctx: FrontendContext,
+) -> ModelStack:
+    """Step 4: Instantiate model + readout and enrich topology metadata."""
+    processed = frontend_ctx.processed_split
+    if dataset_ctx.preset.config.n_output is not None:
+        meta_n_outputs = int(dataset_ctx.preset.config.n_output)
+    else:
+        target_sample = processed.train_y if processed.train_y is not None else processed.test_y
+        if target_sample is None:
+            raise ValueError("Unable to infer output dimension without targets.")
+        meta_n_outputs = (
+            int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
+        )
+
+    model = ModelFactory.create_model(
+        config=config,
+        dataset_preset=dataset_ctx.preset,
+        training=dataset_ctx.training,
+        input_dim=frontend_ctx.input_dim_for_factory,
+        output_dim=meta_n_outputs,
+        input_shape=frontend_ctx.input_shape_for_meta,
+    )
+
     topo_meta = model.get_topology_meta() if hasattr(model, "get_topology_meta") else {}
     if not isinstance(topo_meta, dict):
         topo_meta = {}
     shapes_meta = topo_meta.get("shapes", {}) or {}
-    shapes_meta["input"] = input_shape_original
-    shapes_meta["preprocessed"] = preprocessed_shape
-    shapes_meta["projected"] = projected_shape
+    shapes_meta["input"] = dataset_ctx.input_shape
+    shapes_meta["preprocessed"] = frontend_ctx.preprocessed_shape
+    shapes_meta["projected"] = frontend_ctx.projected_shape
     shapes_meta["output"] = (meta_n_outputs,)
     topo_meta["shapes"] = shapes_meta
     details_meta = topo_meta.get("details", {}) or {}
-    details_meta["preprocess"] = "-".join(preprocess_labels) if preprocess_labels else None
+    details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
     topo_meta["details"] = details_meta
+    print("\n=== Step 4: Build Model Stack ===")
     print_topology(topo_meta)
 
-    readout = RidgeRegression(ridge_lambda=float(training_obj.ridge_lambda), use_intercept=True)
-
-    metric = "accuracy" if task_type is TaskType.CLASSIFICATION else "mse"
-    runner = UniversalPipeline(model, readout, None, metric=metric)
-    validation_tuple = (val_X, val_y) if (val_X is not None and val_y is not None) else None
-    results = runner.run(
-        train_X,
-        train_y,
-        test_X,
-        test_y,
-        validation=validation_tuple,
-        training_cfg=training_obj,
-        training_extras={},
-        model_label=model_type_str,
+    metric = "accuracy" if dataset_ctx.task_type is TaskType.CLASSIFICATION else "mse"
+    readout = RidgeRegression(ridge_lambda=float(dataset_ctx.training.ridge_lambda), use_intercept=True)
+    return ModelStack(
+        model=model,
+        readout=readout,
+        topo_meta=topo_meta,
+        metric=metric,
+        model_label=config.model_type.value,
     )
 
+
+def run_pipeline(config: RunConfig) -> Dict[str, Any]:
+    """
+    Declarative orchestrator for the unified pipeline.
+    """
+    dataset_ctx = _prepare_dataset(config)
+    frontend_ctx = _process_frontend(config, dataset_ctx.split, dataset_ctx.model_preset)
+    stack = _build_model_stack(config, dataset_ctx, frontend_ctx)
+
+    runner = UniversalPipeline(stack.model, stack.readout, None, metric=stack.metric)
+    validation_tuple = (
+        (frontend_ctx.processed_split.val_X, frontend_ctx.processed_split.val_y)
+        if (frontend_ctx.processed_split.val_X is not None and frontend_ctx.processed_split.val_y is not None)
+        else None
+    )
+    results = runner.run(
+        frontend_ctx.processed_split.train_X,
+        dataset_ctx.split.train_y,
+        frontend_ctx.processed_split.test_X,
+        dataset_ctx.split.test_y,
+        validation=validation_tuple,
+        training_cfg=dataset_ctx.training,
+        training_extras={},
+        model_label=stack.model_label,
+    )
+
+    report_payload = dict(
+        runner=runner,
+        readout=stack.readout,
+        train_X=frontend_ctx.processed_split.train_X,
+        train_y=dataset_ctx.split.train_y,
+        test_X=frontend_ctx.processed_split.test_X,
+        test_y=dataset_ctx.split.test_y,
+        val_X=frontend_ctx.processed_split.val_X,
+        val_y=dataset_ctx.split.val_y,
+        training_obj=dataset_ctx.training,
+        dataset_name=dataset_ctx.dataset_name,
+        model_type_str=stack.model_label,
+    )
     generate_report(
         results,
         config,
-        topo_meta,
-        runner=runner,
-        readout=readout,
-        train_X=train_X,
-        train_y=train_y,
-        test_X=test_X,
-        test_y=test_y,
-        val_X=val_X,
-        val_y=val_y,
-        training_obj=training_obj,
-        dataset_name=dataset_name,
-        model_type_str=model_type_str,
+        stack.topo_meta,
+        **report_payload,
     )
 
     return results

@@ -40,7 +40,8 @@ def print_topology(meta: Dict[str, Any]) -> None:
 
     preprocess_method = details.get("preprocess") or "None"
     agg_mode = details.get("agg_mode") or "None"
-    student_layers = _fmt_layers(details.get("student_layers"))
+    student_layers_raw = details.get("student_layers")
+    student_layers = _fmt_layers(student_layers_raw)
 
     print(f"=== Model Topology: {meta.get('type', 'UNKNOWN')} ===")
     print(f"1. Input Data      : {_fmt_dim(s_in)}")
@@ -57,10 +58,16 @@ def print_topology(meta: Dict[str, Any]) -> None:
 
     # Step 5/6: internal/model
     model_desc = ""
-    if student_layers != "None" and s_adapter is not None:
-        model_desc = f"{_fmt_dim(s_adapter)} -> {_fmt_layers(details.get('student_layers'))}"
+    if student_layers_raw and s_adapter is not None:
+        chain = [_fmt_dim(s_adapter)]
+        chain.extend(f"[{int(v)}]" for v in student_layers_raw)
+        if s_feat is not None:
+            chain.append(_fmt_dim(s_feat))
+        model_desc = " -> ".join(chain)
     elif s_internal is not None:
         model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
+        if s_feat is not None and s_feat != s_internal:
+            model_desc = f"{model_desc} -> {_fmt_dim(s_feat)}"
     else:
         model_desc = "n/a"
     print(f"5. Model           : {model_desc}")

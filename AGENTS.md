@@ -25,53 +25,61 @@ Separation of Concerns: 物理層（Reservoir）は計算のみ、論理層（Or
 Don't Repeat Yourself (DRY): 重複コードや設定のコピペを極端に嫌う。
 
 
-現在の動作フロー (Current Workflow)
-User Input: CLIで --unified-hidden などを指定。
-Config Setup: 指定された Preset を読み込み、CLI引数で厳密に上書き（Override）。必須項目（n_unitsなど）の欠落チェック。
-Model Build: 物理層（Reservoir）と読み出し層（Readout）を初期化。アーキテクチャ概要を表示。
-Training (Ridge Search): Validationデータを使って最適な λを探索。探索履歴を返す。
-Logging & Plotting: ベストな λ とスコアを表示。Validationデータに対して再推論を行い、混同行列と精度比較グラフを outputs/ に保存。
+Revised Architecture Blueprint (V2.1)
+1-6 Process Flow (Tensor Flow Style)
+データの流れと各ステップの役割定義です。
+
+STEP
+1. Input Data - [Batch, Time, Features]
+Examples: MNIST [28x28], Audio, Text
+
+2. Preprocessing - [Batch, Time, Features] -> [Batch, Time, Features]
+Role: Data scaling, polynomial features (Stateless or independent of model internal structure).
+Examples: Raw, StandardScaler, DesignMatrix
+
+3. Input Projection - [Batch, Time, Features] -> [Batch, Time, Hidden]
+Role: Mapping input space to high-dimensional hidden space (Random or Learned).
+Examples: Random Projection (W_in)
+Note: FNN Student also uses this to match Teacher's input projection logic.
+
+4. Adapter: Flatten is used here if Model requires 2D input [Batch, Time*Hidden] (only at FNN).
+
+5. Model (Engine) - [Batch, Time, Hidden] -> [Batch, Time, Hidden] (Reservoir) OR [Batch, Hidden] (FNN)
+Role: Stateful dynamics or Deep Non-linear mapping.
+Examples: Classical Reservoir, Quantum Reservoir, FNN (Student)
+
+6. Aggregation - [Batch, Time, Hidden] -> [Batch, Feature] (only at Reservoir).
+Role: Temporal reduction to fixed feature vector. 
+Examples: Last state, Mean, Concat
+
+7. Readout - [Batch, Feature] -> [Batch, Output]
+Role: Final decoding/classification.
+Examples: Ridge Regression, Softmax
+WHERE TO FIND THEM (Location Mapping)
+
+Factory (/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/factory.py) should just include 4-5-6
+where should /home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/generic_runner.py do then?
+
+ファイル配置と責務のマッピングです。
+data/ (Input Data) 1
+layers/preprocessing.py (Preprocessing) 2
+layers/projection.py (Input Projection) 3
+layers/adapters.py (Structural Glues: Flatten, Reshape) 4
+models/ (Model Engine & Assemblers) 5
+    reservoir/, nn/, distillation/
+layers/aggregation.py (Aggregation) 6
+readout/ridge.py (Readout) 7
 
 
-指定された Preset Name に基づき、Pythonレジストリから「標準設定オブジェクト」を取得。
-Builderから渡された「ユーザー設定」をマージ。
-Feature Engineering（多項式特徴量など）のパラメータを解決。
-Model Instantiation: 正規化されたパラメータのみを使って ClassicalReservoir などのノードを初期化。
-Execution: JAX scan による高速計算。
 
+models/factory.py (Manufacturer)
+責務: 4-6 (Engine Stack) の製造。
+特徴: 状態を持たない。作って渡すだけ。
 
-4. 残存課題と次のステップ (Next Steps)
-🚨 最優先: Quantum Implementations のリファクタリング
-今回のセッションでは「古典リザバー（Classical）」のV2化を完了させました。次はこれを基盤として、以下の量子モデルの実装に着手する必要があります。
-QuantumAnalogReservoir / QuantumGateBasedReservoir の刷新:
-現在の実装は V1 時代の古いインターフェース（Pythonループ等）のままです。
-これらを jax.lax.scan を使用した形式に書き換え、StepArtifacts を返すように変更する必要があります。
-ClassicalReservoir と同様に、暗黙のデフォルト値を排除し、SSOTプリセットに従うように修正が必要です。
-FNN/RNN との比較実験:
-UniversalPipeline が抽象化されたため、FNN/RNN モデルも同じフローで動作確認を行う必要があります。## 4. Key Implementation Patterns
+pipelines/generic_runner.py (Driver)
+責務: 1-7 の実行（ChatGPTの言う「実験ロジックの正本」）。
+特徴: 何のモデルか（FNNかReservoirか）を知らない。「学習して、特徴とって、Readoutする」という抽象的な手順だけを知っている。
 
-### 4.1 JAX Scan Pattern
-時系列処理には必ず `jax.lax.scan` を使用します。これにより、JIT コンパイル時にループが最適化され、GPU 上で劇的な高速化が実現されます。
-
-# GOOD: JAX Scan
-def scan_fn(carry, x):
-    new_carry = update(carry, x)
-    return new_carry, new_carry
-final, history = jax.lax.scan(scan_fn, init, inputs)
-
-# BAD: Python Loop
-history = []
-state = init
-for x in inputs:
-    state = update(state, x) # Slow on GPU
-    history.append(state)
-
-
-### 4.2 Dynamic Dependency Injection
-`pipelines/run.py` は、静的なモデル定義ではなく、Config に基づいて動的にパイプラインを構築します。
-*   `use_design_matrix` フラグにより、`DesignMatrix` クラスが動的に注入されます。
-*   これにより、コードを変更することなく、CLI 引数だけでアーキテクチャの構成要素を変更可能です。
-
----
-
-## 5. Directory Structure (Map)
+pipelines/run.py (Manager/Frontend)
+責務: 1-3 (Frontend) の準備 と、ドライバーへの指示。
+特徴: 具体的なコンフィグ (RunConfig) を解釈し、データを用意し、Factoryに製造を依頼し、Runnerに鍵を渡す。

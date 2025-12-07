@@ -186,18 +186,18 @@ class UniversalPipeline:
 
         start = time.time()
 
-        print(f"\n=== Step 5: Train Model ({model_label}) ===")
+        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{model_label}] ===")
         start_train = time.time()
         train_logs = self.model.train(train_X, train_y, **train_params) or {}
         train_time = time.time() - start_train
 
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
         if final_loss is not None:
-            print(f"Model training completed in {train_time:.2f}s. Final Loss: {final_loss}")
+            print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s. Final Loss: {final_loss}")
         else:
-            print(f"Model training completed in {train_time:.2f}s.")
+            print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
 
-        print("\n=== Step 6: Extract Features (Aggregated Model Output) ===")
+        print("\n=== Step 6: Aggregation (Feature Extraction) ===")
         train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
         self._feature_stats(train_features, "post_train_features")
 
@@ -209,7 +209,7 @@ class UniversalPipeline:
 
         test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
 
-        print("\n=== Step 7: Fit Readout (Ridge Regression) ===")
+        print("\n=== Step 7: Readout (Ridge Regression) ===")
         best_lambda, search_history, weight_norms = self._fit_readout(
             train_features,
             train_y,
@@ -222,7 +222,6 @@ class UniversalPipeline:
         self.readout.ridge_lambda = best_lambda
 
         # Evaluate
-        train_pred = self.readout.predict(train_features)
         test_pred = self.readout.predict(test_features)
 
         results = {
@@ -231,6 +230,7 @@ class UniversalPipeline:
         }
         if validation:
             results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
+        results["readout"] = self.readout
 
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
