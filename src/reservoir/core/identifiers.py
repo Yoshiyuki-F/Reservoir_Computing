@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import enum
 
-class Pipeline(str, enum.Enum):
-    """実験パイプライン（モデルアーキテクチャ）の種類。"""
+class Model(str, enum.Enum):
+    """モデルアーキテクチャの種類。"""
 
     CLASSICAL_RESERVOIR = "classical-reservoir"
     FNN = "fnn"

@@ -9,20 +9,20 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Optional, Union
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import Pipeline, AggregationMode, Preprocessing, TaskType
+from reservoir.core.identifiers import AggregationMode, Preprocessing,  Model
 from reservoir.models.config import PreprocessingConfig, ProjectionConfig, AggregationConfig, ClassicalReservoirConfig, \
     DistillationConfig
 
 
 @dataclass(frozen=True)
-class ModelConfig:
+class PipelineConfig:
     """
     Wrapper for model configuration.
     Links a canonical pipeline ID (model_type) with a specific config object.
     """
 
     name: str
-    model_type: Pipeline
+    model_type: Model
     description: str
     preprocess_config: PreprocessingConfig
     projection_config: ProjectionConfig
@@ -70,7 +70,7 @@ class ModelConfig:
             return getattr(self.config.teacher, item)
         if item in self.params:
             return self.params[item]
-        raise AttributeError(f"{item} not found in ModelConfig or underlying config.")
+        raise AttributeError(f"{item} not found in PipelineConfig or underlying config.")
 
 
 # -----------------------------------------------------------------------------
@@ -107,9 +107,9 @@ AGGREGATION_CONFIG = AggregationConfig(
 )
 
 
-FNN_DISTILLATION_CONFIG = ModelConfig(
+FNN_DISTILLATION_CONFIG = PipelineConfig(
     name="fnn-distillation",
-    model_type=Pipeline.FNN_DISTILLATION,
+    model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess_config=PREPROCESSING_CONFIG,
     projection_config=PROJECTION_CONFIG,
@@ -117,9 +117,9 @@ FNN_DISTILLATION_CONFIG = ModelConfig(
     aggregation_config=None
 )
 
-CLASSICAL_RESERVOIR_CONFIG = ModelConfig(
+CLASSICAL_RESERVOIR_CONFIG = PipelineConfig(
     name="classical-reservoir",
-    model_type=Pipeline.CLASSICAL_RESERVOIR,
+    model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess_config=PREPROCESSING_CONFIG,
     projection_config=PROJECTION_CONFIG,
@@ -127,9 +127,9 @@ CLASSICAL_RESERVOIR_CONFIG = ModelConfig(
     aggregation_config=AGGREGATION_CONFIG
 )
 
-MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
-    Pipeline.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_CONFIG,
-    Pipeline.FNN_DISTILLATION: FNN_DISTILLATION_CONFIG,
+MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {
+    Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_CONFIG,
+    Model.FNN_DISTILLATION: FNN_DISTILLATION_CONFIG,
 }
 
 
@@ -139,19 +139,19 @@ MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
 
 MODEL_REGISTRY = StrictRegistry(MODEL_DEFINITIONS)
 
-MODEL_PRESETS: Dict[Pipeline, ModelConfig] = dict(MODEL_DEFINITIONS)
+MODEL_PRESETS: Dict[Model, PipelineConfig] = dict(MODEL_DEFINITIONS)
 
 
-def get_model_preset(pipeline: Pipeline) -> ModelConfig:
+def get_model_preset(model: Model) -> PipelineConfig:
     """Retrieves a model preset by enum key; raises on invalid names."""
-    preset = MODEL_REGISTRY.get(pipeline)
+    preset = MODEL_REGISTRY.get(model)
     if preset is None:
-        raise KeyError(f"Model preset '{pipeline}' not found.")
+        raise KeyError(f"Model preset '{model}' not found.")
     return preset
 
 
 __all__ = [
-    "ModelConfig",
+    "PipelineConfig",
     "MODEL_DEFINITIONS",
     "MODEL_REGISTRY",
     "MODEL_PRESETS",
