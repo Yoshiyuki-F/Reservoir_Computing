@@ -65,7 +65,7 @@ class DesignMatrix:
         return self.transform(X)
 
 
-def create_preprocessor(p_type: Preprocessing, **kwargs) -> List[object]:
+def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[object], list[str]]:
     """
     Build a list of preprocessing transformers for Step 2 based on Enum only.
     RAW: no-op
@@ -73,15 +73,17 @@ def create_preprocessor(p_type: Preprocessing, **kwargs) -> List[object]:
     DESIGN_MATRIX: FeatureScaler + DesignMatrix
     """
     layers: List[object] = []
+    preprocess_labels: list[str] = []
     if p_type == Preprocessing.STANDARD_SCALER:
         layers.append(FeatureScaler())
+        preprocess_labels.append("scaler")
     elif p_type == Preprocessing.DESIGN_MATRIX:
         #多項式拡張はスケーリング必須のため
         layers.append(FeatureScaler())
-        degree = int(kwargs.get("poly_degree", 2))
-        layers.append(DesignMatrix(degree=degree))
+        layers.append(DesignMatrix(degree=poly_degree))
+        preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
     # RAW -> no layers
-    return layers
+    return layers, preprocess_labels
 
 
 __all__ = ["FeatureScaler", "DesignMatrix", "create_preprocessor"]

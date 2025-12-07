@@ -21,8 +21,6 @@ def build_run_config(*, preset_name: str, dataset_name: str) -> RunConfig:
         dataset=dataset_enum,
         model_type=pipeline_enum,
         task_type=task_type,
-        preprocessing=Preprocessing.RAW,
-        readout_type=ReadOutType.RidgeRegression,
     )
 
 

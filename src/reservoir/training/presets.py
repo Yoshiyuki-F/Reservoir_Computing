@@ -32,7 +32,7 @@ class TrainingConfig:
     ridge_lambda: float = 1e-7 # no use but needed for type consistency
     # Defines the search space for validation. Defaults to a log-spaced range around typical values.
     ridge_lambdas: List[float] = field(
-        default_factory=lambda: np.logspace(-15, -5, 30).tolist()
+        default_factory=lambda: np.logspace(-12, 0, 30).tolist()
     )
 
     # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?

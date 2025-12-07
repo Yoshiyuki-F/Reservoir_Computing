@@ -9,20 +9,11 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Optional, Union
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import Pipeline, AggregationMode
+from reservoir.core.identifiers import Pipeline, AggregationMode, Preprocessing
+from reservoir.models.config import PreprocessingConfig, ProjectionConfig, ReservoirDynamicsConfig, AggregationConfig
 from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
 from reservoir.models.distillation.config import DistillationConfig
 
-# -----------------------------------------------------------------------------
-# Type Definitions
-# -----------------------------------------------------------------------------
-
-ModelConfiguration = Union[ClassicalReservoirConfig, DistillationConfig]
-
-
-# -----------------------------------------------------------------------------
-# Data Classes
-# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -33,8 +24,8 @@ class ModelConfig:
 
     name: str
     model_type: Pipeline
-    description: str = ""
-    config: Optional[ModelConfiguration] = None
+    description: str
+    config: Union[ClassicalReservoirConfig, DistillationConfig]
     params: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -86,26 +77,38 @@ class ModelConfig:
 # -----------------------------------------------------------------------------
 
 CRCONFIG: ClassicalReservoirConfig = ClassicalReservoirConfig(
-    n_units=100,
-    spectral_radius=1.3,
-    leak_rate=0.2,
-    input_scale=0.6,
-    input_connectivity=0.9,
-    rc_connectivity=0.1,
-    bias_scale=1.0,
-    noise_rc=0.001,
-    seed=42,
-    poly_degree=1,
-    state_aggregation=AggregationMode.MEAN,
+    # Step 2
+    preprocess=PreprocessingConfig(
+        method=Preprocessing.RAW,
+        poly_degree=1
+    ),
+    # Step 3
+    projection=ProjectionConfig(
+        n_units=100,
+        input_scale=0.6,
+        input_connectivity=0.1,
+        bias_scale=1.0,
+        seed=42
+    ),
+    # Step 5
+    dynamics=ReservoirDynamicsConfig(
+        spectral_radius=1.3,
+        leak_rate=0.2,
+        rc_connectivity=0.9,
+        seed=42
+    ),
+    # Step 6
+    aggregation=AggregationConfig(
+        mode=AggregationMode.MEAN
+    )
 )
-
 
 MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
     Pipeline.CLASSICAL_RESERVOIR: ModelConfig(
         name="classical",
         model_type=Pipeline.CLASSICAL_RESERVOIR,
         description="Standard classical reservoir (Echo State Network)",
-        config=CRCONFIG,
+        config=CRCONFIG, #TODO why 2346 in the same Config? does it need info for preprocess/projection?, no.
     ),
     Pipeline.FNN_DISTILLATION: ModelConfig(
         name="fnn-distillation",
@@ -138,7 +141,6 @@ def get_model_preset(pipeline: Pipeline) -> ModelConfig:
 
 __all__ = [
     "ModelConfig",
-    "ModelConfiguration",
     "MODEL_DEFINITIONS",
     "MODEL_REGISTRY",
     "MODEL_PRESETS",

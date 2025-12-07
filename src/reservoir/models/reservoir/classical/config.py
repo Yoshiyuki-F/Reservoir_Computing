@@ -1,55 +1,61 @@
 """src/reservoir/models/reservoir/classical/config.py"""
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from __future__ import annotations
+from dataclasses import dataclass, asdict
+from typing import Any, Dict
 
 from reservoir.core.identifiers import AggregationMode
-
+from reservoir.models.config import (
+    PreprocessingConfig,
+    ProjectionConfig,
+    ReservoirDynamicsConfig,
+    AggregationConfig
+)
 
 @dataclass(frozen=True)
 class ClassicalReservoirConfig:
     """
-    Configuration for reservoir nodes (Classical/Quantum).
-    Strict Schema: physical hyperparameters are required; no implicit defaults.
+    Configuration for classical reservoir nodes.
+    Hierarchically structured to match the V2.1 Pipeline Steps (2, 3, 5, 6).
     """
+    preprocess: PreprocessingConfig
+    projection: ProjectionConfig
+    dynamics: ReservoirDynamicsConfig
+    aggregation: AggregationConfig
 
-    n_units: int
-    spectral_radius: float
-    leak_rate: float
-    input_scale: float
-    input_connectivity: float
-    rc_connectivity: float
-    bias_scale: float
-    noise_rc: float = 0.0
-    seed: Optional[int] = None
-    use_design_matrix: bool = False
-    poly_degree: int = 1
-    state_aggregation: AggregationMode = AggregationMode.MEAN
+    @property
+    def n_units(self) -> int:
+        """Shortcut for convenience / backward compatibility."""
+        return self.projection.n_units
 
-    def __post_init__(self) -> None:
-        if isinstance(self.state_aggregation, str):
-            try:
-                object.__setattr__(self, "state_aggregation", AggregationMode(self.state_aggregation))
-            except Exception as exc:
-                raise ValueError(f"Invalid state_aggregation '{self.state_aggregation}'") from exc
-
-    def to_dict(self) -> Dict[str, Any]:
-        data = dict(self.__dict__)
-        mode = data.get("state_aggregation")
-        if isinstance(mode, AggregationMode):
-            data["state_aggregation"] = mode.value
-        return data
+    @property
+    def leak_rate(self) -> float:
+        """Shortcut for convenience."""
+        return self.dynamics.leak_rate
 
     def validate(self, *, context: str = "") -> None:
-        prefix = f"{context}: " if context else ""
-        if self.n_units is None or self.n_units <= 0:
-            raise ValueError(f"{prefix}n_units must be > 0.")
-        if not (0.0 < self.spectral_radius):
-            raise ValueError(f"{prefix}spectral_radius must be > 0.")
-        if not (0.0 <= self.leak_rate <= 1.0):
-            raise ValueError(f"{prefix}leak_rate must be in [0, 1].")
-        if not (0.0 < self.input_scale):
-            raise ValueError(f"{prefix}input_scale must be > 0.")
-        if self.bias_scale < 0.0:
-            raise ValueError(f"{prefix}bias_scale must be >= 0.")
-        if not isinstance(self.state_aggregation, AggregationMode):
-            raise TypeError(f"{prefix}state_aggregation must be AggregationMode, got {type(self.state_aggregation)}.")
+        """
+        Basic validation hook to align with DistillationConfig expectations.
+        """
+        self.projection.validate(context=f"{context}projection")
+        self.dynamics.validate(context=f"{context}dynamics")
+        self.aggregation.validate(context=f"{context}aggregation")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Flattens the hierarchical config into a single dictionary.
+        This maintains compatibility with Factories that expect flat parameters.
+        """
+        flat_dict = {}
+        # Merge all sub-configs
+        flat_dict.update(asdict(self.preprocess))
+        flat_dict.update(asdict(self.projection))
+        flat_dict.update(asdict(self.dynamics))
+
+        # Handle AggregationMode enum serialization
+        agg_data = asdict(self.aggregation)
+        if isinstance(agg_data.get("mode"), AggregationMode):
+            flat_dict["state_aggregation"] = agg_data["mode"].value
+        else:
+            flat_dict["state_aggregation"] = agg_data.get("mode")
+
+        return flat_dict

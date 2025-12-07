@@ -20,7 +20,7 @@ class ReservoirFactory:
 
     @staticmethod
     def create_pipeline(
-        reservoir_params: Dict[str, Any] | ClassicalReservoirConfig,
+        reservoir_config: ClassicalReservoirConfig,
         *,
         input_dim: int,
         output_dim: int,
@@ -31,11 +31,6 @@ class ReservoirFactory:
         Assemble reservoir node and aggregation into SequentialModel (Steps 5-6).
         Assumes inputs are already projected to reservoir_config.n_units dimensionality.
         """
-        reservoir_config = (
-            reservoir_params
-            if isinstance(reservoir_params, ClassicalReservoirConfig)
-            else ClassicalReservoirConfig(**reservoir_params)
-        )
         reservoir_config.validate(context=pipeline.value)
 
         projected_input_dim = int(input_dim)
@@ -104,6 +99,5 @@ class ReservoirFactory:
             spectral_radius=float(config.spectral_radius),
             leak_rate=float(config.leak_rate),
             rc_connectivity=float(config.rc_connectivity),
-            noise_rc=float(config.noise_rc),
             seed=seed_val,
         )

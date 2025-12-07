@@ -206,8 +206,10 @@ class UniversalPipeline:
         if validation:
             val_X, val_y = validation
             val_Z = self.batch_transform(val_X, batch_size=feature_batch_size)
+            self._feature_stats(val_Z, "post_val_features")
 
         test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
+        self._feature_stats(test_features, "post_test_features")
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
         best_lambda, search_history, weight_norms = self._fit_readout(

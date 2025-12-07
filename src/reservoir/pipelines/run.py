@@ -111,6 +111,22 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
     return np.asarray(arr)
 
 
+def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray], test_X: Optional[np.ndarray]) -> None:
+    """Lightweight stats logger for each split at a given processing stage."""
+    def _stats(arr: np.ndarray) -> str:
+        arr64 = np.asarray(arr, dtype=np.float64)
+        return (
+            f"shape={arr64.shape}, mean={float(np.mean(arr64)):.4f}, std={float(np.std(arr64)):.4f}, "
+            f"min={float(np.min(arr64)):.4f}, max={float(np.max(arr64)):.4f}, nans={int(np.isnan(arr64).sum())}"
+        )
+
+    print(f"[FeatureStats:{stage}:train] {_stats(train_X)}")
+    if val_X is not None:
+        print(f"[FeatureStats:{stage}:val] {_stats(val_X)}")
+    if test_X is not None:
+        print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
+
+
 def _prepare_dataset(config: RunConfig) -> DatasetContext:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
     if not isinstance(config, RunConfig):
@@ -128,6 +144,10 @@ def _prepare_dataset(config: RunConfig) -> DatasetContext:
         model_type=config.model_type.value,
         require_3d=True,
     )
+
+    _log_split_stats("raw", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
+
+    print()
     return DatasetContext(
         dataset=dataset_enum,
         preset=dataset_preset,
@@ -146,18 +166,12 @@ def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset:
     Returns processed datasets and shape metadata for model creation.
     """
     print("\n=== Step 2: Preprocessing ===")
-    poly_degree = int(getattr(model_preset.config, "poly_degree", 1))
-    preprocessing_enum = config.preprocessing
-    preprocess_labels: list[str] = []
-    if preprocessing_enum == Preprocessing.STANDARD_SCALER:
-        preprocess_labels.append("scaler")
-    elif preprocessing_enum == Preprocessing.DESIGN_MATRIX:
-        preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
-    pre_layers = create_preprocessor(preprocessing_enum, poly_degree=poly_degree)
+    preprocessing_config = model_preset.config.preprocess
+    pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
 
     train_X = np.asarray(data_split.train_X)
-    val_X = np.asarray(data_split.val_X) if data_split.val_X is not None else None
-    test_X = np.asarray(data_split.test_X) if data_split.test_X is not None else None
+    val_X = np.asarray(data_split.val_X)
+    test_X = np.asarray(data_split.test_X)
 
     if pre_layers:
         train_X = _apply_layers(pre_layers, train_X, fit=True)
@@ -165,48 +179,30 @@ def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset:
             val_X = _apply_layers(pre_layers, val_X, fit=False)
         if test_X is not None:
             test_X = _apply_layers(pre_layers, test_X, fit=False)
+    _log_split_stats("preprocess", train_X, val_X, test_X)
     preprocessed_shape = train_X.shape[1:]
 
     print("\n=== Step 3: Projection (for reservoir/distillation) ===")
-    projected_shape: Optional[tuple[int, ...]] = None
-    projected_train = train_X
+    projection_config = model_preset.config.projection
+
+
+    projection = InputProjection(
+        input_dim=int(preprocessed_shape[-1]),
+        output_dim=int(projection_config.n_units),
+        input_scale=float(projection_config.input_scale),
+        input_connectivity=float(projection_config.input_connectivity),
+        seed=int(projection_config.seed),
+        bias_scale=float(projection_config.bias_scale),
+    )
+
+
+    projected_train = projection(train_X)
+    projected_test = projection(test_X)
+
     projected_val = val_X
-    projected_test = test_X
-    if config.model_type in {Pipeline.CLASSICAL_RESERVOIR, Pipeline.QUANTUM_GATE_BASED, Pipeline.QUANTUM_ANALOG}:
-        res_cfg = model_preset.config
-        projection = InputProjection(
-            input_dim=int(preprocessed_shape[-1]),
-            output_dim=int(res_cfg.n_units),
-            input_scale=float(res_cfg.input_scale),
-            input_connectivity=float(res_cfg.input_connectivity),
-            seed=int(res_cfg.seed or 0),
-            bias_scale=float(res_cfg.bias_scale),
-        )
-        projected_train = projection(train_X)
-        if val_X is not None:
-            projected_val = projection(val_X)
-        if test_X is not None:
-            projected_test = projection(test_X)
-        projected_shape = projected_train.shape[1:]
-    elif config.model_type is Pipeline.FNN_DISTILLATION:
-        distill_cfg = model_preset.config
-        if not isinstance(distill_cfg, DistillationConfig):
-            raise ValueError("FNN_DISTILLATION preset must define DistillationConfig.")
-        teacher_cfg = distill_cfg.teacher
-        projection = InputProjection(
-            input_dim=int(preprocessed_shape[-1]),
-            output_dim=int(teacher_cfg.n_units),
-            input_scale=float(teacher_cfg.input_scale),
-            input_connectivity=float(teacher_cfg.input_connectivity),
-            seed=int(teacher_cfg.seed or 0),
-            bias_scale=float(teacher_cfg.bias_scale),
-        )
-        projected_train = projection(train_X)
-        if val_X is not None:
-            projected_val = projection(val_X)
-        if test_X is not None:
-            projected_test = projection(test_X)
-        projected_shape = projected_train.shape[1:]
+    if val_X is not None:
+        projected_val = projection(val_X)
+    projected_shape = projected_train.shape[1:]
 
     transformed_shape = projected_shape or preprocessed_shape
     input_shape_for_meta: tuple[int, ...] = transformed_shape
@@ -222,8 +218,8 @@ def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset:
         val_X=projected_val,
         val_y=data_split.val_y,
     )
-    print(f"Data Shapes -> Train: {processed_split.train_X.shape}, Val: {getattr(processed_split.val_X, 'shape', None)}, Test: {processed_split.test_X.shape}")
 
+    _log_split_stats("projection", projected_train, projected_val, projected_test)
     return FrontendContext(
         processed_split=processed_split,
         preprocess_labels=preprocess_labels,

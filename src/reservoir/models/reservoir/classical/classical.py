@@ -25,10 +25,9 @@ class ClassicalReservoir(Reservoir):
         spectral_radius: float,
         leak_rate: float,
         rc_connectivity: float,
-        noise_rc: float,
         seed: int,
     ) -> None:
-        super().__init__(n_inputs=n_inputs, n_units=n_units, noise_rc=noise_rc, seed=seed)
+        super().__init__(n_inputs=n_inputs, n_units=n_units, seed=seed)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
         self.rc_connectivity = float(rc_connectivity)

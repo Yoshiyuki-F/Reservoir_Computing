@@ -20,8 +20,6 @@ class RunConfig:
     dataset: Dataset  # SSOT: The Data Source
     model_type: Pipeline  # SSOT: The Model Architecture
     task_type: TaskType  # SSOT: The Problem Category
-    preprocessing: Preprocessing  # SSOT: Feature Engineering
-    readout_type: ReadOutType  # SSOT: The Decoder
 
 
 class Pipeline(str, enum.Enum):
