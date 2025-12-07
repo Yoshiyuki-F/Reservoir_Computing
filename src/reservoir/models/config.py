@@ -70,6 +70,7 @@ class ClassicalReservoirConfig:
     leak_rate: float
     rc_connectivity: float
     seed: int
+    aggregation_config : AggregationConfig
 
     def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
         prefix = f"{context}: "
@@ -87,6 +88,7 @@ class ClassicalReservoirConfig:
             "leak_rate": float(self.leak_rate),
             "rc_connectivity": float(self.rc_connectivity),
             "seed": int(self.seed),
+            "aggregation": self.aggregation_config.to_dict(),
         }
 
 @dataclass(frozen=True)

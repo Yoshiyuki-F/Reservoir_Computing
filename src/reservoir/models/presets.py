@@ -31,7 +31,6 @@ class PipelineConfig:
     preprocess: PreprocessingConfig
     projection: ProjectionConfig
     model: Union[ClassicalReservoirConfig, DistillationConfig]
-    aggregation: Optional[AggregationConfig]
 
     def __post_init__(self) -> None:
         if self.preprocess is None:
@@ -140,19 +139,23 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
+#step 6 aggregation
+DEFAULT_AGGREGATION = AggregationConfig(AggregationMode.MEAN)
+
+
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
     rc_connectivity=0.9,
     seed=42,
+    aggregation_config=DEFAULT_AGGREGATION
 )
 
-DISTILLATION_MODEL = DistillationConfig(
+FNN_DISTILLATION_DYNAMICS = DistillationConfig(
     teacher=CLASSICAL_RESERVOIR_DYNAMICS,
     student_hidden_layers=(100,),
 )
 
-DEFAULT_AGGREGATION = AggregationConfig(mode=AggregationMode.MEAN)
 
 FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn-distillation",
@@ -160,8 +163,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
-    model=DISTILLATION_MODEL,
-    aggregation=None, # FNN distillation does not use aggregation
+    model=FNN_DISTILLATION_DYNAMICS
 )
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
@@ -170,9 +172,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
-    model=CLASSICAL_RESERVOIR_DYNAMICS,
-    aggregation=DEFAULT_AGGREGATION,
+    model=CLASSICAL_RESERVOIR_DYNAMICS
 )
+
 
 MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {
     Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_PRESET,
