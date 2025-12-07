@@ -11,7 +11,7 @@ ensure_x64_enabled()
 
 from reservoir.utils import check_gpu_available
 from reservoir.pipelines.config_builder import build_run_config
-from reservoir.core.identifiers import Pipeline
+from reservoir.core.identifiers import Model
 from reservoir.pipelines import run_pipeline
 
 def main() -> None:
@@ -21,7 +21,7 @@ def main() -> None:
         "--model",
         type=str,
         required=True,
-        choices=[p.value for p in Pipeline],
+        choices=[p.value for p in Model],
         help="Model preset name (Pipeline enum value, e.g., classical-reservoir, fnn-distillation)",
     )
     parser.add_argument("--dataset", type=str, required=True)
@@ -36,12 +36,12 @@ def main() -> None:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config (strict preset + dataset only)
-    config = build_run_config(preset_name=args.model, dataset_name=args.dataset)
+    config, dataset = build_run_config(preset_name=args.model, dataset_name=args.dataset)
 
-    print(f"[Unified] Running {config[0].model_type} pipeline on {config[0].dataset}...")
+    print(f"[Unified] Running {config.name} pipeline on {dataset.name}...")
 
     # Run Pipeline
-    results = run_pipeline(config)
+    results = run_pipeline(config, dataset)
 
     # Output Results
     print("[Unified] Results:")

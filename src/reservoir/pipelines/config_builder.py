@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from reservoir.core.identifiers import Pipeline, TaskType
-from reservoir.models import ModelConfig
+from reservoir.core.identifiers import Model, Dataset
+from reservoir.models.presets import PipelineConfig
 from reservoir.models.presets import MODEL_DEFINITIONS
 
 
-def build_run_config(*, preset_name: str, dataset_name: str) -> Tuple[ModelConfig, TaskType]:
+def build_run_config(*, preset_name: str, dataset_name: str) -> Tuple[PipelineConfig, Dataset]:
     """
     Strict V2 Config Builder.
     Accepts ONLY the model preset and dataset identifiers, validating eagerly.
@@ -18,10 +18,10 @@ def build_run_config(*, preset_name: str, dataset_name: str) -> Tuple[ModelConfi
     if not preset_name:
         raise ValueError("preset_name is required.")
 
-    task_type = TaskType(preset_name)
-    pipeline = Pipeline(preset_name)
+    model = Model(preset_name)
+    dataset = Dataset(dataset_name)
 
-    return MODEL_DEFINITIONS[pipeline], task_type
+    return MODEL_DEFINITIONS[model], dataset
 
 
 __all__ = ["build_run_config"]

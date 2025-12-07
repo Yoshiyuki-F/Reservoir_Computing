@@ -24,7 +24,7 @@ from reservoir.data.config import (
     MNISTConfig,
 )
 from reservoir.core.presets import StrictRegistry
-from reservoir.models import ModelConfig
+from reservoir.models.presets import PipelineConfig
 from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
@@ -113,7 +113,7 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def load_dataset_with_validation_split(
-    config: ModelConfig,
+    config: PipelineConfig,
     training_cfg: Optional[TrainingConfig] = None,
     *,
     model_type: str,
