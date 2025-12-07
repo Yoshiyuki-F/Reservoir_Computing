@@ -15,7 +15,7 @@ from functools import lru_cache
 import jax.numpy as jnp
 from reservoir.readout import RidgeReadoutNumpy
 from reservoir.models.presets import get_model_preset
-from reservoir.core.identifiers import Pipeline
+from reservoir.core.identifiers import Model
 
 from reservoir.models.reservoir.base import BaseReservoirComputer
 from reservoir.models.reservoir.classical.config import QuantumReservoirConfig, parse_ridge_lambdas

@@ -70,7 +70,7 @@ class ClassicalReservoirConfig:
     leak_rate: float
     rc_connectivity: float
     seed: int
-    aggregation : AggregationMode
+    aggregation: AggregationMode
 
     def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
         prefix = f"{context}: "
@@ -80,6 +80,10 @@ class ClassicalReservoirConfig:
             raise ValueError(f"{prefix}leak_rate must be in (0,1].")
         if not (0.0 < float(self.rc_connectivity) <= 1.0):
             raise ValueError(f"{prefix}rc_connectivity must be in (0,1].")
+        if self.aggregation is None:
+            raise ValueError(f"{prefix}aggregation is required.")
+        if not isinstance(self.aggregation, AggregationMode):
+            raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         return self
 
     def to_dict(self) -> dict[str, Any]:
