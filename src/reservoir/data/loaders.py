@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 
+from reservoir.core.identifiers import Dataset
 from reservoir.data.generators import (
     generate_sine_data,
     generate_mnist_sequence_data,
@@ -15,7 +16,6 @@ from reservoir.data.generators import (
     generate_lorenz_data,
 )
 from reservoir.data.presets import get_dataset_preset
-from reservoir.core.identifiers import Dataset, RunConfig
 from reservoir.data.config import (
     BaseDatasetConfig,
     SineWaveConfig,
@@ -24,6 +24,7 @@ from reservoir.data.config import (
     MNISTConfig,
 )
 from reservoir.core.presets import StrictRegistry
+from reservoir.models import ModelConfig
 from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
@@ -112,7 +113,7 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def load_dataset_with_validation_split(
-    config: RunConfig,
+    config: ModelConfig,
     training_cfg: Optional[TrainingConfig] = None,
     *,
     model_type: str,
