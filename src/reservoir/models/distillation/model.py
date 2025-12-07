@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/distillation/model.py
 Distill a teacher feature extractor into a student feed-forward network.
 """
 
@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import jax
 import jax.numpy as jnp
 
 from reservoir.models.nn.base import BaseModel
@@ -28,30 +29,41 @@ class DistillationModel(BaseModel):
         return self.__call__(X)
 
     def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:
-        teacher_features = self.teacher(inputs)
-        # Force MSE-based distillation by disabling classification loss on the student model
-        # and any trainable layers inside the sequential container.
-        if hasattr(self.student, "classification"):
-            try:
-                self.student.classification = False
-            except Exception:
-                pass
-        if hasattr(self.student, "layers"):
-            for layer in getattr(self.student, "layers"):
-                if hasattr(layer, "classification"):
-                    try:
-                        layer.classification = False
-                    except Exception:
-                        pass
-        return self.student.train(inputs, teacher_features)
+        # Step A: Teacher forward pass (no gradients back to teacher).
+        teacher_features = jax.lax.stop_gradient(self.teacher(inputs))
 
-    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
-        preds = self.predict(X)
-        y_arr = jnp.asarray(y)
-        if preds.shape != y_arr.shape:
-            raise ValueError(f"Shape mismatch for evaluation: preds {preds.shape}, y {y_arr.shape}")
-        mse = float(jnp.mean((preds - y_arr) ** 2))
-        return {"mse": mse}
+        # Step B: Adapter forward (flatten) then student engine train.
+        if not hasattr(self.student, "layers") or len(self.student.layers) < 2:
+            raise ValueError("Distillation student must be SequentialModel with [Flatten, FNN] layers.")
+
+        adapter = self.student.layers[0]
+        engine = self.student.layers[1]
+        student_inputs = adapter(inputs)
+
+        logs = engine.train(student_inputs, teacher_features)
+
+        # Post-train: compute final distillation loss for logging.
+        student_out = engine.predict(student_inputs)
+        if student_out.shape != teacher_features.shape:
+            raise ValueError(f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_features.shape}")
+        distill_loss = float(jnp.mean((student_out - teacher_features) ** 2))
+        if isinstance(logs, dict):
+            logs = dict(logs)
+            logs.setdefault("final_loss", distill_loss)
+        else:
+            logs = {"final_loss": distill_loss}
+        return logs
+
+    def evaluate(self, X: jnp.ndarray, y: Any = None) -> Dict[str, float]:
+        """
+        Distillation evaluation aligns student outputs with teacher features (not labels).
+        """
+        teacher_features = jax.lax.stop_gradient(self.teacher(X))
+        student_out = self.student(X)
+        if student_out.shape != teacher_features.shape:
+            raise ValueError(f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_features.shape}")
+        distill_mse = float(jnp.mean((student_out - teacher_features) ** 2))
+        return {"distill_mse": distill_mse}
 
     def get_topology_meta(self) -> Dict[str, Any]:
         return (

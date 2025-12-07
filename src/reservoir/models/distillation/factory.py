@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from dataclasses import replace
 from reservoir.core.identifiers import Pipeline
 from reservoir.models.distillation.model import DistillationModel
 from reservoir.models.nn.factory import NNModelFactory
@@ -51,7 +52,9 @@ class DistillationFactory:
         time_steps = input_shape[0] if input_shape else 1
         student_input_dim = input_dim * time_steps
         fnn_cfg_layers = [student_input_dim, *distillation_config.student_hidden_layers, teacher_feature_dim]
-        student_model = NNModelFactory.create_fnn({"layer_dims": fnn_cfg_layers}, training)
+        # Force regression for student (it mimics features, not labels)
+        student_training = replace(training, classification=False)
+        student_model = NNModelFactory.create_fnn({"layer_dims": fnn_cfg_layers}, student_training)
         student_layers: list[Any] = [Flatten(), student_model]
 
         student_seq = SequentialModel(student_layers)
@@ -59,7 +62,6 @@ class DistillationFactory:
 
         model = DistillationModel(teacher=teacher_seq, student=student_seq, training_config=training)
 
-        agg_mode = teacher_meta.get("details", {}).get("agg_mode")
         topo_meta: Dict[str, Any] = {
             "type": Pipeline.FNN_DISTILLATION.value.upper(),
             "shapes": {
