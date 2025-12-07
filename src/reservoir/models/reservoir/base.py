@@ -11,8 +11,7 @@ import jax.numpy as jnp
 class Reservoir(ABC):
     """Abstract base class providing common scan-based trajectory generation."""
 
-    def __init__(self, n_inputs: int, n_units: int, seed: int) -> None:
-        self.n_inputs = n_inputs
+    def __init__(self, n_units: int, seed: int) -> None:
         self.n_units = n_units
         self.seed = seed
 
@@ -44,7 +43,7 @@ class Reservoir(ABC):
         return states if is_sequence_batched else states[0]
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"n_inputs": self.n_inputs, "n_units": self.n_units}
+        return {"n_units": self.n_units}
 
     def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         """

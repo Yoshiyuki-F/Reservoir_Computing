@@ -20,14 +20,13 @@ class ClassicalReservoir(Reservoir):
 
     def __init__(
         self,
-        n_inputs: int,
         n_units: int,
         spectral_radius: float,
         leak_rate: float,
         rc_connectivity: float,
         seed: int,
     ) -> None:
-        super().__init__(n_inputs=n_inputs, n_units=n_units, seed=seed)
+        super().__init__( n_units=n_units, seed=seed)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
         self.rc_connectivity = float(rc_connectivity)
@@ -90,16 +89,14 @@ class ClassicalReservoir(Reservoir):
     def from_dict(cls, data: Dict[str, Any]) -> "ClassicalReservoir":
         try:
             return cls(
-                n_inputs=int(data["n_inputs"]),
                 n_units=int(data["n_units"]),
                 spectral_radius=float(data["spectral_radius"]),
                 leak_rate=float(data["leak_rate"]),
                 rc_connectivity=float(data["rc_connectivity"]),
-                noise_rc=float(data["noise_rc"]),
                 seed=int(data["seed"]),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc
 
     def __repr__(self) -> str:
-        return f"ClassicalReservoir(n_inputs={self.n_inputs}, n_units={self.n_units})"
+        return f"ClassicalReservoir(n_units={self.n_units})"
