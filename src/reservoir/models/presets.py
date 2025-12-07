@@ -90,8 +90,6 @@ class PipelineConfig:
 
         merged.update(self.preprocess.to_dict())
         merged.update(self.projection.to_dict())
-        if self.aggregation is not None:
-            merged.update(self.aggregation.to_dict())
 
         return merged
 
