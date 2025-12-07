@@ -70,7 +70,7 @@ class ClassicalReservoirConfig:
     leak_rate: float
     rc_connectivity: float
     seed: int
-    aggregation_config : AggregationConfig
+    aggregation : AggregationMode
 
     def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
         prefix = f"{context}: "
@@ -88,7 +88,7 @@ class ClassicalReservoirConfig:
             "leak_rate": float(self.leak_rate),
             "rc_connectivity": float(self.rc_connectivity),
             "seed": int(self.seed),
-            "aggregation": self.aggregation_config.to_dict(),
+            "aggregation": self.aggregation.value,
         }
 
 @dataclass(frozen=True)
@@ -115,20 +115,3 @@ class DistillationConfig:
             raise ValueError(f"{prefix}student_hidden_layers must contain at least one layer size.")
         if any(width <= 0 for width in self.student_hidden_layers):
             raise ValueError(f"{prefix}student_hidden_layers values must be positive.")
-
-
-
-
-@dataclass(frozen=True)
-class AggregationConfig:
-    """Step 6 aggregation parameters."""
-
-    mode: AggregationMode
-
-    def validate(self, context: str = "aggregation") -> "AggregationConfig":
-        if self.mode is None:
-            raise ValueError(f"{context}: mode is required.")
-        return self
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"mode": self.mode.value if isinstance(self.mode, AggregationMode) else str(self.mode)}

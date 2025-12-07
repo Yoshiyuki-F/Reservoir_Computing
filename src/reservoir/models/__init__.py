@@ -8,7 +8,7 @@ from .nn.rnn import RNNModel, SimpleRNN
 from .sequential import SequentialModel
 from .reservoir import ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
-    ModelConfig,
+    PipelineConfig,
     MODEL_PRESETS,
     MODEL_REGISTRY,
     get_model_preset,
@@ -29,7 +29,7 @@ __all__ = [
     "ReservoirFactory",
     "Reservoir",
     "ClassicalReservoir",
-    "ModelConfig",
+    "PipelineConfig",
     "MODEL_PRESETS",
     "MODEL_REGISTRY",
     "get_model_preset",

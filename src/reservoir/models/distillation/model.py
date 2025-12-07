@@ -32,6 +32,8 @@ class DistillationModel(BaseModel):
     def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:
         # Step A: Teacher forward pass (no gradients back to teacher).
         teacher_features = jax.lax.stop_gradient(self.teacher(inputs))
+        if teacher_features.ndim == 3:
+            teacher_features = teacher_features.reshape(teacher_features.shape[0], -1)
 
         # Step B: Adapter forward (flatten) then student engine train.
         if not hasattr(self.student, "layers") or len(self.student.layers) < 2:
@@ -61,6 +63,8 @@ class DistillationModel(BaseModel):
         """
         teacher_features = jax.lax.stop_gradient(self.teacher(X))
         student_out = self.student(X)
+        if teacher_features.ndim == 3:
+            teacher_features = teacher_features.reshape(teacher_features.shape[0], -1)
         if student_out.shape != teacher_features.shape:
             raise ValueError(f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_features.shape}")
         distill_mse = float(jnp.mean((student_out - teacher_features) ** 2))
