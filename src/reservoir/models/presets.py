@@ -161,7 +161,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=DISTILLATION_MODEL,
-    aggregation=None,
+    aggregation=None, # FNN distillation does not use aggregation
 )
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
