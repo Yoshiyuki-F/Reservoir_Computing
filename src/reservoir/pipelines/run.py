@@ -16,7 +16,7 @@ import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.core.identifiers import Dataset, Pipeline, TaskType, RunConfig, Preprocessing
+from reservoir.core.identifiers import Dataset, Pipeline, TaskType
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.ridge import RidgeRegression
@@ -26,7 +26,7 @@ from reservoir.data.structs import SplitDataset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.layers.preprocessing import create_preprocessor
 from reservoir.layers.projection import InputProjection
-from reservoir.models.presets import get_model_preset, DistillationConfig, ModelConfig
+from reservoir.models.presets import get_model_preset, ModelConfig
 from reservoir.utils.reporting import generate_report
 
 # Ensure dataset loaders are registered
@@ -127,10 +127,10 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
         print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
 
 
-def _prepare_dataset(config: RunConfig) -> DatasetContext:
+def _prepare_dataset(config: ModelConfig) -> DatasetContext:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
-    if not isinstance(config, RunConfig):
-        raise TypeError(f"run_pipeline requires RunConfig, got {type(config)}.")
+    if not isinstance(config, ModelConfig):
+        raise TypeError(f"run_pipeline requires ModelConfig, got {type(config)}.")
 
     print("=== Step 1: Loading Dataset ===")
     dataset_enum, dataset_preset = _get_strict_dataset_meta(config.dataset)
@@ -147,7 +147,6 @@ def _prepare_dataset(config: RunConfig) -> DatasetContext:
 
     _log_split_stats("raw", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
 
-    print()
     return DatasetContext(
         dataset=dataset_enum,
         preset=dataset_preset,
@@ -160,7 +159,7 @@ def _prepare_dataset(config: RunConfig) -> DatasetContext:
     )
 
 
-def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset: ModelConfig) -> FrontendContext:
+def _process_frontend(config: ModelConfig, data_split: SplitDataset, model_preset: ModelConfig) -> FrontendContext:
     """
     Step 2 & 3: Apply preprocessing and projection without mutating raw splits.
     Returns processed datasets and shape metadata for model creation.
@@ -231,7 +230,7 @@ def _process_frontend(config: RunConfig, data_split: SplitDataset, model_preset:
 
 
 def _build_model_stack(
-    config: RunConfig,
+    config: ModelConfig,
     dataset_ctx: DatasetContext,
     frontend_ctx: FrontendContext,
 ) -> ModelStack:
@@ -282,7 +281,7 @@ def _build_model_stack(
     )
 
 
-def run_pipeline(config: RunConfig) -> Dict[str, Any]:
+def run_pipeline(config: ModelConfig, task_type:TaskType ) -> Dict[str, Any]:
     """
     Declarative orchestrator for the unified pipeline.
     """
