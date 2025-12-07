@@ -113,10 +113,8 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def load_dataset_with_validation_split(
-    config: PipelineConfig,
+    dataset_enum: Dataset,
     training_cfg: Optional[TrainingConfig] = None,
-    *,
-    model_type: str,
     require_3d: bool = True,
 ) -> SplitDataset:
     """
@@ -125,7 +123,6 @@ def load_dataset_with_validation_split(
     if training_cfg is None:
         training_cfg = get_training_preset("standard")
 
-    dataset_enum = config.dataset
     preset = get_dataset_preset(dataset_enum)
     if preset is None:
         raise ValueError(f"Dataset preset '{dataset_enum}' is not registered.")
@@ -202,19 +199,19 @@ def load_dataset_with_validation_split(
 
         train_X, train_y, val_X, val_y = _split_validation(train_X, train_y)
 
-    if require_3d:
-        targets = {
-            "train": train_X,
-            "test": test_X,
-            "val": val_X,
-        }
-        for split_name, arr in targets.items():
-            if arr is None:
-                continue
-            if arr.ndim != 3:
-                raise ValueError(
-                    f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
-                    f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
-                )
+    # if require_3d:
+    #     targets = {
+    #         "train": train_X,
+    #         "test": test_X,
+    #         "val": val_X,
+    #     }
+    #     for split_name, arr in targets.items():
+    #         if arr is None:
+    #             continue
+    #         if arr.ndim != 3:
+    #             raise ValueError(
+    #                 f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
+    #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
+    #             )
 
     return SplitDataset(train_X, train_y, test_X, test_y, val_X, val_y)
