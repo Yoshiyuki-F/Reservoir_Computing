@@ -4,7 +4,7 @@ Shared configuration components for model pipelines (Steps 2-6).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict, Tuple
 
 from reservoir.core.identifiers import AggregationMode, Preprocessing
 
@@ -63,7 +63,7 @@ class ProjectionConfig:
 
 
 @dataclass(frozen=True)
-class ReservoirDynamicsConfig:
+class ClassicalReservoirConfig:
     """Step 5 reservoir dynamics parameters."""
 
     spectral_radius: float
@@ -71,7 +71,7 @@ class ReservoirDynamicsConfig:
     rc_connectivity: float
     seed: int
 
-    def validate(self, context: str = "dynamics") -> "ReservoirDynamicsConfig":
+    def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
         prefix = f"{context}: "
         if float(self.spectral_radius) <= 0:
             raise ValueError(f"{prefix}spectral_radius must be positive.")
@@ -88,6 +88,33 @@ class ReservoirDynamicsConfig:
             "rc_connectivity": float(self.rc_connectivity),
             "seed": int(self.seed),
         }
+
+@dataclass(frozen=True)
+class DistillationConfig:
+    """Configuration for distilling reservoir dynamics into a Student FNN."""
+    """Step 5 distillation fnn dynamics parameters."""
+
+    teacher: ClassicalReservoirConfig
+    student_hidden_layers: Tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "teacher": self.teacher.to_dict(),
+            "student_hidden_layers": tuple(int(v) for v in self.student_hidden_layers),
+        }
+
+    def validate(self, *, context: str = "") -> None:
+        prefix = f"{context}: " if context else ""
+        self.teacher.validate(context=f"{prefix}teacher")
+        if not self.student_hidden_layers:
+            raise ValueError(f"{prefix}student_hidden_layers must contain at least one layer size.")
+        if any(width <= 0 for width in self.student_hidden_layers):
+            raise ValueError(f"{prefix}student_hidden_layers values must be positive.")
+
+
 
 
 @dataclass(frozen=True)
