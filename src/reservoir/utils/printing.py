@@ -57,16 +57,17 @@ def print_topology(meta: Dict[str, Any]) -> None:
         print("4. Adapter         : Skipped")
 
     # Step 5/6: internal/model
-    model_desc = ""
+    has_aggregation = agg_mode not in ("None", None)
+
     if student_layers_raw and s_adapter is not None:
         chain = [_fmt_dim(s_adapter)]
         chain.extend(f"[{int(v)}]" for v in student_layers_raw)
-        if s_feat is not None:
+        if not has_aggregation and s_feat is not None:
             chain.append(_fmt_dim(s_feat))
         model_desc = " -> ".join(chain)
     elif s_internal is not None:
         model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
-        if s_feat is not None and s_feat != s_internal:
+        if not has_aggregation and s_feat is not None and s_feat != s_internal:
             model_desc = f"{model_desc} -> {_fmt_dim(s_feat)}"
     else:
         model_desc = "n/a"
