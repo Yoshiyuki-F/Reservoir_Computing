@@ -9,10 +9,9 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Optional, Union
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import Pipeline, AggregationMode, Preprocessing
-from reservoir.models.config import PreprocessingConfig, ProjectionConfig, ReservoirDynamicsConfig, AggregationConfig
-from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
-from reservoir.models.distillation.config import DistillationConfig
+from reservoir.core.identifiers import Pipeline, AggregationMode, Preprocessing, TaskType
+from reservoir.models.config import PreprocessingConfig, ProjectionConfig, AggregationConfig, ClassicalReservoirConfig, \
+    DistillationConfig
 
 
 @dataclass(frozen=True)
@@ -25,8 +24,10 @@ class ModelConfig:
     name: str
     model_type: Pipeline
     description: str
-    config: Union[ClassicalReservoirConfig, DistillationConfig]
-    params: Dict[str, Any] = field(default_factory=dict)
+    preprocess_config: PreprocessingConfig
+    projection_config: ProjectionConfig
+    model_config: Union[ClassicalReservoirConfig, DistillationConfig]
+    aggregation_config: Optional[AGGREGATION_CONFIG]
 
     @property
     def reservoir(self) -> Optional[ClassicalReservoirConfig]:
@@ -76,49 +77,59 @@ class ModelConfig:
 # Definitions
 # -----------------------------------------------------------------------------
 
-CRCONFIG: ClassicalReservoirConfig = ClassicalReservoirConfig(
-    # Step 2
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.RAW,
-        poly_degree=1
-    ),
-    # Step 3
-    projection=ProjectionConfig(
-        n_units=100,
-        input_scale=0.6,
-        input_connectivity=0.1,
-        bias_scale=1.0,
-        seed=42
-    ),
-    # Step 5
-    dynamics=ReservoirDynamicsConfig(
-        spectral_radius=1.3,
-        leak_rate=0.2,
-        rc_connectivity=0.9,
-        seed=42
-    ),
-    # Step 6
-    aggregation=AggregationConfig(
-        mode=AggregationMode.MEAN
-    )
+PREPROCESSING_CONFIG = PreprocessingConfig(
+    method=Preprocessing.RAW,
+    poly_degree=1
+)
+
+PROJECTION_CONFIG = ProjectionConfig(
+    n_units=100,
+    input_scale=0.6,
+    input_connectivity=0.1,
+    bias_scale=1.0,
+    seed=42
+)
+
+CLASSICAL_RESERVOIR_CONFIG = ClassicalReservoirConfig(
+    spectral_radius=1.3,
+    leak_rate=0.2,
+    rc_connectivity=0.9,
+    seed=42
+)
+
+DISTILLATION_CONFIG = DistillationConfig(
+    teacher=CLASSICAL_RESERVOIR_CONFIG,
+    student_hidden_layers=(100,),
+)
+
+AGGREGATION_CONFIG = AggregationConfig(
+    mode=AggregationMode.MEAN
+)
+
+
+FNN_DISTILLATION_CONFIG = ModelConfig(
+    name="fnn-distillation",
+    model_type=Pipeline.FNN_DISTILLATION,
+    description="Feedforward Neural Network with Reservoir Distillation",
+    preprocess_config=PREPROCESSING_CONFIG,
+    projection_config=PROJECTION_CONFIG,
+    model_config=DISTILLATION_CONFIG,
+    aggregation_config=None
+)
+
+CLASSICAL_RESERVOIR_CONFIG = ModelConfig(
+    name="classical-reservoir",
+    model_type=Pipeline.CLASSICAL_RESERVOIR,
+    description="Echo State Network (Classical Reservoir Computing)",
+    preprocess_config=PREPROCESSING_CONFIG,
+    projection_config=PROJECTION_CONFIG,
+    model_config=CLASSICAL_RESERVOIR_CONFIG,
+    aggregation_config=AGGREGATION_CONFIG
 )
 
 MODEL_DEFINITIONS: Dict[Pipeline, ModelConfig] = {
-    Pipeline.CLASSICAL_RESERVOIR: ModelConfig(
-        name="classical",
-        model_type=Pipeline.CLASSICAL_RESERVOIR,
-        description="Standard classical reservoir (Echo State Network)",
-        config=CRCONFIG, #TODO why 2346 in the same Config? does it need info for preprocess/projection?, no.
-    ),
-    Pipeline.FNN_DISTILLATION: ModelConfig(
-        name="fnn-distillation",
-        model_type=Pipeline.FNN_DISTILLATION,
-        description="Feedforward Neural Network with Reservoir Distillation",
-        config=DistillationConfig(
-            teacher=CRCONFIG,
-            student_hidden_layers=(100,),
-        ),
-    ),
+    Pipeline.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_CONFIG,
+    Pipeline.FNN_DISTILLATION: FNN_DISTILLATION_CONFIG,
 }
 
 

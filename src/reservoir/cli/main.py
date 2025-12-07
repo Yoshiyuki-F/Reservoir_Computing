@@ -38,7 +38,7 @@ def main() -> None:
     # Build Config (strict preset + dataset only)
     config = build_run_config(preset_name=args.model, dataset_name=args.dataset)
 
-    print(f"[Unified] Running {config.model_type} pipeline on {config.dataset}...")
+    print(f"[Unified] Running {config[0].model_type} pipeline on {config[0].dataset}...")
 
     # Run Pipeline
     results = run_pipeline(config)

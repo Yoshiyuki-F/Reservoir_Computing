@@ -55,4 +55,4 @@ pipelines/generic_runner.py (Driver)
 
 pipelines/run.py (Manager/Frontend)
 責務: 1-3 (Frontend) の準備 と、ドライバーへの指示。
-特徴: 具体的なコンフィグ (RunConfig) を解釈し、データを用意し、Factoryに製造を依頼し、Runnerに鍵を渡す。
+特徴: 具体的なコンフィグ (ModelConfig) を解釈し、データを用意し、Factoryに製造を依頼し、Runnerに鍵を渡す。

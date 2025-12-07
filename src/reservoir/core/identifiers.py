@@ -12,15 +12,6 @@ This module centralizes the definition of:
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class RunConfig:
-    dataset: Dataset  # SSOT: The Data Source
-    model_type: Pipeline  # SSOT: The Model Architecture
-    task_type: TaskType  # SSOT: The Problem Category
-
 
 class Pipeline(str, enum.Enum):
     """実験パイプライン（モデルアーキテクチャ）の種類。"""
@@ -40,7 +31,7 @@ class TaskType(str, enum.Enum):
     """タスクの種類。"""
 
     REGRESSION = "regression"
-    CLASSIFICATION = "classification" # TODO shoudl be definied by dataset (data/configs)
+    CLASSIFICATION = "classification"
 
     def __str__(self) -> str:
         return self.value
