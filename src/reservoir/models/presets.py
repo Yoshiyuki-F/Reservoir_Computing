@@ -12,7 +12,6 @@ from reservoir.core.identifiers import AggregationMode, Preprocessing, Model
 from reservoir.models.config import (
     PreprocessingConfig,
     ProjectionConfig,
-    AggregationConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
 )
@@ -49,15 +48,6 @@ class PipelineConfig:
         elif hasattr(model_cfg, "validate"):
             model_cfg.validate(context=f"{self.name}.model")
 
-        if self.model_type in {
-            Model.CLASSICAL_RESERVOIR,
-            Model.QUANTUM_GATE_BASED,
-            Model.QUANTUM_ANALOG,
-        }:
-            if self.aggregation is None:
-                raise ValueError(f"{self.name}: aggregation config is required for reservoir pipelines.")
-            self.aggregation.validate(context=f"{self.name}.aggregation")
-
     # Legacy-friendly aliases (SSOT remains the explicit fields above)
     @property
     def config(self) -> Union[ClassicalReservoirConfig, DistillationConfig]:
@@ -70,10 +60,6 @@ class PipelineConfig:
     @property
     def projection_config(self) -> ProjectionConfig:
         return self.projection
-
-    @property
-    def aggregation_config(self) -> Optional[AggregationConfig]:
-        return self.aggregation
 
     @property
     def params(self) -> Dict[str, Any]:
@@ -139,16 +125,13 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-#step 6 aggregation
-DEFAULT_AGGREGATION = AggregationConfig(AggregationMode.MEAN)
-
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
     rc_connectivity=0.9,
     seed=42,
-    aggregation_config=DEFAULT_AGGREGATION
+    aggregation=AggregationMode.MEAN,
 )
 
 FNN_DISTILLATION_DYNAMICS = DistillationConfig(
@@ -163,7 +146,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
-    model=FNN_DISTILLATION_DYNAMICS
+    model=FNN_DISTILLATION_DYNAMICS,
 )
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
@@ -172,7 +155,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
-    model=CLASSICAL_RESERVOIR_DYNAMICS
+    model=CLASSICAL_RESERVOIR_DYNAMICS,
 )
 
 
