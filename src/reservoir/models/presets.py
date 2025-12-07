@@ -1,135 +1,182 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/presets.py
-Central Registry for Model Presets.
-Aggregates configurations from sub-modules into named presets for the CLI.
-Uses shared identifiers from reservoir.core.identifiers.
+Central registry for model presets.
+SSOT: all default hyperparameters live in these dataclasses.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, Optional, Union
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import AggregationMode, Preprocessing,  Model
-from reservoir.models.config import PreprocessingConfig, ProjectionConfig, AggregationConfig, ClassicalReservoirConfig, \
-    DistillationConfig
+from reservoir.core.identifiers import AggregationMode, Preprocessing, Model
+from reservoir.models.config import (
+    PreprocessingConfig,
+    ProjectionConfig,
+    AggregationConfig,
+    ClassicalReservoirConfig,
+    DistillationConfig,
+)
 
 
 @dataclass(frozen=True)
 class PipelineConfig:
     """
-    Wrapper for model configuration.
-    Links a canonical pipeline ID (model_type) with a specific config object.
+    Canonical pipeline configuration composed of step-specific configs (2-6).
+    Exposes explicit, validated fields; no implicit defaults.
     """
 
     name: str
     model_type: Model
     description: str
-    preprocess_config: PreprocessingConfig
-    projection_config: ProjectionConfig
-    model_config: Union[ClassicalReservoirConfig, DistillationConfig]
-    aggregation_config: Optional[AGGREGATION_CONFIG]
+    preprocess: PreprocessingConfig
+    projection: ProjectionConfig
+    model: Union[ClassicalReservoirConfig, DistillationConfig]
+    aggregation: Optional[AggregationConfig]
+
+    def __post_init__(self) -> None:
+        if self.preprocess is None:
+            raise ValueError(f"{self.name}: preprocess config is required.")
+        if self.projection is None:
+            raise ValueError(f"{self.name}: projection config is required.")
+        if self.model is None:
+            raise ValueError(f"{self.name}: model config is required.")
+
+        self.preprocess.validate(context=f"{self.name}.preprocess")
+        self.projection.validate(context=f"{self.name}.projection")
+
+        model_cfg = self.model
+        if isinstance(model_cfg, DistillationConfig):
+            model_cfg.validate(context=f"{self.name}.model")
+        elif hasattr(model_cfg, "validate"):
+            model_cfg.validate(context=f"{self.name}.model")
+
+        if self.model_type in {
+            Model.CLASSICAL_RESERVOIR,
+            Model.QUANTUM_GATE_BASED,
+            Model.QUANTUM_ANALOG,
+        }:
+            if self.aggregation is None:
+                raise ValueError(f"{self.name}: aggregation config is required for reservoir pipelines.")
+            self.aggregation.validate(context=f"{self.name}.aggregation")
+
+    # Legacy-friendly aliases (SSOT remains the explicit fields above)
+    @property
+    def config(self) -> Union[ClassicalReservoirConfig, DistillationConfig]:
+        return self.model
+
+    @property
+    def preprocess_config(self) -> PreprocessingConfig:
+        return self.preprocess
+
+    @property
+    def projection_config(self) -> ProjectionConfig:
+        return self.projection
+
+    @property
+    def aggregation_config(self) -> Optional[AggregationConfig]:
+        return self.aggregation
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        return {}
 
     @property
     def reservoir(self) -> Optional[ClassicalReservoirConfig]:
         """Expose reservoir configs for consumers expecting the legacy attribute."""
-        if isinstance(self.config, ClassicalReservoirConfig):
-            return self.config
-        return None
+        return self.model if isinstance(self.model, ClassicalReservoirConfig) else None
 
     @property
     def distillation(self) -> Optional[DistillationConfig]:
         """Expose distillation configs for consumers expecting the legacy attribute."""
-        if isinstance(self.config, DistillationConfig):
-            return self.config
-        return None
+        return self.model if isinstance(self.model, DistillationConfig) else None
 
     def to_params(self) -> Dict[str, Any]:
-        """Merge explicit params with the underlying config dict."""
+        """Flatten pipeline configuration into a serializable dictionary."""
         merged: Dict[str, Any] = {}
 
-        if self.config is not None:
-            if isinstance(self.config, DistillationConfig):
-                merged.update(self.config.teacher.to_dict())
-                merged["student_hidden_layers"] = tuple(int(v) for v in self.config.student_hidden_layers)
-            elif hasattr(self.config, "to_dict"):
-                merged.update(self.config.to_dict())
-            else:
-                merged.update(asdict(self.config))
+        model_cfg = self.model
+        if isinstance(model_cfg, DistillationConfig):
+            merged.update(model_cfg.teacher.to_dict())
+            merged["student_hidden_layers"] = tuple(int(v) for v in model_cfg.student_hidden_layers)
+        elif hasattr(model_cfg, "to_dict"):
+            merged.update(model_cfg.to_dict())
+        else:
+            merged.update(asdict(model_cfg))
 
-        merged.update(self.params)
+        merged.update(self.preprocess.to_dict())
+        merged.update(self.projection.to_dict())
+        if self.aggregation is not None:
+            merged.update(self.aggregation.to_dict())
+
         return merged
 
     def __getattr__(self, item: str) -> Any:
         """
-        Provide passthrough access to underlying config/params for
-        compatibility (e.g., preset.leak_rate in tests).
+        Provide passthrough access to underlying model config for convenience
+        (e.g., preset.leak_rate).
         """
-        if self.config is not None and hasattr(self.config, item):
-            return getattr(self.config, item)
-        if isinstance(self.config, DistillationConfig) and hasattr(self.config.teacher, item):
-            return getattr(self.config.teacher, item)
-        if item in self.params:
-            return self.params[item]
-        raise AttributeError(f"{item} not found in PipelineConfig or underlying config.")
+        model_cfg = object.__getattribute__(self, "model")
+        if hasattr(model_cfg, item):
+            return getattr(model_cfg, item)
+        if isinstance(model_cfg, DistillationConfig) and hasattr(model_cfg.teacher, item):
+            return getattr(model_cfg.teacher, item)
+        raise AttributeError(f"{item} not found in PipelineConfig or underlying model config.")
 
 
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
 
-PREPROCESSING_CONFIG = PreprocessingConfig(
+DEFAULT_PREPROCESS = PreprocessingConfig(
     method=Preprocessing.RAW,
-    poly_degree=1
+    poly_degree=1,
 )
 
-PROJECTION_CONFIG = ProjectionConfig(
+DEFAULT_PROJECTION = ProjectionConfig(
     n_units=100,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
-    seed=42
+    seed=42,
 )
 
-CLASSICAL_RESERVOIR_CONFIG = ClassicalReservoirConfig(
+CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
     rc_connectivity=0.9,
-    seed=42
+    seed=42,
 )
 
-DISTILLATION_CONFIG = DistillationConfig(
-    teacher=CLASSICAL_RESERVOIR_CONFIG,
+DISTILLATION_MODEL = DistillationConfig(
+    teacher=CLASSICAL_RESERVOIR_DYNAMICS,
     student_hidden_layers=(100,),
 )
 
-AGGREGATION_CONFIG = AggregationConfig(
-    mode=AggregationMode.MEAN
-)
+DEFAULT_AGGREGATION = AggregationConfig(mode=AggregationMode.MEAN)
 
-
-FNN_DISTILLATION_CONFIG = PipelineConfig(
+FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn-distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess_config=PREPROCESSING_CONFIG,
-    projection_config=PROJECTION_CONFIG,
-    model_config=DISTILLATION_CONFIG,
-    aggregation_config=None
+    preprocess=DEFAULT_PREPROCESS,
+    projection=DEFAULT_PROJECTION,
+    model=DISTILLATION_MODEL,
+    aggregation=None,
 )
 
-CLASSICAL_RESERVOIR_CONFIG = PipelineConfig(
+CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical-reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess_config=PREPROCESSING_CONFIG,
-    projection_config=PROJECTION_CONFIG,
-    model_config=CLASSICAL_RESERVOIR_CONFIG,
-    aggregation_config=AGGREGATION_CONFIG
+    preprocess=DEFAULT_PREPROCESS,
+    projection=DEFAULT_PROJECTION,
+    model=CLASSICAL_RESERVOIR_DYNAMICS,
+    aggregation=DEFAULT_AGGREGATION,
 )
 
 MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {
-    Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_CONFIG,
-    Model.FNN_DISTILLATION: FNN_DISTILLATION_CONFIG,
+    Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_PRESET,
+    Model.FNN_DISTILLATION: FNN_DISTILLATION_PRESET,
 }
 
 
@@ -138,7 +185,6 @@ MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {
 # -----------------------------------------------------------------------------
 
 MODEL_REGISTRY = StrictRegistry(MODEL_DEFINITIONS)
-
 MODEL_PRESETS: Dict[Model, PipelineConfig] = dict(MODEL_DEFINITIONS)
 
 
