@@ -71,9 +71,13 @@ def print_topology(meta: Dict[str, Any]) -> None:
             chain.append(_fmt_dim(s_feat))
         model_desc = " -> ".join(chain)
     elif s_internal is not None:
-        model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
-        if not has_aggregation and s_feat is not None and s_feat != s_internal:
-            model_desc = f"{model_desc} -> {_fmt_dim(s_feat)}"
+        # If internal is already the output (e.g., linear), avoid duplicating output.
+        if not has_aggregation and s_feat is not None and s_internal == s_feat:
+            model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
+        else:
+            model_desc = f"{_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_internal)}"
+            if not has_aggregation and s_feat is not None and s_feat != s_internal:
+                model_desc = f"{model_desc} -> {_fmt_dim(s_feat)}"
     else:
         model_desc = "n/a"
     print(f"5. Model           : {model_desc}")

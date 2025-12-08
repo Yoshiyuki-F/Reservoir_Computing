@@ -20,7 +20,9 @@ class FNNModel(BaseFlaxModel):
             raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")
         if int(input_dim) <= 0 or int(output_dim) <= 0:
             raise ValueError("input_dim and output_dim must be positive for FNNModel.")
-        hidden_layers = tuple(int(h) for h in model_config.hidden_layers)
+        hidden_layers = tuple(int(h) for h in (model_config.hidden_layers or ()))
+        # Drop non-positive layers to allow (0,) or None -> linear model
+        hidden_layers = tuple(h for h in hidden_layers if h > 0)
         self.layer_dims: Sequence[int] = (int(input_dim), *hidden_layers, int(output_dim))
         super().__init__({"layer_dims": self.layer_dims}, training_config)
 

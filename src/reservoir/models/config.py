@@ -230,26 +230,27 @@ class DistillationConfig:
         self.teacher.validate(context=f"{prefix}teacher")
         if not self.student.hidden_layers:
             raise ValueError(f"{prefix}student.hidden_layers must contain at least one layer size.")
-        if any(width <= 0 for width in self.student.hidden_layers):
-            raise ValueError(f"{prefix}student.hidden_layers values must be positive.")
+        if any(width < 0 for width in self.student.hidden_layers):
+            raise ValueError(f"{prefix}student.hidden_layers values must be non negative.")
 
 
 @dataclass(frozen=True)
 class FNNConfig:
-    hidden_layers: Tuple[int, ...]
+    hidden_layers: Optional[Tuple[int, ...]]
 
     def __post_init__(self) -> None:
         self.validate()
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "hidden_layers": tuple(int(v) for v in self.hidden_layers),
+            "hidden_layers": tuple(int(v) for v in (self.hidden_layers or ())),
         }
 
     def validate(self, *, context: str = "") -> None:
         prefix = f"{context}: " if context else ""
-        if any(width <= 0 for width in self.hidden_layers):
-            raise ValueError(f"{prefix}hidden_layers values must be positive.")
+        layers = self.hidden_layers or ()
+        if any(width < 0 for width in layers):
+            raise ValueError(f"{prefix}hidden_layers values must be non-negative.")
 
 
 

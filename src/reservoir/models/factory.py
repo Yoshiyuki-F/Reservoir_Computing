@@ -69,18 +69,20 @@ class ModelFactory:
             )
             # Attach topology metadata for FNN
             flattened_dim = int(input_dim)
+            hidden_layers = tuple(int(h) for h in (config.model.hidden_layers or ()) if int(h) > 0)
+            internal_shape = hidden_layers or (output_dim,)
             topo_meta: Dict[str, Any] = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,
                     "projected": input_shape,
                     "adapter": (flattened_dim,),
-                    "internal": tuple(config.model.hidden_layers) if config.model.hidden_layers else None,
+                    "internal": internal_shape,
                     "feature": (output_dim,),
                     "output": (output_dim,),
                 },
                 "details": {
-                    "student_layers": tuple(config.model.hidden_layers) if config.model.hidden_layers else None,
+                    "student_layers": hidden_layers or None,
                     "structure": "Flatten -> FNN -> Output",
                     "agg_mode": "None",
                     "readout": "None",
