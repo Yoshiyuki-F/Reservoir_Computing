@@ -16,7 +16,7 @@ from reservoir.core.interfaces import ReadoutModule
 class RidgeRegression(ReadoutModule):
     """Ridge regression readout solved with JAX linear algebra."""
 
-    def __init__(self, ridge_lambda: float, use_intercept: bool = True) -> None:
+    def __init__(self, ridge_lambda: float, use_intercept: bool) -> None:
         if ridge_lambda is None:
             raise ValueError("RidgeRegression requires an explicit, positive ridge_lambda.")
         lambda_val = float(ridge_lambda)
@@ -58,7 +58,12 @@ class RidgeRegression(ReadoutModule):
         eye = jnp.eye(n_features, dtype=X.dtype)
         XtX = X.T @ X
         Xty = X.T @ y_arr
-        w = jax.scipy.linalg.solve(XtX + self.ridge_lambda * eye, Xty, assume_a="pos")
+        lam_val = float(self.ridge_lambda)
+        solve_mat = XtX + lam_val * eye
+        if lam_val < 1e-7:
+            w = jax.scipy.linalg.solve(solve_mat, Xty)  # safer general solver for near-singular cases
+        else:
+            w = jax.scipy.linalg.solve(solve_mat, Xty, assume_a="pos")
         if not jnp.all(jnp.isfinite(w)):
             w = jnp.zeros_like(w)
         if self.use_intercept:
@@ -99,27 +104,22 @@ class RidgeRegression(ReadoutModule):
         Xty = X_train.T @ y_train
         eye = jnp.eye(XtX.shape[0], dtype=XtX.dtype)
 
-        def solve_lambda(lam: jnp.ndarray) -> jnp.ndarray:
-            lam_val = float(lam)
-            if lam_val < 1e-7:  # 閾値は適宜調整
-                # 簡易対策: LU分解(solve) 遅いお
-                # default = "gem" (一般行列)
-                # A = L*U not root calculation
-                return jax.scipy.linalg.solve(XtX + lam * eye, Xty)  # assume_a="gen"
-            else: # positive-definite matrix Cholesky(pos)
-                # A = LL^T calculation
-                # (it might be doing root calculation of negative number internally) which might cause NaN
-                return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
+        @jax.jit
+        def _solve_pos(lam: jnp.ndarray) -> jnp.ndarray:
+            return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
 
+        @jax.jit
+        def _solve_gen(lam: jnp.ndarray) -> jnp.ndarray:
+            return jax.scipy.linalg.solve(XtX + lam * eye, Xty)
 
-        # --- 【修正前】 vmapで一括解決 ---
-        # weights_all = jax.vmap(solve_lambda, in_axes=0, out_axes=0)(lambdas_arr)
-
-        # --- 【修正後】 Pythonループで1つずつ解く ---
         weights_list = []
         for lam in lambdas_arr:
-            # 1つ解く -> メモリ解放 を繰り返すことでピークメモリを抑える
-            w = solve_lambda(lam)
+            lam_val = float(lam)
+            lam_arr = jnp.asarray(lam_val, dtype=eye.dtype)
+            if lam_val < 1e-7:
+                w = _solve_gen(lam_arr)
+            else:
+                w = _solve_pos(lam_arr)
             weights_list.append(w)
 
         weights_all = jnp.stack(weights_list)

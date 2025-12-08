@@ -9,6 +9,7 @@ from typing import Any, Dict, Tuple, Union, Optional
 from reservoir.core.identifiers import AggregationMode, Preprocessing, Model
 
 
+
 @dataclass(frozen=True)
 class PipelineConfig:
     """
@@ -21,16 +22,21 @@ class PipelineConfig:
     description: str
     preprocess: PreprocessingConfig
     projection: Optional[ProjectionConfig]
-    model: Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig]
+    model: ModelConfig
+    readout: "ReadoutConfig"
 
     def __post_init__(self) -> None:
         if self.preprocess is None:
             raise ValueError(f"{self.name}: preprocess config is required.")
+        if self.readout is None:
+            raise ValueError(f"{self.name}: readout config is required.")
         if self.model is None:
             raise ValueError(f"{self.name}: model config is required.")
 
         self.preprocess.validate(context=f"{self.name}.preprocess")
-        # self.projection.validate(context=f"{self.name}.projection") could be None
+        if self.projection is not None:
+            self.projection.validate(context=f"{self.name}.projection")
+        self.readout.validate(context=f"{self.name}.readout")
 
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
@@ -79,7 +85,9 @@ class PipelineConfig:
             merged.update(asdict(model_cfg))
 
         merged.update(self.preprocess.to_dict())
-        merged.update(self.projection.to_dict())
+        if self.projection is not None:
+            merged.update(self.projection.to_dict())
+        merged.update(self.readout.to_dict())
 
         return merged
 
@@ -149,6 +157,21 @@ class ProjectionConfig:
             "bias_scale": float(self.bias_scale),
             "seed": int(self.seed),
         }
+
+
+@dataclass(frozen=True)
+class RidgeReadoutConfig:
+    """Step 7 readout configuration (structure/defaults)."""
+    ridge_lambda: float
+    use_intercept: float
+
+    def validate(self, context: str = "readout") -> "RidgeReadoutConfig":
+        if float(self.ridge_lambda) <= 0:
+            raise ValueError(f"{context}: init_alpha must be positive.")
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"ridge_lambda": float(self.ridge_lambda)}
 
 
 @dataclass(frozen=True)
@@ -226,3 +249,8 @@ class FNNConfig:
         prefix = f"{context}: " if context else ""
         if any(width <= 0 for width in self.hidden_layers):
             raise ValueError(f"{prefix}hidden_layers values must be positive.")
+
+
+
+ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig]
+ReadoutConfig = Union[RidgeReadoutConfig, None]
