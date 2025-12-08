@@ -137,7 +137,9 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
     feature_shape = None
     student_layers = None
     readout_label = None
-    is_fnn = str(model_type_str).lower().startswith("fnn")
+    type_lower = str(model_type_str).lower()
+    is_fnn = "fnn" in type_lower or "rnn" in type_lower or "nn" in type_lower
+    has_reservoir = "reservoir" in type_lower or "distillation" in type_lower
     if isinstance(topo_meta, dict):
         shapes = topo_meta.get("shapes") or {}
         feature_shape = shapes.get("feature")
@@ -145,13 +147,17 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         student_layers = details.get("student_layers")
         readout_label = details.get("readout")
         topo_type = str(topo_meta.get("type", "")).lower()
-        is_fnn = is_fnn or topo_type == "fnn"
+        is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
+        has_reservoir = has_reservoir or "reservoir" in topo_type or "distillation" in topo_type
 
-    if not is_fnn:
+    # Reservoir marker (nr) only if reservoir is involved
+    if has_reservoir:
         if isinstance(feature_shape, tuple) and feature_shape:
             filename_parts.append(f"nr{int(feature_shape[0])}")
         else:
             filename_parts.append("nr0")
+
+    # NN marker
     if is_fnn:
         layers = tuple(int(v) for v in student_layers) if student_layers is not None else ()
         if layers:
@@ -159,11 +165,6 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         else:
             filename_parts.append("nn0")
         filename_parts.append(f"epochs{int(getattr(training_obj, 'epochs', 0) or 0)}")
-    elif student_layers is not None:
-        layers = tuple(int(v) for v in student_layers) if hasattr(student_layers, "__iter__") else ()
-        if layers:
-            filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
-            filename_parts.append(f"epochs{int(getattr(training_obj, 'epochs', 0) or 0)}")
     return filename_parts
 
 
