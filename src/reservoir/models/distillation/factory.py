@@ -72,16 +72,17 @@ class DistillationFactory:
             "type": Model.FNN_DISTILLATION.value.upper(),
             "shapes": {
                 "input": input_shape,
-                "preprocessed": None,
-                "projected": (time_steps, projected_input_dim),
-                "internal": (time_steps, projected_input_dim),
-                "feature": (int(teacher_feature_dim),),
-                "output": (output_dim,),
+                "preprocessed": None,  # preprocessing happens upstream
+                "projected": (time_steps, projected_input_dim),  # sequence into flatten
+                "adapter": (student_input_dim,),  # flattened time-major input to FNN
+                "internal": tuple(hidden_layers) if hidden_layers else None,  # hidden layer widths
+                "feature": (int(teacher_feature_dim),),  # student output equals teacher feature dim
+                "output": (output_dim,),  # readout target size
             },
             "details": {
-                "preprocess": None,
-                "agg_mode": teacher_cfg.aggregation.value,
-                "student_layers": tuple(fnn_cfg_layers[1:-1]) if len(fnn_cfg_layers) > 2 else None,
+                "preprocess": "Flatten",
+                "agg_mode": "None",
+                "student_layers": tuple(hidden_layers) if hidden_layers else None,
                 "student_structure": "Flatten -> FNN",
             },
         }
