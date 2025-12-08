@@ -63,26 +63,6 @@ class ModelStack:
     model_label: str
 
 
-def _get_strict_dataset_meta(dataset: Dataset) -> tuple[Dataset, DatasetPreset]:
-    """
-    Retrieve dataset metadata.
-    Raises ValueError if the dataset is unknown or metadata is incomplete.
-    """
-    if not isinstance(dataset, Dataset):
-        raise TypeError(f"Configuration Error: 'dataset' must be a Dataset Enum, got {type(dataset)}.")
-
-    preset = DATASET_REGISTRY.get(dataset)
-    if preset is None:
-        raise ValueError(f"Configuration Error: Dataset '{dataset}' is not registered in DATASET_REGISTRY.")
-
-    if preset.config.n_input is None:
-        raise ValueError(f"Preset Error: Dataset '{dataset}' is missing 'n_input' in its definition.")
-    if preset.config.n_output is None:
-        raise ValueError(f"Preset Error: Dataset '{dataset}' is missing 'n_output' in its definition.")
-
-    return dataset, preset
-
-
 def _resolve_training_config(task_type: TaskType) -> TrainingConfig:
     """
     Resolve training configuration strictly from presets.
@@ -132,7 +112,7 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
 def _prepare_dataset(dataset: Dataset) -> DatasetContext:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
     print("=== Step 1: Loading Dataset ===")
-    dataset_enum, dataset_preset = _get_strict_dataset_meta(dataset)
+    dataset_enum, dataset_preset = dataset, DATASET_REGISTRY.get(dataset)
 
     training_cfg = _resolve_training_config(dataset.task_type)
     dataset_split = load_dataset_with_validation_split(
