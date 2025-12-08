@@ -29,6 +29,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             seed=0,
             frequencies=(1.0, 2.0, 5.0),
         ),
+        use_dimensions=(0,),
     ),
     Dataset.LORENZ: DatasetPreset(
         name="lorenz",
@@ -65,6 +66,8 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             gamma=0.1,
             n=10,
         ),
+        use_dimensions=None
+
     ),
     Dataset.MNIST: DatasetPreset(
         name="mnist",
@@ -81,6 +84,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             train_fraction=1.0,
             test_fraction=1.0,
         ),
+        use_dimensions=None
     ),
 }
 

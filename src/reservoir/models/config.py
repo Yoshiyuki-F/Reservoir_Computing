@@ -3,7 +3,7 @@ Shared configuration components for model pipelines (Steps 2-6).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, Tuple, Union, Optional
 
 from reservoir.core.identifiers import AggregationMode, Preprocessing, Model
@@ -30,7 +30,7 @@ class PipelineConfig:
             raise ValueError(f"{self.name}: model config is required.")
 
         self.preprocess.validate(context=f"{self.name}.preprocess")
-        self.projection.validate(context=f"{self.name}.projection")
+        # self.projection.validate(context=f"{self.name}.projection") could be None
 
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
