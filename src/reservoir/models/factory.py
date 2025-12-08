@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional
 
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
-from reservoir.data.presets import DatasetPreset
 from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
@@ -21,7 +20,6 @@ class ModelFactory:
     @staticmethod
     def create_model(
         config: PipelineConfig,
-        dataset_preset: DatasetPreset = None,
         training: TrainingConfig = None,
         input_dim: int = None,
         output_dim: int = None,

@@ -247,7 +247,6 @@ def _build_model_stack(
 
     model = ModelFactory.create_model(
         config=config,
-        dataset_preset=dataset_ctx.preset,
         training=dataset_ctx.training,
         input_dim=frontend_ctx.input_dim_for_factory,
         output_dim=meta_n_outputs,
