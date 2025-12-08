@@ -7,9 +7,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import jax.numpy as jnp
-
-from reservoir.core.identifiers import AggregationMode
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.reservoir.base import Reservoir
@@ -22,7 +19,7 @@ class ReservoirFactory:
     @staticmethod
     def create_pipeline(
         pipeline_config: PipelineConfig,
-        input_dim: int,
+        projected_input_dim: int,
         output_dim: int,
         input_shape: Optional[tuple[int, ...]],
     ) -> Reservoir:
@@ -36,12 +33,10 @@ class ReservoirFactory:
         if not isinstance(model, ClassicalReservoirConfig):
             raise TypeError(f"ReservoirFactory requires ClassicalReservoirConfig, got {type(model)}.")
 
-        projected_input_dim = int(input_dim)
         node = ReservoirFactory.create_node(model, projected_input_dim)
 
         # Topology metadata
         topo_meta: Dict[str, Any] = {}
-        in_shape = input_shape
         if input_shape is None:
             t_steps = 1
         elif len(input_shape) == 1:
@@ -56,16 +51,16 @@ class ReservoirFactory:
 
         topo_meta["type"] = pipeline_config.model_type.value.upper()
         topo_meta["shapes"] = {
-            "input": in_shape,
+            "input": input_shape,
             "preprocessed": None,
-            "projected": (t_steps, projected_input_dim) if in_shape else None,
+            "projected": (t_steps, projected_input_dim) if input_shape else None,
             "internal": (t_steps, projected_input_dim),
             "feature": (int(feature_units),),
             "output": (int(output_dim),),
         }
         topo_meta["details"] = {
             "preprocess": None,
-            "agg_mode": agg_mode_enum.value if isinstance(agg_mode_enum, AggregationMode) else str(agg_mode_enum),
+            "agg_mode": agg_mode_enum.value,
             "student_layers": None,
         }
         node.topology_meta = topo_meta

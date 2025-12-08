@@ -40,7 +40,7 @@ class DistillationModel(BaseModel):
         return self.student.predict(X)
 
     def _compute_teacher_targets(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        teacher_outputs = self.teacher(inputs, return_sequences=False)
+        teacher_outputs = self.teacher(inputs)
         return jax.lax.stop_gradient(teacher_outputs)
 
     def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:

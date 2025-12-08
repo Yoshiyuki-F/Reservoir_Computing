@@ -45,7 +45,7 @@ class Reservoir(ABC):
     def to_dict(self) -> Dict[str, Any]:
         return {"n_units": self.n_units}
 
-    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

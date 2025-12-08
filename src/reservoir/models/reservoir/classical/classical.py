@@ -80,7 +80,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, StepArtifacts(states=stacked)
 
-    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, **_: Any) -> jnp.ndarray:
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(inputs, dtype=jnp.float64)
         if arr.ndim != 3:
             raise ValueError(f"ClassicalReservoir expects 3D input (batch, time, features), got {arr.shape}")
@@ -88,19 +88,17 @@ class ClassicalReservoir(Reservoir):
         initial_state = self.initialize_state(batch_size)
         _, artifacts = self.forward(initial_state, arr)
         states = artifacts.states if hasattr(artifacts, "states") else artifacts
-        if return_sequences:
-            return states
         return self.aggregator.transform(states)
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
+    def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs:Any) -> Dict[str, Any]:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
-        _ = self(inputs, return_sequences=False)
+        _ = self(inputs)
         return {}
 
     def to_dict(self) -> Dict[str, Any]:

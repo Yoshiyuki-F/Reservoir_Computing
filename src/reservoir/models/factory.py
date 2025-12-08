@@ -48,7 +48,7 @@ class ModelFactory:
 
             return ReservoirFactory.create_pipeline(
                 pipeline_config=config,
-                input_dim=resolved_input_dim,
+                projected_input_dim=resolved_input_dim,
                 output_dim=resolved_output_dim,
                 input_shape=input_shape,
             )
