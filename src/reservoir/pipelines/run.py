@@ -283,6 +283,7 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Opti
         config,
         stack.topo_meta,
         **report_payload,
+        task_type=dataset_meta.task_type,
     )
 
     return results

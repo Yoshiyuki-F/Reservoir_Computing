@@ -234,6 +234,7 @@ class UniversalPipeline:
                 results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
             results["readout"] = self.readout
 
+        results["training_logs"] = train_logs
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
 

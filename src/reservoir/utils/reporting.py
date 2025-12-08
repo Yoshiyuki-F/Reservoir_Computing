@@ -91,8 +91,12 @@ def plot_classification_report(
 
     train_features_np = runner.batch_transform(train_X, batch_size=feature_batch_size)
     test_features_np = runner.batch_transform(test_X, batch_size=feature_batch_size)
-    train_pred_np = np.asarray(readout.predict(train_features_np))
-    test_pred_np = np.asarray(readout.predict(test_features_np))
+    if readout is None:
+        train_pred_np = np.asarray(train_features_np)
+        test_pred_np = np.asarray(test_features_np)
+    else:
+        train_pred_np = np.asarray(readout.predict(train_features_np))
+        test_pred_np = np.asarray(readout.predict(test_features_np))
     if train_pred_np.ndim > 1:
         train_pred_np = np.argmax(train_pred_np, axis=-1)
     if test_pred_np.ndim > 1:
@@ -105,8 +109,10 @@ def plot_classification_report(
         if val_labels_np.ndim > 1:
             val_labels_np = np.argmax(val_labels_np, axis=-1)
         val_features_np = runner.batch_transform(val_X, batch_size=feature_batch_size)
-        val_pred_raw = np.asarray(readout.predict(val_features_np))
-        val_pred_np = val_pred_raw
+        if readout is None:
+            val_pred_np = np.asarray(val_features_np)
+        else:
+            val_pred_np = np.asarray(readout.predict(val_features_np))
         if val_pred_np.ndim > 1:
             val_pred_np = np.argmax(val_pred_np, axis=-1)
 
@@ -130,16 +136,34 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
     filename_parts = [model_type_str, "raw"]
     feature_shape = None
     student_layers = None
+    readout_label = None
+    is_fnn = str(model_type_str).lower().startswith("fnn")
     if isinstance(topo_meta, dict):
         shapes = topo_meta.get("shapes") or {}
         feature_shape = shapes.get("feature")
         details = topo_meta.get("details") or {}
         student_layers = details.get("student_layers")
-    if isinstance(feature_shape, tuple) and feature_shape:
-        filename_parts.append(f"nr{int(feature_shape[0])}")
-    if student_layers:
-        filename_parts.append(f"nn{'-'.join(str(int(v)) for v in student_layers)}")
+        readout_label = details.get("readout")
+        topo_type = str(topo_meta.get("type", "")).lower()
+        is_fnn = is_fnn or topo_type == "fnn"
+
+    if not is_fnn:
+        if isinstance(feature_shape, tuple) and feature_shape:
+            filename_parts.append(f"nr{int(feature_shape[0])}")
+        else:
+            filename_parts.append("nr0")
+    if is_fnn:
+        layers = tuple(int(v) for v in student_layers) if student_layers is not None else ()
+        if layers:
+            filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
+        else:
+            filename_parts.append("nn0")
         filename_parts.append(f"epochs{int(getattr(training_obj, 'epochs', 0) or 0)}")
+    elif student_layers is not None:
+        layers = tuple(int(v) for v in student_layers) if hasattr(student_layers, "__iter__") else ()
+        if layers:
+            filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
+            filename_parts.append(f"epochs{int(getattr(training_obj, 'epochs', 0) or 0)}")
     return filename_parts
 
 
@@ -159,21 +183,23 @@ def generate_report(
     training_obj: Any,
     dataset_name: str,
     model_type_str: str,
+    task_type: Optional[Any] = None,
 ) -> None:
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
     if training_logs:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
-        loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_distillation_loss.png"
+        loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
         plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss")
 
     # Ridge search reporting
     train_res = _safe_get(results, "train", {})
-    metric = "accuracy" if getattr(config, "task_type", None) and str(config.task_type).lower().find("class") != -1 else "mse"
+    task_val = task_type if task_type is not None else getattr(config, "task_type", None)
+    metric = "accuracy" if task_val and str(task_val).lower().find("class") != -1 else "mse"
     print_ridge_search_results(train_res, metric)
 
     # Classification plots
-    if getattr(config, "task_type", None) and str(config.task_type).lower().find("class") != -1:
+    if task_val and str(task_val).lower().find("class") != -1:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
         confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
         selected_lambda = None
