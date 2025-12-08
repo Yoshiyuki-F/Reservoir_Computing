@@ -6,23 +6,13 @@ from typing import Dict, Optional
 
 from reservoir.core.presets import StrictRegistry
 from .config import (
-    BaseDatasetConfig,
     SineWaveConfig,
     LorenzConfig,
     MackeyGlassConfig,
-    MNISTConfig,
+    MNISTConfig, DatasetPreset,
 )
 from reservoir.core.identifiers import Dataset, TaskType
 
-
-@dataclass(frozen=True)
-class DatasetPreset:
-    name: str
-    description: str
-    task_type: TaskType
-    config: BaseDatasetConfig
-    use_dimensions: Optional[tuple[int, ...]] = None
-    # V2 strict: configs are immutable; no dynamic override/merge logic.
 
 
 DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {

@@ -1,102 +1,34 @@
-"""
-src/reservoir/training/presets.py
-Training configurations and Hyperparameter search spaces.
+from typing import Dict
 
-V2 Architecture Compliance:
-- Single Source of Truth: The dataclass defines the defaults (including ridge_lambda).
-- Explicit: Config objects are complete, typed, and validated.
-"""
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from reservoir.training.config import TrainingConfig
 import numpy as np
-
-
-@dataclass(frozen=True)
-class TrainingConfig:
-    """Configuration for training loops and ridge hyperparameters."""
-
-    name: str = "standard"
-
-    # Training Loop
-    batch_size: int = 128
-    epochs: int = 10
-    learning_rate: float = 0.001
-    classification: bool = False
-    seed: int = 0
-
-    # Readout Regularization (Ridge Regression)
-    # 'ridge_lambda' is the canonical default regularization strength when no search is run.
-    ridge_lambda: float = 1e-7 # no use but needed for type consistency
-    # Defines the search space for validation. Defaults to a log-spaced range around typical values.
-    ridge_lambdas: List[float] = field(
-        default_factory=lambda: np.logspace(-12, 0, 30).tolist()
-    )
-
-    # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
-    train_size: float = 0.8
-    val_size: float = 0.1
-    test_ratio: float = 0.1
-
-    # Task Metadata
-    task_type: str = "timeseries"  # 'timeseries', 'classification', etc.
-
-    def __post_init__(self) -> None:
-        if self.ridge_lambda is None or float(self.ridge_lambda) <= 0.0:
-            raise ValueError("TrainingConfig.ridge_lambda must be a positive value defined in the preset.")
-        if not self.ridge_lambdas:
-            raise ValueError("TrainingConfig.ridge_lambdas must be a non-empty sequence.")
-        if any(float(lam) <= 0.0 for lam in self.ridge_lambdas):
-            raise ValueError("TrainingConfig.ridge_lambdas must contain only positive values.")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary, ensuring types are JSON-safe."""
-        return {
-            "name": self.name,
-            "batch_size": int(self.batch_size),
-            "epochs": int(self.epochs),
-            "learning_rate": float(self.learning_rate),
-            "classification": bool(self.classification),
-            "seed": int(self.seed),
-            "ridge_lambda": float(self.ridge_lambda),
-            "ridge_lambdas": [float(v) for v in self.ridge_lambdas],
-            "train_size": float(self.train_size),
-            "val_size": float(self.val_size),
-            "test_ratio": float(self.test_ratio),
-            "task_type": self.task_type,
-        }
 
 
 # --- Preset Definitions ---
 # The Dataclass defaults ARE the "standard".
 # We only define overrides for other presets.
 
-TRAINING_DEFINITIONS: Dict[str, TrainingConfig] = {
-    "standard": TrainingConfig(),  # Uses all defaults from above
+TRAINING_PRESETS: Dict[str, TrainingConfig] = {
+    "standard": TrainingConfig(
+        name = "standard",
+        batch_size= 128,
+        epochs = 10,
+        learning_rate = 0.001,
+        classification = False,
+        seed= 0,
 
-    "quick_test": TrainingConfig(
-        name="quick_test",
-        batch_size=32,
-        epochs=1,
-        ridge_lambda=1e-3,
-        ridge_lambdas=[1e-3],  # Single value for speed
-    ),
+        # Readout Regularization (Ridge Regression)
+        # 'ridge_lambda' is the canonical default regularization strength when no search is run.
+        ridge_lambda= 1e-7, # no use but needed for type consistency
+        # Defines the search space for validation. Defaults to a log-spaced range around typical values.
+        ridge_lambdas= np.logspace(-12, 0, 30).tolist(),
 
-    "heavy": TrainingConfig(
-        name="heavy",
-        batch_size=256,
-        epochs=100,
-        learning_rate=1e-4,
-        ridge_lambda=1e-2,
-        # Finer-grained search space
-        ridge_lambdas=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0],
+        # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
+        train_size=0.8,
+        val_size=0.1,
+        test_ratio=0.1,
     ),
 }
-
-TRAINING_PRESETS = TRAINING_DEFINITIONS
-TRAINING_REGISTRY = TRAINING_PRESETS  # Legacy alias; no aliasing/normalization in V2.
 
 
 def get_training_preset(name: str) -> TrainingConfig:
@@ -110,6 +42,5 @@ def get_training_preset(name: str) -> TrainingConfig:
 __all__ = [
     "TrainingConfig",
     "TRAINING_PRESETS",
-    "TRAINING_REGISTRY",
     "get_training_preset",
 ]

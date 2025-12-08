@@ -8,7 +8,7 @@ V2 Architecture Compliance:
 - Fail Fast: Dictionary access raises KeyError if parameters are missing.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any, Dict, Optional
 from typing import Any as _Any
 
@@ -17,11 +17,12 @@ import numpy as np
 # Core Imports
 from reservoir.models import ModelFactory
 from reservoir.core.identifiers import Dataset, Model, TaskType
+from reservoir.pipelines.config import DatasetContext, FrontendContext, ModelStack
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.ridge import RidgeRegression
 from reservoir.data.loaders import load_dataset_with_validation_split
-from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
+from reservoir.data.presets import DATASET_REGISTRY
 from reservoir.data.structs import SplitDataset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.layers.preprocessing import create_preprocessor
@@ -31,36 +32,6 @@ from reservoir.utils.reporting import generate_report
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
-
-
-@dataclass(frozen=True)
-class FrontendContext:
-    processed_split: SplitDataset
-    preprocess_labels: list[str]
-    preprocessed_shape: tuple[int, ...]
-    projected_shape: Optional[tuple[int, ...]]
-    input_shape_for_meta: tuple[int, ...]
-    input_dim_for_factory: int
-
-
-@dataclass(frozen=True)
-class DatasetContext:
-    dataset: Dataset
-    dataset_name: str
-    preset: DatasetPreset
-    split: SplitDataset
-    training: TrainingConfig
-    task_type: TaskType
-    input_shape: tuple[int, ...]
-
-
-@dataclass(frozen=True)
-class ModelStack:
-    model: Any
-    readout: RidgeRegression
-    topo_meta: Dict[str, Any]
-    metric: str
-    model_label: str
 
 
 def _resolve_training_config(task_type: TaskType) -> TrainingConfig:
@@ -162,6 +133,10 @@ def _process_frontend(config: PipelineConfig, dataset_ctx: DatasetContext) -> Fr
     print("\n=== Step 3: Projection (for reservoir/distillation) ===")
     projection_config = config.projection
 
+    if projection_config is None:
+        return FrontendContext(
+
+        )
 
     projection = InputProjection(
         input_dim=int(preprocessed_shape[-1]),

@@ -10,8 +10,7 @@ from reservoir.utils.jax_config import ensure_x64_enabled
 ensure_x64_enabled()
 
 from reservoir.utils import check_gpu_available
-from reservoir.pipelines.config_builder import build_run_config
-from reservoir.core.identifiers import Model
+from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline
 
 def main() -> None:
@@ -36,7 +35,7 @@ def main() -> None:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config (strict preset + dataset only)
-    config, dataset = build_run_config(preset_name=args.model, dataset_name=args.dataset)
+    config, dataset = Model(args.model), Dataset(args.dataset)
 
     print(f"[Unified] Running {config.name} pipeline on {dataset.name}...")
 
