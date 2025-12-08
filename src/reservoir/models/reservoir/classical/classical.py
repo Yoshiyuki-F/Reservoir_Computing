@@ -98,7 +98,6 @@ class ClassicalReservoir(Reservoir):
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
-        _ = self(inputs)
         return {}
 
     def to_dict(self) -> Dict[str, Any]:

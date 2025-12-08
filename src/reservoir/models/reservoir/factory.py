@@ -55,8 +55,8 @@ class ReservoirFactory:
             "preprocessed": None,
             "projected": (t_steps, projected_input_dim) if input_shape else None,
             "internal": (t_steps, projected_input_dim),
-            "feature": (int(feature_units),),
-            "output": (int(output_dim),),
+            "feature": (feature_units,),
+            "output": (output_dim,),
         }
         topo_meta["details"] = {
             "preprocess": None,

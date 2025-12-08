@@ -30,16 +30,12 @@ class ModelFactory:
     ) -> Any:
 
         preset = dataset_preset
-        data_cfg = preset.config
-        resolved_input_dim = int(input_dim or data_cfg.n_input or 0)
-        resolved_output_dim = int(output_dim or data_cfg.n_output or 0)
-        if resolved_input_dim <= 0:
+        if input_dim <= 0:
             raise ValueError(f"Dataset '{preset.name}' must define n_input > 0.")
-        if resolved_output_dim <= 0:
+        if output_dim <= 0:
             raise ValueError(f"Dataset '{preset.name}' must define n_output > 0.")
 
-        task_type = preset.task_type
-        training_cfg = training or ModelFactory._build_training(task_type)
+        training_cfg = training
         pipeline_enum = config.model_type
 
         if pipeline_enum in {Model.CLASSICAL_RESERVOIR, Model.QUANTUM_GATE_BASED, Model.QUANTUM_ANALOG}:
@@ -48,8 +44,8 @@ class ModelFactory:
 
             return ReservoirFactory.create_pipeline(
                 pipeline_config=config,
-                projected_input_dim=resolved_input_dim,
-                output_dim=resolved_output_dim,
+                projected_input_dim=input_dim,
+                output_dim=output_dim,
                 input_shape=input_shape,
             )
 
@@ -59,8 +55,8 @@ class ModelFactory:
             return DistillationFactory.create_model(
                 distillation_config=config.model,
                 training=training_cfg,
-                input_dim=resolved_input_dim,
-                output_dim=resolved_output_dim,
+                input_dim=input_dim,
+                output_dim=output_dim,
                 input_shape=input_shape,
             )
 
