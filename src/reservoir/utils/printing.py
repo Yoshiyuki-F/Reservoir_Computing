@@ -40,12 +40,17 @@ def print_topology(meta: Dict[str, Any]) -> None:
 
     preprocess_method = details.get("preprocess") or "None"
     agg_mode = details.get("agg_mode") or "None"
+    readout_label = details.get("readout") or "Ridge Regression"
+    adapter_label = details.get("adapter") or "Skipped"
     student_layers_raw = details.get("student_layers")
     student_layers = _fmt_layers(student_layers_raw)
 
     print(f"=== Model Topology: {meta.get('type', 'UNKNOWN')} ===")
     print(f"1. Input Data      : {_fmt_dim(s_in)}")
-    print(f"2. Preprocessing   : {_fmt_dim(s_in)} -> {_fmt_dim(s_pre)} (Method: {preprocess_method})")
+    if preprocess_method in {"None", None, "RAW", "Raw", "raw"}:
+        print("2. Preprocessing   : Skipped")
+    else:
+        print(f"2. Preprocessing   : {_fmt_dim(s_in)} -> {_fmt_dim(s_pre)} (Method: {preprocess_method})")
     if s_proj is not None:
         print(f"3. Input Projection: {_fmt_dim(s_pre)} -> {_fmt_dim(s_proj)}")
     else:
@@ -54,7 +59,7 @@ def print_topology(meta: Dict[str, Any]) -> None:
     if s_adapter is not None:
         print(f"4. Adapter         : {_fmt_dim(s_proj or s_pre)} -> {_fmt_dim(s_adapter)} (Flatten/Struct)")
     else:
-        print("4. Adapter         : Skipped")
+        print(f"4. Adapter         : {adapter_label}")
 
     # Step 5/6: internal/model
     has_aggregation = agg_mode not in ("None", None)
@@ -79,5 +84,8 @@ def print_topology(meta: Dict[str, Any]) -> None:
     else:
         print(f"6. Aggregation     : {_fmt_dim(prev_dim)} -> {_fmt_dim(s_feat)} (Mode: {agg_mode})")
 
-    print(f"7. Readout         : {_fmt_dim(s_feat)} -> {_fmt_dim(s_out)} (Ridge Regression)")
+    if readout_label in ("None", None):
+        print("7. Readout         : Skipped (end-to-end model output)")
+    else:
+        print(f"7. Readout         : {_fmt_dim(s_feat)} -> {_fmt_dim(s_out)} ({readout_label})")
     print("=" * 60)

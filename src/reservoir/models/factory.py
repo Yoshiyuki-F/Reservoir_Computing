@@ -7,9 +7,10 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from reservoir.models.nn.factory import NNModelFactory
+from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
-from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
+from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig, FNNConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
@@ -58,12 +59,35 @@ class ModelFactory:
             )
 
         if pipeline_enum == Model.FNN:
-            return NNModelFactory.create_fnn(
-                model_cfg=config.model,
-                training_cfg=training_cfg,
+            if not isinstance(config.model, FNNConfig):
+                raise TypeError(f"FNN pipeline requires FNNConfig, got {type(config.model)}.")
+            model = FNNModel(
+                model_config=config.model,
+                training_config=training_cfg,
                 input_dim=input_dim,
                 output_dim=output_dim,
             )
+            # Attach topology metadata for FNN
+            flattened_dim = int(input_dim)
+            topo_meta: Dict[str, Any] = {
+                "type": pipeline_enum.value.upper(),
+                "shapes": {
+                    "input": input_shape,
+                    "projected": input_shape,
+                    "adapter": (flattened_dim,),
+                    "internal": tuple(config.model.hidden_layers) if config.model.hidden_layers else None,
+                    "feature": (output_dim,),
+                    "output": (output_dim,),
+                },
+                "details": {
+                    "student_layers": tuple(config.model.hidden_layers) if config.model.hidden_layers else None,
+                    "structure": "Flatten -> FNN -> Output",
+                    "agg_mode": "None",
+                    "readout": "None",
+                },
+            }
+            model.topology_meta = topo_meta
+            return model
 
 
         raise ValueError(f"Unsupported model_type: {pipeline_enum}")

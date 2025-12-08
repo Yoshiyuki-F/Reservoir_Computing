@@ -47,7 +47,7 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 )
 
 FNN_DYNAMICS = FNNConfig(
-    hidden_layers=(100,),
+    hidden_layers=(1000,),
 )
 
 FNN_DISTILLATION_PRESET = PipelineConfig(

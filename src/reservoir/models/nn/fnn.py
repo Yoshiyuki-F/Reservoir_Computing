@@ -15,13 +15,14 @@ from reservoir.training.presets import TrainingConfig
 class FNNModel(BaseFlaxModel):
     """Wrap FNNModule with BaseModel API."""
 
-    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig):
-        if "layer_dims" not in model_config:
-            raise ValueError("FNNModel requires 'layer_dims' in model_config.")
-        self.layer_dims: Sequence[int] = tuple(int(v) for v in model_config["layer_dims"])
-        if len(self.layer_dims) < 2:
-            raise ValueError("FNNModel.layer_dims must include at least input and output dimensions.")
-        super().__init__(model_config, training_config)
+    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig, input_dim: int, output_dim: int):
+        if not isinstance(model_config, FNNConfig):
+            raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")
+        if int(input_dim) <= 0 or int(output_dim) <= 0:
+            raise ValueError("input_dim and output_dim must be positive for FNNModel.")
+        hidden_layers = tuple(int(h) for h in model_config.hidden_layers)
+        self.layer_dims: Sequence[int] = (int(input_dim), *hidden_layers, int(output_dim))
+        super().__init__({"layer_dims": self.layer_dims}, training_config)
 
     def _flatten_inputs(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
@@ -82,4 +83,3 @@ class FNN(nn.Module):
         if self.return_hidden:
             return x, hidden_output
         return x
-

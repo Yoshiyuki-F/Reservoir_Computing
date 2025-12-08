@@ -60,7 +60,12 @@ class DistillationFactory:
 
         #3, create student
         student_training = replace(training, classification=False)
-        student_model = FNNModel({"layer_dims": fnn_cfg_layers}, student_training)
+        student_model = FNNModel(
+            model_config=distillation_config.student,
+            training_config=student_training,
+            input_dim=student_input_dim,
+            output_dim=int(teacher_feature_dim),
+        )
 
         model = DistillationModel(
             teacher=teacher_node,
