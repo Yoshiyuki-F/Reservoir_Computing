@@ -54,7 +54,7 @@ class DistillationFactory:
 
         #2. configure student FNN
         student_input_dim = projected_input_dim * time_steps
-        h_layers = distillation_config.student_hidden_layers
+        h_layers = distillation_config.student.hidden_layers
         hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
         fnn_cfg_layers = [student_input_dim] + hidden_layers + [teacher_feature_dim]
 

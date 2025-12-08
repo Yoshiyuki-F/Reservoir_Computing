@@ -7,11 +7,13 @@ import argparse
 import sys
 
 from reservoir.utils.jax_config import ensure_x64_enabled
+
 ensure_x64_enabled()
 
 from reservoir.utils import check_gpu_available
 from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline
+from reservoir.models.presets import get_model_preset
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Unified ML Framework CLI")
@@ -35,12 +37,14 @@ def main() -> None:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config (strict preset + dataset only)
-    config, dataset = Model(args.model), Dataset(args.dataset)
+    model_enum = Model(args.model)
+    dataset = Dataset(args.dataset)
+    pipeline_config = get_model_preset(model_enum)
 
-    print(f"[Unified] Running {config.name} pipeline on {dataset.name}...")
+    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}...")
 
     # Run Pipeline
-    results = run_pipeline(config, dataset)
+    results = run_pipeline(pipeline_config, dataset)
 
     # Output Results
     print("[Unified] Results:")
