@@ -49,16 +49,28 @@ class UniversalPipeline:
             aligned_preds = preds_arr.reshape(targets_arr.shape)
         return float(jnp.mean((aligned_preds - targets_arr) ** 2))
 
-    def _feature_stats(self, features: jnp.ndarray, stage: str) -> None:
-        feats = jnp.asarray(features, dtype=jnp.float64)
-        stats = {
-            "shape": feats.shape,
-            "mean": float(jnp.mean(feats)),
-            "std": float(jnp.std(feats)),
-            "min": float(jnp.min(feats)),
-            "max": float(jnp.max(feats)),
-            "nans": int(jnp.isnan(feats).sum()),
-        }
+    def _feature_stats(self, features: Any, stage: str) -> None:
+        # Prefer CPU stats to avoid host->device transfers when features are numpy.
+        if isinstance(features, np.ndarray):
+            feats = features
+            stats = {
+                "shape": feats.shape,
+                "mean": float(np.mean(feats)),
+                "std": float(np.std(feats)),
+                "min": float(np.min(feats)),
+                "max": float(np.max(feats)),
+                "nans": int(np.isnan(feats).sum()),
+            }
+        else:
+            feats = jnp.asarray(features, dtype=jnp.float64)
+            stats = {
+                "shape": feats.shape,
+                "mean": float(jnp.mean(feats)),
+                "std": float(jnp.std(feats)),
+                "min": float(jnp.min(feats)),
+                "max": float(jnp.max(feats)),
+                "nans": int(jnp.isnan(feats).sum()),
+            }
         print(
             f"[FeatureStats:{stage}] shape={stats['shape']}, "
             f"mean={stats['mean']:.4f}, std={stats['std']:.4f}, "
@@ -161,11 +173,6 @@ class UniversalPipeline:
         training_extras: Optional[Dict[str, Any]] = None,
         model_label: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
-        train_X = jnp.asarray(train_X)
-        train_y = jnp.asarray(train_y)
-        test_X = jnp.asarray(test_X)
-        test_y = jnp.asarray(test_y)
-
         cfg = training_cfg or TrainingConfig()
         extras = dict(training_extras or {})
         model_label = model_label or self.model.__class__.__name__

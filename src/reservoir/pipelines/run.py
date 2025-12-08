@@ -113,10 +113,13 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
 def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray], test_X: Optional[np.ndarray]) -> None:
     """Lightweight stats logger for each split at a given processing stage."""
     def _stats(arr: np.ndarray) -> str:
-        arr64 = np.asarray(arr)  # avoid dtype cast to prevent unnecessary copies
+        arr64 = np.asarray(arr)
+        sample = arr64
+        if sample.shape[0] > 2000:
+            sample = sample[:2000]
         return (
-            f"shape={arr64.shape}, mean={float(np.mean(arr64)):.4f}, std={float(np.std(arr64)):.4f}, "
-            f"min={float(np.min(arr64)):.4f}, max={float(np.max(arr64)):.4f}, nans={int(np.isnan(arr64).sum())}"
+            f"shape={arr64.shape}, mean={float(np.mean(sample)):.4f}, std={float(np.std(sample)):.4f}, "
+            f"min={float(np.min(sample)):.4f}, max={float(np.max(sample)):.4f}, nans={int(np.isnan(sample).sum())}"
         )
 
     print(f"[FeatureStats:{stage}:train] {_stats(train_X)}")
