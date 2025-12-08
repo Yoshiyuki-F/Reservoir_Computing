@@ -42,6 +42,9 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     aggregation=AggregationMode.MEAN,
 )
 
+FNN_DYNAMICS = FNNConfig(
+    hidden_layers=(100,),
+)
 
 FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn-distillation",
@@ -51,7 +54,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     projection=DEFAULT_PROJECTION,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
-        student_hidden_layers=(100,),
+        student=FNN_DYNAMICS,
     ),
 )
 
@@ -70,9 +73,7 @@ FNN_PRESET = PipelineConfig(
     description="Feedforward Neural Network (FNN)",
     preprocess=DEFAULT_PREPROCESS,
     projection=None,
-    model=FNNConfig(
-        hidden_layers=(),
-    )
+    model=FNN_DYNAMICS
 )
 
 MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {

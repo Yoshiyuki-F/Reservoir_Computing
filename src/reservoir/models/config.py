@@ -72,7 +72,7 @@ class PipelineConfig:
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
             merged.update(model_cfg.teacher.to_dict())
-            merged["student_hidden_layers"] = tuple(int(v) for v in model_cfg.student_hidden_layers)
+            merged["student.hidden_layers"] = tuple(int(v) for v in model_cfg.student.hidden_layers)
         elif hasattr(model_cfg, "to_dict"):
             merged.update(model_cfg.to_dict())
         else:
@@ -190,7 +190,7 @@ class DistillationConfig:
     """Step 5 distillation fnn dynamics parameters."""
 
     teacher: ClassicalReservoirConfig
-    student_hidden_layers: Tuple[int, ...]
+    student: FNNConfig
 
     def __post_init__(self) -> None:
         self.validate()
@@ -198,16 +198,16 @@ class DistillationConfig:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "teacher": self.teacher.to_dict(),
-            "student_hidden_layers": tuple(int(v) for v in self.student_hidden_layers),
+            "student.hidden_layers": tuple(int(v) for v in self.student.hidden_layers),
         }
 
     def validate(self, *, context: str = "") -> None:
         prefix = f"{context}: " if context else ""
         self.teacher.validate(context=f"{prefix}teacher")
-        if not self.student_hidden_layers:
-            raise ValueError(f"{prefix}student_hidden_layers must contain at least one layer size.")
-        if any(width <= 0 for width in self.student_hidden_layers):
-            raise ValueError(f"{prefix}student_hidden_layers values must be positive.")
+        if not self.student.hidden_layers:
+            raise ValueError(f"{prefix}student.hidden_layers must contain at least one layer size.")
+        if any(width <= 0 for width in self.student.hidden_layers):
+            raise ValueError(f"{prefix}student.hidden_layers values must be positive.")
 
 
 @dataclass(frozen=True)
