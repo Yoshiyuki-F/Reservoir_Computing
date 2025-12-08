@@ -4,12 +4,11 @@ Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, Dict, Optional
 
-from reservoir.training.presets import TrainingConfig, get_training_preset
-from reservoir.core.identifiers import Dataset, Model, TaskType
-from reservoir.data.presets import DATASET_REGISTRY, DatasetPreset
+from reservoir.training.presets import TrainingConfig
+from reservoir.core.identifiers import Model
+from reservoir.data.presets import DatasetPreset
 from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
@@ -29,11 +28,10 @@ class ModelFactory:
         input_shape: tuple[int, ...] = None,
     ) -> Any:
 
-        preset = dataset_preset
-        if input_dim <= 0:
-            raise ValueError(f"Dataset '{preset.name}' must define n_input > 0.")
-        if output_dim <= 0:
-            raise ValueError(f"Dataset '{preset.name}' must define n_output > 0.")
+        if input_dim is None or input_dim <= 0:
+            raise ValueError("ModelFactory.create_model requires a positive input_dim.")
+        if output_dim is None or output_dim <= 0:
+            raise ValueError("ModelFactory.create_model requires a positive output_dim.")
 
         training_cfg = training
         pipeline_enum = config.model_type
@@ -61,24 +59,3 @@ class ModelFactory:
             )
 
         raise ValueError(f"Unsupported model_type: {pipeline_enum}")
-
-    # ------------------------------------------------------------------ #
-    # Helpers                                                            #
-    # ------------------------------------------------------------------ #
-    @staticmethod
-    def _build_training(task_type: TaskType) -> TrainingConfig:
-        preset = get_training_preset("standard")
-        return replace(preset, classification=task_type is TaskType.CLASSIFICATION)
-
-    @staticmethod
-    def _get_dataset_preset(dataset: Optional[Dataset]) -> DatasetPreset:
-        if dataset is None:
-            raise ValueError("Dataset must be provided to resolve presets.")
-        if not isinstance(dataset, Dataset):
-            raise TypeError(f"Dataset preset lookup requires Dataset Enum, got {type(dataset)}.")
-        preset = DATASET_REGISTRY.get(dataset)
-        if preset is None:
-            raise ValueError(f"Dataset preset '{dataset}' not found in registry.")
-        if preset.config.n_input is None or preset.config.n_output is None:
-            raise ValueError(f"Dataset preset '{dataset}' must define n_input and n_output.")
-        return preset

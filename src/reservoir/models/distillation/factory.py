@@ -5,14 +5,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import jax.numpy as jnp
 from dataclasses import replace
 from reservoir.core.identifiers import Model
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.distillation.model import DistillationModel
 from reservoir.models.presets import DistillationConfig
 from reservoir.models.config import ClassicalReservoirConfig
-from reservoir.models.reservoir.factory import ReservoirFactory
+from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.training.presets import TrainingConfig
 
 
@@ -36,13 +35,21 @@ class DistillationFactory:
         if projected_input_dim <= 0:
             raise ValueError(f"input_dim must be positive for distillation, got {input_dim}")
 
-        teacher_node = ReservoirFactory.create_node(teacher_cfg, projected_input_dim)
-        aggregator = teacher_node.aggregator
+        if input_shape is None:
+            raise ValueError("input_shape must be provided for distillation (time, features).")
+        if len(input_shape) != 2:
+            raise ValueError(f"input_shape must be (time, features), got {input_shape}")
+        time_steps = int(input_shape[0])
 
-        time_steps = input_shape[0] if input_shape else 1
-        dummy_states = jnp.zeros((1, time_steps, projected_input_dim), dtype=jnp.float64)
-        aggregated = aggregator.transform(dummy_states)
-        teacher_feature_dim = int(aggregated.shape[-1]) if aggregated.ndim >= 2 else int(aggregated.size)
+        teacher_node = ClassicalReservoir(
+            n_units=projected_input_dim,
+            spectral_radius=teacher_cfg.spectral_radius,
+            leak_rate=teacher_cfg.leak_rate,
+            rc_connectivity=teacher_cfg.rc_connectivity,
+            seed=teacher_cfg.seed,
+            aggregation_mode=teacher_cfg.aggregation,
+        )
+        teacher_feature_dim = teacher_node.get_feature_dim(time_steps=time_steps)
 
         student_input_dim = projected_input_dim * time_steps
         fnn_cfg_layers = (
@@ -64,7 +71,7 @@ class DistillationFactory:
             "shapes": {
                 "input": input_shape,
                 "preprocessed": None,
-                "projected": (time_steps, projected_input_dim) if input_shape else None,
+                "projected": (time_steps, projected_input_dim),
                 "internal": (time_steps, projected_input_dim),
                 "feature": (int(teacher_feature_dim),),
                 "output": (output_dim,),

@@ -4,7 +4,6 @@ Standard Echo State Network implementation.
 
 from __future__ import annotations
 
-from collections import namedtuple
 from typing import Dict, Any, Tuple
 
 import jax
@@ -13,8 +12,6 @@ import jax.numpy as jnp
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
-
-StepArtifacts = namedtuple("StepArtifacts", ["states"])
 
 
 class ClassicalReservoir(Reservoir):
@@ -67,7 +64,7 @@ class ClassicalReservoir(Reservoir):
 
         return next_state, next_state
 
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, StepArtifacts]:
+    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
         batch, time, feat = input_data.shape
@@ -78,23 +75,25 @@ class ClassicalReservoir(Reservoir):
 
         final_states, stacked = jax.lax.scan(self.step, state, proj_transposed)
         stacked = jnp.swapaxes(stacked, 0, 1)
-        return final_states, StepArtifacts(states=stacked)
+        return final_states, stacked
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, **_: Any) -> jnp.ndarray:
         arr = jnp.asarray(inputs, dtype=jnp.float64)
         if arr.ndim != 3:
             raise ValueError(f"ClassicalReservoir expects 3D input (batch, time, features), got {arr.shape}")
         batch_size = arr.shape[0]
         initial_state = self.initialize_state(batch_size)
         _, artifacts = self.forward(initial_state, arr)
-        states = artifacts.states if hasattr(artifacts, "states") else artifacts
+        states = artifacts
+        if return_sequences:
+            return states
         return self.aggregator.transform(states)
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs:Any) -> Dict[str, Any]:
+    def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """

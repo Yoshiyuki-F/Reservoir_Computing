@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.presets import PipelineConfig
-from reservoir.models.reservoir.base import Reservoir
 from reservoir.models.reservoir.classical import ClassicalReservoir
 
 
@@ -22,7 +21,7 @@ class ReservoirFactory:
         projected_input_dim: int,
         output_dim: int,
         input_shape: Optional[tuple[int, ...]],
-    ) -> Reservoir:
+    ) -> ClassicalReservoir:
         """
         Assemble reservoir node with embedded aggregation (Steps 5-6).
         Assumes inputs are already projected to the reservoir dimensionality (input_dim).
@@ -33,18 +32,21 @@ class ReservoirFactory:
         if not isinstance(model, ClassicalReservoirConfig):
             raise TypeError(f"ReservoirFactory requires ClassicalReservoirConfig, got {type(model)}.")
 
-        node = ReservoirFactory.create_node(model, projected_input_dim)
+        node = ClassicalReservoir(
+            n_units=projected_input_dim,
+            spectral_radius=model.spectral_radius,
+            leak_rate=model.leak_rate,
+            rc_connectivity=model.rc_connectivity,
+            seed=model.seed,
+            aggregation_mode=model.aggregation,
+        )
 
-        # Topology metadata
-        topo_meta: Dict[str, Any] = {}
         if input_shape is None:
-            t_steps = 1
-        elif len(input_shape) == 1:
-            t_steps = int(input_shape[0])
-        elif len(input_shape) == 2:
-            t_steps = int(input_shape[0])
-        else:
-            t_steps = int(input_shape[-2])
+            raise ValueError("input_shape must be provided to ReservoirFactory.create_pipeline (time, features).")
+        if len(input_shape) != 2:
+            raise ValueError(f"input_shape must be (time, features), got {input_shape}")
+        t_steps = int(input_shape[0])
+        topo_meta: Dict[str, Any] = {}
         agg_mode_enum = model.aggregation
 
         feature_units = int(node.get_feature_dim(time_steps=t_steps))
@@ -53,7 +55,7 @@ class ReservoirFactory:
         topo_meta["shapes"] = {
             "input": input_shape,
             "preprocessed": None,
-            "projected": (t_steps, projected_input_dim) if input_shape else None,
+            "projected": (t_steps, projected_input_dim),
             "internal": (t_steps, projected_input_dim),
             "feature": (feature_units,),
             "output": (output_dim,),
@@ -65,20 +67,3 @@ class ReservoirFactory:
         }
         node.topology_meta = topo_meta
         return node
-
-
-
-    @staticmethod  # for distillation use
-    def create_node(config: ClassicalReservoirConfig, input_dim: int) -> Reservoir:
-        """
-        Low-level method to create just the Reservoir Node.
-        Used internally and by DistillationFactory (to create Teacher).
-        """
-        return ClassicalReservoir(
-            n_units=input_dim,
-            spectral_radius=config.spectral_radius,
-            leak_rate=config.leak_rate,
-            rc_connectivity=config.rc_connectivity,
-            seed=config.seed,
-            aggregation_mode=config.aggregation,
-        )
