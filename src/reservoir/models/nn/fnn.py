@@ -8,13 +8,14 @@ from typing import Any, Dict, Sequence, Optional
 import flax.linen as nn
 import jax.numpy as jnp
 
+from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
 from reservoir.training.presets import TrainingConfig
 
 class FNNModel(BaseFlaxModel):
     """Wrap FNNModule with BaseModel API."""
 
-    def __init__(self, model_config: Dict[str, Any], training_config: TrainingConfig):
+    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig):
         if "layer_dims" not in model_config:
             raise ValueError("FNNModel requires 'layer_dims' in model_config.")
         self.layer_dims: Sequence[int] = tuple(int(v) for v in model_config["layer_dims"])

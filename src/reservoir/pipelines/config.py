@@ -7,7 +7,7 @@ from typing import Optional, Any, Dict
 from reservoir.core.identifiers import  Dataset, TaskType
 from reservoir.data import SplitDataset
 from reservoir.data.config import DatasetPreset
-from reservoir.readout import RidgeRegression
+from reservoir.models.config import ReadoutConfig
 from reservoir.training import TrainingConfig
 
 
@@ -22,11 +22,10 @@ class FrontendContext:
 
 
 @dataclass(frozen=True)
-class DatasetContext:
+class DatasetMetadata:
     dataset: Dataset
     dataset_name: str
     preset: DatasetPreset
-    split: SplitDataset
     training: TrainingConfig
     task_type: TaskType
     input_shape: tuple[int, ...]
@@ -35,7 +34,7 @@ class DatasetContext:
 @dataclass(frozen=True)
 class ModelStack:
     model: Any
-    readout: RidgeRegression
+    readout: ReadoutConfig
     topo_meta: Dict[str, Any]
     metric: str
     model_label: str

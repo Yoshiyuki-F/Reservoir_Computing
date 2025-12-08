@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from reservoir.training import get_training_preset
 from reservoir.utils.jax_config import ensure_x64_enabled
 
 ensure_x64_enabled()
@@ -40,11 +41,12 @@ def main() -> None:
     model_enum = Model(args.model)
     dataset = Dataset(args.dataset)
     pipeline_config = get_model_preset(model_enum)
+    training_config = get_training_preset("standard")
 
-    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}...")
+    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}... with training preset '{training_config.name}'")
 
     # Run Pipeline
-    results = run_pipeline(pipeline_config, dataset)
+    results = run_pipeline(pipeline_config, dataset, training_config)
 
     # Output Results
     print("[Unified] Results:")

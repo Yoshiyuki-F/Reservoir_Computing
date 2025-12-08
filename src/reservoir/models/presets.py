@@ -12,7 +12,10 @@ from reservoir.models.config import (
     PreprocessingConfig,
     ProjectionConfig,
     ClassicalReservoirConfig,
-    DistillationConfig, FNNConfig, PipelineConfig, ReadoutConfig,
+    DistillationConfig,
+    FNNConfig,
+    PipelineConfig,
+    RidgeReadoutConfig,
 )
 from reservoir.readout import RidgeRegression
 
@@ -33,9 +36,7 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-DEFAULT_READOUT = ReadoutConfig(
-    model = RidgeRegression(10000, use_intercept=True)
-)
+DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=10000000, use_intercept=True)
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,

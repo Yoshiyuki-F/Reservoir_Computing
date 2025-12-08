@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from reservoir.models.nn.factory import NNModelFactory
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
 from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
@@ -55,5 +56,12 @@ class ModelFactory:
                 output_dim=output_dim,
                 input_shape=input_shape,
             )
+
+        if pipeline_enum == Model.FNN:
+            return NNModelFactory.create_fnn(
+                model_cfg=config.model,
+                training_cfg=training_cfg
+            )
+
 
         raise ValueError(f"Unsupported model_type: {pipeline_enum}")

@@ -1,6 +1,8 @@
 """
 Shared configuration components for model pipelines (Steps 2-6).
+config shouldnt have initial value!
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
@@ -23,20 +25,19 @@ class PipelineConfig:
     preprocess: PreprocessingConfig
     projection: Optional[ProjectionConfig]
     model: ModelConfig
-    readout: "ReadoutConfig"
+    readout: ReadoutConfig
 
     def __post_init__(self) -> None:
         if self.preprocess is None:
             raise ValueError(f"{self.name}: preprocess config is required.")
-        if self.readout is None:
-            raise ValueError(f"{self.name}: readout config is required.")
         if self.model is None:
             raise ValueError(f"{self.name}: model config is required.")
 
         self.preprocess.validate(context=f"{self.name}.preprocess")
         if self.projection is not None:
             self.projection.validate(context=f"{self.name}.projection")
-        self.readout.validate(context=f"{self.name}.readout")
+        if self.readout is not None:
+            self.readout.validate(context=f"{self.name}.readout")
 
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
@@ -162,16 +163,16 @@ class ProjectionConfig:
 @dataclass(frozen=True)
 class RidgeReadoutConfig:
     """Step 7 readout configuration (structure/defaults)."""
-    ridge_lambda: float
-    use_intercept: float
+    init_lambda: float
+    use_intercept: bool
 
     def validate(self, context: str = "readout") -> "RidgeReadoutConfig":
-        if float(self.ridge_lambda) <= 0:
-            raise ValueError(f"{context}: init_alpha must be positive.")
+        if float(self.init_lambda) <= 0:
+            raise ValueError(f"{context}: init_lambda must be positive.")
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"ridge_lambda": float(self.ridge_lambda)}
+        return {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
 
 
 @dataclass(frozen=True)

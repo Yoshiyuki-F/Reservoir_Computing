@@ -5,15 +5,16 @@ from typing import Any, Dict
 from reservoir.training.presets import TrainingConfig
 from .rnn import RNNModel
 from .fnn import FNNModel
+from ..config import FNNConfig
 
 
 class NNModelFactory:
     """Internal Factory to build pure FNN/RNN models (without distillation logic)."""
 
     @staticmethod
-    def create_fnn(model_cfg: Dict[str, Any], training_cfg: TrainingConfig) -> FNNModel:
-        if "layer_dims" not in model_cfg:
-            raise ValueError("FNN model requires 'layer_dims' list in model config.")
+    def create_fnn(model_cfg: FNNConfig, training_cfg: TrainingConfig) -> FNNModel:
+        if "hidden_layers" not in model_cfg:
+            raise ValueError("FNN model requires 'hidden_layers' list in model config.")
         return FNNModel(model_cfg, training_cfg)
 
     @staticmethod

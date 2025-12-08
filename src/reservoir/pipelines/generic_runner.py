@@ -4,34 +4,27 @@ Universal pipeline that treats models as feature extractors and owns the readout
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from reservoir.readout.ridge import RidgeRegression
+from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
+from reservoir.models.presets import PipelineConfig
 from reservoir.training.presets import TrainingConfig
 
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
 
-    def __init__(
-        self,
-        model: Any,
-        readout: RidgeRegression,
-        save_path: Optional[Path | str] = None,
-        *,
-        metric: str = "mse",
-    ) -> None:
-        if readout is None:
-            raise ValueError("UniversalPipeline requires a readout instance (RidgeRegression).")
-        self.model = model
-        self.readout = readout
-        self.save_path = Path(save_path) if save_path is not None else None
-        self.metric_name = metric
+    def __init__(self, stack: ModelStack, config: PipelineConfig) -> None:
+        if stack.readout is None:
+            raise ValueError("UniversalPipeline requires a readout instance.")
+        self.model = stack.model
+        self.readout = stack.readout
+        self.metric_name = stack.metric
+        self.config = config
 
     # ------------------------------------------------------------------ #
     # Utilities                                                          #
@@ -129,7 +122,8 @@ class UniversalPipeline:
         ridge_lambdas: Optional[Sequence[float]],
     ) -> tuple[float, Dict[float, float], Dict[float, float]]:
         lambda_candidates = list(ridge_lambdas) if ridge_lambdas is not None else []
-        initial_lambda = float(self.readout.ridge_lambda)
+        config_init = getattr(getattr(self, "config", None), "readout", None)
+        initial_lambda = float(getattr(config_init, "init_lambda", getattr(self.readout, "ridge_lambda", 1.0)))
         single_candidate = lambda_candidates[0] if len(lambda_candidates) == 1 else None
 
         # Tier 1: no validation or no search space (empty/single) -> direct fit.
@@ -163,27 +157,24 @@ class UniversalPipeline:
     # ------------------------------------------------------------------ #
     def run(
         self,
-        train_X: Any,
-        train_y: Any,
-        test_X: Any,
-        test_y: Any,
-        *,
-        validation: Optional[tuple[Any, Any]] = None,
-        training_cfg: Optional[TrainingConfig] = None,
-        training_extras: Optional[Dict[str, Any]] = None,
-        model_label: Optional[str] = None,
+        frontend_ctx: FrontendContext,
+        dataset_meta: DatasetMetadata,
     ) -> Dict[str, Dict[str, Any]]:
-        cfg = training_cfg or TrainingConfig()
-        extras = dict(training_extras or {})
-        model_label = model_label or self.model.__class__.__name__
+        processed = frontend_ctx.processed_split
+        train_X = processed.train_X
+        train_y = processed.train_y
+        test_X = processed.test_X
+        test_y = processed.test_y
+
+        cfg = dataset_meta.training or TrainingConfig()
         ridge_lambdas = cfg.ridge_lambdas
-        feature_batch_size = int(extras.get("feature_batch_size", cfg.batch_size or 0))
+        feature_batch_size = int(cfg.batch_size or 0)
 
         start = time.time()
 
-        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{model_label}] ===")
+        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
         start_train = time.time()
-        train_logs = self.model.train(train_X, train_y, **extras) or {}
+        train_logs = self.model.train(train_X, train_y) or {}
         train_time = time.time() - start_train
 
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
@@ -197,44 +188,51 @@ class UniversalPipeline:
         self._feature_stats(train_features, "post_train_features")
 
         val_Z = None
-        val_y = None
-        if validation:
-            val_X, val_y = validation
-            val_Z = self.batch_transform(val_X, batch_size=feature_batch_size)
+        val_y = processed.val_y
+        if processed.val_X is not None and processed.val_y is not None:
+            val_Z = self.batch_transform(processed.val_X, batch_size=feature_batch_size)
             self._feature_stats(val_Z, "post_val_features")
 
         test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
         self._feature_stats(test_features, "post_test_features")
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
-        best_lambda, search_history, weight_norms = self._fit_readout(
-            train_features,
-            train_y,
-            val_Z,
-            val_y,
-            ridge_lambdas,
-        )
-        if search_history:
-            print(f"Search complete. Best lambda: {best_lambda}")
-        self.readout.ridge_lambda = best_lambda
 
-        # Evaluate
-        test_pred = self.readout.predict(test_features)
+        if self.readout is None: #for end-to-end models without readout
+            print("Readout is None. Using model output directly as predictions (End-to-End mode).")
+            # Readout学習はスキップ
+            best_lambda = None
+            search_history = {}
+            weight_norms = {}
+            # Step 6 の出力をそのまま予測値とする
+            test_pred = test_features
+
+        else:
+            best_lambda, search_history, weight_norms = self._fit_readout(
+                train_features,
+                train_y,
+                val_Z,
+                val_y,
+                ridge_lambdas,
+            )
+            if search_history:
+                print(f"Search complete. Best lambda: {best_lambda}")
+            self.readout.ridge_lambda = best_lambda
+
+            # Evaluate
+            test_pred = self.readout.predict(test_features)
+
 
         results = {
             "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
             "test": {self.metric_name: self._score(test_pred, test_y)},
         }
-        if validation:
+        if val_Z is not None and val_y is not None:
             results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
         results["readout"] = self.readout
 
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
 
-        # Optional: save model/readout if a path is provided
-        if self.save_path:
-            self.save_path.mkdir(parents=True, exist_ok=True)
-            # Placeholder for save logic
 
         return results
