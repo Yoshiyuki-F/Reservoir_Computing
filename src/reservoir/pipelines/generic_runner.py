@@ -19,8 +19,6 @@ class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
 
     def __init__(self, stack: ModelStack, config: PipelineConfig) -> None:
-        if stack.readout is None:
-            raise ValueError("UniversalPipeline requires a readout instance.")
         self.model = stack.model
         self.readout = stack.readout
         self.metric_name = stack.metric
@@ -207,6 +205,11 @@ class UniversalPipeline:
             # Step 6 の出力をそのまま予測値とする
             test_pred = test_features
 
+            results = {
+                "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
+                "test": {self.metric_name: self._score(test_pred, test_y)},
+            }
+
         else:
             best_lambda, search_history, weight_norms = self._fit_readout(
                 train_features,
@@ -222,14 +225,14 @@ class UniversalPipeline:
             # Evaluate
             test_pred = self.readout.predict(test_features)
 
+            results = {
+                "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
+                "test": {self.metric_name: self._score(test_pred, test_y)},
+            }
 
-        results = {
-            "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
-            "test": {self.metric_name: self._score(test_pred, test_y)},
-        }
-        if val_Z is not None and val_y is not None:
-            results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
-        results["readout"] = self.readout
+            if val_Z is not None and val_y is not None:
+                results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
+            results["readout"] = self.readout
 
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}

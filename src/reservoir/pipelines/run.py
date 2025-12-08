@@ -139,6 +139,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         input_dim_for_factory = (
             int(np.prod(input_shape_for_meta)) if config.model_type is Model.FNN else int(input_shape_for_meta[-1])
         )
+        _log_split_stats("projection", train_X, val_X, test_X)
         return FrontendContext(
             processed_split=processed_split,
             preprocess_labels=preprocess_labels,

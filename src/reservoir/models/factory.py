@@ -60,7 +60,9 @@ class ModelFactory:
         if pipeline_enum == Model.FNN:
             return NNModelFactory.create_fnn(
                 model_cfg=config.model,
-                training_cfg=training_cfg
+                training_cfg=training_cfg,
+                input_dim=input_dim,
+                output_dim=output_dim,
             )
 
 

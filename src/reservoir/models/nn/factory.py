@@ -12,10 +12,15 @@ class NNModelFactory:
     """Internal Factory to build pure FNN/RNN models (without distillation logic)."""
 
     @staticmethod
-    def create_fnn(model_cfg: FNNConfig, training_cfg: TrainingConfig) -> FNNModel:
-        if "hidden_layers" not in model_cfg:
-            raise ValueError("FNN model requires 'hidden_layers' list in model config.")
-        return FNNModel(model_cfg, training_cfg)
+    def create_fnn(model_cfg: FNNConfig, training_cfg: TrainingConfig, *, input_dim: int, output_dim: int) -> FNNModel:
+        if not isinstance(model_cfg, FNNConfig):
+            raise TypeError(f"create_fnn expects FNNConfig, got {type(model_cfg)}.")
+        hidden_layers = tuple(int(h) for h in model_cfg.hidden_layers)
+        if input_dim <= 0 or output_dim <= 0:
+            raise ValueError("input_dim and output_dim must be positive for FNN creation.")
+        layer_dims = (int(input_dim), *hidden_layers, int(output_dim))
+        cfg_dict = {"layer_dims": layer_dims}
+        return FNNModel(cfg_dict, training_cfg)
 
     @staticmethod
     def create_rnn(model_cfg: Dict[str, Any], training_cfg: TrainingConfig) -> RNNModel:
