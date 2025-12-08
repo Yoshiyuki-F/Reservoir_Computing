@@ -17,10 +17,7 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         classification = False,
         seed= 0,
 
-        # Readout Regularization (Ridge Regression)
-        # 'ridge_lambda' is the canonical default regularization strength when no search is run.
-        ridge_lambda= 1e-7, # no use but needed for type consistency
-        # Defines the search space for validation. Defaults to a log-spaced range around typical values.
+        # Readout Regularization search space (used by Ridge)
         ridge_lambdas= np.logspace(-12, 0, 30).tolist(),
 
         # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?

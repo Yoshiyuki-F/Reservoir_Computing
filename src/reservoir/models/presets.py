@@ -4,7 +4,6 @@ SSOT: all default hyperparameters live in these dataclasses.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
 from typing import Dict
 
 from reservoir.core.presets import StrictRegistry
@@ -13,8 +12,9 @@ from reservoir.models.config import (
     PreprocessingConfig,
     ProjectionConfig,
     ClassicalReservoirConfig,
-    DistillationConfig, FNNConfig, PipelineConfig,
+    DistillationConfig, FNNConfig, PipelineConfig, ReadoutConfig,
 )
+from reservoir.readout import RidgeRegression
 
 # -----------------------------------------------------------------------------
 # Definitions
@@ -33,6 +33,9 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
+DEFAULT_READOUT = ReadoutConfig(
+    model = RidgeRegression(10000, use_intercept=True)
+)
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
@@ -52,6 +55,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
+    readout=DEFAULT_READOUT,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNN_DYNAMICS,
@@ -65,6 +69,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
+    readout=DEFAULT_READOUT
 )
 
 FNN_PRESET = PipelineConfig(
@@ -73,7 +78,8 @@ FNN_PRESET = PipelineConfig(
     description="Feedforward Neural Network (FNN)",
     preprocess=DEFAULT_PREPROCESS,
     projection=None,
-    model=FNN_DYNAMICS
+    model=FNN_DYNAMICS,
+    readout=None
 )
 
 MODEL_DEFINITIONS: Dict[Model, PipelineConfig] = {
