@@ -113,7 +113,7 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
 def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray], test_X: Optional[np.ndarray]) -> None:
     """Lightweight stats logger for each split at a given processing stage."""
     def _stats(arr: np.ndarray) -> str:
-        arr64 = np.asarray(arr, dtype=np.float64)
+        arr64 = np.asarray(arr)  # avoid dtype cast to prevent unnecessary copies
         return (
             f"shape={arr64.shape}, mean={float(np.mean(arr64)):.4f}, std={float(np.std(arr64)):.4f}, "
             f"min={float(np.min(arr64)):.4f}, max={float(np.max(arr64)):.4f}, nans={int(np.isnan(arr64).sum())}"
@@ -163,9 +163,9 @@ def _process_frontend(config: PipelineConfig, dataset_ctx: DatasetContext) -> Fr
     pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
 
     data_split = dataset_ctx.split
-    train_X = np.asarray(data_split.train_X)
-    val_X = np.asarray(data_split.val_X)
-    test_X = np.asarray(data_split.test_X)
+    train_X = data_split.train_X
+    val_X = data_split.val_X
+    test_X = data_split.test_X
 
     if pre_layers:
         train_X = _apply_layers(pre_layers, train_X, fit=True)
@@ -282,9 +282,16 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset ) -> Dict[str, Any]:
     """
     Declarative orchestrator for the unified pipeline.
     """
+
+    #Step1.
     dataset_ctx = _prepare_dataset(dataset)
+
+    #Step2&3.
     frontend_ctx = _process_frontend(config, dataset_ctx)
+
+    #Step 4: Build Model Stack
     stack = _build_model_stack(config, dataset_ctx, frontend_ctx)
+
 
     runner = UniversalPipeline(stack.model, stack.readout, None, metric=stack.metric)
     validation_tuple = (

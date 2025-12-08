@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional, Sequence
 import jax
 import jax.numpy as jnp
 import numpy as np
-from dataclasses import asdict
 
 from reservoir.readout.ridge import RidgeRegression
 from reservoir.training.presets import TrainingConfig
@@ -85,8 +84,11 @@ class UniversalPipeline:
 
         n = arr.shape[0]
         pad = (-n) % batch_size
-        pad_width = [(0, pad)] + [(0, 0)] * (arr.ndim - 1)
-        arr_padded = jnp.pad(arr, pad_width)
+        if pad == 0:
+            arr_padded = arr
+        else:
+            pad_width = [(0, pad)] + [(0, 0)] * (arr.ndim - 1)
+            arr_padded = jnp.pad(arr, pad_width)
         num_batches = arr_padded.shape[0] // batch_size
         reshaped = arr_padded.reshape((num_batches, batch_size) + arr.shape[1:])
 
@@ -116,20 +118,24 @@ class UniversalPipeline:
     ) -> tuple[float, Dict[float, float], Dict[float, float]]:
         lambda_candidates = list(ridge_lambdas) if ridge_lambdas is not None else []
         initial_lambda = float(self.readout.ridge_lambda)
+        single_candidate = lambda_candidates[0] if len(lambda_candidates) == 1 else None
 
-        # No validation -> skip search to avoid overfitting
-        if val_Z is None or val_y is None:
-            print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
+        # Tier 1: no validation or no search space (empty/single) -> direct fit.
+        direct_fit = val_Z is None or val_y is None or len(lambda_candidates) <= 1
+        if direct_fit:
+            chosen = float(single_candidate if single_candidate is not None else initial_lambda)
+            self.readout.ridge_lambda = chosen
+            if val_Z is None or val_y is None:
+                print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
+            elif len(lambda_candidates) <= 1:
+                print("Single ridge_lambda candidate provided. Running direct fit without search.")
             self.readout.fit(train_Z, train_y)
-            return float(initial_lambda), {}, {}
+            return chosen, {}, {}
 
-        if not lambda_candidates:
-            lambda_candidates = [initial_lambda]
-        else:
-            print(
-                f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates."
-            )
-
+        # Tier 2: validation present and multiple candidates -> search.
+        print(
+            f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates."
+        )
         best_lambda, search_history, weight_norms = self.readout.fit_and_search(
             train_Z,
             train_y,
@@ -166,29 +172,11 @@ class UniversalPipeline:
         ridge_lambdas = cfg.ridge_lambdas
         feature_batch_size = int(extras.get("feature_batch_size", cfg.batch_size or 0))
 
-        cfg_dict = asdict(cfg)
-        # Model owns its TrainingConfig (injected via Factory). Do not pass duplicate params to train().
-        exclude_keys = {
-            "ridge_lambda",
-            "ridge_lambdas",
-            "batch_size",
-            "epochs",
-            "learning_rate",
-            "seed",
-            "classification",
-            "train_size",
-            "val_size",
-            "test_ratio",
-            "task_type",
-            "name",
-        }
-        train_params = {k: v for k, v in cfg_dict.items() if k not in exclude_keys}
-
         start = time.time()
 
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{model_label}] ===")
         start_train = time.time()
-        train_logs = self.model.train(train_X, train_y, **train_params) or {}
+        train_logs = self.model.train(train_X, train_y, **extras) or {}
         train_time = time.time() - start_train
 
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
