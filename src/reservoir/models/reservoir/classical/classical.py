@@ -10,6 +10,8 @@ from typing import Dict, Any, Tuple
 import jax
 import jax.numpy as jnp
 
+from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
 
 StepArtifacts = namedtuple("StepArtifacts", ["states"])
@@ -25,11 +27,16 @@ class ClassicalReservoir(Reservoir):
         leak_rate: float,
         rc_connectivity: float,
         seed: int,
+        aggregation_mode: AggregationMode,
     ) -> None:
-        super().__init__( n_units=n_units, seed=seed)
+        super().__init__(n_units=n_units, seed=seed)
         self.spectral_radius = float(spectral_radius)
         self.leak_rate = float(leak_rate)
         self.rc_connectivity = float(rc_connectivity)
+        if not isinstance(aggregation_mode, AggregationMode):
+            raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
+        self.aggregation_mode = aggregation_mode
+        self.aggregator = StateAggregator(mode=aggregation_mode)
         self._rng = jax.random.PRNGKey(self.seed)
         self._init_weights()
 
@@ -73,6 +80,29 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, StepArtifacts(states=stacked)
 
+    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, **_: Any) -> jnp.ndarray:
+        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        if arr.ndim != 3:
+            raise ValueError(f"ClassicalReservoir expects 3D input (batch, time, features), got {arr.shape}")
+        batch_size = arr.shape[0]
+        initial_state = self.initialize_state(batch_size)
+        _, artifacts = self.forward(initial_state, arr)
+        states = artifacts.states if hasattr(artifacts, "states") else artifacts
+        if return_sequences:
+            return states
+        return self.aggregator.transform(states)
+
+    def get_feature_dim(self, time_steps: int) -> int:
+        """Return aggregated feature dimension without running the model."""
+        return self.aggregator.get_output_dim(self.n_units, int(time_steps))
+
+    def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
+        """
+        Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
+        """
+        _ = self(inputs, return_sequences=False)
+        return {}
+
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
         data.update(
@@ -81,6 +111,7 @@ class ClassicalReservoir(Reservoir):
                 "leak_rate": self.leak_rate,
                 "rc_connectivity": self.rc_connectivity,
                 "seed": self.seed,
+                "aggregation": self.aggregation_mode.value,
             }
         )
         return data
@@ -94,6 +125,7 @@ class ClassicalReservoir(Reservoir):
                 leak_rate=float(data["leak_rate"]),
                 rc_connectivity=float(data["rc_connectivity"]),
                 seed=int(data["seed"]),
+                aggregation_mode=AggregationMode(data["aggregation"]),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc

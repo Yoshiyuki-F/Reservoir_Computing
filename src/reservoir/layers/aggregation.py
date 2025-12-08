@@ -5,7 +5,7 @@ State aggregation components compatible with Transformer protocol.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 import jax.numpy as jnp
 from reservoir.core.interfaces import Transformer
@@ -68,6 +68,24 @@ class StateAggregator(Transformer):
 
     def __call__(self, features: jnp.ndarray) -> jnp.ndarray:
         return self.transform(features)
+
+    def get_output_dim(self, n_units: int, n_steps: int) -> int:
+        """Compute aggregated feature dimension without materializing data."""
+        mode = self.mode
+        steps = int(n_steps)
+        units = int(n_units)
+        if steps <= 0:
+            raise ValueError(f"n_steps must be positive, got {n_steps}")
+        if units <= 0:
+            raise ValueError(f"n_units must be positive, got {n_units}")
+
+        if mode in {AggregationMode.LAST, AggregationMode.MEAN}:
+            return units
+        if mode in {AggregationMode.LAST_MEAN, AggregationMode.MTS}:
+            return units * 2
+        if mode is AggregationMode.CONCAT:
+            return units * steps
+        raise ValueError(f"Unknown aggregation mode: {mode}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {"mode": self.mode.value if isinstance(self.mode, AggregationMode) else str(self.mode)}

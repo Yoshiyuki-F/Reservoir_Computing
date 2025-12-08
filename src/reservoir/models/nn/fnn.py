@@ -3,7 +3,7 @@ FNN BaseModel wrapper using BaseFlaxModel."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, Optional
 
 import flax.linen as nn
 import jax.numpy as jnp

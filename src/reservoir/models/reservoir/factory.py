@@ -5,68 +5,61 @@ Handles creation of Physical Nodes (Reservoir) and assembly into sequential pipe
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 
-from reservoir.core.identifiers import Pipeline, AggregationMode
-from reservoir.layers.aggregation import StateAggregator
+import jax.numpy as jnp
+
+from reservoir.core.identifiers import AggregationMode
+from reservoir.models.config import ClassicalReservoirConfig
+from reservoir.models.presets import PipelineConfig
 from reservoir.models.reservoir.base import Reservoir
 from reservoir.models.reservoir.classical import ClassicalReservoir
-from reservoir.models.reservoir.classical.config import ClassicalReservoirConfig
-from reservoir.models.sequential import SequentialModel
 
 
 class ReservoirFactory:
-    """Factory for creating Reservoir Nodes and sequential Reservoir models."""
+    """Factory for creating Reservoir Nodes (Steps 5-6)."""
 
     @staticmethod
     def create_pipeline(
-        reservoir_config: ClassicalReservoirConfig,
-        *,
+        pipeline_config: PipelineConfig,
         input_dim: int,
         output_dim: int,
-        input_shape: Optional[tuple[int, ...]] = None,
-        pipeline: Pipeline = Pipeline.CLASSICAL_RESERVOIR,
-    ) -> SequentialModel:
+        input_shape: Optional[tuple[int, ...]],
+    ) -> Reservoir:
         """
-        Assemble reservoir node and aggregation into SequentialModel (Steps 5-6).
-        Assumes inputs are already projected to reservoir_config.n_units dimensionality.
+        Assemble reservoir node with embedded aggregation (Steps 5-6).
+        Assumes inputs are already projected to the reservoir dimensionality (input_dim).
         """
-        reservoir_config.validate(context=pipeline.value)
+        if not isinstance(pipeline_config, PipelineConfig):
+            raise TypeError(f"ReservoirFactory expects PipelineConfig, got {type(pipeline_config)}.")
+        model = pipeline_config.model
+        if not isinstance(model, ClassicalReservoirConfig):
+            raise TypeError(f"ReservoirFactory requires ClassicalReservoirConfig, got {type(model)}.")
 
         projected_input_dim = int(input_dim)
-        node = ReservoirFactory.create_node(
-            reservoir_config,
-            projected_input_dim,
-            use_input_projection=False,
-        )
-
-        layers: List[Any] = []
-        layers.append(node)
-        aggregator = StateAggregator(mode=reservoir_config.state_aggregation)
-        layers.append(aggregator)
-
-        seq = SequentialModel(layers)
-        seq.reservoir = node
-        seq.aggregator = aggregator
-        seq.effective_input_dim = projected_input_dim
+        node = ReservoirFactory.create_node(model, projected_input_dim)
 
         # Topology metadata
         topo_meta: Dict[str, Any] = {}
-        in_shape = input_shape or (1, projected_input_dim)
-        t_steps = in_shape[0] if len(in_shape) > 1 else 1
-        agg_mode_enum = reservoir_config.state_aggregation
-        feature_units = reservoir_config.n_units
-        if agg_mode_enum in {AggregationMode.LAST_MEAN, AggregationMode.MTS}:
-            feature_units = reservoir_config.n_units * 2
-        elif agg_mode_enum == AggregationMode.CONCAT:
-            feature_units = reservoir_config.n_units * t_steps
+        in_shape = input_shape
+        if input_shape is None:
+            t_steps = 1
+        elif len(input_shape) == 1:
+            t_steps = int(input_shape[0])
+        elif len(input_shape) == 2:
+            t_steps = int(input_shape[0])
+        else:
+            t_steps = int(input_shape[-2])
+        agg_mode_enum = model.aggregation
 
-        topo_meta["type"] = pipeline.value.upper()
+        feature_units = int(node.get_feature_dim(time_steps=t_steps))
+
+        topo_meta["type"] = pipeline_config.model_type.value.upper()
         topo_meta["shapes"] = {
-            "input": None,
+            "input": in_shape,
             "preprocessed": None,
-            "projected": None,
-            "internal": (t_steps, reservoir_config.n_units),
+            "projected": (t_steps, projected_input_dim) if in_shape else None,
+            "internal": (t_steps, projected_input_dim),
             "feature": (int(feature_units),),
             "output": (int(output_dim),),
         }
@@ -75,29 +68,22 @@ class ReservoirFactory:
             "agg_mode": agg_mode_enum.value if isinstance(agg_mode_enum, AggregationMode) else str(agg_mode_enum),
             "student_layers": None,
         }
-        seq.topology_meta = topo_meta
-        return seq
+        node.topology_meta = topo_meta
+        return node
+
+
 
     @staticmethod  # for distillation use
-    def create_node(
-        config: ClassicalReservoirConfig,
-        input_dim: int,
-        *,
-        use_input_projection: bool = False,
-    ) -> Reservoir:
+    def create_node(config: ClassicalReservoirConfig, input_dim: int) -> Reservoir:
         """
         Low-level method to create just the Reservoir Node.
         Used internally and by DistillationFactory (to create Teacher).
         """
-        config.validate(context="reservoir")
-
-        seed_val = 0 if config.seed is None else int(config.seed)
-
         return ClassicalReservoir(
-            n_inputs=int(input_dim),
-            n_units=int(config.n_units),
-            spectral_radius=float(config.spectral_radius),
-            leak_rate=float(config.leak_rate),
-            rc_connectivity=float(config.rc_connectivity),
-            seed=seed_val,
+            n_units=input_dim,
+            spectral_radius=config.spectral_radius,
+            leak_rate=config.leak_rate,
+            rc_connectivity=config.rc_connectivity,
+            seed=config.seed,
+            aggregation_mode=config.aggregation,
         )

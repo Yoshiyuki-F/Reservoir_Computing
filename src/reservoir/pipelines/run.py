@@ -16,7 +16,7 @@ import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.core.identifiers import Dataset, Pipeline, TaskType
+from reservoir.core.identifiers import Dataset, Model, TaskType
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.ridge import RidgeRegression
@@ -26,23 +26,11 @@ from reservoir.data.structs import SplitDataset
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.layers.preprocessing import create_preprocessor
 from reservoir.layers.projection import InputProjection
-from reservoir.models.presets import get_model_preset, ModelConfig
+from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import generate_report
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
-
-
-@dataclass(frozen=True)
-class DatasetContext:
-    dataset: Dataset
-    preset: DatasetPreset
-    model_preset: ModelConfig
-    training: TrainingConfig
-    split: SplitDataset
-    dataset_name: str
-    task_type: TaskType
-    input_shape: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -53,6 +41,17 @@ class FrontendContext:
     projected_shape: Optional[tuple[int, ...]]
     input_shape_for_meta: tuple[int, ...]
     input_dim_for_factory: int
+
+
+@dataclass(frozen=True)
+class DatasetContext:
+    dataset: Dataset
+    dataset_name: str
+    preset: DatasetPreset
+    split: SplitDataset
+    training: TrainingConfig
+    task_type: TaskType
+    input_shape: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -127,47 +126,43 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
         print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
 
 
-def _prepare_dataset(config: ModelConfig) -> DatasetContext:
+def _prepare_dataset(dataset: Dataset) -> DatasetContext:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
-    if not isinstance(config, ModelConfig):
-        raise TypeError(f"run_pipeline requires ModelConfig, got {type(config)}.")
-
     print("=== Step 1: Loading Dataset ===")
-    dataset_enum, dataset_preset = _get_strict_dataset_meta(config.dataset)
-    model_preset = get_model_preset(config.model_type)
-    if model_preset is None or model_preset.config is None:
-        raise ValueError(f"Model preset for {config.model_type} is missing configuration.")
-    training_cfg = _resolve_training_config(config.task_type)
+    dataset_enum, dataset_preset = _get_strict_dataset_meta(dataset)
+
+    training_cfg = _resolve_training_config(dataset.task_type)
     dataset_split = load_dataset_with_validation_split(
-        config,
+        dataset,
         training_cfg,
-        model_type=config.model_type.value,
         require_3d=True,
     )
 
     _log_split_stats("raw", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
 
+    input_shape = tuple(dataset_split.train_X.shape[1:]) if dataset_split.train_X is not None else ()
+
     return DatasetContext(
         dataset=dataset_enum,
+        dataset_name=dataset_preset.name,
         preset=dataset_preset,
-        model_preset=model_preset,
-        training=training_cfg,
         split=dataset_split,
-        dataset_name=dataset_enum.value,
-        task_type=config.task_type,
-        input_shape=dataset_split.train_X.shape[1:],
+        training=training_cfg,
+        task_type=dataset_preset.task_type,
+        input_shape=input_shape,
     )
 
 
-def _process_frontend(config: ModelConfig, data_split: SplitDataset, model_preset: ModelConfig) -> FrontendContext:
+def _process_frontend(config: PipelineConfig, dataset_ctx: DatasetContext) -> FrontendContext:
     """
     Step 2 & 3: Apply preprocessing and projection without mutating raw splits.
     Returns processed datasets and shape metadata for model creation.
     """
     print("\n=== Step 2: Preprocessing ===")
-    preprocessing_config = model_preset.config.preprocess
+    preprocessing_config = config.preprocess
     pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
 
+    data_split = dataset_ctx.split
     train_X = np.asarray(data_split.train_X)
     val_X = np.asarray(data_split.val_X)
     test_X = np.asarray(data_split.test_X)
@@ -182,7 +177,7 @@ def _process_frontend(config: ModelConfig, data_split: SplitDataset, model_prese
     preprocessed_shape = train_X.shape[1:]
 
     print("\n=== Step 3: Projection (for reservoir/distillation) ===")
-    projection_config = model_preset.config.projection
+    projection_config = config.projection
 
 
     projection = InputProjection(
@@ -206,7 +201,7 @@ def _process_frontend(config: ModelConfig, data_split: SplitDataset, model_prese
     transformed_shape = projected_shape or preprocessed_shape
     input_shape_for_meta: tuple[int, ...] = transformed_shape
     input_dim_for_factory = (
-        int(np.prod(transformed_shape)) if config.model_type is Pipeline.FNN else int(transformed_shape[-1])
+        int(np.prod(transformed_shape)) if config.model_type is Model.FNN else int(transformed_shape[-1])
     )
 
     processed_split = SplitDataset(
@@ -230,10 +225,14 @@ def _process_frontend(config: ModelConfig, data_split: SplitDataset, model_prese
 
 
 def _build_model_stack(
-    config: ModelConfig,
+    config: PipelineConfig,
     dataset_ctx: DatasetContext,
     frontend_ctx: FrontendContext,
 ) -> ModelStack:
+
+    print("\n=== Step 4: Build Model Stack ===")
+
+
     """Step 4: Instantiate model + readout and enrich topology metadata."""
     processed = frontend_ctx.processed_split
     if dataset_ctx.preset.config.n_output is not None:
@@ -267,7 +266,6 @@ def _build_model_stack(
     details_meta = topo_meta.get("details", {}) or {}
     details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
     topo_meta["details"] = details_meta
-    print("\n=== Step 4: Build Model Stack ===")
     print_topology(topo_meta)
 
     metric = "accuracy" if dataset_ctx.task_type is TaskType.CLASSIFICATION else "mse"
@@ -281,12 +279,12 @@ def _build_model_stack(
     )
 
 
-def run_pipeline(config: ModelConfig, task_type:TaskType ) -> Dict[str, Any]:
+def run_pipeline(config: PipelineConfig, dataset: Dataset ) -> Dict[str, Any]:
     """
     Declarative orchestrator for the unified pipeline.
     """
-    dataset_ctx = _prepare_dataset(config)
-    frontend_ctx = _process_frontend(config, dataset_ctx.split, dataset_ctx.model_preset)
+    dataset_ctx = _prepare_dataset(dataset)
+    frontend_ctx = _process_frontend(config, dataset_ctx)
     stack = _build_model_stack(config, dataset_ctx, frontend_ctx)
 
     runner = UniversalPipeline(stack.model, stack.readout, None, metric=stack.metric)
