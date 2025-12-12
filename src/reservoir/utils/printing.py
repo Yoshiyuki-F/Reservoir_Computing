@@ -91,5 +91,31 @@ def print_topology(meta: Dict[str, Any]) -> None:
     if readout_label in ("None", None):
         print("7. Readout         : Skipped (end-to-end model output)")
     else:
-        print(f"7. Readout         : {_fmt_dim(s_feat)} -> {_fmt_dim(s_out)} ({readout_label})")
+        # User Request: Show flattened 2D topology for Sequence tasks and W_out size
+        w_size = ""
+        feat_dim_str = _fmt_dim(s_feat)
+        out_dim_str = _fmt_dim(s_out)
+        
+        if s_feat and len(s_feat) > 0 and s_out and len(s_out) > 0:
+             w_rows = s_feat[-1]
+             w_cols = s_out[-1]
+             w_size = f", W_out=[{w_rows}x{w_cols}]"
+             
+             # If Sequence mode, show flattened shapes: [BxT, F] -> [BxT, O]
+             if agg_mode == "sequence" and len(s_feat) >= 3:
+                  # infer BxT
+                  total_time = 1
+                  for d in s_feat[:-1]:
+                      total_time *= int(d)
+                  feat_dim_str = f"[{total_time}x{w_rows}]"
+                  
+                  # infer output BxT
+                  # output might be (B, T, O)
+                  if len(s_out) >= 3:
+                      total_time_out = 1
+                      for d in s_out[:-1]:
+                          total_time_out *= int(d)
+                      out_dim_str = f"[{total_time_out}x{w_cols}]"
+
+        print(f"7. Readout         : {feat_dim_str} -> {out_dim_str} ({readout_label}{w_size})")
     print("=" * 60)

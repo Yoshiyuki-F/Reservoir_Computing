@@ -42,23 +42,50 @@ class ReservoirFactory:
         )
 
         if input_shape is None:
-            raise ValueError("input_shape must be provided to ReservoirFactory.create_pipeline (time, features).")
-        if len(input_shape) != 2:
-            raise ValueError(f"input_shape must be (time, features), got {input_shape}")
-        t_steps = int(input_shape[0])
+            raise ValueError("input_shape must be provided.")
+        
+        # Handle 2D (Time, Feat) or 3D (Batch, Time, Feat)
+        if len(input_shape) == 2:
+             t_steps = int(input_shape[0])
+             batch_dim = None
+        elif len(input_shape) == 3:
+             batch_dim = int(input_shape[0])
+             t_steps = int(input_shape[1])
+        else:
+            raise ValueError(f"input_shape must be 2D or 3D, got {input_shape}")
+
         topo_meta: Dict[str, Any] = {}
         agg_mode_enum = model.aggregation
 
         feature_units = int(node.get_feature_dim(time_steps=t_steps))
+        
+        # Determine shapes with batch dimension if present
+        def _with_batch(shape_wo_batch: tuple[int, ...]) -> tuple[int, ...]:
+             if batch_dim is not None:
+                 return (batch_dim,) + shape_wo_batch
+             return shape_wo_batch
+
+        # Correction for SEQUENCE mode: Feature shape includes time dimension
+        from reservoir.core.identifiers import AggregationMode
+        if agg_mode_enum == AggregationMode.SEQUENCE:
+             feat_core = (t_steps, feature_units)
+             out_core = (t_steps, output_dim)
+        else:
+             feat_core = (feature_units,)
+             out_core = (output_dim,)
+             
+        feature_shape = _with_batch(feat_core)
+        projected_shape = _with_batch((t_steps, projected_input_dim))
+        output_shape = _with_batch(out_core)
 
         topo_meta["type"] = pipeline_config.model_type.value.upper()
         topo_meta["shapes"] = {
             "input": input_shape,
             "preprocessed": None,
-            "projected": (t_steps, projected_input_dim),
-            "internal": (t_steps, projected_input_dim),
-            "feature": (feature_units,),
-            "output": (output_dim,),
+            "projected": projected_shape,
+            "internal": projected_shape,
+            "feature": feature_shape,
+            "output": output_shape,
         }
         topo_meta["details"] = {
             "preprocess": None,

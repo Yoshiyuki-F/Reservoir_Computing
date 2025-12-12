@@ -86,7 +86,8 @@ def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfi
 
     _log_split_stats("raw", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
 
-    input_shape = tuple(dataset_split.train_X.shape[1:]) if dataset_split.train_X is not None else ()
+    # User Request: Use full 3D shape (Batch, Time, Feature) for topology logging
+    input_shape = dataset_split.train_X.shape if dataset_split.train_X is not None else ()
 
     metadata = DatasetMetadata(
         dataset=dataset_enum,
@@ -121,7 +122,8 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         if test_X is not None:
             test_X = _apply_layers(pre_layers, test_X, fit=False)
     _log_split_stats("preprocess", train_X, val_X, test_X)
-    preprocessed_shape = train_X.shape[1:]
+    # Use full 3D shape
+    preprocessed_shape = train_X.shape
 
     print("\n=== Step 3: Projection (for reservoir/distillation) ===")
     projection_config = config.projection
@@ -135,10 +137,11 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
             val_X=val_X,
             val_y=data_split.val_y,
         )
+        # Use full 3D shape
+        preprocessed_shape = train_X.shape
         input_shape_for_meta = preprocessed_shape
-        input_dim_for_factory = (
-            int(np.prod(input_shape_for_meta)) if config.model_type is Model.FNN else int(input_shape_for_meta[-1])
-        )
+        # input_dim_for_factory still needs the feature dimension (last dim)
+        input_dim_for_factory = int(preprocessed_shape[-1])
         _log_split_stats("projection", train_X, val_X, test_X)
         return FrontendContext(
             processed_split=processed_split,
@@ -165,13 +168,16 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     projected_val = val_X
     if val_X is not None:
         projected_val = projection(val_X)
-    projected_shape = projected_train.shape[1:]
+    projected_val = val_X
+    if val_X is not None:
+        projected_val = projection(val_X)
+    
+    # Use full 3D shape
+    projected_shape = projected_train.shape # (Batch, Time, ProjUnits)
 
-    transformed_shape = projected_shape or preprocessed_shape
-    input_shape_for_meta: tuple[int, ...] = transformed_shape
-    input_dim_for_factory = (
-        int(np.prod(transformed_shape)) if config.model_type is Model.FNN else int(transformed_shape[-1])
-    )
+    transformed_shape = projected_shape
+    input_shape_for_meta = transformed_shape
+    input_dim_for_factory = int(transformed_shape[-1])
 
     processed_split = SplitDataset(
         train_X=projected_train,
@@ -229,7 +235,9 @@ def _build_model_stack(
     shapes_meta["input"] = dataset_meta.input_shape
     shapes_meta["preprocessed"] = frontend_ctx.preprocessed_shape
     shapes_meta["projected"] = frontend_ctx.projected_shape
-    shapes_meta["output"] = (meta_n_outputs,)
+    shapes_meta["projected"] = frontend_ctx.projected_shape
+    if "output" not in shapes_meta:
+        shapes_meta["output"] = (meta_n_outputs,)
     topo_meta["shapes"] = shapes_meta
     details_meta = topo_meta.get("details", {}) or {}
     details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
