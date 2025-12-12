@@ -43,6 +43,7 @@ class Dataset(str, enum.Enum):
     SINE_WAVE = "sine_wave"
     LORENZ = "lorenz"
     MACKEY_GLASS = "mackey_glass"
+    LORENZ96 = "lorenz96"
     MNIST = "mnist"
 
     @property

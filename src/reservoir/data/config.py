@@ -27,6 +27,11 @@ class LorenzConfig(BaseDatasetConfig):
     warmup_steps: int
 
 @dataclass(frozen=True)
+class Lorenz96Config(BaseDatasetConfig):
+    F: float
+    warmup_steps: int
+
+@dataclass(frozen=True)
 class MackeyGlassConfig(BaseDatasetConfig):
     tau: int
     beta: float

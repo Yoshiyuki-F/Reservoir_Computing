@@ -8,6 +8,7 @@ from reservoir.core.presets import StrictRegistry
 from .config import (
     SineWaveConfig,
     LorenzConfig,
+    Lorenz96Config,
     MackeyGlassConfig,
     MNISTConfig, DatasetPreset,
 )
@@ -48,6 +49,22 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             warmup_steps=0,
         ),
         use_dimensions=(0,),
+    ),
+    Dataset.LORENZ96: DatasetPreset(
+        name="lorenz96",
+        description="Lorenz 96 chaotic system",
+        task_type=TaskType.REGRESSION,
+        config=Lorenz96Config(
+            n_input=40,
+            n_output=40,
+            time_steps=2000,
+            dt=0.05,
+            noise_level=0.0,
+            seed=0,
+            F=8.0,
+            warmup_steps=100,
+        ),
+        use_dimensions=None,
     ),
     Dataset.MACKEY_GLASS: DatasetPreset(
         name="mackey_glass",

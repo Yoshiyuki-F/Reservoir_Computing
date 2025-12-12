@@ -14,6 +14,7 @@ from reservoir.data.generators import (
     generate_mnist_sequence_data,
     generate_mackey_glass_data,
     generate_lorenz_data,
+    generate_lorenz96_data,
 )
 from reservoir.data.presets import get_dataset_preset
 from reservoir.data.config import (
@@ -21,6 +22,7 @@ from reservoir.data.config import (
     SineWaveConfig,
     MackeyGlassConfig,
     LorenzConfig,
+    Lorenz96Config,
     MNISTConfig,
 )
 from reservoir.core.presets import StrictRegistry
@@ -105,6 +107,20 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     X, y = generate_lorenz_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
+    if X_arr.ndim == 2:
+        X_arr = X_arr[:, None, :]
+    if y_arr.ndim == 2:
+        y_arr = y_arr[:, None, :]
+    return X_arr, y_arr
+
+
+@register_loader(Dataset.LORENZ96)
+def load_lorenz96(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Generate Lorenz 96 sequences."""
+    X, y = generate_lorenz96_data(config)
+    X_arr = jnp.asarray(X, dtype=jnp.float64)
+    y_arr = jnp.asarray(y, dtype=jnp.float64)
+    # Ensure (N, 1, F) where N is time steps, for consistency with other loaders
     if X_arr.ndim == 2:
         X_arr = X_arr[:, None, :]
     if y_arr.ndim == 2:

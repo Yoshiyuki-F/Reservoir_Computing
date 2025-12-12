@@ -18,6 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover - torch optional
 from reservoir.data.config import (
     SineWaveConfig,
     LorenzConfig,
+    Lorenz96Config,
     MackeyGlassConfig,
     MNISTConfig,
 )
@@ -106,6 +107,60 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
         data[i] = [x, y, z]
     
     # 入力は現在の状態、ターゲットは次の状態
+    input_data = jnp.array(data[:-1], dtype=jnp.float64)
+    target_data = jnp.array(data[1:], dtype=jnp.float64)
+    
+    return input_data, target_data
+
+
+def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Generates Lorenz 96 chaotic time series data.
+    
+    The Lorenz 96 model is defined by:
+    dx_i/dt = (x_{i+1} - x_{i-2}) * x_{i-1} - x_i + F
+    
+    Args:
+        config: Lorenz96Config object
+        
+    Returns:
+        tuple: (input_data, target_data)
+            - input_data: Shape (time_steps, N)
+            - target_data: Shape (time_steps, N)
+    """
+    N = config.n_input  # Number of dimensions
+    F = config.F
+    dt = config.dt
+    
+    # Initialization
+    x = np.full(N, F, dtype=np.float64)
+    if config.seed is not None:
+        np.random.seed(config.seed)
+    
+    # Add small perturbation to trigger chaos
+    x += np.random.normal(0, 0.01, N)
+    
+    # Total steps including warmup
+    total_steps = config.time_steps + config.warmup_steps
+    data = np.zeros((total_steps, N), dtype=np.float64)
+
+    # Pre-allocate indices for cyclic boundary conditions
+    # i-2, i-1, i, i+1 (mod N)
+    # Using numpy vectorization
+    indices = np.arange(N)
+    idx_minus_2 = (indices - 2) % N
+    idx_minus_1 = (indices - 1) % N
+    idx_plus_1 = (indices + 1) % N
+    
+    for t in range(total_steps):
+        # dx/dt = (x[i+1] - x[i-2]) * x[i-1] - x[i] + F
+        dx = (x[idx_plus_1] - x[idx_minus_2]) * x[idx_minus_1] - x + F
+        x += dx * dt
+        data[t] = x
+        
+    # Discard warmup steps
+    data = data[config.warmup_steps:]
+    
+    # Input is current state, Target is next state
     input_data = jnp.array(data[:-1], dtype=jnp.float64)
     target_data = jnp.array(data[1:], dtype=jnp.float64)
     
