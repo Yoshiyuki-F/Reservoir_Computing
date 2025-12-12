@@ -24,7 +24,7 @@ from reservoir.readout import RidgeRegression
 # -----------------------------------------------------------------------------
 
 DEFAULT_PREPROCESS = PreprocessingConfig(
-    method=Preprocessing.RAW,
+    method=Preprocessing.STANDARD_SCALER,
     poly_degree=1,
 )
 
@@ -36,14 +36,14 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=10000000, use_intercept=True)
+DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=1e-2, use_intercept=True)
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
     rc_connectivity=0.9,
     seed=42,
-    aggregation=AggregationMode.MEAN,
+    aggregation=AggregationMode.SEQUENCE,
 )
 
 FNN_DYNAMICS = FNNConfig(

@@ -16,10 +16,16 @@ class FeatureScaler:
 
     def fit(self, X: Union[np.ndarray, jnp.ndarray]) -> "FeatureScaler":
         X = np.asarray(X)
+
+        if X.ndim == 3:
+            reduce_axis = (0, 1)
+        else:
+            reduce_axis = 0
+
         if self.with_mean:
-            self.mean_ = np.mean(X, axis=0)
+            self.mean_ = np.mean(X, axis=reduce_axis)
         if self.with_std:
-            self.scale_ = np.std(X, axis=0)
+            self.scale_ = np.std(X, axis=reduce_axis)
             self.scale_[self.scale_ == 0] = 1.0
         return self
 

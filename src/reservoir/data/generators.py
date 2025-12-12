@@ -127,42 +127,60 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
             - input_data: Shape (time_steps, N)
             - target_data: Shape (time_steps, N)
     """
-    N = config.n_input  # Number of dimensions
+    import jax
+    
+    N = config.n_input
     F = config.F
     dt = config.dt
     
     # Initialization
-    x = np.full(N, F, dtype=np.float64)
+    # Use JAX PRNG for consistency if needed, but numpy seed is provided
     if config.seed is not None:
         np.random.seed(config.seed)
     
-    # Add small perturbation to trigger chaos
-    x += np.random.normal(0, 0.01, N)
+    # Initial state (numpy)
+    x0 = np.full(N, F, dtype=np.float64)
+    x0 += np.random.normal(0, 0.01, N)
+    x0 = jnp.array(x0, dtype=jnp.float64)
     
-    # Total steps including warmup
     total_steps = config.time_steps + config.warmup_steps
-    data = np.zeros((total_steps, N), dtype=np.float64)
 
-    # Pre-allocate indices for cyclic boundary conditions
-    # i-2, i-1, i, i+1 (mod N)
-    # Using numpy vectorization
-    indices = np.arange(N)
+    # Pre-compute indices for cyclic boundary conditions
+    indices = jnp.arange(N)
     idx_minus_2 = (indices - 2) % N
     idx_minus_1 = (indices - 1) % N
     idx_plus_1 = (indices + 1) % N
-    
-    for t in range(total_steps):
+
+    def lorenz96_deriv(x, _):
         # dx/dt = (x[i+1] - x[i-2]) * x[i-1] - x[i] + F
-        dx = (x[idx_plus_1] - x[idx_minus_2]) * x[idx_minus_1] - x + F
-        x += dx * dt
-        data[t] = x
+        return (x[idx_plus_1] - x[idx_minus_2]) * x[idx_minus_1] - x + F
+
+    def step_fn(carry, _):
+        x = carry
+        
+        # RK4 Integration
+        k1 = lorenz96_deriv(x, None)
+        k2 = lorenz96_deriv(x + k1 * dt / 2, None)
+        k3 = lorenz96_deriv(x + k2 * dt / 2, None)
+        k4 = lorenz96_deriv(x + k3 * dt, None)
+        
+        x_next = x + (k1 + 2*k2 + 2*k3 + k4) * dt / 6.0
+        
+        # Check for numeric stability (optional in scan, can be costly)
+        # JAX usually handles NaNs nicely by propagating them
+        return x_next, x_next
+
+    # Run simulation
+    # scan returns (final_carry, stacked_outputs)
+    # We pass None as 'xs' to scan for the number of steps
+    _, data = jax.lax.scan(step_fn, x0, None, length=total_steps)
         
     # Discard warmup steps
     data = data[config.warmup_steps:]
     
     # Input is current state, Target is next state
-    input_data = jnp.array(data[:-1], dtype=jnp.float64)
-    target_data = jnp.array(data[1:], dtype=jnp.float64)
+    input_data = data[:-1]
+    target_data = data[1:]
     
     return input_data, target_data
 

@@ -65,6 +65,7 @@ class AggregationMode(str, enum.Enum):
     LAST_MEAN = "last_mean"
     MTS = "mts"
     CONCAT = "concat"
+    SEQUENCE = "sequence"
 
     def __str__(self) -> str:
         return self.value

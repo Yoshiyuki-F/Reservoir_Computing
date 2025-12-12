@@ -33,6 +33,8 @@ class StateAggregator(Transformer):
         """Static aggregator for reuse in functional contexts."""
         agg_mode = StateAggregator._resolve_mode(mode)
         arr = jnp.asarray(states, dtype=jnp.float64)
+        if agg_mode is AggregationMode.SEQUENCE:
+            return arr
         if arr.ndim == 3:
             if agg_mode is AggregationMode.LAST:
                 return arr[:, -1, :]
@@ -85,6 +87,8 @@ class StateAggregator(Transformer):
             return units * 2
         if mode is AggregationMode.CONCAT:
             return units * steps
+        if mode is AggregationMode.SEQUENCE:
+            return units
         raise ValueError(f"Unknown aggregation mode: {mode}")
 
     def to_dict(self) -> Dict[str, Any]:

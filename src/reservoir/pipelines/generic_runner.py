@@ -133,6 +133,10 @@ class UniversalPipeline:
                 print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
             elif len(lambda_candidates) <= 1:
                 print("Single ridge_lambda candidate provided. Running direct fit without search.")
+            if train_Z.ndim == 3:
+                train_Z = train_Z.reshape(-1, train_Z.shape[-1])
+            if train_y.ndim == 3:
+                train_y = train_y.reshape(-1, train_y.shape[-1])
             self.readout.fit(train_Z, train_y)
             return chosen, {}, {}
 

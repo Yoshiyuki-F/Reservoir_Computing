@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 
-from reservoir.core.identifiers import Dataset
+from reservoir.core.identifiers import Dataset, TaskType
 from reservoir.data.generators import (
     generate_sine_data,
     generate_mnist_sequence_data,
@@ -120,11 +120,12 @@ def load_lorenz96(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
     X, y = generate_lorenz96_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
-    # Ensure (N, 1, F) where N is time steps, for consistency with other loaders
-    if X_arr.ndim == 2:
-        X_arr = X_arr[:, None, :]
-    if y_arr.ndim == 2:
-        y_arr = y_arr[:, None, :]
+    # Return (T, F) so that splitting happens along the time axis (axis 0).
+    # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
+    # if X_arr.ndim == 2:
+    #     X_arr = X_arr[:, None, :]
+    # if y_arr.ndim == 2:
+    #     y_arr = y_arr[:, None, :]
     return X_arr, y_arr
 
 
@@ -149,7 +150,12 @@ def load_dataset_with_validation_split(
     print(f"Loading dataset: {dataset_enum.value}...")
     dataset = loader(preset.config)
 
-    val_size = float(training_cfg.val_size)
+    # User Request: Disable validation for Regression tasks
+    if preset.task_type == TaskType.REGRESSION:
+        print("TaskType.REGRESSION detected: Disabling validation split (val_size=0.0).")
+        val_size = 0.0
+    else:
+        val_size = float(training_cfg.val_size)
 
     def _split_validation(features: jnp.ndarray, labels: jnp.ndarray) -> tuple[
         jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray]
@@ -214,6 +220,25 @@ def load_dataset_with_validation_split(
         train_y, test_y = y[:train_count], y[train_count:]
 
         train_X, train_y, val_X, val_y = _split_validation(train_X, train_y)
+
+    # Special handling for Lorenz96 (or any single-sequence tasks in the future)
+    # The user requires (Batch=1, Time, Feature) for this dataset.
+    # Currently X is (Steps, Feature). We reshape to (1, Steps, Feature).
+    if dataset_enum == Dataset.LORENZ96:
+        def _reshape_to_batch1(arr: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
+            if arr is None: 
+                return None
+            # If (T, F) -> (1, T, F)
+            if arr.ndim == 2:
+                return arr[None, :, :]
+            return arr
+
+        train_X = _reshape_to_batch1(train_X)
+        train_y = _reshape_to_batch1(train_y)
+        test_X = _reshape_to_batch1(test_X)
+        test_y = _reshape_to_batch1(test_y)
+        val_X = _reshape_to_batch1(val_X)
+        val_y = _reshape_to_batch1(val_y)
 
     # if require_3d:
     #     targets = {
