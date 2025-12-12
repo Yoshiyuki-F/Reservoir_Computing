@@ -133,10 +133,10 @@ def plot_classification_report(
 
 
 def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str) -> list[str]:
-    filename_parts = [model_type_str, "raw"]
     feature_shape = None
     student_layers = None
     readout_label = None
+    preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower or "rnn" in type_lower or "nn" in type_lower
     has_reservoir = "reservoir" in type_lower or "distillation" in type_lower
@@ -146,14 +146,20 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         details = topo_meta.get("details") or {}
         student_layers = details.get("student_layers")
         readout_label = details.get("readout")
+        if details.get("preprocess"):
+            preprocess_label = details["preprocess"]
+        
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
         has_reservoir = has_reservoir or "reservoir" in topo_type or "distillation" in topo_type
 
+    filename_parts = [model_type_str, preprocess_label]
+
     # Reservoir marker (nr) only if reservoir is involved
     if has_reservoir:
         if isinstance(feature_shape, tuple) and feature_shape:
-            filename_parts.append(f"nr{int(feature_shape[0])}")
+            # Use last dimension as feature/units count (handles both (N,) and (B, T, N))
+            filename_parts.append(f"nr{int(feature_shape[-1])}")
         else:
             filename_parts.append("nr0")
 
@@ -228,3 +234,71 @@ def generate_report(
             results=results,
             training_obj=training_obj,
         )
+    elif metric == "mse":
+        # Regression Pplots
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
+        # Assuming last part of filename is useful to distinguish, but for regression we usually want "prediction"
+        prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
+        
+        # We need predictions on test set.
+        # generate_report arguments don't include predictions directly, so we need to generate them or pass them?
+        # generic_runner passes runner, readout, etc. We can re-generate predictions.
+        
+        # Re-generating predictions inside reporting might be expensive if not cached, 
+        # but standardized reporting usually does this or accepts predictions.
+        # Given arguments, we must use runner + readout.
+        
+        plot_regression_report(
+             runner=runner,
+             readout=readout,
+             train_y=train_y,
+             test_X=test_X,
+             test_y=test_y,
+             filename=prediction_filename,
+             model_type_str=model_type_str,
+        )
+
+
+def plot_regression_report(
+    *,
+    runner: Any,
+    readout: Any,
+    train_y: Any,
+    test_X: Any,
+    test_y: Any,
+    filename: str,
+    model_type_str: str,
+) -> None:
+    try:
+        from reservoir.utils.plotting import plot_timeseries_comparison
+    except Exception as exc:  # pragma: no cover
+        print(f"Skipping plotting due to import error: {exc}")
+        return
+
+    # Generate Test Predictions
+    feature_batch_size = 0 # Default or infer? infer from runner usage is hard here without config access
+                           # Actually generate_report receives training_obj, we could use that.
+    
+    test_features = runner.batch_transform(test_X, batch_size=0) # 0 means full batch if supported or default
+    if readout is None:
+        test_pred = test_features
+    else:
+        test_pred = readout.predict(test_features)
+        
+    # Infer global time offset from training set length
+    train_len = 0
+    if train_y is not None:
+         train_y_np = np.asarray(train_y)
+         if train_y_np.ndim == 3:
+              train_len = train_y_np.shape[1]
+         elif train_y_np.ndim == 2:
+              train_len = train_y_np.shape[0]
+
+    plot_timeseries_comparison(
+        targets=test_y,
+        predictions=test_pred,
+        filename=filename,
+        title=f"Test Predictions ({model_type_str})",
+        time_offset=train_len,
+    )
+

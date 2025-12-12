@@ -241,6 +241,5 @@ class UniversalPipeline:
         results["training_logs"] = train_logs
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
-
-
+            
         return results

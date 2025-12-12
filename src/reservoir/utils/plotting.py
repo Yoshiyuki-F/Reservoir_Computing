@@ -191,3 +191,72 @@ def plot_loss_history(history: Sequence[float], filename: str, title: str = "Los
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"Loss curve saved to '{output_path}'.")
+
+
+def plot_timeseries_comparison(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+    filename: str,
+    title: str = "TimeSeries Prediction",
+    max_features: int = 3,
+    start_step: int = 0,
+    end_step: Optional[int] = None,
+    time_offset: int = 0,
+) -> None:
+    """
+    Plot predicted vs actual time series trajectories.
+    Handles 3D (Batch, Time, Feat) or 2D (Time, Feat) inputs.
+    Plots the first sample (if batched) and up to `max_features` features.
+    """
+    targets_np = np.asarray(targets)
+    preds_np = np.asarray(predictions)
+
+    # Standardize to (Time, Feat)
+    if targets_np.ndim == 3:
+        # Take first sample in batch
+        target_seq = targets_np[0]
+        pred_seq = preds_np[0]
+    elif targets_np.ndim == 2:
+        target_seq = targets_np
+        pred_seq = preds_np
+    else:
+        print(f"Skipping plot: expected 2D/3D arrays, got {targets_np.shape}")
+        return
+
+    time_steps, n_feats = target_seq.shape
+    plot_feats = min(n_feats, max_features)
+    
+    if end_step is None:
+        end_step = time_steps
+
+    # Slice time (0-based for array indexing)
+    target_slice = target_seq[start_step:end_step]
+    pred_slice = pred_seq[start_step:end_step]
+    
+    # Time axis (shifted by global offset)
+    t_start = start_step + time_offset
+    t_end = t_start + (end_step - start_step)
+    t_axis = np.arange(t_start, t_end)
+
+    fig, axes = plt.subplots(plot_feats, 1, figsize=(12, 3 * plot_feats), sharex=True)
+    if plot_feats == 1:
+        axes = [axes]
+
+    for i in range(plot_feats):
+        ax = axes[i]
+        ax.plot(t_axis, target_slice[:, i], label="Actual", color="black", alpha=0.7)
+        ax.plot(t_axis, pred_slice[:, i], label="Predicted", color="tab:blue", alpha=0.9, linestyle="--")
+        ax.set_ylabel(f"Feature {i}")
+        ax.grid(True, linestyle=":", alpha=0.5)
+        if i == 0:
+            ax.legend(loc="upper right")
+        if i == plot_feats - 1:
+            ax.set_xlabel("Time Step")
+
+    output_path = _resolve_output_path(filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.suptitle(title)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Prediction plot saved to '{output_path}'.")
