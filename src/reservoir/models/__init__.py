@@ -9,7 +9,6 @@ from .reservoir import ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
     PipelineConfig,
     MODEL_PRESETS,
-    MODEL_REGISTRY,
     get_model_preset,
     DistillationConfig,
 )
@@ -29,7 +28,6 @@ __all__ = [
     "ClassicalReservoir",
     "PipelineConfig",
     "MODEL_PRESETS",
-    "MODEL_REGISTRY",
     "get_model_preset",
     "DistillationConfig",
 ]

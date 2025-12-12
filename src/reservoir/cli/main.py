@@ -40,7 +40,7 @@ def main() -> None:
     # Build Config (strict preset + dataset only)
     model_enum = Model(args.model)
     dataset = Dataset(args.dataset)
-    pipeline_config = get_model_preset(model_enum)
+    pipeline_config = get_model_preset(model_enum, dataset)
     training_config = get_training_preset("standard")
 
     print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}... with training preset '{training_config.name}'")

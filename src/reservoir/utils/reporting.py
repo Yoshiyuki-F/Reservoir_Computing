@@ -248,6 +248,8 @@ def generate_report(
         # but standardized reporting usually does this or accepts predictions.
         # Given arguments, we must use runner + readout.
         
+        test_mse = _safe_get(results, "test", {}).get("mse")
+
         plot_regression_report(
              runner=runner,
              readout=readout,
@@ -256,6 +258,7 @@ def generate_report(
              test_y=test_y,
              filename=prediction_filename,
              model_type_str=model_type_str,
+             mse=test_mse,
         )
 
 
@@ -268,6 +271,7 @@ def plot_regression_report(
     test_y: Any,
     filename: str,
     model_type_str: str,
+    mse: Optional[float] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -294,11 +298,15 @@ def plot_regression_report(
          elif train_y_np.ndim == 2:
               train_len = train_y_np.shape[0]
 
+    title_str = f"Test Predictions ({model_type_str})"
+    if mse is not None:
+        title_str += f" | MSE: {mse:.4f}"
+
     plot_timeseries_comparison(
         targets=test_y,
         predictions=test_pred,
         filename=filename,
-        title=f"Test Predictions ({model_type_str})",
+        title=title_str,
         time_offset=train_len,
     )
 

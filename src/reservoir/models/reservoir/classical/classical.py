@@ -56,11 +56,11 @@ class ClassicalReservoir(Reservoir):
     def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # 論文の式:   (1 - a) * state + tanh(...)
 
-        pre_activation = projected_input + jnp.dot(state, self.W)
-        activated = jnp.tanh(pre_activation)
-
-        # 論文 Eq(7) 通りの実装
-        next_state = (1.0 - self.leak_rate) * state + activated
+        # 論文 Eq(7) 通りの実装 Li-ESN
+        # next_state = (1.0 - self.leak_rate) * state + jnp.tanh(projected_input + jnp.dot(state, self.W))
+        
+        # Jaeger (2007) Standard Li-ESN
+        next_state = (1.0 - self.leak_rate) * state + self.leak_rate * jnp.tanh(projected_input + jnp.dot(state, self.W))
 
         return next_state, next_state
 
