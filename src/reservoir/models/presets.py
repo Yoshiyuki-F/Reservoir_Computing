@@ -34,7 +34,7 @@ def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
 # -----------------------------------------------------------------------------
 
 DEFAULT_PREPROCESS = PreprocessingConfig(
-    method=Preprocessing.RAW,
+    method=Preprocessing.MAX_SCALER,
     poly_degree=1,
 )
 

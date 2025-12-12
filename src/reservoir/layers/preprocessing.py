@@ -71,6 +71,21 @@ class DesignMatrix:
         return self.transform(X)
 
 
+class MaxScaler:
+    def __init__(self):
+        self.max_val = None
+
+    def fit(self, X):
+        # Trainデータの最大値を「記憶」する
+        self.max_val = jnp.max(X)
+        return self
+
+    def transform(self, X):
+        # 記憶しておいたTrainの最大値で割る
+        # (Testデータにこれより大きい値が来たら 1.0 を超えるが、それは許容する)
+        return X / self.max_val
+
+
 def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[object], list[str]]:
     """
     Build a list of preprocessing transformers for Step 2 based on Enum only.
@@ -88,6 +103,8 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
         layers.append(FeatureScaler())
         layers.append(DesignMatrix(degree=poly_degree))
         preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
+    elif p_type == Preprocessing.MAX_SCALER:
+        layers.append(MaxScaler())
     # RAW -> no layers
     return layers, preprocess_labels
 
