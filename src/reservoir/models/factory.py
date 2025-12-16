@@ -4,7 +4,9 @@ Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+import numpy as np
 
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
@@ -60,25 +62,34 @@ class ModelFactory:
         if pipeline_enum == Model.FNN:
             if not isinstance(config.model, FNNConfig):
                 raise TypeError(f"FNN pipeline requires FNNConfig, got {type(config.model)}.")
+
+            # Calculate correct flattened dimension from input_shape if available
+            flattened_dim = int(input_dim)  # fallback
+            batch_size = None
+            if input_shape:
+                batch_size = int(input_shape[0])
+                if len(input_shape) > 1:
+                     flattened_dim = int(np.prod(input_shape[1:]))
+
             model = FNNModel(
                 model_config=config.model,
                 training_config=training_cfg,
-                input_dim=input_dim,
+                input_dim=flattened_dim,
                 output_dim=output_dim,
             )
             # Attach topology metadata for FNN
-            flattened_dim = int(input_dim)
             hidden_layers = tuple(int(h) for h in (config.model.hidden_layers or ()) if int(h) > 0)
             internal_shape = hidden_layers or (output_dim,)
+            
             topo_meta: Dict[str, Any] = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,
                     "projected": input_shape,
-                    "adapter": (flattened_dim,),
-                    "internal": internal_shape,
-                    "feature": (output_dim,),
-                    "output": (output_dim,),
+                    "adapter": (batch_size, flattened_dim) if batch_size else (flattened_dim,),
+                    "internal": tuple(hidden_layers) if hidden_layers else None,
+                    "feature": (batch_size, output_dim) if batch_size else (output_dim,),
+                    "output": (batch_size, output_dim) if batch_size else (output_dim,),
                 },
                 "details": {
                     "student_layers": hidden_layers or None,

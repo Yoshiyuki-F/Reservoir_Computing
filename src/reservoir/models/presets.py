@@ -17,8 +17,6 @@ from reservoir.models.config import (
     PipelineConfig,
     RidgeReadoutConfig,
 )
-from reservoir.readout import RidgeRegression
-
 
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     """Retrieves a model preset by enum key; raises on invalid names."""
@@ -118,7 +116,10 @@ FNN_PRESET = PipelineConfig(
     name="fnn",
     model_type=Model.FNN,
     description="Feedforward Neural Network (FNN)",
-    preprocess=DEFAULT_PREPROCESS,
+    preprocess=PreprocessingConfig(
+        method=Preprocessing.MAX_SCALER,
+        poly_degree=1,
+    ),
     projection=None,
     model=FNNConfig(
         hidden_layers=(100,),
