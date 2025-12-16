@@ -78,10 +78,11 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             dt=1,
             noise_level=0.0,
             seed=0,
-            tau=30,
+            tau=17,
             beta=0.2,
             gamma=0.1,
             n=10,
+            downsample=1,
         ),
         use_dimensions=None
 

@@ -103,17 +103,14 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarr
     # y is X shifted by 1. full = [X[0], X[1]... X[T-1], y[T-1]]
     seq = np.append(np.asarray(X_gen).flatten(), np.asarray(y_gen)[-1])
     
-    # 3. Force Downsampling (User Request)
-    # "data = data[::10]"
-    seq = seq[::10]
-    
-    # 4. Normalize (as per user snippet)
-    # "data = (data - np.mean(data)) / np.std(data)"
-    mean_val = np.mean(seq)
-    std_val = np.std(seq)
-    if std_val > 1e-9:
-        seq = (seq - mean_val) / std_val
-        
+    # 3. Downsampling (Parameterized)
+    step = getattr(config, "downsample", 1)
+    if step > 1:
+        seq = seq[::step]
+        print(f"    [Dataset] Applied downsampling: step={step}")
+
+    # 4. Normalize (Disabled: Pipeline handles preprocessing)
+
     # 5. Naive MSE Baseline
     # "Naive MSE = mean((y[1:] - y[:-1])**2)"
     naive_loss = np.mean((seq[1:] - seq[:-1]) ** 2)

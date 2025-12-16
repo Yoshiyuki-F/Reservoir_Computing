@@ -80,7 +80,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         poly_degree=1,
     ),
     projection=ProjectionConfig(
-        n_units=3,
+        n_units=1,
         input_scale=0.1,
         input_connectivity=1.0,
         bias_scale=0.0,

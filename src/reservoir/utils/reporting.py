@@ -11,6 +11,43 @@ def _safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
     return d.get(key, default) if isinstance(d, dict) else default
 
 
+def calculate_chaos_metrics(y_true: Any, y_pred: Any) -> Tuple[float, float]:
+    """
+    Mackey-Glassなどのカオス予測専用の評価指標
+    """
+    # 形状を合わせる
+    y_true_np = np.asarray(y_true).flatten()
+    y_pred_np = np.asarray(y_pred).flatten()
+    
+    # 基本統計量
+    mse = np.mean((y_true_np - y_pred_np) ** 2)
+    rmse = np.sqrt(mse)
+    std_true = np.std(y_true_np)
+    std_pred = np.std(y_pred_np)
+    
+    # 1. NDEI (業界標準)
+    # これが 0.1 を切ることを目指す
+    ndei = rmse / std_true if std_true > 1e-9 else float('inf')
+    
+    # 2. Variance Ratio (分散比)
+    # これが 1.0 に近づくことを目指す
+    var_ratio = std_pred / std_true if std_true > 1e-9 else 0.0
+    
+    # 3. Correlation (相関係数)
+    if std_true > 1e-9 and std_pred > 1e-9:
+        corr = np.corrcoef(y_true_np, y_pred_np)[0, 1]
+    else:
+        corr = 0.0
+
+    print(f"=== Chaos Prediction Metrics ===")
+    print(f"MSE       : {mse:.5f}")
+    print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
+    print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
+    print(f"Corr      : {corr:.5f} (Target > 0.95)")
+    
+    return ndei, var_ratio
+
+
 def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
     if not isinstance(train_res, dict):
         return
@@ -74,6 +111,8 @@ def plot_classification_report(
     # 追加: 計算済みの予測値を受け取るオプション
     precalc_preds: Optional[Dict[str, Any]] = None,
     preprocessors: Optional[list[Any]] = None,
+    selected_lambda: Optional[float] = None,
+    lambda_norm: Optional[float] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -291,6 +330,7 @@ def generate_report(
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
         prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
         test_mse = _safe_get(results, "test", {}).get("mse")
+        scaler = results.get("scaler")
 
         # Regressionの方も同様に最適化（必要な場合）
         # 現状は簡易的に予測値を渡すだけにしていますが、
@@ -306,9 +346,30 @@ def generate_report(
              filename=prediction_filename,
              model_type_str=model_type_str,
              mse=test_mse,
-             precalc_test_pred=test_pred_cached, # 必要なら受け皿を作る
+             precalc_test_pred=test_pred_cached, 
              preprocessors=preprocessors,
-        )
+             scaler=scaler,
+         )
+         
+        # Closed-Loop Plots
+        cl_pred = precalc_preds.get("closed_loop_pred")
+        cl_truth = precalc_preds.get("closed_loop_truth")
+        if cl_pred is not None:
+            cl_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_closed_loop.png"
+            # We reuse plot_regression_report but pass None for runner/readout as we have precalc preds
+            plot_regression_report(
+                runner=runner,
+                readout=readout,
+                train_y=None, # No training context needed for this plot
+                test_X=None,  # Not used if precalc_test_pred is provided
+                test_y=cl_truth,
+                filename=cl_filename,
+                model_type_str=f"{model_type_str} (Closed-Loop)",
+                mse=None,
+                precalc_test_pred=cl_pred,
+                preprocessors=preprocessors,
+                scaler=scaler
+            )
 
 
 def plot_regression_report(
@@ -323,6 +384,7 @@ def plot_regression_report(
     mse: Optional[float] = None,
     precalc_test_pred: Optional[Any] = None, # 追加
     preprocessors: Optional[list[Any]] = None,
+    scaler: Optional[Any] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -366,9 +428,40 @@ def plot_regression_report(
              else:
                  test_y = test_y[diff:]
 
+    # Prepare for plotting (Inverse Transform to Raw Domain)
+    # Ensure (N, F) shape for scaler
+    def to_2d(arr):
+        if arr.ndim == 3: return arr.reshape(-1, arr.shape[-1])
+        if arr.ndim == 1: return arr.reshape(-1, 1)
+        return arr
+
+    test_pred_plot = to_2d(test_pred)
+    test_y_plot = to_2d(test_y) if test_y is not None else None
+
+    if scaler is not None:
+        try:
+            test_pred_plot = scaler.inverse_transform(test_pred_plot)
+            if test_y_plot is not None:
+                test_y_plot = scaler.inverse_transform(test_y_plot)
+        except Exception as e:
+            print(f"  [Report] Scaler inverse transform failed: {e}")
+    elif preprocessors:
+        for p in reversed(preprocessors):
+            if hasattr(p, "inverse_transform"):
+                try:
+                    test_pred_plot = p.inverse_transform(test_pred_plot)
+                    if test_y_plot is not None:
+                        test_y_plot = p.inverse_transform(test_y_plot)
+                except Exception as e:
+                    print(f"  [Report] Inverse transform failed for {type(p).__name__}: {e}")
+
+    # Update variables for plotting
+    test_pred = test_pred_plot
+    test_y = test_y_plot
+
     title_str = f"Test Predictions ({model_type_str})"
     if mse is not None:
-        title_str += f" | MSE: {mse:.4f}"
+        title_str += f" | MSE: {mse:.4f} (Scaled)"
 
     plot_timeseries_comparison(
         targets=test_y,

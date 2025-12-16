@@ -20,6 +20,7 @@ class FrontendContext:
     projected_shape: Optional[tuple[int, ...]]
     input_shape_for_meta: tuple[int, ...]
     input_dim_for_factory: int
+    scaler: Optional[Any]
 
 
 @dataclass(frozen=True)

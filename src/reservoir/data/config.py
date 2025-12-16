@@ -38,6 +38,7 @@ class MackeyGlassConfig(BaseDatasetConfig):
     gamma: float
     n: int
     warmup_steps: int
+    downsample: int
 
 @dataclass(frozen=True)
 class MNISTConfig(BaseDatasetConfig):
