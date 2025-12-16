@@ -92,12 +92,11 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 
 @register_loader(Dataset.MACKEY_GLASS)
 def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """Generate Mackey-Glass samples (N, 1, 1) compatible with sequence models."""
+    """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
     X, y = generate_mackey_glass_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
-    if X_arr.ndim == 2:
-        X_arr = X_arr[:, None, :]
+    # Return (T, F) to allow splitting along time axis
     return X_arr, y_arr
 
 
@@ -221,10 +220,10 @@ def load_dataset_with_validation_split(
 
         train_X, train_y, val_X, val_y = _split_validation(train_X, train_y)
 
-    # Special handling for Lorenz96 (or any single-sequence tasks in the future)
-    # The user requires (Batch=1, Time, Feature) for this dataset.
+    # Special handling for Lorenz96 and Mackey-Glass
+    # The user requires (Batch=1, Time, Feature) for these datasets.
     # Currently X is (Steps, Feature). We reshape to (1, Steps, Feature).
-    if dataset_enum == Dataset.LORENZ96:
+    if dataset_enum in (Dataset.LORENZ96, Dataset.MACKEY_GLASS):
         def _reshape_to_batch1(arr: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
             if arr is None: 
                 return None

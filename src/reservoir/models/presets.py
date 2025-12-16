@@ -20,8 +20,9 @@ from reservoir.models.config import (
 
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     """Retrieves a model preset by enum key; raises on invalid names."""
-    if dataset == Dataset.LORENZ96 and model == Model.CLASSICAL_RESERVOIR:
-        return LORENZ_CLASSICAL_RESERVOIR_PRESET
+    if (dataset == Dataset.LORENZ96 or dataset == Dataset.MACKEY_GLASS ) and model == Model.CLASSICAL_RESERVOIR:
+        print("WOWOWOW")
+        return TIME_CLASSICAL_RESERVOIR_PRESET
     preset = StrictRegistry(MODEL_PRESETS).get(model)
     if preset is None:
         raise KeyError(f"Model preset '{model}' not found.")
@@ -64,9 +65,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     readout=DEFAULT_READOUT
 )
 
-"=============================================Lorenz96 Presets============================================"
+"=============================================Time series Presets============================================"
 
-LORENZ_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
+TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical-reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
@@ -75,7 +76,7 @@ LORENZ_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         poly_degree=1,
     ),
     projection=ProjectionConfig(
-        n_units=5000,
+        n_units=50,
         input_scale=0.1,
         input_connectivity=1.0,
         bias_scale=0.0,
@@ -105,7 +106,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(1000,),
+            hidden_layers=(1000,1000),
         ),
     ),
 )
