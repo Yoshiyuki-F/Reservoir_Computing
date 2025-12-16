@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset
+from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset, TaskType
 from reservoir.models.config import (
     PreprocessingConfig,
     ProjectionConfig,
@@ -17,12 +17,16 @@ from reservoir.models.config import (
     PipelineConfig,
     RidgeReadoutConfig,
 )
+from reservoir.data.presets import get_dataset_preset 
 
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     """Retrieves a model preset by enum key; raises on invalid names."""
-    if (dataset == Dataset.LORENZ96 or dataset == Dataset.MACKEY_GLASS ) and model == Model.CLASSICAL_RESERVOIR:
-        print("WOWOWOW")
+    # Check if regression task to use time-series optimized preset
+    ds_preset = get_dataset_preset(dataset)
+
+    if ds_preset.task_type == TaskType.REGRESSION and model == Model.CLASSICAL_RESERVOIR:
         return TIME_CLASSICAL_RESERVOIR_PRESET
+    
     preset = StrictRegistry(MODEL_PRESETS).get(model)
     if preset is None:
         raise KeyError(f"Model preset '{model}' not found.")
@@ -76,7 +80,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         poly_degree=1,
     ),
     projection=ProjectionConfig(
-        n_units=50,
+        n_units=3,
         input_scale=0.1,
         input_connectivity=1.0,
         bias_scale=0.0,

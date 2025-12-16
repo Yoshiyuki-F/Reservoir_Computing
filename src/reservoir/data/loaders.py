@@ -93,10 +93,39 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 @register_loader(Dataset.MACKEY_GLASS)
 def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
-    X, y = generate_mackey_glass_data(config)
-    X_arr = jnp.asarray(X, dtype=jnp.float64)
-    y_arr = jnp.asarray(y, dtype=jnp.float64)
-    # Return (T, F) to allow splitting along time axis
+    import numpy as np
+    
+    # 1. Generate (returns jnp arrays)
+    X_gen, y_gen = generate_mackey_glass_data(config)
+    
+    # 2. Reconstruct full sequence (N+1)
+    # X_gen: (T, 1), y_gen: (T, 1)
+    # y is X shifted by 1. full = [X[0], X[1]... X[T-1], y[T-1]]
+    seq = np.append(np.asarray(X_gen).flatten(), np.asarray(y_gen)[-1])
+    
+    # 3. Force Downsampling (User Request)
+    # "data = data[::10]"
+    seq = seq[::10]
+    
+    # 4. Normalize (as per user snippet)
+    # "data = (data - np.mean(data)) / np.std(data)"
+    mean_val = np.mean(seq)
+    std_val = np.std(seq)
+    if std_val > 1e-9:
+        seq = (seq - mean_val) / std_val
+        
+    # 5. Naive MSE Baseline
+    # "Naive MSE = mean((y[1:] - y[:-1])**2)"
+    naive_loss = np.mean((seq[1:] - seq[:-1]) ** 2)
+    print(f"    [Dataset] Naive Prediction MSE (Baseline): {naive_loss:.6f}")
+    
+    # 6. Re-create X, y
+    X_new = seq[:-1].reshape(-1, 1)
+    y_new = seq[1:].reshape(-1, 1)
+    
+    X_arr = jnp.asarray(X_new, dtype=jnp.float64)
+    y_arr = jnp.asarray(y_new, dtype=jnp.float64)
+    
     return X_arr, y_arr
 
 

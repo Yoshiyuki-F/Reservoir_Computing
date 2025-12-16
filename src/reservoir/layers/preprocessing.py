@@ -37,6 +37,14 @@ class FeatureScaler:
             X = X / self.scale_
         return X
 
+    def inverse_transform(self, X: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        X = jnp.array(X)
+        if self.scale_ is not None:
+            X = X * self.scale_
+        if self.mean_ is not None:
+            X = X + self.mean_
+        return X
+
     def fit_transform(self, X: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         return self.fit(X).transform(X)
 
@@ -67,6 +75,10 @@ class DesignMatrix:
 
         return out
 
+    # DesignMatrix is generally not invertible (expanding features)
+    def inverse_transform(self, X):
+        return X
+
     def __call__(self, X):
         return self.transform(X)
 
@@ -83,7 +95,14 @@ class MaxScaler:
     def transform(self, X):
         # 記憶しておいたTrainの最大値で割る
         # (Testデータにこれより大きい値が来たら 1.0 を超えるが、それは許容する)
-        return X / self.max_val
+        if self.max_val is not None:
+            return X / self.max_val
+        return X
+
+    def inverse_transform(self, X):
+        if self.max_val is not None:
+            return X * self.max_val
+        return X
 
 
 def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[object], list[str]]:

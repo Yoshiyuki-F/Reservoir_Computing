@@ -69,12 +69,11 @@ def plot_classification_report(
     model_type_str: str,
     dataset_name: str,
     metric: str,
-    selected_lambda: Optional[float],
-    lambda_norm: Optional[float],
     results: Dict[str, Any],
     training_obj: Any,
     # 追加: 計算済みの予測値を受け取るオプション
     precalc_preds: Optional[Dict[str, Any]] = None,
+    preprocessors: Optional[list[Any]] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -234,6 +233,7 @@ def generate_report(
     dataset_name: str,
     model_type_str: str,
     task_type: Optional[Any] = None,
+    preprocessors: Optional[list[Any]] = None,
 ) -> None:
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
@@ -284,6 +284,7 @@ def generate_report(
             results=results,
             training_obj=training_obj,
             precalc_preds=precalc_preds,  # <--- ここで渡す
+            preprocessors=preprocessors,
         )
     elif metric == "mse":
         # Regression Plots
@@ -305,7 +306,8 @@ def generate_report(
              filename=prediction_filename,
              model_type_str=model_type_str,
              mse=test_mse,
-             precalc_test_pred=test_pred_cached # 必要なら受け皿を作る
+             precalc_test_pred=test_pred_cached, # 必要なら受け皿を作る
+             preprocessors=preprocessors,
         )
 
 
@@ -320,6 +322,7 @@ def plot_regression_report(
     model_type_str: str,
     mse: Optional[float] = None,
     precalc_test_pred: Optional[Any] = None, # 追加
+    preprocessors: Optional[list[Any]] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -346,6 +349,22 @@ def plot_regression_report(
               train_len = train_y_np.shape[1]
          elif train_y_np.ndim == 2:
               train_len = train_y_np.shape[0]
+
+    # Align lengths if predictions are shorter (e.g. TimeDelayEmbedding)
+    if test_y is not None and test_pred is not None:
+        def get_len(arr):
+             return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
+        
+        len_t = get_len(test_y)
+        len_p = get_len(test_pred)
+        
+        if len_p < len_t:
+             diff = len_t - len_p
+             # print(f"  [Report] Aligning plot targets: slicing first {diff} steps.")
+             if test_y.ndim == 3:
+                 test_y = test_y[:, diff:, :]
+             else:
+                 test_y = test_y[diff:]
 
     title_str = f"Test Predictions ({model_type_str})"
     if mse is not None:

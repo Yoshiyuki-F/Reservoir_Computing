@@ -31,16 +31,62 @@ class DistillationModel(BaseModel):
         teacher: ClassicalReservoir,
         student: FNNModel,
         training_config: TrainingConfig,
+        student_adapter: Any = None,
     ):
         self.teacher = teacher
         self.student = student
         self.training_config = training_config
+        self.student_adapter = student_adapter
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         return self.predict(inputs)
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        if self.student_adapter is not None:
+             # Preserve batch dimension if input is 3D sequence
+             is_sequence = (X.ndim == 3)
+             batch_size = X.shape[0] if is_sequence else 1
+
+             X_in = self.student_adapter(X)
+             out = self.student.predict(X_in)
+
+             if is_sequence:
+                 # Reshape (N*T', F) -> (N, T', F)
+                 return out.reshape(batch_size, -1, out.shape[-1])
+             return out
         return self.student.predict(X)
+
+    def _prepare_student_data(self, inputs: jnp.ndarray, targets: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Aligns inputs and targets when an adapter (e.g. TimeDelay) changes the time dimension."""
+        if self.student_adapter is None:
+            return inputs, targets
+
+        # 1. Transform Inputs
+        # TimeDelayEmbedding returns (Batch * (Time-Window+1), Window*Feat)
+        student_X = self.student_adapter(inputs)
+
+        # 2. Align Targets
+        # Targets are teacher outputs (Batch, Time, TeacherFeat)
+        # We need to slice off the initial window accumulation
+        # and flatten to match student_X samples.
+        
+        # Infer window size from adapter if possible, or deduce from shape change
+        # Assuming linear mapping: N_out = N_in - N_per_window * (W-1) ?
+        # Harder to guess. 
+        # But TimeDelayEmbedding class has `window_size`.
+        if hasattr(self.student_adapter, "window_size"):
+             w = self.student_adapter.window_size
+             # Slice targets: discard first w-1 steps
+             # targets[:, w-1:, :]
+             if targets.ndim == 3:
+                 targets_sliced = targets[:, w-1:, :]
+                 student_y = targets_sliced.reshape(-1, targets_sliced.shape[-1])
+                 return student_X, student_y
+        
+        # Fallback if logic is generic or flat
+        # If flattened, just return targets? No, might mismatch.
+        # This fallback is risky but minimal.
+        return student_X, targets
 
     def _compute_teacher_targets(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
@@ -90,6 +136,9 @@ class DistillationModel(BaseModel):
         # Use batched computation for teacher targets (safe for large datasets)
         teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
 
+        # Apply Adapter and Align Targets
+        student_X, student_targets = self._prepare_student_data(inputs, teacher_targets)
+
         # --- Phase 2: Student Model Training ---
         print("\n    [Distillation] ==========================================")
         print("    [Distillation] Phase 2: Student Model Training")
@@ -97,13 +146,11 @@ class DistillationModel(BaseModel):
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         # Student training (uses its own progress bar)
-        student_logs = self.student.train(inputs, teacher_targets, **kwargs) or {}
+        student_logs = self.student.train(student_X, student_targets, **kwargs) or {}
 
         # Optional: Compute final distillation MSE for logging
         # If dataset is huge, consider batching this predict as well, but usually student is faster.
-        student_out = self.student.predict(inputs)
-
-        distill_mse = float(jnp.mean((student_out - teacher_targets) ** 2))
+        distill_mse = student_logs.get("final_loss", 0.0)
         logs = dict(student_logs) if isinstance(student_logs, dict) else {}
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
@@ -119,14 +166,19 @@ class DistillationModel(BaseModel):
         else:
              teacher_targets = self._compute_teacher_targets(X)
 
-        student_out = self.student.predict(X)
-        if student_out.shape != teacher_targets.shape:
+        # Align for student
+        student_X, teacher_targets_aligned = self._prepare_student_data(X, teacher_targets)
+        
+        student_out = self.student.predict(student_X)
+        
+        if student_out.shape != teacher_targets_aligned.shape:
+             # Just in case fallback didn't work
             raise ValueError(
-                f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_targets.shape}"
+                f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_targets_aligned.shape}"
             )
 
-        distill_mse = float(jnp.mean((student_out - teacher_targets) ** 2))
-        student_metrics = self.student.evaluate(X, teacher_targets)
+        distill_mse = float(jnp.mean((student_out - teacher_targets_aligned) ** 2))
+        student_metrics = self.student.evaluate(student_X, teacher_targets_aligned)
 
         if isinstance(student_metrics, dict):
             metrics: Dict[str, float] = dict(student_metrics)

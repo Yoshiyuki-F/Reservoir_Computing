@@ -208,6 +208,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         return FrontendContext(
             processed_split=processed_split,
             preprocess_labels=preprocess_labels,
+            preprocessors=pre_layers,
             preprocessed_shape=preprocessed_shape,
             projected_shape=None,
             input_shape_for_meta=input_shape_for_meta,
@@ -261,6 +262,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     return FrontendContext(
         processed_split=processed_split,
         preprocess_labels=preprocess_labels,
+        preprocessors=pre_layers,
         preprocessed_shape=preprocessed_shape,
         projected_shape=projected_shape,
         input_shape_for_meta=input_shape_for_meta,
@@ -354,6 +356,7 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Opti
         training_obj=dataset_meta.training,
         dataset_name=dataset_meta.dataset_name,
         model_type_str=stack.model_label,
+        preprocessors=frontend_ctx.preprocessors,
     )
     generate_report(
         results,

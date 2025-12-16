@@ -13,6 +13,7 @@ from reservoir.models.presets import DistillationConfig
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.training.presets import TrainingConfig
+from reservoir.layers.adapters import TimeDelayEmbedding  # New import
 
 
 class DistillationFactory:
@@ -59,8 +60,11 @@ class DistillationFactory:
         )
         teacher_feature_dim = teacher_node.get_feature_dim(time_steps=time_steps)
 
-        #2. configure student FNN
-        student_input_dim = projected_input_dim * time_steps
+        #2. configure student FNN with Time Delay Embedding
+        # Default window size 10 (hardcoded for Mackey-Glass Hard Mode per user request)
+        # Ideally this should be in config, but we are fixing the pipeline now.
+        window_size = 10
+        student_input_dim = projected_input_dim * window_size
         h_layers = distillation_config.student.hidden_layers
         hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
 
@@ -77,6 +81,7 @@ class DistillationFactory:
             teacher=teacher_node,
             student=student_model,
             training_config=student_training,
+            student_adapter=TimeDelayEmbedding(window_size=window_size) # Pass adapter to model
         )
 
         topo_meta: Dict[str, Any] = {
@@ -91,10 +96,10 @@ class DistillationFactory:
                 "output": (batch_size, output_dim),  # readout target size
             },
             "details": {
-                "preprocess": "Flatten",
+                "preprocess": "TDE",
                 "agg_mode": "None",
                 "student_layers": tuple(hidden_layers) if hidden_layers else None,
-                "student_structure": "Flatten -> FNN",
+                "student_structure": f"TDE(w={window_size}) -> FNN",
             },
         }
         model.topology_meta = topo_meta

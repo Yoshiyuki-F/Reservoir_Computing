@@ -243,6 +243,29 @@ class UniversalPipeline:
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
 
+        # Align lengths if feature extraction reduced time dimension (e.g. TimeDelayEmbedding)
+        def align_length(feat, targ):
+             if feat is not None and targ is not None:
+                 # Helper to get length of dim 1 (time) if 3D, or dim 0 if 2D
+                 def get_len(arr):
+                     return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
+                 
+                 len_f = get_len(feat)
+                 len_t = get_len(targ)
+                 
+                 if len_f < len_t:
+                     diff = len_t - len_f
+                     print(f"    [Runner] Aligning targets: slicing first {diff} steps to match features ({len_f}).")
+                     if targ.ndim == 3:
+                         return targ[:, diff:, :]
+                     return targ[diff:]
+             return targ
+             
+        train_y = align_length(train_features, train_y)
+        if val_Z is not None:
+             val_y = align_length(val_Z, val_y)
+        test_y = align_length(test_features, test_y)
+
         results = {}
         train_pred = None
         test_pred = None

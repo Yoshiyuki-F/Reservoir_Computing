@@ -52,6 +52,8 @@ def main() -> None:
     print("[Unified] Results:")
     if isinstance(results, dict):
         for split, metrics in results.items():
+            if split in ("outputs", "training_logs", "readout"):
+                continue
             if isinstance(metrics, dict):
                 pretty = ", ".join(
                     f"{k}={v:.4f}" if isinstance(v, (int, float)) else f"{k}={v}" for k, v in metrics.items()
