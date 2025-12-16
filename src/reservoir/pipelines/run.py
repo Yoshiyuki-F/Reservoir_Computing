@@ -241,7 +241,12 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
 
     transformed_shape = projected_shape
     input_shape_for_meta = transformed_shape
+
+    # ★ ここは「Teacherが受け取る1ステップの次元数」を渡すのが正解
+    # Flatten後のサイズは Factory 側で input_shape から計算させる
     input_dim_for_factory = int(transformed_shape[-1])
+
+    print(f"    [Pipeline] Input Dim for Factory: {input_dim_for_factory} (Shape: {transformed_shape})")
 
     processed_split = SplitDataset(
         train_X=projected_train,

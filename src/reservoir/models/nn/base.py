@@ -89,51 +89,69 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **_: Any) -> Dict[str, Any]:
+    def train(self, inputs: Any, targets: Optional[Any] = None, **_: Any) -> Dict[str, Any]:
+        """
+        Train the model using a Python loop for batching to allow large datasets (OOM prevention).
+        Input is expected to be numpy array or jax array.
+        """
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets' for supervised optimization.")
-        if self.batch_size != self.training_config.batch_size:
-            raise ValueError(
-                f"Batch size mismatch between model ({self.batch_size}) and training_config "
-                f"({self.training_config.batch_size})."
-            )
+        
+        # Check shapes (using numpy semantics if numpy)
+        num_samples = inputs.shape[0]
+        if num_samples != targets.shape[0]:
+            raise ValueError(f"Mismatched batch dimension: inputs {inputs.shape}, targets {targets.shape}")
+        
+        if self.batch_size > num_samples:
+             raise ValueError(f"Dataset size {num_samples} is smaller than batch_size {self.batch_size}")
 
-        X = jnp.asarray(inputs)
-        y = jnp.asarray(targets)
-        num_samples = X.shape[0]
-        if num_samples != y.shape[0]:
-            raise ValueError(f"Mismatched batch dimension: X {X.shape}, y {y.shape}")
-
-        num_batches = num_samples // self.batch_size
-        if num_batches == 0:
-            raise ValueError(f"Dataset size {num_samples} is smaller than batch_size {self.batch_size}")
-
-        X_pruned = X[: num_batches * self.batch_size]
-        y_pruned = y[: num_batches * self.batch_size]
-        X_batched = X_pruned.reshape((num_batches, self.batch_size) + X.shape[1:])
-        y_batched = y_pruned.reshape((num_batches, self.batch_size) + y.shape[1:])
-
+        # Initialize State
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
+        
+        # We need a sample input for init. Use first sample.
+        sample_input = jnp.array(inputs[:1])
         if self._state is None:
-            self._state = self._init_train_state(init_key, X[:1])
+            self._state = self._init_train_state(init_key, sample_input)
 
         is_classification = self.classification
 
         @jax.jit
-        def train_epoch(state, xs, ys):
-            def body_fn(carry_state, batch_data):
-                b_x, b_y = batch_data
-                new_state, loss = BaseFlaxModel._train_step(carry_state, b_x, b_y, is_classification)
-                return new_state, loss
-
-            final_state, losses = jax.lax.scan(body_fn, state, (xs, ys))
-            return final_state, jnp.mean(losses)
+        def train_step_jit(state, b_x, b_y):
+            new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, is_classification)
+            return new_state, loss
 
         loss_history = []
+        
+        # Training Loop
         for _ in range(self.epochs):
-            self._state, epoch_loss = train_epoch(self._state, X_batched, y_batched)
-            loss_history.append(float(epoch_loss))
+            batch_losses = []
+            
+            # Simple linear scan (no shuffle for now to match strict reproducibility of original if it didn't shuffle)
+            # Original code did: X_batched = X_pruned.reshape((num_batches, batch_size) ... ) -> so it was sequential.
+            
+            # Drop last logic to match original's (num_batches * batch_size) behavior
+            # or we can process all. Original was: X_pruned = X[: num_batches * self.batch_size]
+            
+            num_batches = num_samples // self.batch_size
+            limit = num_batches * self.batch_size
+            
+            for i in range(0, limit, self.batch_size):
+                end = i + self.batch_size
+                # Slice on CPU (if numpy)
+                b_x_np = inputs[i:end]
+                b_y_np = targets[i:end]
+                
+                # Transfer to GPU
+                b_x = jnp.array(b_x_np)
+                b_y = jnp.array(b_y_np)
+                
+                self._state, loss = train_step_jit(self._state, b_x, b_y)
+                batch_losses.append(float(loss))
+            
+            if batch_losses:
+                import numpy as np  # Ensure numpy is available
+                loss_history.append(float(np.mean(batch_losses)))
 
         self.trained = True
         return {

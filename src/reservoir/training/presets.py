@@ -11,7 +11,7 @@ import numpy as np
 TRAINING_PRESETS: Dict[str, TrainingConfig] = {
     "standard": TrainingConfig(
         name = "standard",
-        batch_size= 4096,
+        batch_size= 2048,
         epochs = 10,
         learning_rate = 0.001,
         classification = False,

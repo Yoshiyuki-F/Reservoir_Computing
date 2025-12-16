@@ -39,7 +39,7 @@ DEFAULT_PREPROCESS = PreprocessingConfig(
 )
 
 DEFAULT_PROJECTION = ProjectionConfig(
-    n_units=1200,
+    n_units=100,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
@@ -97,10 +97,6 @@ LORENZ_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
 "=============================================FNN Presets============================================"
 
 
-FNN_DYNAMICS = FNNConfig(
-    hidden_layers=(10,),
-)
-
 FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn-distillation",
     model_type=Model.FNN_DISTILLATION,
@@ -110,7 +106,9 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     readout=DEFAULT_READOUT,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
-        student=FNN_DYNAMICS,
+        student=FNNConfig(
+            hidden_layers=(1000,),
+        ),
     ),
 )
 
@@ -122,7 +120,9 @@ FNN_PRESET = PipelineConfig(
     description="Feedforward Neural Network (FNN)",
     preprocess=DEFAULT_PREPROCESS,
     projection=None,
-    model=FNN_DYNAMICS,
+    model=FNNConfig(
+        hidden_layers=(100,),
+    ),
     readout=None
 )
 
