@@ -58,7 +58,7 @@ class FNN(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray):
-        x = jnp.asarray(x, dtype=jnp.float64)
+        x = jnp.asarray(x, dtype=jnp.float32)
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
         if len(self.layer_dims) < 2:

@@ -1,15 +1,18 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/nn/base.py
-Flax-based BaseModel adapter optimized with jax.lax.scan."""
+Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import jax
 import jax.numpy as jnp
 import optax
+import numpy as np
 from flax.training import train_state
+from tqdm import tqdm  # 進行状況表示用
+
 from reservoir.training.presets import TrainingConfig
 
 
@@ -90,74 +93,61 @@ class BaseFlaxModel(BaseModel, ABC):
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
     def train(self, inputs: Any, targets: Optional[Any] = None, **_: Any) -> Dict[str, Any]:
-        """
-        Train the model using a Python loop for batching to allow large datasets (OOM prevention).
-        Input is expected to be numpy array or jax array.
-        """
         if targets is None:
-            raise ValueError("BaseFlaxModel.train requires 'targets' for supervised optimization.")
-        
-        # Check shapes (using numpy semantics if numpy)
+            raise ValueError("BaseFlaxModel.train requires 'targets'.")
+
+        # 1. ここで一括してGPUに転送してしまう (MNIST程度なら余裕で乗ります)
+        print("    [JAX] Transferring data to GPU...")
+        inputs = jax.device_put(jnp.asarray(inputs, dtype=jnp.float32))
+        targets = jax.device_put(jnp.asarray(targets, dtype=jnp.float32))  # 回帰ならfloat, 分類ならint注意
+
         num_samples = inputs.shape[0]
-        if num_samples != targets.shape[0]:
-            raise ValueError(f"Mismatched batch dimension: inputs {inputs.shape}, targets {targets.shape}")
-        
-        if self.batch_size > num_samples:
-             raise ValueError(f"Dataset size {num_samples} is smaller than batch_size {self.batch_size}")
+        # ... (初期化ロジックは同じ) ...
 
         # Initialize State
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
-        
-        # We need a sample input for init. Use first sample.
-        sample_input = jnp.array(inputs[:1])
+        sample_input = inputs[:1]  # 既にGPUにあるデータを使う
+
         if self._state is None:
+            print(f"    [JAX] Initializing parameters...")
             self._state = self._init_train_state(init_key, sample_input)
 
-        is_classification = self.classification
-
+        # JIT function
         @jax.jit
         def train_step_jit(state, b_x, b_y):
-            new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, is_classification)
+            # classificationフラグの扱いに注意 (self.classificationがboolならstatic引数化など検討)
+            # ここではクロージャでキャプチャしているので再コンパイルは起きないはずですが
+            # static_argnumsを使うのがベストプラクティスです。
+            new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
             return new_state, loss
 
         loss_history = []
-        
-        # Training Loop
-        for _ in range(self.epochs):
+        num_batches = num_samples // self.batch_size
+        limit = num_batches * self.batch_size
+
+        print(f"    [JAX] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
+        pbar = tqdm(range(self.epochs), desc="[Train]", unit="ep")
+
+        for _ in pbar:
             batch_losses = []
-            
-            # Simple linear scan (no shuffle for now to match strict reproducibility of original if it didn't shuffle)
-            # Original code did: X_batched = X_pruned.reshape((num_batches, batch_size) ... ) -> so it was sequential.
-            
-            # Drop last logic to match original's (num_batches * batch_size) behavior
-            # or we can process all. Original was: X_pruned = X[: num_batches * self.batch_size]
-            
-            num_batches = num_samples // self.batch_size
-            limit = num_batches * self.batch_size
-            
+
+            # Pythonループだが、データは既にGPUにあるためスライシングは高速
             for i in range(0, limit, self.batch_size):
-                end = i + self.batch_size
-                # Slice on CPU (if numpy)
-                b_x_np = inputs[i:end]
-                b_y_np = targets[i:end]
-                
-                # Transfer to GPU
-                b_x = jnp.array(b_x_np)
-                b_y = jnp.array(b_y_np)
-                
+                # GPU上の配列をスライス (データ転送は発生しない)
+                b_x = inputs[i: i + self.batch_size]
+                b_y = targets[i: i + self.batch_size]
+
                 self._state, loss = train_step_jit(self._state, b_x, b_y)
-                batch_losses.append(float(loss))
-            
+                batch_losses.append(float(loss))  # LossをCPUに戻すコストのみ
+
             if batch_losses:
-                import numpy as np  # Ensure numpy is available
-                loss_history.append(float(np.mean(batch_losses)))
+                avg_loss = float(np.mean(batch_losses))
+                loss_history.append(avg_loss)
+                pbar.set_postfix({"loss": f"{avg_loss:.6f}"})
 
         self.trained = True
-        return {
-            "loss_history": loss_history,
-            "final_loss": loss_history[-1] if loss_history else None,
-        }
+        return {"loss_history": loss_history}
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
         if self._state is None:

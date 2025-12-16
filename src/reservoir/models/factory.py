@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from reservoir.models.nn.factory import NNModelFactory
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model

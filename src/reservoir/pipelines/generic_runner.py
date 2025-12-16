@@ -1,5 +1,6 @@
 """/home/yoshi/PycharmProjects/Reservoir/pipelines/generic_runner.py
 Universal pipeline that treats models as feature extractors and owns the readout.
+Updated to distinguish between Aggregation (Reservoir) and Inference (FNN/Distillation) in logs.
 """
 from __future__ import annotations
 
@@ -9,10 +10,10 @@ from typing import Any, Dict, Optional, Sequence
 import jax
 import jax.numpy as jnp
 import numpy as np
+from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
-from tqdm.auto import tqdm  # ファイルの先頭に追加してください
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
@@ -88,7 +89,7 @@ class UniversalPipeline:
         inputs_np = np.asarray(inputs)
         n_samples = inputs_np.shape[0]
 
-        print(f"    [FeatureExtraction] CPU Manual Batching (Batch Size: {batch_size}, Total: {n_samples})")
+        # print(f"    [FeatureExtraction] CPU Manual Batching (Batch Size: {batch_size}, Total: {n_samples})")
 
         if n_samples == 0:
             return np.array([])
@@ -106,14 +107,13 @@ class UniversalPipeline:
         output = np.empty(out_shape, dtype=out_dtype)
 
         # 4. 高速化用JIT関数
-        # メソッドそのままだとJITしにくい場合があるため、関数でラップ
         @jax.jit
         def step(batch_in):
             return self._extract_features(batch_in)
 
         # 5. CPUループ実行 (tqdm適用)
-        # total=n_samples にすることで "処理数/全データ数" の表示になります
-        with tqdm(total=n_samples, desc="[UniversalPipeline] Features", unit="samples") as pbar:
+        # ログが冗長にならないよう、descをシンプルに
+        with tqdm(total=n_samples, desc="[Pipeline] Extracting", unit="samples") as pbar:
             for i in range(0, n_samples, batch_size):
                 batch_end = min(i + batch_size, n_samples)
                 current_batch_size = batch_end - i
@@ -216,7 +216,18 @@ class UniversalPipeline:
         else:
             print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
 
-        print("\n=== Step 6: Aggregation (Feature Extraction) ===")
+        # --- ログ表示の分岐ロジック ---
+        # モデル名に "FNN" や "Distillation" が含まれる場合は Aggregation ではなく Inference とみなす
+        model_cls_name = self.model.__class__.__name__
+        is_static_model = "FNN" in model_cls_name or "Distillation" in model_cls_name or "CNN" in model_cls_name
+
+        if is_static_model:
+            print("\n=== Step 6: Feature Extraction (Inference) ===")
+            print("    Generating static features for Readout...")
+        else:
+            print("\n=== Step 6: Aggregation (Time-Collapse) ===")
+            print("    Aggregating temporal states...")
+
         # 特徴量抽出 (1回目かつ最後にしたい)
         train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
         self._feature_stats(train_features, "post_train_features")
@@ -232,10 +243,7 @@ class UniversalPipeline:
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
 
-        # 結果格納用
         results = {}
-
-        # 予測結果保持用 (これで再計算を防ぐ)
         train_pred = None
         test_pred = None
         val_pred = None
@@ -267,7 +275,6 @@ class UniversalPipeline:
             self.readout.ridge_lambda = best_lambda
 
             # Evaluate & Store Predictions
-            # ここで予測(predict)まで行ってしまい、その結果を返す
             print("Generating final predictions...")
             train_pred = self.readout.predict(train_features)
             test_pred = self.readout.predict(test_features)
@@ -285,8 +292,6 @@ class UniversalPipeline:
 
             results["readout"] = self.readout
 
-        # ★重要: 生の予測配列(np.ndarray)をresultsに含める
-        # これにより generate_report 側で再計算する必要がなくなる(はず)
         results["outputs"] = {
             "train_pred": train_pred,
             "test_pred": test_pred,
@@ -297,7 +302,6 @@ class UniversalPipeline:
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
 
-        # メモリ解放 (念のため)
         del train_features, test_features, val_Z
 
         return results
