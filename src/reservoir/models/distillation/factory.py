@@ -37,8 +37,6 @@ class DistillationFactory:
 
         if input_shape is None:
             raise ValueError("input_shape must be provided for distillation (time, features).")
-        if len(input_shape) != 2:
-            raise ValueError(f"input_shape must be (time, features), got {input_shape}")
         time_steps = int(input_shape[0])
 
         #1. create teacher
@@ -56,7 +54,6 @@ class DistillationFactory:
         student_input_dim = projected_input_dim * time_steps
         h_layers = distillation_config.student.hidden_layers
         hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
-        fnn_cfg_layers = [student_input_dim] + hidden_layers + [teacher_feature_dim]
 
         #3, create student
         student_training = replace(training, classification=False)
