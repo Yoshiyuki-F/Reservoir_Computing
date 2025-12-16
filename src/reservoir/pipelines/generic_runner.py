@@ -102,11 +102,11 @@ class UniversalPipeline:
         flat = mapped.reshape((arr_padded.shape[0],) + mapped.shape[2:])
         return flat[:n]
 
-    def batch_transform(self, inputs: Any, batch_size: Optional[int] = None, *, to_numpy: bool = True) -> Any:
+    def batch_transform(self, inputs: Any, batch_size: int, to_numpy: bool = True) -> Any:
         """
         Public batched feature extraction that optionally moves results to CPU (numpy).
         """
-        features = self._extract_features_batched(inputs, batch_size or 0)
+        features = self._extract_features_batched(inputs, batch_size)
         if to_numpy:
             return np.asarray(features)
         return features
@@ -168,9 +168,9 @@ class UniversalPipeline:
         test_X = processed.test_X
         test_y = processed.test_y
 
-        cfg = dataset_meta.training or TrainingConfig()
+        cfg = dataset_meta.training
         ridge_lambdas = cfg.ridge_lambdas
-        feature_batch_size = int(cfg.batch_size or 0)
+        feature_batch_size = int(cfg.batch_size)
 
         start = time.time()
 

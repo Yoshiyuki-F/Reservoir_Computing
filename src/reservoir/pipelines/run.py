@@ -11,12 +11,12 @@ V2 Architecture Compliance:
 from dataclasses import replace
 from typing import Any, Dict, Optional, Tuple
 from typing import Any as _Any
-
+import jax
 import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.core.identifiers import Dataset, Model, TaskType
+from reservoir.core.identifiers import Dataset, TaskType
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
@@ -70,6 +70,46 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
         print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
 
 
+def _batched_projection(projection_fn: Any, inputs: np.ndarray, batch_size: int) -> np.ndarray:
+    """
+    データセット全体を一括でGPUに載せるとOOMになるため、
+    バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
+    """
+    n_samples = inputs.shape[0]
+    if n_samples == 0:
+        return np.array([])
+
+    # 1. 形状推論のために最初の1サンプルだけ走らせる
+    # (実際のデータを使って出力サイズを確定させる)
+    dummy_input = inputs[:1]
+    dummy_out_jax = projection_fn(dummy_input)
+
+    # 出力形状の計算: (Total_Samples, Time, Proj_Dim) など
+    output_shape = (n_samples,) + dummy_out_jax.shape[1:]
+    dtype = dummy_out_jax.dtype
+
+    # 2. CPU側に結果格納用のメモリを確保
+    print(f"    [Projection] Allocating CPU buffer: {output_shape} ({dtype})")
+    output = np.empty(output_shape, dtype=dtype)
+
+    # 3. JITコンパイル済みの実行関数を用意
+    @jax.jit
+    def step(x):
+        return projection_fn(x)
+
+    # 4. バッチ処理ループ
+    # GPUメモリを食いつぶさないよう、計算が終わったら即座に np.asarray でCPUへ戻す
+    for i in range(0, n_samples, batch_size):
+        batch_end = min(i + batch_size, n_samples)
+        batch_X = inputs[i:batch_end]
+
+        # GPUへ転送 -> 計算 -> CPUへ戻す
+        batch_out = np.asarray(step(batch_X))
+        output[i:batch_end] = batch_out
+
+    return output
+
+
 def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfig] = None) -> Tuple[DatasetMetadata, SplitDataset]:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
     print("=== Step 1: Loading Dataset ===")
@@ -105,8 +145,8 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     Step 2 & 3: Apply preprocessing and projection without mutating raw splits.
     Returns processed datasets and shape metadata for model creation.
     """
-    _ = dataset_meta  # metadata retained for symmetry; data flow uses raw_split directly
-    print("\n=== Step 2: Preprocessing ===")
+    batch_size = dataset_meta.training.batch_size
+    print(f"\n=== Step 2: Preprocessing (Batch Size: {batch_size})===")
     preprocessing_config = config.preprocess
     pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
 
@@ -161,16 +201,18 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         bias_scale=float(projection_config.bias_scale),
     )
 
+    # --- 修正箇所: バッチ処理で射影を実行 ---
+    # ここで OOM を防ぐために _batched_projection を使用
+    print(f"Applying Projection in batches of {batch_size}...")
+    projected_train = _batched_projection(projection, train_X, batch_size)
 
-    projected_train = projection(train_X)
-    projected_test = projection(test_X)
+    projected_test = None
+    if test_X is not None:
+        projected_test = _batched_projection(projection, test_X, batch_size)
 
-    projected_val = val_X
+    projected_val = None
     if val_X is not None:
-        projected_val = projection(val_X)
-    projected_val = val_X
-    if val_X is not None:
-        projected_val = projection(val_X)
+        projected_val = _batched_projection(projection, val_X, batch_size)
     
     # Use full 3D shape
     projected_shape = projected_train.shape # (Batch, Time, ProjUnits)
