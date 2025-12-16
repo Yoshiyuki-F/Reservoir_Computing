@@ -37,7 +37,16 @@ class DistillationFactory:
 
         if input_shape is None:
             raise ValueError("input_shape must be provided for distillation (time, features).")
-        time_steps = int(input_shape[0])
+        
+        # Check input_shape dimensionality
+        # Expect (Batch, Time, Features) -> 3D
+        if len(input_shape) < 3:
+             # Fallback or error? Assuming 3D for distillation of sequences
+             time_steps = 1
+             batch_size = int(input_shape[0])
+        else:
+             batch_size = int(input_shape[0])
+             time_steps = int(input_shape[1])
 
         #1. create teacher
         teacher_node = ClassicalReservoir(
@@ -75,11 +84,11 @@ class DistillationFactory:
             "shapes": {
                 "input": input_shape,
                 "preprocessed": None,  # preprocessing happens upstream
-                "projected": (time_steps, projected_input_dim),  # sequence into flatten
-                "adapter": (student_input_dim,),  # flattened time-major input to FNN
+                "projected": (batch_size, time_steps, projected_input_dim),  # sequence into flatten
+                "adapter": (batch_size, student_input_dim),  # flattened time-major input to FNN
                 "internal": tuple(hidden_layers) if hidden_layers else None,  # hidden layer widths
-                "feature": (int(teacher_feature_dim),),  # student output equals teacher feature dim
-                "output": (output_dim,),  # readout target size
+                "feature": (batch_size, int(teacher_feature_dim)),  # student output equals teacher feature dim
+                "output": (batch_size, output_dim),  # readout target size
             },
             "details": {
                 "preprocess": "Flatten",
