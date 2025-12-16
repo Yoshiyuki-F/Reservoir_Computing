@@ -12,8 +12,7 @@ import numpy as np
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
-from reservoir.training.presets import TrainingConfig
-
+from tqdm.auto import tqdm  # ファイルの先頭に追加してください
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
@@ -80,27 +79,58 @@ class UniversalPipeline:
             return jnp.asarray(self.model.predict(inputs))
         raise AttributeError("Model must implement __call__ or predict to produce features.")
 
-    def _extract_features_batched(self, inputs: jnp.ndarray, batch_size: int) -> jnp.ndarray:
-        arr = jnp.asarray(inputs)
-        if batch_size is None or batch_size <= 0 or arr.shape[0] <= batch_size:
-            return self._extract_features(arr)
+    def _extract_features_batched(self, inputs: Any, batch_size: int) -> np.ndarray:
+        """
+        CPUメモリ(Numpy)上のデータを少しずつGPU(JAX)に送り、計算結果を再びCPUに戻す。
+        巨大なデータセットでVRAM不足(OOM)を防ぐための実装。
+        """
+        # 1. 入力をNumpy配列として確保 (絶対に jnp.array(inputs) してはいけない)
+        inputs_np = np.asarray(inputs)
+        n_samples = inputs_np.shape[0]
 
-        n = arr.shape[0]
-        pad = (-n) % batch_size
-        if pad == 0:
-            arr_padded = arr
-        else:
-            pad_width = [(0, pad)] + [(0, 0)] * (arr.ndim - 1)
-            arr_padded = jnp.pad(arr, pad_width)
-        num_batches = arr_padded.shape[0] // batch_size
-        reshaped = arr_padded.reshape((num_batches, batch_size) + arr.shape[1:])
+        print(f"    [FeatureExtraction] CPU Manual Batching (Batch Size: {batch_size}, Total: {n_samples})")
 
-        def batch_fn(batch):
-            return self._extract_features(batch)
+        if n_samples == 0:
+            return np.array([])
 
-        mapped = jax.lax.map(batch_fn, reshaped)  # (num_batches, batch_size, ...)
-        flat = mapped.reshape((arr_padded.shape[0],) + mapped.shape[2:])
-        return flat[:n]
+        # 2. 出力の形状と型を決定するためのダミー実行 (最初の1件だけGPUで計算)
+        # JITコンパイルのトリガーにもなります
+        dummy_in = jnp.array(inputs_np[:1])
+        dummy_out = self._extract_features(dummy_in)
+
+        # 出力形状の計算: (54000, Features...)
+        out_shape = (n_samples,) + dummy_out.shape[1:]
+        out_dtype = dummy_out.dtype
+
+        # 3. 結果格納用の巨大なNumpy配列をCPUメモリに確保
+        output = np.empty(out_shape, dtype=out_dtype)
+
+        # 4. 高速化用JIT関数
+        # メソッドそのままだとJITしにくい場合があるため、関数でラップ
+        @jax.jit
+        def step(batch_in):
+            return self._extract_features(batch_in)
+
+        # 5. CPUループ実行 (tqdm適用)
+        # total=n_samples にすることで "処理数/全データ数" の表示になります
+        with tqdm(total=n_samples, desc="[UniversalPipeline] Features", unit="samples") as pbar:
+            for i in range(0, n_samples, batch_size):
+                batch_end = min(i + batch_size, n_samples)
+                current_batch_size = batch_end - i
+
+                # (A) CPUでスライス
+                batch_in_cpu = inputs_np[i: batch_end]
+
+                # (B) GPUへ転送 & 計算
+                batch_out_jax = step(jnp.array(batch_in_cpu))
+
+                # (C) 結果を即座にCPUへ戻す
+                output[i: batch_end] = np.asarray(batch_out_jax)
+
+                # プログレスバーを進める
+                pbar.update(current_batch_size)
+
+        return output
 
     def batch_transform(self, inputs: Any, batch_size: int, to_numpy: bool = True) -> Any:
         """
@@ -179,6 +209,7 @@ class UniversalPipeline:
         train_logs = self.model.train(train_X, train_y) or {}
         train_time = time.time() - start_train
 
+        # ログ出力
         final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
         if final_loss is not None:
             print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s. Final Loss: {final_loss}")
@@ -186,6 +217,7 @@ class UniversalPipeline:
             print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
 
         print("\n=== Step 6: Aggregation (Feature Extraction) ===")
+        # 特徴量抽出 (1回目かつ最後にしたい)
         train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
         self._feature_stats(train_features, "post_train_features")
 
@@ -200,19 +232,27 @@ class UniversalPipeline:
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
 
-        if self.readout is None: #for end-to-end models without readout
+        # 結果格納用
+        results = {}
+
+        # 予測結果保持用 (これで再計算を防ぐ)
+        train_pred = None
+        test_pred = None
+        val_pred = None
+
+        if self.readout is None:
             print("Readout is None. Using model output directly as predictions (End-to-End mode).")
-            # Readout学習はスキップ
+            # End-to-Endの場合は特徴量＝予測値とみなす
             best_lambda = None
             search_history = {}
             weight_norms = {}
-            # Step 6 の出力をそのまま予測値とする
-            test_pred = test_features
 
-            results = {
-                "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
-                "test": {self.metric_name: self._score(test_pred, test_y)},
-            }
+            train_pred = train_features
+            test_pred = test_features
+            if val_Z is not None:
+                val_pred = val_Z
+
+            results["test"] = {self.metric_name: self._score(test_pred, test_y)}
 
         else:
             best_lambda, search_history, weight_norms = self._fit_readout(
@@ -226,20 +266,38 @@ class UniversalPipeline:
                 print(f"Search complete. Best lambda: {best_lambda}")
             self.readout.ridge_lambda = best_lambda
 
-            # Evaluate
+            # Evaluate & Store Predictions
+            # ここで予測(predict)まで行ってしまい、その結果を返す
+            print("Generating final predictions...")
+            train_pred = self.readout.predict(train_features)
             test_pred = self.readout.predict(test_features)
 
-            results = {
-                "train": {"best_lambda": best_lambda, "search_history": search_history, "weight_norms": weight_norms},
-                "test": {self.metric_name: self._score(test_pred, test_y)},
+            results["train"] = {
+                "best_lambda": best_lambda,
+                "search_history": search_history,
+                "weight_norms": weight_norms
             }
+            results["test"] = {self.metric_name: self._score(test_pred, test_y)}
 
             if val_Z is not None and val_y is not None:
-                results["validation"] = {self.metric_name: self._score(self.readout.predict(val_Z), val_y)}
+                val_pred = self.readout.predict(val_Z)
+                results["validation"] = {self.metric_name: self._score(val_pred, val_y)}
+
             results["readout"] = self.readout
+
+        # ★重要: 生の予測配列(np.ndarray)をresultsに含める
+        # これにより generate_report 側で再計算する必要がなくなる(はず)
+        results["outputs"] = {
+            "train_pred": train_pred,
+            "test_pred": test_pred,
+            "val_pred": val_pred
+        }
 
         results["training_logs"] = train_logs
         elapsed = time.time() - start
         results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
-            
+
+        # メモリ解放 (念のため)
+        del train_features, test_features, val_Z
+
         return results

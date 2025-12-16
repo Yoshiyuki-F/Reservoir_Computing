@@ -11,8 +11,10 @@ V2 Architecture Compliance:
 from dataclasses import replace
 from typing import Any, Dict, Optional, Tuple
 from typing import Any as _Any
+from tqdm.auto import tqdm
 import jax
 import numpy as np
+import jax.numpy as jnp
 
 # Core Imports
 from reservoir.models import ModelFactory
@@ -72,24 +74,33 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
 
 def _batched_projection(projection_fn: Any, inputs: np.ndarray, batch_size: int) -> np.ndarray:
     """
-    データセット全体を一括でGPUに載せるとOOMになるため、
-    バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
-    """
-    n_samples = inputs.shape[0]
+        データセット全体を一括でGPUに載せるとOOMになるため、
+        バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
+        tqdmによる進捗表示付き。
+        """
+    # inputsがまだlistなどの可能性があるため念のため変換
+    inputs_np = np.asarray(inputs)
+    n_samples = inputs_np.shape[0]
+
     if n_samples == 0:
         return np.array([])
 
-    # 1. 形状推論のために最初の1サンプルだけ走らせる
-    # (実際のデータを使って出力サイズを確定させる)
-    dummy_input = inputs[:1]
-    dummy_out_jax = projection_fn(dummy_input)
+    # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
+    dummy_input = inputs_np[:1]
 
-    # 出力形状の計算: (Total_Samples, Time, Proj_Dim) など
+    # ここでJAX Arrayに変換して関数を通す
+    # (出力のdtypeやshapeを知るため)
+    dummy_input_jax = jnp.array(dummy_input)
+    dummy_out_jax = projection_fn(dummy_input_jax)
+
+    # 出力形状の計算
     output_shape = (n_samples,) + dummy_out_jax.shape[1:]
     dtype = dummy_out_jax.dtype
 
     # 2. CPU側に結果格納用のメモリを確保
-    print(f"    [Projection] Allocating CPU buffer: {output_shape} ({dtype})")
+    # print(f"    [Projection] Allocating CPU buffer: {output_shape} ({dtype})")
+    # -> tqdmとかぶるためprintは控えめにするか、tqdmの前に出すのがベター
+
     output = np.empty(output_shape, dtype=dtype)
 
     # 3. JITコンパイル済みの実行関数を用意
@@ -97,15 +108,26 @@ def _batched_projection(projection_fn: Any, inputs: np.ndarray, batch_size: int)
     def step(x):
         return projection_fn(x)
 
-    # 4. バッチ処理ループ
-    # GPUメモリを食いつぶさないよう、計算が終わったら即座に np.asarray でCPUへ戻す
-    for i in range(0, n_samples, batch_size):
-        batch_end = min(i + batch_size, n_samples)
-        batch_X = inputs[i:batch_end]
+    # 4. バッチ処理ループ (tqdm適用)
+    desc_str = f"[UniversalPipeline] Projection (Batch: {batch_size})"
 
-        # GPUへ転送 -> 計算 -> CPUへ戻す
-        batch_out = np.asarray(step(batch_X))
-        output[i:batch_end] = batch_out
+    with tqdm(total=n_samples, desc=desc_str, unit="samples") as pbar:
+        for i in range(0, n_samples, batch_size):
+            batch_end = min(i + batch_size, n_samples)
+            current_batch_size = batch_end - i
+
+            # (A) CPUでスライス
+            batch_X_np = inputs_np[i:batch_end]
+
+            # (B) GPUへ転送 -> 計算
+            # jnp.array() で転送が発生
+            batch_out_jax = step(jnp.array(batch_X_np))
+
+            # (C) CPUへ戻す (同期)
+            output[i:batch_end] = np.asarray(batch_out_jax)
+
+            # 進捗更新
+            pbar.update(current_batch_size)
 
     return output
 
@@ -146,7 +168,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     Returns processed datasets and shape metadata for model creation.
     """
     batch_size = dataset_meta.training.batch_size
-    print(f"\n=== Step 2: Preprocessing (Batch Size: {batch_size})===")
+    print(f"\n=== Step 2: Preprocessing ===")
     preprocessing_config = config.preprocess
     pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
 

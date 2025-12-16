@@ -73,6 +73,8 @@ def plot_classification_report(
     lambda_norm: Optional[float],
     results: Dict[str, Any],
     training_obj: Any,
+    # 追加: 計算済みの予測値を受け取るオプション
+    precalc_preds: Optional[Dict[str, Any]] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -81,7 +83,11 @@ def plot_classification_report(
         return
 
     feature_batch_size = int(getattr(training_obj, "batch_size", 0) or 0)
+    precalc_preds = precalc_preds or {}
 
+    # ---------------------------------------------------------
+    # 1. Labels Preparation
+    # ---------------------------------------------------------
     train_labels_np = np.asarray(train_y)
     test_labels_np = np.asarray(test_y)
     if train_labels_np.ndim > 1:
@@ -89,33 +95,70 @@ def plot_classification_report(
     if test_labels_np.ndim > 1:
         test_labels_np = np.argmax(test_labels_np, axis=-1)
 
-    train_features_np = runner.batch_transform(train_X, batch_size=feature_batch_size)
-    test_features_np = runner.batch_transform(test_X, batch_size=feature_batch_size)
-    if readout is None:
-        train_pred_np = np.asarray(train_features_np)
-        test_pred_np = np.asarray(test_features_np)
+    # ---------------------------------------------------------
+    # 2. Predictions (Train/Test) - Use cached if available
+    # ---------------------------------------------------------
+    train_pred_cached = precalc_preds.get("train_pred")
+    test_pred_cached = precalc_preds.get("test_pred")
+
+    # --- Train ---
+    if train_pred_cached is not None:
+        train_pred_np = np.asarray(train_pred_cached)
     else:
-        train_pred_np = np.asarray(readout.predict(train_features_np))
-        test_pred_np = np.asarray(readout.predict(test_features_np))
+        # Fallback: 重い計算を実行
+        print("  [Report] Calculating Train Predictions (Fallback)...")
+        train_features_np = runner.batch_transform(train_X, batch_size=feature_batch_size)
+        if readout is None:
+            train_pred_np = np.asarray(train_features_np)
+        else:
+            train_pred_np = np.asarray(readout.predict(train_features_np))
+
+    # --- Test ---
+    if test_pred_cached is not None:
+        test_pred_np = np.asarray(test_pred_cached)
+    else:
+        # Fallback
+        print("  [Report] Calculating Test Predictions (Fallback)...")
+        test_features_np = runner.batch_transform(test_X, batch_size=feature_batch_size)
+        if readout is None:
+            test_pred_np = np.asarray(test_features_np)
+        else:
+            test_pred_np = np.asarray(readout.predict(test_features_np))
+
+    # Argmax adjustment
     if train_pred_np.ndim > 1:
         train_pred_np = np.argmax(train_pred_np, axis=-1)
     if test_pred_np.ndim > 1:
         test_pred_np = np.argmax(test_pred_np, axis=-1)
 
+    # ---------------------------------------------------------
+    # 3. Validation
+    # ---------------------------------------------------------
     val_labels_np = None
     val_pred_np = None
     if val_X is not None:
         val_labels_np = np.asarray(val_y)
         if val_labels_np.ndim > 1:
             val_labels_np = np.argmax(val_labels_np, axis=-1)
-        val_features_np = runner.batch_transform(val_X, batch_size=feature_batch_size)
-        if readout is None:
-            val_pred_np = np.asarray(val_features_np)
+
+        val_pred_cached = precalc_preds.get("val_pred")
+        if val_pred_cached is not None:
+            val_pred_np = np.asarray(val_pred_cached)
         else:
-            val_pred_np = np.asarray(readout.predict(val_features_np))
+            # Fallback
+            print("  [Report] Calculating Validation Predictions (Fallback)...")
+            val_features_np = runner.batch_transform(val_X, batch_size=feature_batch_size)
+            if readout is None:
+                val_pred_np = np.asarray(val_features_np)
+            else:
+                val_pred_np = np.asarray(readout.predict(val_features_np))
+
         if val_pred_np.ndim > 1:
             val_pred_np = np.argmax(val_pred_np, axis=-1)
 
+    # ---------------------------------------------------------
+    # 4. Plot
+    # ---------------------------------------------------------
     metrics_payload = dict(results.get("test", {})) if isinstance(results, dict) else {}
     plot_classification_results(
         train_labels=train_labels_np,
@@ -148,7 +191,7 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         readout_label = details.get("readout")
         if details.get("preprocess"):
             preprocess_label = details["preprocess"]
-        
+
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
         has_reservoir = has_reservoir or "reservoir" in topo_type or "distillation" in topo_type
@@ -205,6 +248,12 @@ def generate_report(
     metric = "accuracy" if task_val and str(task_val).lower().find("class") != -1 else "mse"
     print_ridge_search_results(train_res, metric)
 
+    # ---------------------------------------------------------
+    # Retrieve Pre-calculated Predictions (Optimization)
+    # ---------------------------------------------------------
+    # 前のステップで計算された予測値があれば取得する
+    precalc_preds = _safe_get(results, "outputs", {})
+
     # Classification plots
     if task_val and str(task_val).lower().find("class") != -1:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
@@ -216,6 +265,7 @@ def generate_report(
             weight_norms = train_res.get("weight_norms") or {}
             if selected_lambda is not None:
                 lambda_norm = weight_norms.get(selected_lambda) or weight_norms.get(float(selected_lambda))
+
         plot_classification_report(
             runner=runner,
             readout=readout,
@@ -233,22 +283,18 @@ def generate_report(
             lambda_norm=lambda_norm,
             results=results,
             training_obj=training_obj,
+            precalc_preds=precalc_preds,  # <--- ここで渡す
         )
     elif metric == "mse":
-        # Regression Pplots
+        # Regression Plots
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
-        # Assuming last part of filename is useful to distinguish, but for regression we usually want "prediction"
         prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
-        
-        # We need predictions on test set.
-        # generate_report arguments don't include predictions directly, so we need to generate them or pass them?
-        # generic_runner passes runner, readout, etc. We can re-generate predictions.
-        
-        # Re-generating predictions inside reporting might be expensive if not cached, 
-        # but standardized reporting usually does this or accepts predictions.
-        # Given arguments, we must use runner + readout.
-        
         test_mse = _safe_get(results, "test", {}).get("mse")
+
+        # Regressionの方も同様に最適化（必要な場合）
+        # 現状は簡易的に予測値を渡すだけにしていますが、
+        # plot_regression_report も同様に修正すれば高速化できます
+        test_pred_cached = precalc_preds.get("test_pred")
 
         plot_regression_report(
              runner=runner,
@@ -259,6 +305,7 @@ def generate_report(
              filename=prediction_filename,
              model_type_str=model_type_str,
              mse=test_mse,
+             precalc_test_pred=test_pred_cached # 必要なら受け皿を作る
         )
 
 
@@ -272,6 +319,7 @@ def plot_regression_report(
     filename: str,
     model_type_str: str,
     mse: Optional[float] = None,
+    precalc_test_pred: Optional[Any] = None, # 追加
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -280,16 +328,17 @@ def plot_regression_report(
         return
 
     # Generate Test Predictions
-    feature_batch_size = 0 # Default or infer? infer from runner usage is hard here without config access
-                           # Actually generate_report receives training_obj, we could use that.
-    
-    test_features = runner.batch_transform(test_X, batch_size=0) # 0 means full batch if supported or default
-    if readout is None:
-        test_pred = test_features
+    if precalc_test_pred is not None:
+        test_pred = np.asarray(precalc_test_pred)
     else:
-        test_pred = readout.predict(test_features)
-        
-    # Infer global time offset from training set length
+        # Fallback
+        test_features = runner.batch_transform(test_X, batch_size=0)
+        if readout is None:
+            test_pred = test_features
+        else:
+            test_pred = readout.predict(test_features)
+
+    # Infer global time offset
     train_len = 0
     if train_y is not None:
          train_y_np = np.asarray(train_y)
@@ -309,4 +358,3 @@ def plot_regression_report(
         title=title_str,
         time_offset=train_len,
     )
-
