@@ -105,6 +105,7 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
         preprocess_labels.extend(["scaler", f"poly{poly_degree}"])
     elif p_type == Preprocessing.MAX_SCALER:
         layers.append(MaxScaler())
+        preprocess_labels.append("max_scaler")
     # RAW -> no layers
     return layers, preprocess_labels
 

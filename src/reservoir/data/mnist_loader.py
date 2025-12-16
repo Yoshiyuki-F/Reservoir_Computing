@@ -14,7 +14,10 @@ MNIST_ROOT = Path("data/mnist")
 
 def get_mnist_datasets() -> Tuple[datasets.MNIST, datasets.MNIST]:
     """Download (if needed) and return MNIST train/test datasets."""
-    transform = transforms.ToTensor()
+    transform = transforms.Compose([
+        transforms.PILToTensor(),
+        transforms.Lambda(lambda x: x.float())
+    ])
     train_set = datasets.MNIST(root=str(MNIST_ROOT), train=True, download=True, transform=transform)
     test_set = datasets.MNIST(root=str(MNIST_ROOT), train=False, download=True, transform=transform)
     return train_set, test_set
