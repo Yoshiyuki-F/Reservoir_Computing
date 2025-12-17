@@ -447,7 +447,28 @@ def plot_regression_report(
     test_y = test_y_plot
 
     title_str = f"Test Predictions ({model_type_str})"
-    if mse is not None:
+    
+    # Calculate NDEI if possible
+    ndei = None
+    if test_y is not None and test_pred is not None:
+        y_true_flat = test_y.flatten()
+        y_pred_flat = test_pred.flatten()
+        
+        # Avoid NaN
+        valid_mask = ~np.isnan(y_true_flat) & ~np.isnan(y_pred_flat)
+        if np.sum(valid_mask) > 0:
+            y_t = y_true_flat[valid_mask]
+            y_p = y_pred_flat[valid_mask]
+            
+            rmse = np.sqrt(np.mean((y_t - y_p) ** 2))
+            std_true = np.std(y_t)
+            
+            if std_true > 1e-9:
+                ndei = rmse / std_true
+
+    if ndei is not None:
+        title_str += f" | NDEI: {ndei:.4f}"
+    elif mse is not None:
         title_str += f" | MSE: {mse:.4f} (Scaled)"
 
     plot_timeseries_comparison(
