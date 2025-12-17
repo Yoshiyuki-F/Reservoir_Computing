@@ -241,19 +241,14 @@ class UniversalPipeline:
         if train_Z.ndim == 3: train_Z = train_Z.reshape(-1, train_Z.shape[-1])
         if train_y.ndim == 3: train_y = train_y.reshape(-1, train_y.shape[-1])
         
-        if val_Z is not None and val_Z.ndim == 3: 
+        if val_Z.ndim == 3:
              val_Z = val_Z.reshape(-1, val_Z.shape[-1])
-        if val_y is not None and val_y.ndim == 3: 
+        if val_y.ndim == 3:
              val_y = val_y.reshape(-1, val_y.shape[-1])
 
         if direct_fit:
             chosen = float(single_candidate if single_candidate is not None else initial_lambda)
             safe_set_lambda(chosen)
-
-            if val_Z is None or val_y is None:
-                print("No validation set provided. Skipping hyperparameter search.")
-            elif len(lambda_candidates) <= 1:
-                print("Single ridge_lambda candidate provided. Running direct fit.")
             
             self.readout.fit(train_Z, train_y)
             return chosen, {}, {}
@@ -295,6 +290,7 @@ class UniversalPipeline:
         closed_loop_truth_val = None
         val_pred = None
         best_lambda = None
+        best_score = None
         search_history = {}
         weight_norms = {}
 
@@ -342,7 +338,7 @@ class UniversalPipeline:
              return targ
              
         train_y = align_length(train_features, train_y)
-        if val_Z is not None: val_y = align_length(val_Z, val_y)
+        val_y = align_length(val_Z, val_y)
         test_y = align_length(test_features, test_y)
 
         # 3. Fit Readout & Predict (Standard)
@@ -350,14 +346,11 @@ class UniversalPipeline:
             print("Readout is None. End-to-End mode.")
             train_pred = train_features
             test_pred = test_features
-            if val_Z is not None: val_pred = val_Z
+            val_pred = val_Z
         else:
             # === Closed-Loop Hyperparameter Search ===
             print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(ridge_lambdas)} candidates...")
-            
-            # 1. Validation Data Check
-            if val_Z is None or val_y is None:
-                raise ValueError("Validation data (val_Z, val_y) is REQUIRED for Closed-Loop Search.")
+
 
             # 2. Setup Projection Fn (Once)
             proj_fn = None
@@ -379,9 +372,6 @@ class UniversalPipeline:
 
             # Val Seed (Use last part of Train to predict Val)
             val_steps = val_Z.shape[1] if val_Z.ndim == 3 else 0
-            if val_steps == 0: 
-                # Fallback if val_Z is 2D (not sequence) - but run.py ensures 3D?
-                val_steps = val_Z.shape[0]
 
             # We use the processed train_X (Projected) for warmup
             # Assuming train_X is (Batch, Time, Dim)
@@ -441,15 +431,15 @@ class UniversalPipeline:
             # 5. Standard Open-Loop Predictions (for consistency with logs)
             print("Generating final predictions (Open-Loop)...")
             train_pred = self.readout.predict(train_features)
-            test_pred = self.readout.predict(test_features)
             
-            if val_Z is not None:
-                val_pred = self.readout.predict(val_Z)
+            # [Refactor] Remove Open-Loop predictions for Test and Validation.
+            test_pred = None
+            val_pred = None
 
             print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
 
             # Inverse Transform Logging
-            if frontend_ctx.scaler is not None:
+            if frontend_ctx.scaler is not None and test_pred is not None:
                 try:
                     scaler = frontend_ctx.scaler
                     tp_reshaped = test_pred.reshape(-1, 1) if test_pred.ndim == 1 else test_pred
@@ -464,15 +454,22 @@ class UniversalPipeline:
                  try:
                      # GENERATION_STEP (LENGTH OF TEST TIMESTEP)
                      # VALIDATION SET ALWAYS EXISTS (FOR REGRESSION AND CLASSIFICATION)
-                     generation_steps = test_X.shape[1] if hasattr(test_X, "shape") else 0
-                     print(f"    [Runner] Using Train tail as seed for Test...")
-                     # Trainは常に十分
-                     context_len = train_features.shape[1]
-                     seed_input = train_features[:, -context_len:, :]
 
+                     # === Test Seed Preparation: Train + Val ===
+                     print(f"    [Runner] Preparing seed for Test (Train + Val)...")
+
+                     val_X_input = processed.val_X
+
+                     # Concatenate Train and Val features for continuous history
+                     full_history_inputs = jnp.concatenate([train_X, val_X_input], axis=1)
+
+                     context_len = full_history_inputs.shape[1]
+                     # 入力データをSeedにする
+                     seed_input = full_history_inputs[:, -context_len:, :]
+
+                     generation_steps = test_X.shape[1]
                      print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
-                     closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps,
-                                                                      projection_fn=proj_fn)
+                     
                      # Projection Fn
                      proj_fn = None
                      if self.config.projection is not None:
@@ -485,15 +482,15 @@ class UniversalPipeline:
                              print(" No projection Layer loaded")
 
                      # 3. Generate
-                     closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps,
-                                                                      projection_fn=proj_fn)
+                     closed_loop_pred_val = self.generate_closed_loop(
+                         seed_input, steps=generation_steps, projection_fn=proj_fn)
 
                      # 4. Evaluate (Compare to Full Test)
                      if frontend_ctx.scaler is not None:
                          scaler = frontend_ctx.scaler
                          shape_cl = closed_loop_pred_val.shape
-                         cl_pred_raw = scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1])).reshape(
-                             shape_cl)
+                         cl_pred_raw = (scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1]))
+                         .reshape(shape_cl))
 
                          # Truth = Full Test Y
                          closed_loop_truth_val = test_y
@@ -520,11 +517,9 @@ class UniversalPipeline:
 
         # --- FIX 3: Unified Output Construction & Overwrite ---
         
-        # Calculate final test score (default to standard)
+        # Calculate final test score (Closed-Loop)
         test_score = 0.0
-        if test_y is not None:
-            test_score = self._score(test_pred, test_y)
-
+        
         # Overwrite with Closed-Loop if available
         if closed_loop_pred_val is not None and closed_loop_truth_val is not None:
             print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
@@ -533,6 +528,8 @@ class UniversalPipeline:
             if self.readout is not None:
                 test_score = self._score(test_pred, test_y)
                 print(f"    [Runner] Closed-Loop MSE: {test_score:.5f}")
+        elif test_pred is None:
+             print("    [Runner] Warning: No Test predictions available (Open-Loop disabled, Closed-Loop failed).")
 
         # Construct Results (Once)
         results = {}
@@ -542,8 +539,16 @@ class UniversalPipeline:
             "weight_norms": weight_norms
         }
         results["test"] = {self.metric_name: test_score}
-        if val_pred is not None and val_y is not None:
-            results["validation"] = {self.metric_name: self._score(val_pred, val_y)}
+
+        # Validation Result
+        # Prioritize Closed-Loop best_score.
+        if best_score is not None:
+            val_score = best_score
+        else:
+            # Fallback (e.g. End-to-End mode)
+            val_score = self._score(val_pred, val_y)
+
+        results["validation"] = {self.metric_name: val_score}
 
         results["outputs"] = {
             "train_pred": train_pred,
@@ -561,7 +566,6 @@ class UniversalPipeline:
         }
 
         # Safe Cleanup
-        del train_features, test_features
-        if val_Z is not None: del val_Z
+        del train_features, test_features,  val_Z
 
         return results

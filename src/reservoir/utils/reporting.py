@@ -341,6 +341,7 @@ def generate_report(
              runner=runner,
              readout=readout,
              train_y=train_y,
+             val_y=val_y, # Pass val_y for correct offset
              test_X=test_X,
              test_y=test_y,
              filename=prediction_filename,
@@ -359,12 +360,13 @@ def plot_regression_report(
     runner: Any,
     readout: Any,
     train_y: Any,
+    val_y: Optional[Any] = None, # New Argument
     test_X: Any,
     test_y: Any,
     filename: str,
     model_type_str: str,
     mse: Optional[float] = None,
-    precalc_test_pred: Optional[Any] = None, # 追加
+    precalc_test_pred: Optional[Any] = None, 
     preprocessors: Optional[list[Any]] = None,
     scaler: Optional[Any] = None,
 ) -> None:
@@ -386,19 +388,22 @@ def plot_regression_report(
             test_pred = readout.predict(test_features)
 
     # Infer global time offset
-    train_len = 0
-    if train_y is not None:
-         train_y_np = np.asarray(train_y)
-         if train_y_np.ndim == 3:
-              train_len = train_y_np.shape[1]
-         elif train_y_np.ndim == 2:
-              train_len = train_y_np.shape[0]
+    # Offset = Length(Train) + Length(Val)
+    offset = 0
+    
+    def get_len(arr):
+        if arr is None: return 0
+        arr_np = np.asarray(arr)
+        if arr_np.ndim == 3: return arr_np.shape[1]
+        if arr_np.ndim == 2: return arr_np.shape[0]
+        if arr_np.ndim == 1: return arr_np.shape[0]
+        return 0
+
+    offset += get_len(train_y)
+    offset += get_len(val_y)
 
     # Align lengths if predictions are shorter (e.g. TimeDelayEmbedding)
     if test_y is not None and test_pred is not None:
-        def get_len(arr):
-             return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
-        
         len_t = get_len(test_y)
         len_p = get_len(test_pred)
         
@@ -450,5 +455,5 @@ def plot_regression_report(
         predictions=test_pred,
         filename=filename,
         title=title_str,
-        time_offset=train_len,
+        time_offset=offset,
     )
