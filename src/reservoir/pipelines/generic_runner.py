@@ -166,7 +166,6 @@ class UniversalPipeline:
         # Initialize Output Variables
         closed_loop_pred_val = None
         closed_loop_truth_val = None
-        val_pred = None
         best_lambda = None
         best_score = None
         search_history = {}
