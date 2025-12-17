@@ -261,8 +261,6 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     # Flatten後のサイズは Factory 側で input_shape から計算させる
     input_dim_for_factory = int(transformed_shape[-1])
 
-    print(f"    [Pipeline] Input Dim for Factory: {input_dim_for_factory} (Shape: {transformed_shape})")
-
     processed_split = SplitDataset(
         train_X=projected_train,
         train_y=data_split.train_y,
