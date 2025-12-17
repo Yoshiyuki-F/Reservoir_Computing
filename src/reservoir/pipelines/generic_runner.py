@@ -1,4 +1,4 @@
-"""/home/yoshi/PycharmProjects/Reservoir/pipelines/generic_runner.py
+"""
 Universal pipeline that treats models as feature extractors and owns the readout.
 Updated to distinguish between Aggregation (Reservoir) and Inference (FNN/Distillation) in logs.
 """
@@ -14,6 +14,8 @@ from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
+from reservoir.utils.reporting import calculate_chaos_metrics
+from reservoir.layers.projection import InputProjection
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
@@ -41,7 +43,6 @@ class UniversalPipeline:
         return float(jnp.mean((aligned_preds - targets_arr) ** 2))
 
     def _feature_stats(self, features: Any, stage: str) -> None:
-        # Prefer CPU stats to avoid host->device transfers when features are numpy.
         if isinstance(features, np.ndarray):
             feats = features
             stats = {
@@ -141,6 +142,71 @@ class UniversalPipeline:
             return np.asarray(features)
         return features
 
+    def generate_closed_loop(self, initial_input: jnp.ndarray, steps: int, projection_fn: Optional[Any] = None) -> jnp.ndarray:
+        # 1. Warmup
+        history = jnp.asarray(initial_input)
+        if history.ndim == 2: history = history[None, ...]
+        elif history.ndim == 1: history = history[None, None, ...]
+        
+        batch_size = history.shape[0]
+        
+        # Check support
+        if not hasattr(self.model, "step") or not hasattr(self.model, "initialize_state"):
+            return self._generate_closed_loop_naive(history, steps, projection_fn)
+
+        print(f"[Closed-Loop] Generating {steps} steps (Fast JAX Scan)...")
+        
+        # Initialize & Warmup
+        initial_state = self.model.initialize_state(batch_size)
+        final_state, _ = self.model.forward(initial_state, history)
+        
+        # Helper for readout
+        def predict_one(s):
+            s_in = s[:, None, :] 
+            if self.readout is not None:
+                out = self.readout.predict(s_in) 
+                return out[:, 0, :] 
+            else:
+                 return s
+
+        first_prediction = predict_one(final_state)
+        
+        # Scan Step
+        def scan_step(carry, _):
+            h_prev, x_raw = carry
+            x_proj = projection_fn(x_raw) if projection_fn else x_raw
+            h_next, _ = self.model.step(h_prev, x_proj)
+            y_next = predict_one(h_next)
+            return (h_next, y_next), y_next
+
+        # Execute Scan
+        _, predictions = jax.lax.scan(scan_step, (final_state, first_prediction), None, length=steps)
+        
+        return jnp.swapaxes(predictions, 0, 1)
+
+    def _generate_closed_loop_naive(self, history: jnp.ndarray, steps: int, projection_fn: Optional[Any]) -> jnp.ndarray:
+        predictions = []
+        current_history = history
+        print(f"[Closed-Loop] Generating {steps} steps (Naive Loop)...")
+        for _ in tqdm(range(steps), desc="[Closed-Loop]", unit="step", leave=False):
+             features = self._extract_features(current_history)
+             if self.readout is not None:
+                 pred_seq = self.readout.predict(features)
+             else:
+                 pred_seq = features
+             last_pred = pred_seq[:, -1:, :] 
+             predictions.append(last_pred)
+             
+             pred_to_append = last_pred
+             if projection_fn:
+                  p_flat = last_pred.reshape(-1, last_pred.shape[-1])
+                  p_proj = projection_fn(p_flat).reshape(last_pred.shape[0], 1, -1)
+                  pred_to_append = p_proj
+             
+             current_history = jnp.concatenate([current_history, pred_to_append], axis=1)
+
+        return jnp.concatenate(predictions, axis=1)
+
     def _fit_readout(
         self,
         train_Z: jnp.ndarray,
@@ -149,31 +215,43 @@ class UniversalPipeline:
         val_y: Optional[jnp.ndarray],
         ridge_lambdas: Optional[Sequence[float]],
     ) -> tuple[float, Dict[float, float], Dict[float, float]]:
+        
+        # --- FIX 1: Safely handle Read-Only Config ---
+        def safe_set_lambda(val):
+            try:
+                self.readout.ridge_lambda = float(val)
+            except (TypeError, AttributeError):
+                # Config is frozen, ignore
+                pass
+
         lambda_candidates = list(ridge_lambdas) if ridge_lambdas is not None else []
         config_init = getattr(getattr(self, "config", None), "readout", None)
-        initial_lambda = float(getattr(config_init, "init_lambda", getattr(self.readout, "ridge_lambda", 1.0)))
-        single_candidate = lambda_candidates[0] if len(lambda_candidates) == 1 else None
+        
+        initial_lambda = None
+        if hasattr(self.readout, "ridge_lambda"):
+             initial_lambda = float(self.readout.ridge_lambda)
+        elif config_init:
+             initial_lambda = float(getattr(config_init, "init_lambda"))
 
-        # Tier 1: no validation or no search space (empty/single) -> direct fit.
+        single_candidate = lambda_candidates[0] if len(lambda_candidates) == 1 else None
         direct_fit = val_Z is None or val_y is None or len(lambda_candidates) <= 1
+
         if direct_fit:
             chosen = float(single_candidate if single_candidate is not None else initial_lambda)
-            self.readout.ridge_lambda = chosen
+            safe_set_lambda(chosen)
+
             if val_Z is None or val_y is None:
-                print("No validation set provided. Skipping hyperparameter search to prevent overfitting.")
+                print("No validation set provided. Skipping hyperparameter search.")
             elif len(lambda_candidates) <= 1:
-                print("Single ridge_lambda candidate provided. Running direct fit without search.")
-            if train_Z.ndim == 3:
-                train_Z = train_Z.reshape(-1, train_Z.shape[-1])
-            if train_y.ndim == 3:
-                train_y = train_y.reshape(-1, train_y.shape[-1])
+                print("Single ridge_lambda candidate provided. Running direct fit.")
+            
+            if train_Z.ndim == 3: train_Z = train_Z.reshape(-1, train_Z.shape[-1])
+            if train_y.ndim == 3: train_y = train_y.reshape(-1, train_y.shape[-1])
+            
             self.readout.fit(train_Z, train_y)
             return chosen, {}, {}
 
-        # Tier 2: validation present and multiple candidates -> search.
-        print(
-            f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates."
-        )
+        print(f"Search active: overriding initial ridge_lambda={initial_lambda} with {len(lambda_candidates)} candidates.")
         best_lambda, search_history, weight_norms = self.readout.fit_and_search(
             train_Z,
             train_y,
@@ -182,6 +260,7 @@ class UniversalPipeline:
             lambda_candidates,
             metric=self.metric_name,
         )
+        safe_set_lambda(best_lambda)
         return best_lambda, search_history, weight_norms
 
     # ------------------------------------------------------------------ #
@@ -203,32 +282,31 @@ class UniversalPipeline:
         feature_batch_size = int(cfg.batch_size)
 
         start = time.time()
+        
+        # --- FIX 2: Initialize Variables Early ---
+        closed_loop_pred_val = None
+        closed_loop_truth_val = None
+        val_pred = None
+        best_lambda = None
+        search_history = {}
+        weight_norms = {}
 
+        # 1. Train Model (Reservoir Warmup)
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
         start_train = time.time()
         train_logs = self.model.train(train_X, train_y) or {}
         train_time = time.time() - start_train
+        print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
 
-        # ログ出力
-        final_loss = train_logs.get("final_loss") or train_logs.get("final_mse") or train_logs.get("loss")
-        if final_loss is not None:
-            print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s. Final Loss: {final_loss}")
-        else:
-            print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
-
-        # --- ログ表示の分岐ロジック ---
-        # モデル名に "FNN" や "Distillation" が含まれる場合は Aggregation ではなく Inference とみなす
+        # 2. Extract Features
         model_cls_name = self.model.__class__.__name__
         is_static_model = "FNN" in model_cls_name or "Distillation" in model_cls_name or "CNN" in model_cls_name
 
         if is_static_model:
             print("\n=== Step 6: Feature Extraction (Inference) ===")
-            print("    Generating static features for Readout...")
         else:
             print("\n=== Step 6: Aggregation (Time-Collapse) ===")
-            print("    Aggregating temporal states...")
 
-        # 特徴量抽出 (1回目かつ最後にしたい)
         train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
         self._feature_stats(train_features, "post_train_features")
 
@@ -243,88 +321,160 @@ class UniversalPipeline:
 
         print("\n=== Step 7: Readout (Ridge Regression) ===")
 
-        # Align lengths if feature extraction reduced time dimension (e.g. TimeDelayEmbedding)
+        # Align lengths
         def align_length(feat, targ):
              if feat is not None and targ is not None:
-                 # Helper to get length of dim 1 (time) if 3D, or dim 0 if 2D
-                 def get_len(arr):
-                     return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
-                 
+                 def get_len(arr): return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
                  len_f = get_len(feat)
                  len_t = get_len(targ)
-                 
                  if len_f < len_t:
                      diff = len_t - len_f
-                     print(f"    [Runner] Aligning targets: slicing first {diff} steps to match features ({len_f}).")
-                     if targ.ndim == 3:
-                         return targ[:, diff:, :]
+                     print(f"    [Runner] Aligning targets: slicing first {diff} steps.")
+                     if targ.ndim == 3: return targ[:, diff:, :]
                      return targ[diff:]
              return targ
              
         train_y = align_length(train_features, train_y)
-        if val_Z is not None:
-             val_y = align_length(val_Z, val_y)
+        if val_Z is not None: val_y = align_length(val_Z, val_y)
         test_y = align_length(test_features, test_y)
 
-        results = {}
-        train_pred = None
-        test_pred = None
-        val_pred = None
-
+        # 3. Fit Readout & Predict (Standard)
         if self.readout is None:
-            print("Readout is None. Using model output directly as predictions (End-to-End mode).")
-            # End-to-Endの場合は特徴量＝予測値とみなす
-            best_lambda = None
-            search_history = {}
-            weight_norms = {}
-
+            print("Readout is None. End-to-End mode.")
             train_pred = train_features
             test_pred = test_features
-            if val_Z is not None:
-                val_pred = val_Z
-
-            results["test"] = {self.metric_name: self._score(test_pred, test_y)}
-
+            if val_Z is not None: val_pred = val_Z
         else:
             best_lambda, search_history, weight_norms = self._fit_readout(
-                train_features,
-                train_y,
-                val_Z,
-                val_y,
-                ridge_lambdas,
+                train_features, train_y, val_Z, val_y, ridge_lambdas
             )
-            if search_history:
-                print(f"Search complete. Best lambda: {best_lambda}")
-            self.readout.ridge_lambda = best_lambda
-
-            # Evaluate & Store Predictions
             print("Generating final predictions...")
             train_pred = self.readout.predict(train_features)
             test_pred = self.readout.predict(test_features)
-
-            results["train"] = {
-                "best_lambda": best_lambda,
-                "search_history": search_history,
-                "weight_norms": weight_norms
-            }
-            results["test"] = {self.metric_name: self._score(test_pred, test_y)}
-
-            if val_Z is not None and val_y is not None:
+            
+            if val_Z is not None:
                 val_pred = self.readout.predict(val_Z)
-                results["validation"] = {self.metric_name: self._score(val_pred, val_y)}
 
-            results["readout"] = self.readout
+            # Inverse Transform Logging
+            if frontend_ctx.scaler is not None:
+                try:
+                    scaler = frontend_ctx.scaler
+                    tp_reshaped = test_pred.reshape(-1, 1) if test_pred.ndim == 1 else test_pred
+                    test_pred_raw = scaler.inverse_transform(tp_reshaped)
+                    print("\n[Confirmation] Final Predictions (Inverse Transformed):")
+                    self._feature_stats(test_pred_raw, "final_test_pred_raw")
+                    
+                except Exception as e:
+                    print(f"[Warning] Inverse transform stats failed: {e}")
+
+            # 4. Closed-Loop Generation (True Chaos Check)
+            if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value:
+                 try:
+                     # -------------------------------------------------------------
+                     # Train end state -> Test full generation
+                     # -------------------------------------------------------------
+                     
+                     # 1. Generation Length = Full Test Duration
+                     generation_steps = 0
+                     if hasattr(test_X, "shape"):
+                         generation_steps = test_X.shape[1]
+                     
+                     if generation_steps > 0:
+                         # Sufficient to restore state without re-running full train.
+                         context_len = test_X.shape[1]
+                         seed_input = train_X[:, -context_len:, :]
+
+                         print(f"    [Runner] Full Closed-Loop: Seeding with last {context_len} steps of Train -> Generating {generation_steps} Test steps.")
+
+                         # Projection Fn
+                         proj_fn = None
+                         if self.config.projection is not None:
+                             input_dim = frontend_ctx.preprocessed_shape[-1]
+                             projection_layer = InputProjection(
+                                input_dim=int(input_dim),
+                                output_dim=int(self.config.projection.n_units),
+                                input_scale=float(self.config.projection.input_scale),
+                                input_connectivity=float(self.config.projection.input_connectivity),
+                                seed=int(self.config.projection.seed),
+                                bias_scale=float(self.config.projection.bias_scale),
+                             )
+                             def proj_fn(x): return projection_layer(x)
+
+                         # 3. Generate
+                         closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps, projection_fn=proj_fn)
+                         
+                         # 4. Evaluate (Compare to Full Test)
+                         if frontend_ctx.scaler is not None:
+                             scaler = frontend_ctx.scaler
+                             shape_cl = closed_loop_pred_val.shape
+                             cl_pred_raw = scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1])).reshape(shape_cl)
+                             
+                             # Truth = Full Test Y
+                             closed_loop_truth_val = test_y
+                             
+                             if hasattr(closed_loop_truth_val, "shape"):
+                                 shape_tr = closed_loop_truth_val.shape
+                                 truth_raw = scaler.inverse_transform(closed_loop_truth_val.reshape(-1, shape_tr[-1])).reshape(shape_tr)
+                                 
+                                 # Correct Global Step Calculation
+                                 train_len = train_X.shape[1] if hasattr(train_X, "shape") else 0
+                                 val_len = 0
+                                 if processed.val_X is not None and hasattr(processed.val_X, "shape"):
+                                     val_len = processed.val_X.shape[1]
+                                 
+                                 global_start = train_len + val_len
+                                 global_end = global_start + generation_steps
+
+                                 print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+                                 calculate_chaos_metrics(truth_raw, cl_pred_raw)
+                             
+                 except Exception as e:
+                     print(f"[Warning] Closed-loop generation failed: {e}")
+
+        # --- FIX 3: Unified Output Construction & Overwrite ---
+        
+        # Calculate final test score (default to standard)
+        test_score = 0.0
+        if test_y is not None:
+            test_score = self._score(test_pred, test_y)
+
+        # Overwrite with Closed-Loop if available
+        if closed_loop_pred_val is not None and closed_loop_truth_val is not None:
+            print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
+            test_pred = closed_loop_pred_val
+            test_y = closed_loop_truth_val
+            if self.readout is not None:
+                test_score = self._score(test_pred, test_y)
+                print(f"    [Runner] Closed-Loop MSE: {test_score:.5f}")
+
+        # Construct Results (Once)
+        results = {}
+        results["train"] = {
+            "best_lambda": best_lambda,
+            "search_history": search_history,
+            "weight_norms": weight_norms
+        }
+        results["test"] = {self.metric_name: test_score}
+        if val_pred is not None and val_y is not None:
+            results["validation"] = {self.metric_name: self._score(val_pred, val_y)}
 
         results["outputs"] = {
             "train_pred": train_pred,
-            "test_pred": test_pred,
+            "test_pred": test_pred, 
             "val_pred": val_pred
         }
-
+        
+        results["readout"] = self.readout
+        results["scaler"] = frontend_ctx.scaler
         results["training_logs"] = train_logs
-        elapsed = time.time() - start
-        results["meta"] = {"metric": self.metric_name, "elapsed_sec": elapsed, "pretrain_sec": train_time}
+        results["meta"] = {
+            "metric": self.metric_name, 
+            "elapsed_sec": time.time() - start, 
+            "pretrain_sec": train_time
+        }
 
-        del train_features, test_features, val_Z
+        # Safe Cleanup
+        del train_features, test_features
+        if val_Z is not None: del val_Z
 
         return results

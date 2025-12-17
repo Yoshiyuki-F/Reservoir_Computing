@@ -71,6 +71,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
 
 "=============================================Time series Presets============================================"
 
+#TODO which params are the best for time series
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical-reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
@@ -80,15 +81,15 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         poly_degree=1,
     ),
     projection=ProjectionConfig(
-        n_units=1,
+        n_units=400,
         input_scale=0.1,
         input_connectivity=1.0,
         bias_scale=0.0,
-        seed=42,
+        seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=0.6,
-        leak_rate=1.0,
+        spectral_radius=0.95,
+        leak_rate=0.5,
         rc_connectivity=0.02,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,

@@ -183,6 +183,19 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
             val_X = _apply_layers(pre_layers, val_X, fit=False)
         if test_X is not None:
             test_X = _apply_layers(pre_layers, test_X, fit=False)
+            
+        # Fix: For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
+        # This ensures model output is scaled, matching the inverse_transform expectation.
+        if dataset_meta.task_type == TaskType.REGRESSION:
+             print("    [Preprocessing] Applying transforms to targets (y) for REGRESSION task.")
+             # Note: fit=False to reuse scaler fitted on X
+             if data_split.train_y is not None:
+                 data_split = replace(data_split, train_y=_apply_layers(pre_layers, data_split.train_y, fit=False))
+             if data_split.val_y is not None:
+                 data_split = replace(data_split, val_y=_apply_layers(pre_layers, data_split.val_y, fit=False))
+             if data_split.test_y is not None:
+                 data_split = replace(data_split, test_y=_apply_layers(pre_layers, data_split.test_y, fit=False))
+
     _log_split_stats("preprocess", train_X, val_X, test_X)
     # Use full 3D shape
     preprocessed_shape = train_X.shape
@@ -213,6 +226,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
             projected_shape=None,
             input_shape_for_meta=input_shape_for_meta,
             input_dim_for_factory=input_dim_for_factory,
+            scaler=pre_layers[0] if pre_layers else None,
         )
 
     projection = InputProjection(
@@ -267,6 +281,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         projected_shape=projected_shape,
         input_shape_for_meta=input_shape_for_meta,
         input_dim_for_factory=input_dim_for_factory,
+        scaler=pre_layers[0] if pre_layers else None,
     )
 
 
@@ -276,7 +291,7 @@ def _build_model_stack(
     frontend_ctx: FrontendContext,
 ) -> ModelStack:
 
-    print("\n=== Step 4: Build Model Stack ===")
+    print("\n=== Step 4: Build Model Stack (Sample, TimeStep, Dimension) ===")
 
 
     """Step 4: Instantiate model + readout and enrich topology metadata."""
@@ -339,9 +354,13 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Opti
     del raw_split
 
     #Step 4: Build Model Stack
+    print("DEBUG: Calling _build_model_stack...")
     stack = _build_model_stack(config, dataset_meta, frontend_ctx)
+    print("DEBUG: Returned from _build_model_stack.")
 
+    print("DEBUG: Initializing UniversalPipeline...")
     runner = UniversalPipeline(stack, config)
+    print("DEBUG: Calling runner.run...")
     results = runner.run(frontend_ctx, dataset_meta)
 
     report_payload = dict(

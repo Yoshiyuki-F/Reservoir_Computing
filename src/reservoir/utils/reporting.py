@@ -351,25 +351,7 @@ def generate_report(
              scaler=scaler,
          )
          
-        # Closed-Loop Plots
-        cl_pred = precalc_preds.get("closed_loop_pred")
-        cl_truth = precalc_preds.get("closed_loop_truth")
-        if cl_pred is not None:
-            cl_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_closed_loop.png"
-            # We reuse plot_regression_report but pass None for runner/readout as we have precalc preds
-            plot_regression_report(
-                runner=runner,
-                readout=readout,
-                train_y=None, # No training context needed for this plot
-                test_X=None,  # Not used if precalc_test_pred is provided
-                test_y=cl_truth,
-                filename=cl_filename,
-                model_type_str=f"{model_type_str} (Closed-Loop)",
-                mse=None,
-                precalc_test_pred=cl_pred,
-                preprocessors=preprocessors,
-                scaler=scaler
-            )
+
 
 
 def plot_regression_report(
