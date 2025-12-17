@@ -15,7 +15,6 @@ from tqdm.auto import tqdm
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import calculate_chaos_metrics
-from reservoir.layers.projection import InputProjection
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
@@ -463,58 +462,58 @@ class UniversalPipeline:
             # 4. Closed-Loop Generation (True Chaos Check)
             if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value:
                  try:
-                     # -------------------------------------------------------------
-                     # Train end state -> Test full generation
-                     # -------------------------------------------------------------
-                     
-                     # 1. Generation Length = Full Test Duration
-                     generation_steps = 0
-                     if hasattr(test_X, "shape"):
-                         generation_steps = test_X.shape[1]
-                     
-                     if generation_steps > 0:
-                         # Sufficient to restore state without re-running full train.
-                         context_len = test_X.shape[1]
-                         seed_input = val_Z[:, -context_len:, :]
+                     # GENERATION_STEP (LENGTH OF TEST TIMESTEP)
+                     # VALIDATION SET ALWAYS EXISTS (FOR REGRESSION AND CLASSIFICATION)
+                     generation_steps = test_X.shape[1] if hasattr(test_X, "shape") else 0
+                     print(f"    [Runner] Using Train tail as seed for Test...")
+                     # Trainは常に十分
+                     context_len = train_features.shape[1]
+                     seed_input = train_features[:, -context_len:, :]
 
-                         print(f"    [Runner] Full Closed-Loop: Seeding with last {context_len} steps of Train -> Generating {generation_steps} Test steps.")
+                     print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
+                     closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps,
+                                                                      projection_fn=proj_fn)
+                     # Projection Fn
+                     proj_fn = None
+                     if self.config.projection is not None:
+                         if hasattr(frontend_ctx, "projection_layer") and frontend_ctx.projection_layer is not None:
+                             print("    [Runner] Using existing InputProjection from FrontendContext.")
 
-                         # Projection Fn
-                         proj_fn = None
-                         if self.config.projection is not None:
-                             if hasattr(frontend_ctx, "projection_layer") and frontend_ctx.projection_layer is not None:
-                                  print("    [Runner] Using existing InputProjection from FrontendContext.")
-                                  def proj_fn(x): return frontend_ctx.projection_layer(x)
-                             else:
-                                 print(" No projection Layer loaded")
+                             def proj_fn(x):
+                                 return frontend_ctx.projection_layer(x)
+                         else:
+                             print(" No projection Layer loaded")
 
-                         # 3. Generate
-                         closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps, projection_fn=proj_fn)
-                         
-                         # 4. Evaluate (Compare to Full Test)
-                         if frontend_ctx.scaler is not None:
-                             scaler = frontend_ctx.scaler
-                             shape_cl = closed_loop_pred_val.shape
-                             cl_pred_raw = scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1])).reshape(shape_cl)
-                             
-                             # Truth = Full Test Y
-                             closed_loop_truth_val = test_y
-                             
-                             if hasattr(closed_loop_truth_val, "shape"):
-                                 shape_tr = closed_loop_truth_val.shape
-                                 truth_raw = scaler.inverse_transform(closed_loop_truth_val.reshape(-1, shape_tr[-1])).reshape(shape_tr)
-                                 
-                                 # Correct Global Step Calculation
-                                 train_len = train_X.shape[1] if hasattr(train_X, "shape") else 0
-                                 val_len = 0
-                                 if processed.val_X is not None and hasattr(processed.val_X, "shape"):
-                                     val_len = processed.val_X.shape[1]
-                                 
-                                 global_start = train_len + val_len
-                                 global_end = global_start + generation_steps
+                     # 3. Generate
+                     closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps,
+                                                                      projection_fn=proj_fn)
 
-                                 print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
-                                 calculate_chaos_metrics(truth_raw, cl_pred_raw)
+                     # 4. Evaluate (Compare to Full Test)
+                     if frontend_ctx.scaler is not None:
+                         scaler = frontend_ctx.scaler
+                         shape_cl = closed_loop_pred_val.shape
+                         cl_pred_raw = scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1])).reshape(
+                             shape_cl)
+
+                         # Truth = Full Test Y
+                         closed_loop_truth_val = test_y
+
+                         if hasattr(closed_loop_truth_val, "shape"):
+                             shape_tr = closed_loop_truth_val.shape
+                             truth_raw = scaler.inverse_transform(
+                                 closed_loop_truth_val.reshape(-1, shape_tr[-1])).reshape(shape_tr)
+
+                             # Correct Global Step Calculation
+                             train_len = train_X.shape[1] if hasattr(train_X, "shape") else 0
+                             val_len = 0
+                             if processed.val_X is not None and hasattr(processed.val_X, "shape"):
+                                 val_len = processed.val_X.shape[1]
+
+                             global_start = train_len + val_len
+                             global_end = global_start + generation_steps
+
+                             print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+                             calculate_chaos_metrics(truth_raw, cl_pred_raw)
                              
                  except Exception as e:
                      print(f"[Warning] Closed-loop generation failed: {e}")
