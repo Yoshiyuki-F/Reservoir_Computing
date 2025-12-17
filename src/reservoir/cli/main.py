@@ -43,9 +43,33 @@ def main() -> None:
     pipeline_config = get_model_preset(model_enum, dataset)
     training_config = get_training_preset("standard")
 
-    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}... with training preset '{training_config.name}'")
+    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}...")
+    print(f"With training preset: '{training_config.name}'")
+    print("\n=== Configuration ===")
+    print(f"Pipeline    : {pipeline_config.name}")
+    print(f"Description : {pipeline_config.description}")
+    print(f"Dataset     : {dataset.name}")
+    
+    import json
+    def print_section(name: str, data: dict):
+        if not data: return
+        print(f"\n[{name}]")
+        # filter out None values for cleaner output
+        clean_data = {k: v for k, v in data.items() if v is not None}
+        print(json.dumps(clean_data, indent=2))
 
-    print(pipeline_config.config, dataset.value, training_config.to_dict())
+    print_section("Preprocessing", pipeline_config.preprocess.to_dict())
+    
+    if pipeline_config.projection:
+        print_section("Projection", pipeline_config.projection.to_dict())
+        
+    print_section("Model Dynamics", pipeline_config.model.to_dict())
+    
+    if pipeline_config.readout:
+        print_section("Readout", pipeline_config.readout.to_dict())
+
+    print_section("Training", training_config.to_dict())
+    print("=" * 21 + "\n")
 
     # Run Pipeline
     results = run_pipeline(pipeline_config, dataset, training_config)

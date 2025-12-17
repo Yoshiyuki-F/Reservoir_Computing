@@ -285,7 +285,7 @@ def generate_report(
     train_res = _safe_get(results, "train", {})
     task_val = task_type if task_type is not None else getattr(config, "task_type", None)
     metric = "accuracy" if task_val and str(task_val).lower().find("class") != -1 else "mse"
-    print_ridge_search_results(train_res, metric)
+    # print_ridge_search_results(train_res, metric)
 
     # ---------------------------------------------------------
     # Retrieve Pre-calculated Predictions (Optimization)

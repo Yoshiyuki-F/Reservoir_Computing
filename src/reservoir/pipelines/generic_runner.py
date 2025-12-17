@@ -142,7 +142,7 @@ class UniversalPipeline:
             return np.asarray(features)
         return features
 
-    def generate_closed_loop(self, initial_input: jnp.ndarray, steps: int, projection_fn: Optional[Any] = None) -> jnp.ndarray:
+    def generate_closed_loop(self, initial_input: jnp.ndarray, steps: int, projection_fn: Optional[Any] = None, verbose: bool = True) -> jnp.ndarray:
         # 1. Warmup
         history = jnp.asarray(initial_input)
         if history.ndim == 2: history = history[None, ...]
@@ -152,9 +152,10 @@ class UniversalPipeline:
         
         # Check support
         if not hasattr(self.model, "step") or not hasattr(self.model, "initialize_state"):
-            return self._generate_closed_loop_naive(history, steps, projection_fn)
+            return self._generate_closed_loop_naive(history, steps, projection_fn, verbose=verbose)
 
-        print(f"[Closed-Loop] Generating {steps} steps (Fast JAX Scan)...")
+        if verbose:
+            print(f"[Closed-Loop] Generating {steps} steps (Fast JAX Scan)...")
         
         # Initialize & Warmup
         initial_state = self.model.initialize_state(batch_size)
@@ -184,11 +185,12 @@ class UniversalPipeline:
         
         return jnp.swapaxes(predictions, 0, 1)
 
-    def _generate_closed_loop_naive(self, history: jnp.ndarray, steps: int, projection_fn: Optional[Any]) -> jnp.ndarray:
+    def _generate_closed_loop_naive(self, history: jnp.ndarray, steps: int, projection_fn: Optional[Any], verbose: bool = True) -> jnp.ndarray:
         predictions = []
         current_history = history
-        print(f"[Closed-Loop] Generating {steps} steps (Naive Loop)...")
-        for _ in tqdm(range(steps), desc="[Closed-Loop]", unit="step", leave=False):
+        if verbose:
+            print(f"[Closed-Loop] Generating {steps} steps (Naive Loop)...")
+        for _ in tqdm(range(steps), desc="[Closed-Loop]", unit="step", leave=False, disable=not verbose):
              features = self._extract_features(current_history)
              if self.readout is not None:
                  pred_seq = self.readout.predict(features)
@@ -406,7 +408,7 @@ class UniversalPipeline:
                      weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
 
                 # C. Closed-Loop Generation (Validation)
-                val_gen_features = self.generate_closed_loop(seed_data, steps=val_steps, projection_fn=proj_fn)
+                val_gen_features = self.generate_closed_loop(seed_data, steps=val_steps, projection_fn=proj_fn, verbose=False)
                 
                 # D. Score (MSE against val_y)
                 score = self._score(val_gen_features, val_y)
@@ -418,6 +420,16 @@ class UniversalPipeline:
                     best_lambda = lam_val
 
             print(f"    [Runner] Best Closed-Loop Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+
+            # Print Search Table Immediately
+            from reservoir.utils.reporting import print_ridge_search_results
+            # Construct a dummy results dict for the printer
+            search_results = {
+                "search_history": search_history,
+                "best_lambda": best_lambda,
+                "weight_norms": weight_norms
+            }
+            print_ridge_search_results(search_results, self.metric_name)
 
             # 4. Refit with Best Lambda
             print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
@@ -434,8 +446,6 @@ class UniversalPipeline:
             
             if val_Z is not None:
                 val_pred = self.readout.predict(val_Z)
-
-            print("#TODO ridge search log should be before step 8 is shown")
 
             print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
 
