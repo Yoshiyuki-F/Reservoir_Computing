@@ -82,14 +82,14 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     ),
     projection=ProjectionConfig(
         n_units=400,
-        input_scale=0.4,
+        input_scale=0.2,
         input_connectivity=1.0,
         bias_scale=0.1,
         seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=0.99,
-        leak_rate=0.2,
+        spectral_radius=0.9,
+        leak_rate=0.1,
         rc_connectivity=0.02,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,

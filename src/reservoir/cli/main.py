@@ -45,6 +45,8 @@ def main() -> None:
 
     print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}... with training preset '{training_config.name}'")
 
+    print(pipeline_config.config, dataset.value, training_config.to_dict())
+
     # Run Pipeline
     results = run_pipeline(pipeline_config, dataset, training_config)
 

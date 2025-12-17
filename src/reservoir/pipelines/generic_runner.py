@@ -325,7 +325,7 @@ class UniversalPipeline:
         test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
         self._feature_stats(test_features, "post_test_features")
 
-        print("\n=== Step 7: Readout (Ridge Regression) ===")
+        print("\n=== Step 7: Readout (Ridge Regression) with val data ===")
 
         # Align lengths
         def align_length(feat, targ):
@@ -351,15 +351,93 @@ class UniversalPipeline:
             test_pred = test_features
             if val_Z is not None: val_pred = val_Z
         else:
-            best_lambda, search_history, weight_norms = self._fit_readout(
-                train_features, train_y, val_Z, val_y, ridge_lambdas
-            )
-            print("Generating final predictions...")
+            # === Closed-Loop Hyperparameter Search ===
+            print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(ridge_lambdas)} candidates...")
+            
+            # 1. Validation Data Check
+            if val_Z is None or val_y is None:
+                raise ValueError("Validation data (val_Z, val_y) is REQUIRED for Closed-Loop Search.")
+
+            # 2. Setup Projection Fn (Once)
+            proj_fn = None
+            if self.config.projection is not None:
+                if hasattr(frontend_ctx, "projection_layer") and frontend_ctx.projection_layer is not None:
+                     def proj_fn(x): return frontend_ctx.projection_layer(x)
+                else:
+                    print("    [Runner] Warning: Projection configured but layer not found in context.")
+
+            # 3. Search Loop
+            best_score = float("inf")
+            best_lambda = ridge_lambdas[0]
+            search_history = {}
+            weight_norms = {}
+            
+            # Reshape for fit (Reuse)
+            tf_reshaped = train_features.reshape(-1, train_features.shape[-1]) if train_features.ndim == 3 else train_features
+            ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
+
+            # Val Seed (Use last part of Train to predict Val)
+            val_steps = val_Z.shape[1] if val_Z.ndim == 3 else 0
+            if val_steps == 0: 
+                # Fallback if val_Z is 2D (not sequence) - but run.py ensures 3D?
+                val_steps = val_Z.shape[0]
+
+            # We use the processed train_X (Projected) for warmup
+            # Assuming train_X is (Batch, Time, Dim)
+            seed_len = val_steps
+            if train_X.shape[1] < seed_len:
+                 seed_len = train_X.shape[1]
+            seed_data = train_X[:, -seed_len:, :]
+
+            for lam in tqdm(ridge_lambdas, desc="[Closed-Loop Search]"):
+                lam_val = float(lam)
+                
+                # A. Set Lambda
+                if hasattr(self.readout, "ridge_lambda"):
+                    self.readout.ridge_lambda = lam_val
+                elif hasattr(self.readout, "config"):
+                    self.readout.config.ridge_lambda = lam_val
+                
+                # B. Open-Loop Fit
+                self.readout.fit(tf_reshaped, ty_reshaped)
+                
+                # Track norm
+                if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
+                     weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
+
+                # C. Closed-Loop Generation (Validation)
+                val_gen_features = self.generate_closed_loop(seed_data, steps=val_steps, projection_fn=proj_fn)
+                
+                # D. Score (MSE against val_y)
+                score = self._score(val_gen_features, val_y)
+                
+                search_history[lam_val] = float(score)
+                
+                if score < best_score:
+                    best_score = score
+                    best_lambda = lam_val
+
+            print(f"    [Runner] Best Closed-Loop Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+
+            # 4. Refit with Best Lambda
+            print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
+            if hasattr(self.readout, "ridge_lambda"):
+                self.readout.ridge_lambda = best_lambda
+            elif hasattr(self.readout, "config"):
+                self.readout.config.ridge_lambda = best_lambda
+            self.readout.fit(tf_reshaped, ty_reshaped)
+
+            # 5. Standard Open-Loop Predictions (for consistency with logs)
+            print("Generating final predictions (Open-Loop)...")
             train_pred = self.readout.predict(train_features)
             test_pred = self.readout.predict(test_features)
             
             if val_Z is not None:
                 val_pred = self.readout.predict(val_Z)
+
+            print("#TODO ridge search log should be before step 8 is shown")
+
+            print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
 
             # Inverse Transform Logging
             if frontend_ctx.scaler is not None:
@@ -367,7 +445,6 @@ class UniversalPipeline:
                     scaler = frontend_ctx.scaler
                     tp_reshaped = test_pred.reshape(-1, 1) if test_pred.ndim == 1 else test_pred
                     test_pred_raw = scaler.inverse_transform(tp_reshaped)
-                    print("\n[Confirmation] Final Predictions (Inverse Transformed):")
                     self._feature_stats(test_pred_raw, "final_test_pred_raw")
                     
                 except Exception as e:
@@ -388,7 +465,7 @@ class UniversalPipeline:
                      if generation_steps > 0:
                          # Sufficient to restore state without re-running full train.
                          context_len = test_X.shape[1]
-                         seed_input = train_X[:, -context_len:, :]
+                         seed_input = val_Z[:, -context_len:, :]
 
                          print(f"    [Runner] Full Closed-Loop: Seeding with last {context_len} steps of Train -> Generating {generation_steps} Test steps.")
 
