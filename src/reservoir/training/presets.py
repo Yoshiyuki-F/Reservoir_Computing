@@ -18,7 +18,7 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         seed= 0,
 
         # Readout Regularization search space (used by Ridge)
-        ridge_lambdas= np.logspace(-12, 0, 30).tolist(),
+        ridge_lambdas= np.logspace(-12, 3, 30).tolist(),
 
         # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
         train_size=0.8,
