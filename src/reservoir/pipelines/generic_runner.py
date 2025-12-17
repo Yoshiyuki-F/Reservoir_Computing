@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/generic_runner.py
 Universal pipeline that treats models as feature extractors and owns the readout.
 Updated to distinguish between Aggregation (Reservoir) and Inference (FNN/Distillation) in logs.
 """
@@ -236,6 +236,15 @@ class UniversalPipeline:
         single_candidate = lambda_candidates[0] if len(lambda_candidates) == 1 else None
         direct_fit = val_Z is None or val_y is None or len(lambda_candidates) <= 1
 
+        # Flatten 3D (Batch, Time, Feat) -> 2D (Sample, Feat) for Ridge
+        if train_Z.ndim == 3: train_Z = train_Z.reshape(-1, train_Z.shape[-1])
+        if train_y.ndim == 3: train_y = train_y.reshape(-1, train_y.shape[-1])
+        
+        if val_Z is not None and val_Z.ndim == 3: 
+             val_Z = val_Z.reshape(-1, val_Z.shape[-1])
+        if val_y is not None and val_y.ndim == 3: 
+             val_y = val_y.reshape(-1, val_y.shape[-1])
+
         if direct_fit:
             chosen = float(single_candidate if single_candidate is not None else initial_lambda)
             safe_set_lambda(chosen)
@@ -244,9 +253,6 @@ class UniversalPipeline:
                 print("No validation set provided. Skipping hyperparameter search.")
             elif len(lambda_candidates) <= 1:
                 print("Single ridge_lambda candidate provided. Running direct fit.")
-            
-            if train_Z.ndim == 3: train_Z = train_Z.reshape(-1, train_Z.shape[-1])
-            if train_y.ndim == 3: train_y = train_y.reshape(-1, train_y.shape[-1])
             
             self.readout.fit(train_Z, train_y)
             return chosen, {}, {}
@@ -389,16 +395,11 @@ class UniversalPipeline:
                          # Projection Fn
                          proj_fn = None
                          if self.config.projection is not None:
-                             input_dim = frontend_ctx.preprocessed_shape[-1]
-                             projection_layer = InputProjection(
-                                input_dim=int(input_dim),
-                                output_dim=int(self.config.projection.n_units),
-                                input_scale=float(self.config.projection.input_scale),
-                                input_connectivity=float(self.config.projection.input_connectivity),
-                                seed=int(self.config.projection.seed),
-                                bias_scale=float(self.config.projection.bias_scale),
-                             )
-                             def proj_fn(x): return projection_layer(x)
+                             if hasattr(frontend_ctx, "projection_layer") and frontend_ctx.projection_layer is not None:
+                                  print("    [Runner] Using existing InputProjection from FrontendContext.")
+                                  def proj_fn(x): return frontend_ctx.projection_layer(x)
+                             else:
+                                 print(" No projection Layer loaded")
 
                          # 3. Generate
                          closed_loop_pred_val = self.generate_closed_loop(seed_input, steps=generation_steps, projection_fn=proj_fn)

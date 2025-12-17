@@ -175,12 +175,8 @@ def load_dataset_with_validation_split(
     print(f"Loading dataset: {dataset_enum.value}...")
     dataset = loader(preset.config)
 
-    # User Request: Disable validation for Regression tasks
-    if preset.task_type == TaskType.REGRESSION:
-        print("TaskType.REGRESSION detected: Disabling validation split (val_size=0.0).")
-        val_size = 0.0
-    else:
-        val_size = float(training_cfg.val_size)
+    # val is needed for both tasks
+    val_size = float(training_cfg.val_size)
 
     def _split_validation(features: jnp.ndarray, labels: jnp.ndarray) -> tuple[
         jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray]

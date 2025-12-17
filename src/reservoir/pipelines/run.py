@@ -282,6 +282,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         input_shape_for_meta=input_shape_for_meta,
         input_dim_for_factory=input_dim_for_factory,
         scaler=pre_layers[0] if pre_layers else None,
+        projection_layer=projection,
     )
 
 

@@ -74,7 +74,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             n_input=1,
             n_output=1,
             time_steps=10000,
-            warmup_steps=100,
+            warmup_steps=0,
             dt=1,
             noise_level=0.0,
             seed=0,
@@ -85,7 +85,6 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             downsample=1,
         ),
         use_dimensions=None
-
     ),
     Dataset.MNIST: DatasetPreset(
         name="mnist",

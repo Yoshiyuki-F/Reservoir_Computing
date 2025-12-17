@@ -49,7 +49,7 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=1e-2, use_intercept=True)
+DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
@@ -82,14 +82,14 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     ),
     projection=ProjectionConfig(
         n_units=400,
-        input_scale=0.1,
+        input_scale=0.4,
         input_connectivity=1.0,
-        bias_scale=0.0,
+        bias_scale=0.1,
         seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=0.95,
-        leak_rate=0.5,
+        spectral_radius=0.99,
+        leak_rate=0.2,
         rc_connectivity=0.02,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,

@@ -21,6 +21,7 @@ class FrontendContext:
     input_shape_for_meta: tuple[int, ...]
     input_dim_for_factory: int
     scaler: Optional[Any]
+    projection_layer: Optional[Any] = None
 
 
 @dataclass(frozen=True)
