@@ -1,52 +1,95 @@
 """
-Reporting utilities for post-run analysis: plotting, logging, and file outputs.
+Reporting utilities for post-run analysis: metrics, logging, and file outputs.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple, Optional
 import numpy as np
-
+import jax.numpy as jnp
 
 def _safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
     return d.get(key, default) if isinstance(d, dict) else default
 
+# --- Metrics Calculation ---
+
+def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
+    """
+    汎用スコア計算 (MSE または Accuracy)
+    Runnerの _score メソッドを移動
+    """
+    preds_arr = jnp.asarray(preds)
+    targets_arr = jnp.asarray(targets)
+
+    if metric_name == "accuracy":
+        pred_labels = preds_arr if preds_arr.ndim == 1 else jnp.argmax(preds_arr, axis=-1)
+        true_labels = targets_arr if targets_arr.ndim == 1 else jnp.argmax(targets_arr, axis=-1)
+        return float(jnp.mean(pred_labels == true_labels))
+
+    # Regression (MSE)
+    aligned_preds = preds_arr
+    if preds_arr.shape != targets_arr.shape and preds_arr.size == targets_arr.size:
+        aligned_preds = preds_arr.reshape(targets_arr.shape)
+
+    return float(jnp.mean((aligned_preds - targets_arr) ** 2))
 
 def calculate_chaos_metrics(y_true: Any, y_pred: Any) -> Tuple[float, float]:
     """
     Mackey-Glassなどのカオス予測専用の評価指標
     """
-    # 形状を合わせる
     y_true_np = np.asarray(y_true).flatten()
     y_pred_np = np.asarray(y_pred).flatten()
-    
-    # 基本統計量
+
     mse = np.mean((y_true_np - y_pred_np) ** 2)
     rmse = np.sqrt(mse)
     std_true = np.std(y_true_np)
     std_pred = np.std(y_pred_np)
-    
-    # 1. NDEI (業界標準)
-    # これが 0.1 を切ることを目指す
+
     ndei = rmse / std_true if std_true > 1e-9 else float('inf')
-    
-    # 2. Variance Ratio (分散比)
-    # これが 1.0 に近づくことを目指す
     var_ratio = std_pred / std_true if std_true > 1e-9 else 0.0
-    
-    # 3. Correlation (相関係数)
+
+    corr = 0.0
     if std_true > 1e-9 and std_pred > 1e-9:
         corr = np.corrcoef(y_true_np, y_pred_np)[0, 1]
-    else:
-        corr = 0.0
 
     print(f"=== Chaos Prediction Metrics ===")
     print(f"MSE       : {mse:.5f}")
     print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
     print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
     print(f"Corr      : {corr:.5f} (Target > 0.95)")
-    
+
     return ndei, var_ratio
 
+# --- Logging / Printing ---
+
+def print_feature_stats(features: Any, stage: str) -> None:
+    """
+    特徴量の統計情報を表示する
+    Runnerの _feature_stats メソッドを移動
+    """
+    if isinstance(features, np.ndarray):
+        feats = features
+        lib = np
+    else:
+        feats = jnp.asarray(features)
+        lib = jnp
+
+    # 基本統計量
+    stats = {
+        "shape": feats.shape,
+        "mean": float(lib.mean(feats)),
+        "std": float(lib.std(feats)),
+        "min": float(lib.min(feats)),
+        "max": float(lib.max(feats)),
+        "nans": int(lib.isnan(feats).sum()),
+    }
+
+    print(
+        f"[FeatureStats:{stage}] shape={stats['shape']}, "
+        f"mean={stats['mean']:.4f}, std={stats['std']:.4f}, "
+        f"min={stats['min']:.4f}, max={stats['max']:.4f}, nans={stats['nans']}"
+    )
+    if stats["std"] < 1e-6:
+        print("Feature matrix has near-zero variance. Model output may be inactive.")
 
 def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
     if not isinstance(train_res, dict):
@@ -57,6 +100,8 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
     best_lam = train_res.get("best_lambda")
     weight_norms = train_res.get("weight_norms", {}) or {}
     metric_label = "Accuracy" if metric == "accuracy" else "MSE"
+
+    # Decide best logic for marking
     best_by_metric = None
     if metric == "accuracy":
         best_by_metric = max(history, key=history.get)
