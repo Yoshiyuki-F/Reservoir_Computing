@@ -3,3 +3,7 @@ node_modules/
 package-lock.json
 package.json
 data/mnist/
+
+# Python
+*.pyc
+__pycache__/
