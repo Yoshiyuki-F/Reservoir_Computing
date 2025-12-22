@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, Optional
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
