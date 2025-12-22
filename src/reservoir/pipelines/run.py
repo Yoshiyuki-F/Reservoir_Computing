@@ -11,10 +11,7 @@ V2 Architecture Compliance:
 from dataclasses import replace
 from typing import Any, Dict, Optional, Tuple
 from typing import Any as _Any
-from tqdm.auto import tqdm
-import jax
 import numpy as np
-import jax.numpy as jnp
 
 # Core Imports
 from reservoir.models import ModelFactory
@@ -31,6 +28,7 @@ from reservoir.layers.preprocessing import create_preprocessor
 from reservoir.layers.projection import InputProjection
 from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import generate_report
+from reservoir.utils.batched_compute import batched_compute
 
 # Ensure dataset loaders are registered
 from reservoir.data import loaders as _data_loaders  # noqa: F401
@@ -53,7 +51,7 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
     return np.asarray(arr)
 
 
-def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray], test_X: Optional[np.ndarray]) -> None:
+def _log_split_stats(stage: str, train_X: np.ndarray, val_X: np.ndarray, test_X: np.ndarray) -> None:
     """Lightweight stats logger for each split at a given processing stage."""
     def _stats(arr: np.ndarray) -> str:
         arr64 = np.asarray(arr)
@@ -71,65 +69,6 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: Optional[np.ndarray
     if test_X is not None:
         print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
 
-
-def _batched_projection(projection_fn: Any, inputs: np.ndarray, batch_size: int) -> np.ndarray:
-    """
-        データセット全体を一括でGPUに載せるとOOMになるため、
-        バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
-        tqdmによる進捗表示付き。
-        """
-    # inputsがまだlistなどの可能性があるため念のため変換
-    inputs_np = np.asarray(inputs)
-    n_samples = inputs_np.shape[0]
-
-    if n_samples == 0:
-        return np.array([])
-
-    # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
-    dummy_input = inputs_np[:1]
-
-    # ここでJAX Arrayに変換して関数を通す
-    # (出力のdtypeやshapeを知るため)
-    dummy_input_jax = jnp.array(dummy_input)
-    dummy_out_jax = projection_fn(dummy_input_jax)
-
-    # 出力形状の計算
-    output_shape = (n_samples,) + dummy_out_jax.shape[1:]
-    dtype = dummy_out_jax.dtype
-
-    # 2. CPU側に結果格納用のメモリを確保
-    # print(f"    [Projection] Allocating CPU buffer: {output_shape} ({dtype})")
-    # -> tqdmとかぶるためprintは控えめにするか、tqdmの前に出すのがベター
-
-    output = np.empty(output_shape, dtype=dtype)
-
-    # 3. JITコンパイル済みの実行関数を用意
-    @jax.jit
-    def step(x):
-        return projection_fn(x)
-
-    # 4. バッチ処理ループ (tqdm適用)
-    desc_str = f"[UniversalPipeline] Projection (Batch: {batch_size})"
-
-    with tqdm(total=n_samples, desc=desc_str, unit="samples") as pbar:
-        for i in range(0, n_samples, batch_size):
-            batch_end = min(i + batch_size, n_samples)
-            current_batch_size = batch_end - i
-
-            # (A) CPUでスライス
-            batch_X_np = inputs_np[i:batch_end]
-
-            # (B) GPUへ転送 -> 計算
-            # jnp.array() で転送が発生
-            batch_out_jax = step(jnp.array(batch_X_np))
-
-            # (C) CPUへ戻す (同期)
-            output[i:batch_end] = np.asarray(batch_out_jax)
-
-            # 進捗更新
-            pbar.update(current_batch_size)
-
-    return output
 
 
 def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfig] = None) -> Tuple[DatasetMetadata, SplitDataset]:
@@ -239,17 +178,18 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     )
 
     # --- 修正箇所: バッチ処理で射影を実行 ---
-    # ここで OOM を防ぐために _batched_projection を使用
+    # ここで OOM を防ぐために batched_compute を使用
+    desc = f"[Projection] (Batch: {batch_size})"
     print(f"Applying Projection in batches of {batch_size}...")
-    projected_train = _batched_projection(projection, train_X, batch_size)
+    projected_train = batched_compute(projection, np.asarray(train_X), batch_size, desc=desc + "train")
 
     projected_test = None
     if test_X is not None:
-        projected_test = _batched_projection(projection, test_X, batch_size)
+        projected_test = batched_compute(projection, np.asarray(test_X), batch_size, desc=desc + "test")
 
     projected_val = None
     if val_X is not None:
-        projected_val = _batched_projection(projection, val_X, batch_size)
+        projected_val = batched_compute(projection, np.asarray(val_X), batch_size, desc=desc + "val")
     
     # Use full 3D shape
     projected_shape = projected_train.shape # (Batch, Time, ProjUnits)

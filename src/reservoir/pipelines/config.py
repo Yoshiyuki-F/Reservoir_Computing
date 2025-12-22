@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Optional, Any, Dict
 
 from reservoir.core.identifiers import  Dataset, TaskType
+from reservoir.core.interfaces import ReadoutModule
 from reservoir.data import SplitDataset
 from reservoir.data.config import DatasetPreset
-from reservoir.models.config import ReadoutConfig
 from reservoir.training import TrainingConfig
 
 
@@ -37,7 +37,7 @@ class DatasetMetadata:
 @dataclass(frozen=True)
 class ModelStack:
     model: Any
-    readout: ReadoutConfig
+    readout: Optional[ReadoutModule]
     topo_meta: Dict[str, Any]
     metric: str
     model_label: str

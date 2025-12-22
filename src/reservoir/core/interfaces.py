@@ -6,7 +6,7 @@ Transformer / Readout contracts referenced throughout the codebase.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Protocol, runtime_checkable, Sequence, Tuple
+from typing import Any, Dict, Optional, Protocol, runtime_checkable, Sequence, Tuple
 import jax.numpy as jnp
 
 
@@ -32,6 +32,7 @@ class ReadoutModule(Protocol):
     """Protocol for readout components (e.g., ridge regression)."""
 
     ridge_lambda: float
+    coef_: Optional[jnp.ndarray]
 
     def fit(self, states: Any, targets: Any) -> Any:
         ...

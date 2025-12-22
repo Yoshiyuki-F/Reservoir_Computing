@@ -60,7 +60,7 @@ def load_sine_wave(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
 @register_loader(Dataset.MNIST)
 def load_mnist(config: MNISTConfig) -> SplitDataset:
-    """Load MNIST sequence dataset as canonical train/test splits."""
+    """Load MNIST sequence dataset as canonical train/val/test splits."""
     if generate_mnist_sequence_data is None:
         raise ImportError("MNIST sequence loader requires torch/torchvision.")
     train_seq, train_labels = generate_mnist_sequence_data(config, split=config.split)
@@ -82,11 +82,25 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_labels_arr = jax.nn.one_hot(jnp.asarray(train_labels).astype(int), num_classes)
     test_labels_arr = jax.nn.one_hot(jnp.asarray(test_labels).astype(int), num_classes)
 
+    # Create validation split from training data (10%)
+    import numpy as np
+    val_ratio = 0.1
+    n_train = train_arr.shape[0]
+    n_val = max(1, int(n_train * val_ratio))
+    n_train_new = n_train - n_val
+
+    val_arr = train_arr[n_train_new:]
+    val_labels_arr = train_labels_arr[n_train_new:]
+    train_arr = train_arr[:n_train_new]
+    train_labels_arr = train_labels_arr[:n_train_new]
+
     return SplitDataset(
-        train_X=train_arr,
-        train_y=train_labels_arr,
-        test_X=test_arr,
-        test_y=test_labels_arr,
+        train_X=np.asarray(train_arr),
+        train_y=np.asarray(train_labels_arr),
+        test_X=np.asarray(test_arr),
+        test_y=np.asarray(test_labels_arr),
+        val_X=np.asarray(val_arr),
+        val_y=np.asarray(val_labels_arr),
     )
 
 
@@ -179,15 +193,14 @@ def load_dataset_with_validation_split(
     val_size = float(training_cfg.val_size)
 
     def _split_validation(features: jnp.ndarray, labels: jnp.ndarray) -> tuple[
-        jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray]
+        jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
     ]:
-        if val_size <= 0.0 or len(features) <= 1:
-            return features, labels, None, None
-
-        val_count = max(1, int(len(features) * val_size))
+        # Always create validation split (minimum 1 sample)
+        val_count = max(1, int(len(features) * val_size)) if val_size > 0 else 1
         train_count = len(features) - val_count
         if train_count < 1:
             train_count = len(features) - 1
+            val_count = 1
 
         val_features = features[train_count:]
         val_labels = labels[train_count:]
@@ -237,7 +250,11 @@ def load_dataset_with_validation_split(
             raise ValueError(f"Invalid split sizes: train={train_count}, val={val_count}, test={test_count} for total={total}.")
 
         train_X, train_y = X[:train_count], y[:train_count]
-        val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count] if val_count > 0 else (None, None)
+        # Always create validation split (minimum 1 sample)
+        if val_count < 1:
+            val_count = 1
+            train_count = train_count - 1 if train_count > 1 else train_count
+        val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
         test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
 
     # Special handling for Lorenz96 and Mackey-Glass
@@ -274,4 +291,12 @@ def load_dataset_with_validation_split(
     #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
     #             )
 
-    return SplitDataset(train_X, train_y, test_X, test_y, val_X, val_y)
+    import numpy as np
+    return SplitDataset(
+        train_X=np.asarray(train_X),
+        train_y=np.asarray(train_y),
+        test_X=np.asarray(test_X),
+        test_y=np.asarray(test_y),
+        val_X=np.asarray(val_X),
+        val_y=np.asarray(val_y),
+    )

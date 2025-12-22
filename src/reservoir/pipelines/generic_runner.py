@@ -5,7 +5,7 @@ Refactored to delegate reporting/logging to reservoir.utils.reporting.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional
 
 import jax
 import jax.numpy as jnp
@@ -14,12 +14,14 @@ from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
+from reservoir.core.identifiers import TaskType
 from reservoir.utils.reporting import (
     calculate_chaos_metrics,
     print_ridge_search_results,
     print_feature_stats,
     compute_score
 )
+from reservoir.utils.batched_compute import batched_compute
 
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
@@ -43,46 +45,27 @@ class UniversalPipeline:
             return jnp.asarray(self.model.predict(inputs))
         raise AttributeError("Model must implement __call__ or predict to produce features.")
 
-    def _extract_features_batched(self, inputs: Any, batch_size: int) -> np.ndarray:
-        """
-        Extract features using CPU-GPU batching to avoid OOM.
-        """
-        inputs_np = np.asarray(inputs)
-        n_samples = inputs_np.shape[0]
+    def batch_transform(
+        self,
+        inputs: np.ndarray,
+        batch_size: int,
+    ) -> np.ndarray:
+        """Transform inputs using CPU-GPU batching to avoid OOM."""
+        features = batched_compute(
+            self._extract_features,
+            inputs,
+            batch_size,
+            desc="[Pipeline] Extracting"
+        )
+        return np.asarray(features)
 
-        if n_samples == 0:
-            return np.array([])
-
-        # Dummy run for shape inference
-        dummy_in = jnp.array(inputs_np[:1])
-        dummy_out = self._extract_features(dummy_in)
-
-        out_shape = (n_samples,) + dummy_out.shape[1:]
-        out_dtype = dummy_out.dtype
-        output = np.empty(out_shape, dtype=out_dtype)
-
-        @jax.jit
-        def step(batch_in):
-            return self._extract_features(batch_in)
-
-        with tqdm(total=n_samples, desc="[Pipeline] Extracting", unit="samples") as pbar:
-            for i in range(0, n_samples, batch_size):
-                batch_end = min(i + batch_size, n_samples)
-                current_batch_size = batch_end - i
-                batch_in_cpu = inputs_np[i: batch_end]
-                batch_out_jax = step(jnp.array(batch_in_cpu))
-                output[i: batch_end] = np.asarray(batch_out_jax)
-                pbar.update(current_batch_size)
-
-        return output
-
-    def batch_transform(self, inputs: Any, batch_size: int, to_numpy: bool = True) -> Any:
-        features = self._extract_features_batched(inputs, batch_size)
-        if to_numpy:
-            return np.asarray(features)
-        return features
-
-    def generate_closed_loop(self, initial_input: jnp.ndarray, steps: int, projection_fn: Optional[Any] = None, verbose: bool = True) -> jnp.ndarray:
+    def generate_closed_loop(
+        self,
+        initial_input: jnp.ndarray,
+        steps: int,
+        projection_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
+        verbose: bool = True
+    ) -> jnp.ndarray:
         history = jnp.asarray(initial_input)
         if history.ndim == 2: history = history[None, ...]
         elif history.ndim == 1: history = history[None, None, ...]
@@ -119,7 +102,13 @@ class UniversalPipeline:
 
         return jnp.swapaxes(predictions, 0, 1)
 
-    def _generate_closed_loop_naive(self, history: jnp.ndarray, steps: int, projection_fn: Optional[Any], verbose: bool = True) -> jnp.ndarray:
+    def _generate_closed_loop_naive(
+        self,
+        history: jnp.ndarray,
+        steps: int,
+        projection_fn: Callable[[jnp.ndarray], jnp.ndarray],
+        verbose: bool = True
+    ) -> jnp.ndarray:
         predictions = []
         current_history = history
         if verbose:
@@ -216,8 +205,32 @@ class UniversalPipeline:
             train_pred = train_features
             test_pred = test_features
             val_pred = val_Z
+        elif dataset_meta.task_type is TaskType.CLASSIFICATION:
+            # === Classification: Open-Loop Evaluation ===
+            print("    [Runner] Classification task: Using Open-Loop evaluation.")
+            
+            # Reshape for fit
+            tf_reshaped = train_features.reshape(-1, train_features.shape[-1]) if train_features.ndim == 3 else train_features
+            ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
+            vf_reshaped = val_Z.reshape(-1, val_Z.shape[-1]) if val_Z.ndim == 3 else val_Z
+            vy_reshaped = val_y.reshape(-1, val_y.shape[-1]) if val_y.ndim == 3 else val_y
+            
+            # Use fit_and_search for hyperparameter optimization
+            best_lambda, search_history, weight_norms = self.readout.fit_and_search(
+                tf_reshaped, ty_reshaped,
+                vf_reshaped, vy_reshaped,
+                ridge_lambdas,
+                metric="accuracy"
+            )
+            best_score = search_history.get(best_lambda, 0.0)
+            print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
+            
+            # Predictions
+            train_pred = self.readout.predict(train_features)
+            test_pred = self.readout.predict(test_features) if test_features is not None else None
+            val_pred = self.readout.predict(val_Z) if val_Z is not None else None
         else:
-            # === Closed-Loop Hyperparameter Search ===
+            # === Regression: Closed-Loop Hyperparameter Search ===
             print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(ridge_lambdas)} candidates...")
 
             # Setup Projection Fn
@@ -243,11 +256,8 @@ class UniversalPipeline:
             for lam in tqdm(ridge_lambdas, desc="[Closed-Loop Search]"):
                 lam_val = float(lam)
 
-                # Update Lambda
                 if hasattr(self.readout, "ridge_lambda"):
                     self.readout.ridge_lambda = lam_val
-                elif hasattr(self.readout, "config"):
-                    self.readout.config.ridge_lambda = lam_val
 
                 # Fit
                 self.readout.fit(tf_reshaped, ty_reshaped)
@@ -257,7 +267,7 @@ class UniversalPipeline:
                      weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
 
                 # Generate & Score
-                val_gen_features = self.generate_closed_loop(seed_data, steps=val_steps, projection_fn=proj_fn, verbose=False)
+                val_gen_features = self.generate_closed_loop(jnp.array(seed_data), steps=val_steps, projection_fn=proj_fn, verbose=False)
                 # Use centralized compute_score
                 score = compute_score(val_gen_features, val_y, self.metric_name)
 
@@ -281,8 +291,6 @@ class UniversalPipeline:
             print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
             if hasattr(self.readout, "ridge_lambda"):
                 self.readout.ridge_lambda = best_lambda
-            elif hasattr(self.readout, "config"):
-                self.readout.config.ridge_lambda = best_lambda
             self.readout.fit(tf_reshaped, ty_reshaped)
 
             # Open-Loop Predictions (Train only)
@@ -291,17 +299,6 @@ class UniversalPipeline:
             val_pred = None
 
             print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
-
-            # Inverse Transform Logging (Delegated logic inside print_feature_stats if needed,
-            # but for now we just compute it if we want to print stats)
-            if frontend_ctx.scaler is not None and test_pred is not None:
-                try:
-                    scaler = frontend_ctx.scaler
-                    tp_reshaped = test_pred.reshape(-1, 1) if test_pred.ndim == 1 else test_pred
-                    test_pred_raw = scaler.inverse_transform(tp_reshaped)
-                    print_feature_stats(test_pred_raw, "final_test_pred_raw")
-                except Exception:
-                    pass
 
             # 4. Closed-Loop Generation (Test)
             if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value:
@@ -312,7 +309,7 @@ class UniversalPipeline:
                      print(f"    [Runner] Preparing seed for Test (Train + Val)...")
                      val_X_input = processed.val_X
                      # Concatenate Train and Val features for continuous history
-                     full_history_inputs = jnp.concatenate([train_X, val_X_input], axis=1)
+                     full_history_inputs = jnp.concatenate([jnp.array(train_X), jnp.array(val_X_input)], axis=1)
                      context_len = full_history_inputs.shape[1]
                      seed_input = full_history_inputs[:, -context_len:, :]
 
