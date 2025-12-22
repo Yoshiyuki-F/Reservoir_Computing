@@ -381,6 +381,7 @@ def generate_report(
         # 現状は簡易的に予測値を渡すだけにしていますが、
         # plot_regression_report も同様に修正すれば高速化できます
         test_pred_cached = precalc_preds.get("test_pred")
+        is_closed_loop = results.get("is_closed_loop", False)
 
         plot_regression_report(
              runner=runner,
@@ -395,6 +396,7 @@ def generate_report(
              precalc_test_pred=test_pred_cached, 
              preprocessors=preprocessors,
              scaler=scaler,
+             is_closed_loop=is_closed_loop,
          )
          
 
@@ -414,6 +416,7 @@ def plot_regression_report(
     precalc_test_pred: Optional[Any] = None, 
     preprocessors: Optional[list[Any]] = None,
     scaler: Optional[Any] = None,
+    is_closed_loop: bool = False,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -492,6 +495,8 @@ def plot_regression_report(
     test_y = test_y_plot
 
     title_str = f"Test Predictions ({model_type_str})"
+    if is_closed_loop:
+        title_str = f"{title_str} closed-loop"
     
     # Calculate NDEI if possible
     ndei = None

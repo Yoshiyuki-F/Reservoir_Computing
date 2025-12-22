@@ -349,6 +349,7 @@ class UniversalPipeline:
         # --- Construct Results ---
 
         test_score = 0.0
+        results = {}
         if closed_loop_pred_val is not None and closed_loop_truth_val is not None:
             print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
             test_pred = closed_loop_pred_val
@@ -357,10 +358,10 @@ class UniversalPipeline:
                 # Use centralized score
                 test_score = compute_score(test_pred, test_y, self.metric_name)
                 print(f"    [Runner] Closed-Loop MSE: {test_score:.5f}")
+            results["is_closed_loop"] = True
         elif test_pred is None:
              print("    [Runner] Warning: No Test predictions available.")
 
-        results = {}
         results["train"] = {
             "best_lambda": best_lambda,
             "search_history": search_history,
