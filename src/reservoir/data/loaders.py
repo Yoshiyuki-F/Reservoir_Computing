@@ -227,20 +227,18 @@ def load_dataset_with_validation_split(
         if not (0.0 <= test_ratio < 1.0):
             raise ValueError(f"test_ratio must be in [0,1), got {test_ratio}.")
 
-        if test_ratio > 0.0:
-            test_count = max(1, int(total * test_ratio))
-            train_count = total - test_count
-        else:
-            train_count = max(1, int(total * train_ratio))
-            test_count = total - train_count
+        # Correct 8:1:1 split: calculate all counts from total
+        import math
+        train_count = max(1, math.ceil(total * train_ratio))
+        val_count = max(1, round(total * val_size)) if val_size > 0 else 0
+        test_count = total - train_count - val_count
 
         if train_count < 1 or test_count < 1:
-            raise ValueError(f"Invalid split sizes: train={train_count}, test={test_count} for total={total}.")
+            raise ValueError(f"Invalid split sizes: train={train_count}, val={val_count}, test={test_count} for total={total}.")
 
-        train_X, test_X = X[:train_count], X[train_count:]
-        train_y, test_y = y[:train_count], y[train_count:]
-
-        train_X, train_y, val_X, val_y = _split_validation(train_X, train_y)
+        train_X, train_y = X[:train_count], y[:train_count]
+        val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count] if val_count > 0 else (None, None)
+        test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
 
     # Special handling for Lorenz96 and Mackey-Glass
     # The user requires (Batch=1, Time, Feature) for these datasets.
