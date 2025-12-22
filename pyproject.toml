@@ -44,7 +44,7 @@ test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv r
 # GPU-enabled CLI runner
 [tool.poe.tasks.cli-gpu]
 # Use bash so we can unset LD_LIBRARY_PATH and forward all args with "$@"
-cmd = "bash -c 'unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-cli \"$@\"' --"
+cmd = "bash -c 'unset LD_LIBRARY_PATH && export XLA_PYTHON_CLIENT_PREALLOCATE=false && export XLA_PYTHON_CLIENT_ALLOCATOR=platform && JAX_PLATFORMS=cuda uv run reservoir-cli \"$@\"' --"
 args = [{ name = "extra", help = "Arguments forwarded to reservoir-cli (e.g. 'sine cr 600' or '--dataset mnist --model fnn ...')", positional = true, multiple = true }]
 
 [build-system]
