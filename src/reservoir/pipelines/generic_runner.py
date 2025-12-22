@@ -35,29 +35,6 @@ class UniversalPipeline:
     # ------------------------------------------------------------------ #
     # Utilities (Computation only)                                       #
     # ------------------------------------------------------------------ #
-    def _extract_features(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        if hasattr(self.model, "__call__"):
-            try:
-                return jnp.asarray(self.model(inputs))
-            except TypeError:
-                pass
-        if hasattr(self.model, "predict"):
-            return jnp.asarray(self.model.predict(inputs))
-        raise AttributeError("Model must implement __call__ or predict to produce features.")
-
-    def batch_transform(
-        self,
-        inputs: np.ndarray,
-        batch_size: int,
-    ) -> np.ndarray:
-        """Transform inputs using CPU-GPU batching to avoid OOM."""
-        features = batched_compute(
-            self._extract_features,
-            inputs,
-            batch_size,
-            desc="[Pipeline] Extracting"
-        )
-        return np.asarray(features)
 
     def generate_closed_loop(
         self,
@@ -66,14 +43,12 @@ class UniversalPipeline:
         projection_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
         verbose: bool = True
     ) -> jnp.ndarray:
+        """Generate closed-loop predictions using Fast JAX Scan."""
         history = jnp.asarray(initial_input)
         if history.ndim == 2: history = history[None, ...]
         elif history.ndim == 1: history = history[None, None, ...]
 
         batch_size = history.shape[0]
-
-        if not hasattr(self.model, "step") or not hasattr(self.model, "initialize_state"):
-            return self._generate_closed_loop_naive(history, steps, projection_fn, verbose=verbose)
 
         if verbose:
             print(f"[Closed-Loop] Generating {steps} steps (Fast JAX Scan)...")
@@ -101,36 +76,6 @@ class UniversalPipeline:
         _, predictions = jax.lax.scan(scan_step, (final_state, first_prediction), None, length=steps)
 
         return jnp.swapaxes(predictions, 0, 1)
-
-    def _generate_closed_loop_naive(
-        self,
-        history: jnp.ndarray,
-        steps: int,
-        projection_fn: Callable[[jnp.ndarray], jnp.ndarray],
-        verbose: bool = True
-    ) -> jnp.ndarray:
-        predictions = []
-        current_history = history
-        if verbose:
-            print(f"[Closed-Loop] Generating {steps} steps (Naive Loop)...")
-        for _ in tqdm(range(steps), desc="[Closed-Loop]", unit="step", leave=False, disable=not verbose):
-             features = self._extract_features(current_history)
-             if self.readout is not None:
-                 pred_seq = self.readout.predict(features)
-             else:
-                 pred_seq = features
-             last_pred = pred_seq[:, -1:, :]
-             predictions.append(last_pred)
-
-             pred_to_append = last_pred
-             if projection_fn:
-                  p_flat = last_pred.reshape(-1, last_pred.shape[-1])
-                  p_proj = projection_fn(p_flat).reshape(last_pred.shape[0], 1, -1)
-                  pred_to_append = p_proj
-
-             current_history = jnp.concatenate([current_history, pred_to_append], axis=1)
-
-        return jnp.concatenate(predictions, axis=1)
 
     # ------------------------------------------------------------------ #
     # Run                                                                #
@@ -169,17 +114,17 @@ class UniversalPipeline:
 
         # 2. Extract Features
         print("\n=== Step 6: Feature Extraction / Aggregation ===")
-        train_features = self.batch_transform(train_X, batch_size=feature_batch_size)
-        print_feature_stats(train_features, "post_train_features") # Moved to reporting
+        train_features = batched_compute(self.model, train_X, feature_batch_size, desc="[Extracting] train")
+        print_feature_stats(train_features, "post_train_features")
 
         val_Z = None
         val_y = processed.val_y
         if processed.val_X is not None and processed.val_y is not None:
-            val_Z = self.batch_transform(processed.val_X, batch_size=feature_batch_size)
-            print_feature_stats(val_Z, "post_val_features") # Moved to reporting
+            val_Z = batched_compute(self.model, processed.val_X, feature_batch_size, desc="[Extracting] val")
+            print_feature_stats(val_Z, "post_val_features")
 
-        test_features = self.batch_transform(test_X, batch_size=feature_batch_size)
-        print_feature_stats(test_features, "post_test_features") # Moved to reporting
+        test_features = batched_compute(self.model, test_X, feature_batch_size, desc="[Extracting] test")
+        print_feature_stats(test_features, "post_test_features")
 
         print("\n=== Step 7: Readout (Ridge Regression) with val data ===")
 
