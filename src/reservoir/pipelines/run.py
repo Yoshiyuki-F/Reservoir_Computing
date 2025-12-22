@@ -182,15 +182,17 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
     desc = f"[Projection] (Batch: {batch_size})"
     print(f"Applying Projection in batches of {batch_size}...")
     projected_train = batched_compute(projection, np.asarray(train_X), batch_size, desc=desc + "train")
+    del train_X  # メモリ解放
 
     projected_val = None
     if val_X is not None:
         projected_val = batched_compute(projection, np.asarray(val_X), batch_size, desc=desc + "val")
+        del val_X  # メモリ解放
 
     projected_test = None
     if test_X is not None:
         projected_test = batched_compute(projection, np.asarray(test_X), batch_size, desc=desc + "test")
-
+        del test_X  # メモリ解放
     
     # Use full 3D shape
     projected_shape = projected_train.shape # (Batch, Time, ProjUnits)

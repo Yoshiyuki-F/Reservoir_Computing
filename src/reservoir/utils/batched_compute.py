@@ -43,8 +43,8 @@ def batched_compute(
     output_shape = (n_samples,) + dummy_out_jax.shape[1:]
     dtype = dummy_out_jax.dtype
 
-    # 2. CPU側に結果格納用のメモリを確保
-    output = np.empty(output_shape, dtype=dtype)
+    # 2. CPU側に結果格納用のメモリを確保 (float32でメモリ節約)
+    output = np.empty(output_shape, dtype=np.float32)
 
     # 3. JITコンパイル済みの実行関数を用意
     @jax.jit
