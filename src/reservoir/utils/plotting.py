@@ -175,7 +175,7 @@ def plot_classification_results(
     print(f"分類結果を '{output_path}' に保存しました。")
 
 
-def plot_loss_history(history: Sequence[float], filename: str, title: str = "Loss Curve") -> None:
+def plot_loss_history(history: Sequence[float], filename: str, title: str = "Loss Curve", learning_rate: Optional[float] = None) -> None:
     """Plot a generic loss history curve and save to outputs."""
     output_path = _resolve_output_path(filename)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +183,13 @@ def plot_loss_history(history: Sequence[float], filename: str, title: str = "Los
     plt.figure(figsize=(6, 4))
     plt.plot(range(1, len(history) + 1), history, marker="o")
     plt.yscale("log")
-    plt.title(title)
+    
+    # Add learning rate to title if provided
+    full_title = title
+    if learning_rate is not None:
+        full_title = f"{title} (LR={learning_rate:.4f})"
+    plt.title(full_title)
+    
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.grid(True, linestyle="--", alpha=0.6)

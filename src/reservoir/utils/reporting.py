@@ -123,7 +123,7 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
     print("=" * 40 + "\n")
 
 
-def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title: str) -> None:
+def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title: str, learning_rate: Optional[float] = None) -> None:
     if not isinstance(training_logs, dict):
         return
     loss_history = training_logs.get("loss_history")
@@ -134,7 +134,7 @@ def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title:
     except Exception as exc:  # pragma: no cover
         print(f"Skipping distillation loss plotting due to import error: {exc}")
         return
-    plot_loss_history(loss_history, save_path, title=title)
+    plot_loss_history(loss_history, save_path, title=title, learning_rate=learning_rate)
 
 
 def plot_classification_report(
@@ -295,7 +295,11 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         # Include hidden layers info for FNN readout
         if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
             layers_str = "-".join(str(int(v)) for v in readout.hidden_layers)
-            filename_parts.append(f"{readout_type}{layers_str}")
+            lr = getattr(training_obj, 'learning_rate', None) if training_obj else None
+            if lr is not None:
+                filename_parts.append(f"{readout_type}{layers_str}_LR{lr:.0e}")
+            else:
+                filename_parts.append(f"{readout_type}{layers_str}")
         else:
             filename_parts.append(f"{readout_type}RO")
 
@@ -334,7 +338,8 @@ def generate_report(
     if training_logs:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
         loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
-        plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss")
+        lr = getattr(training_obj, 'learning_rate', None)
+        plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss", learning_rate=lr)
 
     # Ridge search reporting
     train_res = _safe_get(results, "train", {})
@@ -385,7 +390,8 @@ def generate_report(
             fnn_loss_history = readout.training_logs.get("loss_history")
             if fnn_loss_history:
                 loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
-                plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss")
+                lr = getattr(training_obj, 'learning_rate', None)
+                plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss", learning_rate=lr)
     elif metric == "mse":
         # Regression Plots
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
