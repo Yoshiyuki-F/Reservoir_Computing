@@ -125,7 +125,8 @@ class UniversalPipeline:
         test_features = batched_compute(self.model, test_X, feature_batch_size, desc="[Extracting] test")
         print_feature_stats(test_features, "post_test_features")
 
-        print("\n=== Step 7: Readout (Ridge Regression) with val data ===")
+        readout_name = type(self.readout).__name__ if self.readout else "None"
+        print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
 
         # Align lengths Helper (Local)
         def align_length(feat, targ):
@@ -160,11 +161,13 @@ class UniversalPipeline:
             vy_reshaped = val_y.reshape(-1, val_y.shape[-1]) if val_y.ndim == 3 else val_y
             
             # Use fit_and_search for hyperparameter optimization
+            # Set lambda candidates if readout supports it
+            if hasattr(self.readout, 'lambda_candidates'):
+                self.readout.lambda_candidates = ridge_lambdas
             best_lambda, search_history, weight_norms = self.readout.fit_and_search(
                 tf_reshaped, ty_reshaped,
                 vf_reshaped, vy_reshaped,
-                ridge_lambdas,
-                metric="accuracy"
+                task_type=dataset_meta.task_type
             )
             best_score = search_history.get(best_lambda, 0.0)
             print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")

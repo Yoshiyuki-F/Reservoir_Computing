@@ -273,7 +273,7 @@ def _build_model_stack(
     print_topology(topo_meta)
 
     metric = "accuracy" if dataset_meta.task_type is TaskType.CLASSIFICATION else "mse"
-    readout = ReadoutFactory.create_readout(config.readout)
+    readout = ReadoutFactory.create_readout(config.readout, dataset_meta.training)
     return ModelStack(
         model=model,
         readout=readout,

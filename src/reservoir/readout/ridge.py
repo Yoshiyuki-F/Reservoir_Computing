@@ -4,19 +4,25 @@ Ridge regression implementation compliant with ReadoutModule protocol.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Sequence
 
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
 
 from reservoir.core.interfaces import ReadoutModule
+from reservoir.core.identifiers import TaskType
 
 
 class RidgeRegression(ReadoutModule):
     """Ridge regression readout solved with JAX linear algebra."""
 
-    def __init__(self, ridge_lambda: float, use_intercept: bool) -> None:
+    def __init__(
+        self,
+        ridge_lambda: float,
+        use_intercept: bool,
+        lambda_candidates: Optional[Sequence[float]] = None
+    ) -> None:
         if ridge_lambda is None:
             raise ValueError("RidgeRegression requires an explicit, positive ridge_lambda.")
         lambda_val = float(ridge_lambda)
@@ -24,6 +30,7 @@ class RidgeRegression(ReadoutModule):
             raise ValueError(f"RidgeRegression ridge_lambda must be positive, got {lambda_val}.")
         self.ridge_lambda = lambda_val
         self.use_intercept = bool(use_intercept)
+        self.lambda_candidates = lambda_candidates
         self.coef_: Optional[jnp.ndarray] = None
         self.intercept_: Optional[jnp.ndarray] = None
         self.input_dim_: Optional[int] = None
@@ -83,14 +90,13 @@ class RidgeRegression(ReadoutModule):
         train_targets: jnp.ndarray,
         val_states: jnp.ndarray,
         val_targets: jnp.ndarray,
-        lambdas: Optional[jnp.ndarray],
         *,
-        metric: str = "mse",
-    ) -> tuple[float, Dict[float, float], Dict[float, float]]:
+        task_type: TaskType = TaskType.REGRESSION,
+    ) -> tuple[float, dict[float, float], dict[float, float]]:
         if val_states is None or val_targets is None:
             raise ValueError("Validation data is required for hyperparameter search.")
 
-        lambda_candidates = [float(lam) for lam in (lambdas or [self.ridge_lambda])]
+        lambda_candidates = [float(lam) for lam in (self.lambda_candidates or [self.ridge_lambda])]
         if not lambda_candidates:
             raise ValueError("At least one lambda candidate must be provided.")
         if any(lam <= 0.0 for lam in lambda_candidates):
@@ -125,7 +131,7 @@ class RidgeRegression(ReadoutModule):
         weights_all = jnp.stack(weights_list)
         preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
 
-        if metric == "accuracy":
+        if task_type is TaskType.CLASSIFICATION:
             true_labels = y_val.ravel() if y_val_is_1d else jnp.argmax(y_val, axis=-1)
             pred_labels = preds_all if preds_all.ndim == 2 else jnp.argmax(preds_all, axis=-1)
             accs = jnp.mean(pred_labels == true_labels, axis=-1)

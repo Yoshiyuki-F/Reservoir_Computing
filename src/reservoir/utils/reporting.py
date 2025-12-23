@@ -258,7 +258,7 @@ def plot_classification_report(
     )
 
 
-def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str) -> list[str]:
+def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None) -> list[str]:
     feature_shape = None
     student_layers = None
     readout_label = None
@@ -288,6 +288,16 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
             filename_parts.append(f"nr{int(feature_shape[-1])}")
         else:
             filename_parts.append("nr0")
+
+    # Readout type suffix
+    if readout is not None:
+        readout_type = type(readout).__name__
+        if "Ridge" in readout_type:
+            filename_parts.append("RidgeRO")
+        elif "FNN" in readout_type:
+            filename_parts.append("FNNRO")
+        else:
+            filename_parts.append(f"{readout_type}RO")
 
     # NN marker
     if is_fnn:
@@ -322,7 +332,7 @@ def generate_report(
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
     if training_logs:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
         loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
         plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss")
 
@@ -340,7 +350,7 @@ def generate_report(
 
     # Classification plots
     if task_val and str(task_val).lower().find("class") != -1:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
         confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
         selected_lambda = None
         lambda_norm = None
@@ -372,7 +382,7 @@ def generate_report(
         )
     elif metric == "mse":
         # Regression Plots
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
         prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
         test_mse = _safe_get(results, "test", {}).get("mse")
         scaler = results.get("scaler")

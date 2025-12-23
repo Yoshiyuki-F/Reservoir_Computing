@@ -264,7 +264,7 @@ class FNNReadoutConfig:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"hidden_layers": tuple(self.hidden_layers)}
+        return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
 ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig]

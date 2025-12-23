@@ -42,7 +42,7 @@ DEFAULT_PREPROCESS = PreprocessingConfig(
 )
 
 DEFAULT_PROJECTION = ProjectionConfig(
-    n_units=1200,
+    n_units=100,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
@@ -50,7 +50,7 @@ DEFAULT_PROJECTION = ProjectionConfig(
 )
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
-DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=[100])
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 
 
 "=============================================Classification Presets============================================"
@@ -70,7 +70,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_FNN_READOUT
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 FNN_DISTILLATION_PRESET = PipelineConfig(
@@ -85,7 +85,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
             hidden_layers=(1000,1000),
         ),
     ),
-    readout=DEFAULT_FNN_READOUT
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 "=============================================Time series Presets============================================"

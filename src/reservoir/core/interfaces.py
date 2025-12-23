@@ -6,8 +6,10 @@ Transformer / Readout contracts referenced throughout the codebase.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Protocol, runtime_checkable, Sequence, Tuple
+from typing import Any, Dict, Optional, Protocol, runtime_checkable
 import jax.numpy as jnp
+
+from reservoir.core.identifiers import TaskType
 
 
 @runtime_checkable
@@ -29,10 +31,7 @@ class Transformer(Protocol):
 
 @runtime_checkable
 class ReadoutModule(Protocol):
-    """Protocol for readout components (e.g., ridge regression)."""
-
-    ridge_lambda: float
-    coef_: Optional[jnp.ndarray]
+    """Protocol for readout components (e.g., ridge regression, FNN)."""
 
     def fit(self, states: Any, targets: Any) -> Any:
         ...
@@ -46,10 +45,9 @@ class ReadoutModule(Protocol):
         train_targets: Any,
         val_states: Any,
         val_targets: Any,
-        lambdas: Sequence[float] | Any,
         *,
-        metric: str = "mse",
-    ) -> Tuple[float, Dict[float, float], Dict[float, float]]:
+        task_type: TaskType = TaskType.REGRESSION,
+    ) -> tuple[float, dict[float, float], dict[float, float]]:
         ...
 
     def to_dict(self) -> Dict[str, Any]:

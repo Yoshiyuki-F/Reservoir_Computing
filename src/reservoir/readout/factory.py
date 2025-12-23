@@ -1,28 +1,33 @@
 """Factory for creating readout instances from configuration."""
 from __future__ import annotations
 
-from typing import Optional, Any
+from typing import Optional
 
-from reservoir.models.config import RidgeReadoutConfig, ReadoutConfig
+from reservoir.models.config import RidgeReadoutConfig, FNNReadoutConfig, ReadoutConfig
 from reservoir.readout.ridge import RidgeRegression
+from reservoir.readout.fnn_readout import FNNReadout
+from reservoir.core.interfaces import ReadoutModule
+from reservoir.training.config import TrainingConfig
 
 class ReadoutFactory:
     """Builds readout modules from ReadoutConfig."""
 
     @staticmethod
-    def create_readout(config: Optional[ReadoutConfig]) -> Any:
+    def create_readout(
+        config: Optional[ReadoutConfig],
+        training_config: Optional[TrainingConfig] = None
+    ) -> Optional[ReadoutModule]:
         # None (End-to-End) の場合
         if config is None:
             return None
 
         # Ridgeの場合
         if isinstance(config, RidgeReadoutConfig):
-            # ここで Config(データ) を Instance(オブジェクト) に変換する
             return RidgeRegression(ridge_lambda=config.init_lambda, use_intercept=config.use_intercept)
 
-        # 将来の拡張 (FNN, SVD etc.)
+        # FNNの場合
         elif isinstance(config, FNNReadoutConfig):
-            return FNN() #TODO use FNN so fnn can be used for readout
+            return FNNReadout(hidden_layers=config.hidden_layers, training_config=training_config)
 
         raise TypeError(f"ReadoutFactory received unknown config type: {type(config)}")
 
