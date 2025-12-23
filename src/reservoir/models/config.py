@@ -160,19 +160,7 @@ class ProjectionConfig:
         }
 
 
-@dataclass(frozen=True)
-class RidgeReadoutConfig:
-    """Step 7 readout configuration (structure/defaults)."""
-    init_lambda: float
-    use_intercept: bool
 
-    def validate(self, context: str = "readout") -> "RidgeReadoutConfig":
-        if float(self.init_lambda) <= 0:
-            raise ValueError(f"{context}: init_lambda must be positive.")
-        return self
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
 
 
 @dataclass(frozen=True)
@@ -252,6 +240,31 @@ class FNNConfig:
         if any(width < 0 for width in layers):
             raise ValueError(f"{prefix}hidden_layers values must be non-negative.")
 
+
+@dataclass(frozen=True)
+class RidgeReadoutConfig:
+    """Step 7 readout configuration (structure/defaults)."""
+    init_lambda: float
+    use_intercept: bool
+
+    def validate(self, context: str = "ridgereadout") -> "RidgeReadoutConfig":
+        if float(self.init_lambda) <= 0:
+            raise ValueError(f"{context}: init_lambda must be positive.")
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
+
+@dataclass(frozen=True)
+class FNNReadoutConfig:
+    """Step 7 readout configuration (structure/fnn)."""
+    hidden_layers: Optional[Tuple[int, ...]]
+
+    def validate(self, context: str = "fnnreadout") -> "FNNReadoutConfig":
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"hidden_layers": tuple(self.hidden_layers)}
 
 
 ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig]

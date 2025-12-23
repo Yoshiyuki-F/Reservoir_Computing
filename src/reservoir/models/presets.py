@@ -49,7 +49,7 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-DEFAULT_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
+DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
@@ -66,7 +66,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_READOUT
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 "=============================================Time series Presets============================================"
@@ -94,7 +94,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
     ),
-    readout=DEFAULT_READOUT
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 
@@ -107,7 +107,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
-    readout=DEFAULT_READOUT,
+    readout=DEFAULT_RIDGE_READOUT,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
