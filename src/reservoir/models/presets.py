@@ -15,7 +15,7 @@ from reservoir.models.config import (
     DistillationConfig,
     FNNConfig,
     PipelineConfig,
-    RidgeReadoutConfig,
+    RidgeReadoutConfig, FNNReadoutConfig,
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -50,6 +50,10 @@ DEFAULT_PROJECTION = ProjectionConfig(
 )
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=[100])
+
+
+"=============================================Classification Presets============================================"
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
@@ -66,7 +70,22 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_FNN_READOUT
+)
+
+FNN_DISTILLATION_PRESET = PipelineConfig(
+    name="fnn-distillation",
+    model_type=Model.FNN_DISTILLATION,
+    description="Feedforward Neural Network with Reservoir Distillation",
+    preprocess=DEFAULT_PREPROCESS,
+    projection=DEFAULT_PROJECTION,
+    model=DistillationConfig(
+        teacher=CLASSICAL_RESERVOIR_DYNAMICS,
+        student=FNNConfig(
+            hidden_layers=(1000,1000),
+        ),
+    ),
+    readout=DEFAULT_FNN_READOUT
 )
 
 "=============================================Time series Presets============================================"
@@ -98,25 +117,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
 )
 
 
-"=============================================FNN Presets============================================"
-
-
-FNN_DISTILLATION_PRESET = PipelineConfig(
-    name="fnn-distillation",
-    model_type=Model.FNN_DISTILLATION,
-    description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=DEFAULT_PREPROCESS,
-    projection=DEFAULT_PROJECTION,
-    readout=DEFAULT_RIDGE_READOUT,
-    model=DistillationConfig(
-        teacher=CLASSICAL_RESERVOIR_DYNAMICS,
-        student=FNNConfig(
-            hidden_layers=(1000,1000),
-        ),
-    ),
-)
-
-
+"=============================================FNN EndToEnd Presets============================================"
 
 FNN_PRESET = PipelineConfig(
     name="fnn",

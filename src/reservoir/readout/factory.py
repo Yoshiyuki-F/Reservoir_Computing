@@ -21,8 +21,8 @@ class ReadoutFactory:
             return RidgeRegression(ridge_lambda=config.init_lambda, use_intercept=config.use_intercept)
 
         # 将来の拡張 (FNN, SVD etc.)
-        # elif isinstance(config, FNNReadoutConfig):
-        #     return ...
+        elif isinstance(config, FNNReadoutConfig):
+            return FNN() #TODO use FNN so fnn can be used for readout
 
         raise TypeError(f"ReadoutFactory received unknown config type: {type(config)}")
 
