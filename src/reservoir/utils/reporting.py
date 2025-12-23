@@ -292,12 +292,7 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
     # Readout type suffix
     if readout is not None:
         readout_type = type(readout).__name__
-        if "Ridge" in readout_type:
-            filename_parts.append("RidgeRO")
-        elif "FNN" in readout_type:
-            filename_parts.append("FNNRO")
-        else:
-            filename_parts.append(f"{readout_type}RO")
+        filename_parts.append(f"{readout_type}RO")
 
     # NN marker
     if is_fnn:
