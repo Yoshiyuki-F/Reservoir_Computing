@@ -56,7 +56,7 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
 
-DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,1000))
 
 
 "=============================================Classification Presets============================================"

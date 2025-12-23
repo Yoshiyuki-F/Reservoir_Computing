@@ -270,10 +270,20 @@ def _build_model_stack(
     details_meta = topo_meta.get("details", {}) or {}
     details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
     topo_meta["details"] = details_meta
+    
+    # Add readout name to details for topology printing
+    readout = ReadoutFactory.create_readout(config.readout, dataset_meta.training)
+    if readout is not None:
+        readout_name = type(readout).__name__
+        if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
+            readout_name += f" ({'-'.join(str(v) for v in readout.hidden_layers)})"
+        details_meta["readout"] = readout_name
+    else:
+        details_meta["readout"] = None
+    
     print_topology(topo_meta)
 
     metric = "accuracy" if dataset_meta.task_type is TaskType.CLASSIFICATION else "mse"
-    readout = ReadoutFactory.create_readout(config.readout, dataset_meta.training)
     return ModelStack(
         model=model,
         readout=readout,

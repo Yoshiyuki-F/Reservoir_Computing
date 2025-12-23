@@ -380,6 +380,13 @@ def generate_report(
             precalc_preds=precalc_preds,  # <--- ここで渡す
             preprocessors=preprocessors,
         )
+        
+        # FNN Readout Loss Plot
+        if readout is not None and hasattr(readout, 'training_logs') and readout.training_logs:
+            fnn_loss_history = readout.training_logs.get("loss_history")
+            if fnn_loss_history:
+                loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
+                plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss")
     elif metric == "mse":
         # Regression Plots
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)

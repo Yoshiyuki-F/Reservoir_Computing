@@ -96,7 +96,9 @@ def print_topology(meta: Dict[str, Any]) -> None:
         feat_dim_str = _fmt_dim(s_feat)
         out_dim_str = _fmt_dim(s_out)
         
-        if s_feat and len(s_feat) > 0 and s_out and len(s_out) > 0:
+        # W_out only makes sense for Ridge (single weight matrix), not for FNN
+        is_ridge = "Ridge" in readout_label
+        if is_ridge and s_feat and len(s_feat) > 0 and s_out and len(s_out) > 0:
              w_rows = s_feat[-1]
              w_cols = s_out[-1]
              w_size = f", W_out=[{w_rows}x{w_cols}]"

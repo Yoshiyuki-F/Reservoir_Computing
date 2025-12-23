@@ -24,6 +24,7 @@ class FNNReadout(ReadoutModule):
         self._model: Optional[FNNModel] = None
         self._input_dim: Optional[int] = None
         self._output_dim: Optional[int] = None
+        self.training_logs: Optional[Dict[str, Any]] = None
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "FNNReadout":
         """Fit the FNN readout on states and targets."""
@@ -49,8 +50,8 @@ class FNNReadout(ReadoutModule):
             output_dim=self._output_dim
         )
 
-        # Train the model
-        self._model.train(X, y)
+        # Train the model and store logs
+        self.training_logs = self._model.train(X, y)
         return self
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
