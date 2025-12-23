@@ -15,7 +15,7 @@ import numpy as np
 
 # Core Imports
 from reservoir.models import ModelFactory
-from reservoir.core.identifiers import Dataset, TaskType
+from reservoir.core.identifiers import Dataset
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
@@ -76,9 +76,7 @@ def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfi
     print("=== Step 1: Loading Dataset ===")
     dataset_enum, dataset_preset = dataset, DATASET_REGISTRY.get(dataset)
 
-    training_cfg = training_override or replace(
-        get_training_preset("standard"), classification=dataset.task_type is TaskType.CLASSIFICATION
-    )
+    training_cfg = training_override or get_training_preset("standard")
     dataset_split = load_dataset_with_validation_split(
         dataset,
         training_cfg,
@@ -95,7 +93,7 @@ def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfi
         dataset_name=dataset_preset.name,
         preset=dataset_preset,
         training=training_cfg,
-        task_type=dataset_preset.task_type,
+        classification=dataset_preset.classification,
         input_shape=input_shape,
     )
     return metadata, dataset_split
@@ -125,7 +123,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
             
         # Fix: For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
         # This ensures model output is scaled, matching the inverse_transform expectation.
-        if dataset_meta.task_type == TaskType.REGRESSION:
+        if not dataset_meta.classification:
              print("    [Preprocessing] Applying transforms to targets (y) for REGRESSION task.")
              # Note: fit=False to reuse scaler fitted on X
              if data_split.train_y is not None:
@@ -272,7 +270,8 @@ def _build_model_stack(
     topo_meta["details"] = details_meta
     
     # Add readout name to details for topology printing
-    readout = ReadoutFactory.create_readout(config.readout, dataset_meta.training)
+    is_classification = dataset_meta.classification
+    readout = ReadoutFactory.create_readout(config.readout, is_classification, dataset_meta.training)
     if readout is not None:
         readout_name = type(readout).__name__
         if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
@@ -283,7 +282,7 @@ def _build_model_stack(
     
     print_topology(topo_meta)
 
-    metric = "accuracy" if dataset_meta.task_type is TaskType.CLASSIFICATION else "mse"
+    metric = "accuracy" if dataset_meta.classification else "mse"
     return ModelStack(
         model=model,
         readout=readout,
@@ -334,7 +333,7 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Opti
         config,
         stack.topo_meta,
         **report_payload,
-        task_type=dataset_meta.task_type,
+        classification=dataset_meta.classification,
     )
 
     return results

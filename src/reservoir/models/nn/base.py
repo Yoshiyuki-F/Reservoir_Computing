@@ -42,13 +42,13 @@ class BaseModel(ABC):
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
 
-    def __init__(self, model_config: Dict[str, Any], training_config: TrainingConfig) -> None:
+    def __init__(self, model_config: Dict[str, Any], training_config: TrainingConfig, classification: bool = False) -> None:
         self.model_config = model_config
         self.training_config = training_config
         self.learning_rate: float = float(training_config.learning_rate)
         self.epochs: int = int(training_config.epochs)
         self.batch_size: int = int(training_config.batch_size)
-        self.classification: bool = bool(training_config.classification)
+        self.classification: bool = classification
         self.seed: int = int(model_config.get("seed", training_config.seed))
         self._model_def = self._create_model_def()
         self._state: Optional[train_state.TrainState] = None

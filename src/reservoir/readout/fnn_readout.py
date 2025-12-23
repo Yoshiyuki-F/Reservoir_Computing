@@ -17,10 +17,12 @@ class FNNReadout(ReadoutModule):
     def __init__(
         self,
         hidden_layers: Optional[Tuple[int, ...]] = None,
-        training_config: Optional[TrainingConfig] = None
+        training_config: Optional[TrainingConfig] = None,
+        classification: bool = False
     ) -> None:
         self.hidden_layers = hidden_layers or ()
         self.training_config = training_config
+        self.classification = classification
         self._model: Optional[FNNModel] = None
         self._input_dim: Optional[int] = None
         self._output_dim: Optional[int] = None
@@ -47,7 +49,8 @@ class FNNReadout(ReadoutModule):
             model_config=fnn_config,
             training_config=self.training_config,
             input_dim=self._input_dim,
-            output_dim=self._output_dim
+            output_dim=self._output_dim,
+            classification=self.classification
         )
 
         # Train the model and store logs

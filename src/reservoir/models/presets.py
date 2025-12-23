@@ -8,7 +8,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from reservoir.core.presets import StrictRegistry
-from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset, TaskType
+from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset
 from reservoir.models.config import (
     PreprocessingConfig,
     ProjectionConfig,
@@ -25,7 +25,7 @@ def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     # Check if regression task to use time-series optimized preset
     ds_preset = get_dataset_preset(dataset)
 
-    if ds_preset.task_type == TaskType.REGRESSION and model == Model.CLASSICAL_RESERVOIR:
+    if not ds_preset.classification and model == Model.CLASSICAL_RESERVOIR:
         return TIME_CLASSICAL_RESERVOIR_PRESET
     
     preset = StrictRegistry(MODEL_PRESETS).get(model)
@@ -56,7 +56,7 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
 
-DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,1000))
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 
 
 "=============================================Classification Presets============================================"
@@ -76,7 +76,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_FNN_READOUT
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 FNN_DISTILLATION_PRESET = PipelineConfig(

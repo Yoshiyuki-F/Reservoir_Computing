@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 
-from reservoir.core.identifiers import Dataset, TaskType
+from reservoir.core.identifiers import Dataset
 from reservoir.data.generators import (
     generate_sine_data,
     generate_mnist_sequence_data,

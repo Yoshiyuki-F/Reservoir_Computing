@@ -12,7 +12,7 @@ from .config import (
     MackeyGlassConfig,
     MNISTConfig, DatasetPreset,
 )
-from reservoir.core.identifiers import Dataset, TaskType
+from reservoir.core.identifiers import Dataset
 
 
 
@@ -20,7 +20,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
     Dataset.SINE_WAVE: DatasetPreset(
         name="sine_wave",
         description="Multi-frequency sine wave composite",
-        task_type=TaskType.REGRESSION,
+        classification=False,
         config=SineWaveConfig(
             n_input=1,
             n_output=1,
@@ -35,7 +35,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
     Dataset.LORENZ: DatasetPreset(
         name="lorenz",
         description="Lorenz attractor chaotic time series",
-        task_type=TaskType.REGRESSION,
+        classification=False,
         config=LorenzConfig(
             n_input=1,
             n_output=1,
@@ -53,7 +53,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
     Dataset.LORENZ96: DatasetPreset(
         name="lorenz96",
         description="Lorenz 96 chaotic system",
-        task_type=TaskType.REGRESSION,
+        classification=False,
         config=Lorenz96Config(
             n_input=40,
             n_output=40,
@@ -69,7 +69,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
     Dataset.MACKEY_GLASS: DatasetPreset(
         name="mackey_glass",
         description="Mackey-Glass chaotic time series",
-        task_type=TaskType.REGRESSION,
+        classification=False,
         config=MackeyGlassConfig(
             n_input=1,
             n_output=1,
@@ -89,7 +89,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
     Dataset.MNIST: DatasetPreset(
         name="mnist",
         description="MNIST digit classification",
-        task_type=TaskType.CLASSIFICATION,
+        classification=True,
         config=MNISTConfig(
             n_input=28,
             n_output=10,

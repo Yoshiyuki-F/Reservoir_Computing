@@ -18,7 +18,7 @@ from reservoir.layers.adapters import Flatten
 class FNNModel(BaseFlaxModel):
     """Wrap FNNModule with BaseModel API using Flatten Adapter."""
 
-    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig, input_dim: int, output_dim: int):
+    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig, input_dim: int, output_dim: int, classification: bool = False):
         if not isinstance(model_config, FNNConfig):
             raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")
         # input_dimの正当性チェックは残すが、実際のデータ形状との整合性はFNNクラスに任せる
@@ -31,7 +31,7 @@ class FNNModel(BaseFlaxModel):
         # input_dimはConfigとして保存するが、実際の初期化時には無視される（Flaxの推論に任せる）
         self.layer_dims: Sequence[int] = (int(input_dim), *hidden_layers, int(output_dim))
 
-        super().__init__({"layer_dims": self.layer_dims}, training_config)
+        super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
         self.adapter = Flatten()
 
     def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **kwargs: Any) -> Dict[str, Any]:

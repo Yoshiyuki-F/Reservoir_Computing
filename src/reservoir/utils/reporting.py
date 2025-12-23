@@ -326,7 +326,7 @@ def generate_report(
     training_obj: Any,
     dataset_name: str,
     model_type_str: str,
-    task_type: Optional[Any] = None,
+    classification: bool = False,
     preprocessors: Optional[list[Any]] = None,
 ) -> None:
     # Loss plotting (distillation)
@@ -338,8 +338,7 @@ def generate_report(
 
     # Ridge search reporting
     train_res = _safe_get(results, "train", {})
-    task_val = task_type if task_type is not None else getattr(config, "task_type", None)
-    metric = "accuracy" if task_val and str(task_val).lower().find("class") != -1 else "mse"
+    metric = "accuracy" if classification else "mse"
     # print_ridge_search_results(train_res, metric)
 
     # ---------------------------------------------------------
@@ -349,7 +348,7 @@ def generate_report(
     precalc_preds = _safe_get(results, "outputs", {})
 
     # Classification plots
-    if task_val and str(task_val).lower().find("class") != -1:
+    if classification:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
         confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
         selected_lambda = None

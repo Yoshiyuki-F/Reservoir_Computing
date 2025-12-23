@@ -13,7 +13,6 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         batch_size= 2048,
         epochs = 10,
         learning_rate = 0.001,
-        classification = False,
         seed= 0,
 
         # Data Splitting

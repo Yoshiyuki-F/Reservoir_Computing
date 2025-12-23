@@ -27,16 +27,6 @@ class Model(str, enum.Enum):
         return self.value
 
 
-class TaskType(str, enum.Enum):
-    """タスクの種類。"""
-
-    REGRESSION = "regression"
-    CLASSIFICATION = "classification"
-
-    def __str__(self) -> str:
-        return self.value
-
-
 class Dataset(str, enum.Enum):
     """データセットの種類。Values must match DATASET_REGISTRY keys exactly."""
 
@@ -45,13 +35,6 @@ class Dataset(str, enum.Enum):
     MACKEY_GLASS = "mackey_glass"
     LORENZ96 = "lorenz96"
     MNIST = "mnist"
-
-    @property
-    def task_type(self) -> TaskType:
-        """このデータセットが主に属するタスク種別。"""
-        if self is Dataset.MNIST:
-            return TaskType.CLASSIFICATION
-        return TaskType.REGRESSION
 
     def __str__(self) -> str:
         return self.value

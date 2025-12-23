@@ -15,7 +15,8 @@ class ReadoutFactory:
     @staticmethod
     def create_readout(
         config: Optional[ReadoutConfig],
-        training_config: Optional[TrainingConfig] = None
+        classification: bool,
+        training_config: Optional[TrainingConfig] = None,
     ) -> Optional[ReadoutModule]:
         # None (End-to-End) の場合
         if config is None:
@@ -31,7 +32,11 @@ class ReadoutFactory:
 
         # FNNの場合
         elif isinstance(config, FNNReadoutConfig):
-            return FNNReadout(hidden_layers=config.hidden_layers, training_config=training_config)
+            return FNNReadout(
+                hidden_layers=config.hidden_layers,
+                training_config=training_config,
+                classification=classification
+            )
 
         raise TypeError(f"ReadoutFactory received unknown config type: {type(config)}")
 

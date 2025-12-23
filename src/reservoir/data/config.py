@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from reservoir.core.identifiers import TaskType
 
 @dataclass(frozen=True)
 class BaseDatasetConfig:
@@ -50,6 +49,6 @@ class MNISTConfig(BaseDatasetConfig):
 class DatasetPreset:
     name: str
     description: str
-    task_type: TaskType
+    classification: bool
     config: BaseDatasetConfig
     use_dimensions: Optional[tuple[int, ...]]

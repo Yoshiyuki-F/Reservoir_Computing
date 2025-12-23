@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Any, Dict
 
-from reservoir.core.identifiers import  Dataset, TaskType
+from reservoir.core.identifiers import Dataset
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.data import SplitDataset
 from reservoir.data.config import DatasetPreset
@@ -30,7 +30,7 @@ class DatasetMetadata:
     dataset_name: str
     preset: DatasetPreset
     training: TrainingConfig
-    task_type: TaskType
+    classification: bool
     input_shape: tuple[int, ...]
 
 

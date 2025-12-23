@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import ModelStack, FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig
-from reservoir.core.identifiers import TaskType
+
 from reservoir.utils.reporting import (
     calculate_chaos_metrics,
     print_ridge_search_results,
@@ -157,7 +157,7 @@ class UniversalPipeline:
             val_pred = val_Z
 
 
-        elif dataset_meta.task_type is TaskType.CLASSIFICATION:
+        elif dataset_meta.classification:
             # === Classification: Open-Loop Evaluation ===
             print("    [Runner] Classification task: Using Open-Loop evaluation.")
             

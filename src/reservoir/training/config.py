@@ -18,7 +18,6 @@ class TrainingConfig:
     batch_size: int
     epochs: int
     learning_rate: float
-    classification: bool
     seed: int
 
     # Data Splitting
@@ -33,7 +32,6 @@ class TrainingConfig:
             "batch_size": int(self.batch_size),
             "epochs": int(self.epochs),
             "learning_rate": float(self.learning_rate),
-            "classification": bool(self.classification),
             "seed": int(self.seed),
             "train_size": float(self.train_size),
             "val_size": float(self.val_size),
