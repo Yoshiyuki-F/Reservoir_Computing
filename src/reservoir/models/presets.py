@@ -5,6 +5,7 @@ SSOT: all default hyperparameters live in these dataclasses.
 from __future__ import annotations
 
 from typing import Dict, Optional
+import numpy as np
 
 from reservoir.core.presets import StrictRegistry
 from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset, TaskType
@@ -49,7 +50,12 @@ DEFAULT_PROJECTION = ProjectionConfig(
     seed=42,
 )
 
-DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(init_lambda=1e-3, use_intercept=True)
+DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
+    init_lambda=1e-3,
+    use_intercept=True,
+    lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
+)
+
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 
 
@@ -70,7 +76,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=DEFAULT_PREPROCESS,
     projection=DEFAULT_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_FNN_READOUT
 )
 
 FNN_DISTILLATION_PRESET = PipelineConfig(

@@ -1,15 +1,14 @@
 """FNN-based readout module implementing ReadoutModule protocol."""
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 import jax.numpy as jnp
 
-from reservoir.core.identifiers import TaskType
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.training.presets import TrainingConfig
+from reservoir.training.config import TrainingConfig
 
 
 class FNNReadout(ReadoutModule):
@@ -60,27 +59,6 @@ class FNNReadout(ReadoutModule):
             raise RuntimeError("FNNReadout is not fitted yet.")
         X = jnp.asarray(states, dtype=jnp.float32)
         return self._model.predict(X)
-
-    def fit_and_search(
-        self,
-        train_states: jnp.ndarray,
-        train_targets: jnp.ndarray,
-        val_states: jnp.ndarray,
-        val_targets: jnp.ndarray,
-        *,
-        task_type: TaskType = TaskType.REGRESSION,
-    ) -> tuple[float, dict[float, float], dict[float, float]]:
-        self.fit(train_states, train_targets)
-        val_pred = self.predict(val_states)
-
-        if task_type is TaskType.CLASSIFICATION:
-            true_labels = jnp.argmax(val_targets, axis=-1) if val_targets.ndim > 1 else val_targets
-            pred_labels = jnp.argmax(val_pred, axis=-1) if val_pred.ndim > 1 else val_pred
-            score = float(jnp.mean(pred_labels == true_labels))
-        else:
-            score = float(jnp.mean((val_pred - val_targets) ** 2))
-
-        return 0.0, {0.0: score}, {}
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the FNN readout."""

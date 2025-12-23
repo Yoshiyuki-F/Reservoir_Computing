@@ -246,14 +246,21 @@ class RidgeReadoutConfig:
     """Step 7 readout configuration (structure/defaults)."""
     init_lambda: float
     use_intercept: bool
+    lambda_candidates: Optional[Tuple[float, ...]] = None
 
     def validate(self, context: str = "ridgereadout") -> "RidgeReadoutConfig":
         if float(self.init_lambda) <= 0:
             raise ValueError(f"{context}: init_lambda must be positive.")
+        if self.lambda_candidates is not None:
+            if any(float(lam) <= 0.0 for lam in self.lambda_candidates):
+                raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
+        result = {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
+        if self.lambda_candidates is not None:
+            result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
+        return result
 
 @dataclass(frozen=True)
 class FNNReadoutConfig:

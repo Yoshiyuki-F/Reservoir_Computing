@@ -23,7 +23,11 @@ class ReadoutFactory:
 
         # Ridgeの場合
         if isinstance(config, RidgeReadoutConfig):
-            return RidgeRegression(ridge_lambda=config.init_lambda, use_intercept=config.use_intercept)
+            return RidgeRegression(
+                ridge_lambda=config.init_lambda,
+                use_intercept=config.use_intercept,
+                lambda_candidates=config.lambda_candidates
+            )
 
         # FNNの場合
         elif isinstance(config, FNNReadoutConfig):

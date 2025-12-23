@@ -5,13 +5,13 @@ Training configurations and Hyperparameter search spaces.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict
 
 
 @dataclass(frozen=True)
 class TrainingConfig:
-    """Configuration for training loops and hyperparameter search."""
+    """Configuration for training loops."""
     name: str
 
     # Training Loop
@@ -21,19 +21,10 @@ class TrainingConfig:
     classification: bool
     seed: int
 
-    # Readout Regularization search space (used by Ridge or similar)
-    ridge_lambdas: List[float]
-
-    # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
+    # Data Splitting
     train_size: float
     val_size: float
     test_ratio: float
-
-    def __post_init__(self) -> None:
-        if not self.ridge_lambdas:
-            raise ValueError("TrainingConfig.ridge_lambdas must be a non-empty sequence.")
-        if any(float(lam) <= 0.0 for lam in self.ridge_lambdas):
-            raise ValueError("TrainingConfig.ridge_lambdas must contain only positive values.")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, ensuring types are JSON-safe."""
@@ -44,7 +35,6 @@ class TrainingConfig:
             "learning_rate": float(self.learning_rate),
             "classification": bool(self.classification),
             "seed": int(self.seed),
-            "ridge_lambdas": [float(v) for v in self.ridge_lambdas],
             "train_size": float(self.train_size),
             "val_size": float(self.val_size),
             "test_ratio": float(self.test_ratio),

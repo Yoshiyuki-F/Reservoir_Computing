@@ -4,14 +4,13 @@ Ridge regression implementation compliant with ReadoutModule protocol.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, Sequence
+from typing import Dict, Any, Optional
 
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
 
 from reservoir.core.interfaces import ReadoutModule
-from reservoir.core.identifiers import TaskType
 
 
 class RidgeRegression(ReadoutModule):
@@ -21,7 +20,7 @@ class RidgeRegression(ReadoutModule):
         self,
         ridge_lambda: float,
         use_intercept: bool,
-        lambda_candidates: Optional[Sequence[float]] = None
+        lambda_candidates: Optional[tuple] = None,
     ) -> None:
         if ridge_lambda is None:
             raise ValueError("RidgeRegression requires an explicit, positive ridge_lambda.")
@@ -83,80 +82,6 @@ class RidgeRegression(ReadoutModule):
             self.coef_ = self.coef_.ravel()
             self.intercept_ = self.intercept_.ravel()
         return self
-
-    def fit_and_search(
-        self,
-        train_states: jnp.ndarray,
-        train_targets: jnp.ndarray,
-        val_states: jnp.ndarray,
-        val_targets: jnp.ndarray,
-        *,
-        task_type: TaskType = TaskType.REGRESSION,
-    ) -> tuple[float, dict[float, float], dict[float, float]]:
-        if val_states is None or val_targets is None:
-            raise ValueError("Validation data is required for hyperparameter search.")
-
-        lambda_candidates = [float(lam) for lam in (self.lambda_candidates or [self.ridge_lambda])]
-        if not lambda_candidates:
-            raise ValueError("At least one lambda candidate must be provided.")
-        if any(lam <= 0.0 for lam in lambda_candidates):
-            raise ValueError(f"All ridge lambdas must be positive, got {lambda_candidates}.")
-        lambdas_arr = jnp.asarray(lambda_candidates, dtype=jnp.float64)
-
-        X_train, y_train, y_is_1d = self._prepare_xy(train_states, train_targets, update_dim=True)
-        X_val, y_val, y_val_is_1d = self._prepare_xy(val_states, val_targets, update_dim=False)
-
-        XtX = X_train.T @ X_train
-        Xty = X_train.T @ y_train
-        eye = jnp.eye(XtX.shape[0], dtype=XtX.dtype)
-
-        @jax.jit
-        def _solve_pos(lam: jnp.ndarray) -> jnp.ndarray:
-            return jax.scipy.linalg.solve(XtX + lam * eye, Xty, assume_a="pos")
-
-        @jax.jit
-        def _solve_gen(lam: jnp.ndarray) -> jnp.ndarray:
-            return jax.scipy.linalg.solve(XtX + lam * eye, Xty)
-
-        weights_list = []
-        for lam in lambdas_arr:
-            lam_val = float(lam)
-            lam_arr = jnp.asarray(lam_val, dtype=eye.dtype)
-            if lam_val < 1e-7:
-                w = _solve_gen(lam_arr)
-            else:
-                w = _solve_pos(lam_arr)
-            weights_list.append(w)
-
-        weights_all = jnp.stack(weights_list)
-        preds_all = jnp.einsum("nd,kdo->kno", X_val, weights_all)
-
-        if task_type is TaskType.CLASSIFICATION:
-            true_labels = y_val.ravel() if y_val_is_1d else jnp.argmax(y_val, axis=-1)
-            pred_labels = preds_all if preds_all.ndim == 2 else jnp.argmax(preds_all, axis=-1)
-            accs = jnp.mean(pred_labels == true_labels, axis=-1)
-            best_idx = int(jnp.argmax(accs))
-            search_history = {float(lambdas_arr[i]): float(accs[i]) for i in range(accs.shape[0])}
-        else:
-            errors = jnp.mean((preds_all - y_val[None, ...]) ** 2, axis=(1, 2))
-            best_idx = int(jnp.argmin(errors))
-            search_history = {float(lambdas_arr[i]): float(errors[i]) for i in range(errors.shape[0])}
-
-        weight_norms = {float(lambdas_arr[i]): float(jnp.linalg.norm(weights_all[i])) for i in range(weights_all.shape[0])}
-
-        best_lambda = float(lambdas_arr[best_idx])
-        best_weights = weights_all[best_idx]
-        if self.use_intercept:
-            self.intercept_ = jnp.asarray(best_weights[0], dtype=jnp.float64)
-            self.coef_ = jnp.asarray(best_weights[1:], dtype=jnp.float64)
-        else:
-            self.intercept_ = jnp.zeros(best_weights.shape[1], dtype=jnp.float64)
-            self.coef_ = jnp.asarray(best_weights, dtype=jnp.float64)
-        if y_is_1d:
-            self.coef_ = self.coef_.ravel()
-            self.intercept_ = self.intercept_.ravel()
-        self.ridge_lambda = best_lambda
-        return best_lambda, search_history, weight_norms
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
         if self.coef_ is None:

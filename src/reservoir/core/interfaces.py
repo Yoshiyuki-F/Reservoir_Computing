@@ -6,10 +6,8 @@ Transformer / Readout contracts referenced throughout the codebase.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Protocol, runtime_checkable
 import jax.numpy as jnp
-
-from reservoir.core.identifiers import TaskType
 
 
 @runtime_checkable
@@ -37,17 +35,6 @@ class ReadoutModule(Protocol):
         ...
 
     def predict(self, states: Any) -> Any:
-        ...
-
-    def fit_and_search(
-        self,
-        train_states: Any,
-        train_targets: Any,
-        val_states: Any,
-        val_targets: Any,
-        *,
-        task_type: TaskType = TaskType.REGRESSION,
-    ) -> tuple[float, dict[float, float], dict[float, float]]:
         ...
 
     def to_dict(self) -> Dict[str, Any]:

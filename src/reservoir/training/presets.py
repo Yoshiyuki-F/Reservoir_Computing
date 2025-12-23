@@ -1,7 +1,6 @@
 from typing import Dict
 
 from reservoir.training.config import TrainingConfig
-import numpy as np
 
 
 # --- Preset Definitions ---
@@ -17,10 +16,7 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         classification = False,
         seed= 0,
 
-        # Readout Regularization search space (used by Ridge)
-        ridge_lambdas= np.logspace(-12, 3, 30).tolist(),
-
-        # Data Splitting //TODO test is already defined at MNIST so what gives test_ratio?
+        # Data Splitting
         train_size=0.8,
         val_size=0.1,
         test_ratio=0.1,

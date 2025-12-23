@@ -91,7 +91,6 @@ class UniversalPipeline:
         test_y = processed.test_y
 
         cfg = dataset_meta.training
-        ridge_lambdas = cfg.ridge_lambdas
         feature_batch_size = int(cfg.batch_size)
 
         start = time.time()
@@ -106,13 +105,15 @@ class UniversalPipeline:
 
         # 1. Train Model (Reservoir Warmup)
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
-        start_train = time.time()
         train_logs = self.model.train(train_X, train_y) or {}
-        train_time = time.time() - start_train
-        print(f"[Step 5] Model Dynamics completed in {train_time:.2f}s.")
 
-        # 2. Extract Features
+        
+
+
+
+
         print("\n=== Step 6: Feature Extraction / Aggregation ===")
+        # 2. Extract Features
         train_features = batched_compute(self.model, train_X, feature_batch_size, desc="[Extracting] train")
         print_feature_stats(train_features, "post_train_features")
 
@@ -126,6 +127,10 @@ class UniversalPipeline:
         print_feature_stats(test_features, "post_test_features")
 
         readout_name = type(self.readout).__name__ if self.readout else "None"
+
+
+
+
         print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
 
         # Align lengths Helper (Local)
@@ -150,6 +155,8 @@ class UniversalPipeline:
             train_pred = train_features
             test_pred = test_features
             val_pred = val_Z
+
+
         elif dataset_meta.task_type is TaskType.CLASSIFICATION:
             # === Classification: Open-Loop Evaluation ===
             print("    [Runner] Classification task: Using Open-Loop evaluation.")
@@ -160,25 +167,57 @@ class UniversalPipeline:
             vf_reshaped = val_Z.reshape(-1, val_Z.shape[-1]) if val_Z.ndim == 3 else val_Z
             vy_reshaped = val_y.reshape(-1, val_y.shape[-1]) if val_y.ndim == 3 else val_y
             
-            # Use fit_and_search for hyperparameter optimization
-            # Set lambda candidates if readout supports it
-            if hasattr(self.readout, 'lambda_candidates'):
-                self.readout.lambda_candidates = ridge_lambdas
-            best_lambda, search_history, weight_norms = self.readout.fit_and_search(
-                tf_reshaped, ty_reshaped,
-                vf_reshaped, vy_reshaped,
-                task_type=dataset_meta.task_type
-            )
-            best_score = search_history.get(best_lambda, 0.0)
-            print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
+            # Hyperparameter search (sklearn convention: Runner handles search)
+            if hasattr(self.readout, 'ridge_lambda'):
+                # Ridge: Search over lambda candidates
+                lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or [self.readout.ridge_lambda]
+                print(f"    [Runner] Running hyperparameter search over {len(lambda_candidates)} lambdas...")
+                best_score = -float("inf")  # Accuracy: higher is better
+                best_lambda = lambda_candidates[0]
+                
+                for lam in tqdm(lambda_candidates, desc="[Lambda Search]"):
+                    lam_val = float(lam)
+                    self.readout.ridge_lambda = lam_val
+                    self.readout.fit(tf_reshaped, ty_reshaped)
+                    
+                    val_pred = self.readout.predict(vf_reshaped)
+                    score = compute_score(val_pred, vy_reshaped, self.metric_name)
+                    search_history[lam_val] = float(score)
+                    
+                    if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
+                        weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
+                    
+                    if score > best_score:  # Accuracy: higher is better
+                        best_score = score
+                        best_lambda = lam_val
+                
+                # Re-fit with best lambda
+                self.readout.ridge_lambda = best_lambda
+                self.readout.fit(tf_reshaped, ty_reshaped)
+                print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
+                
+                # Report Search Results
+                search_results = {
+                    "search_history": search_history,
+                    "best_lambda": best_lambda,
+                    "weight_norms": weight_norms
+                }
+                print_ridge_search_results(search_results, self.metric_name)
+            else:
+                # FNN or other: Simple fit (no hyperparameter search)
+                print("    [Runner] No hyperparameter search needed for this readout.")
+                self.readout.fit(tf_reshaped, ty_reshaped)
             
             # Predictions
             train_pred = self.readout.predict(train_features)
             test_pred = self.readout.predict(test_features) if test_features is not None else None
             val_pred = self.readout.predict(val_Z) if val_Z is not None else None
+
+            
         else:
             # === Regression: Closed-Loop Hyperparameter Search ===
-            print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(ridge_lambdas)} candidates...")
+            lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or [self.readout.ridge_lambda] if hasattr(self.readout, 'ridge_lambda') else [1e-3]
+            print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(lambda_candidates)} candidates...")
 
             # Setup Projection Fn
             proj_fn = None
@@ -187,7 +226,7 @@ class UniversalPipeline:
 
             # Search Loop
             best_score = float("inf")
-            best_lambda = ridge_lambdas[0]
+            best_lambda = lambda_candidates[0]
 
             # Reshape for fit
             tf_reshaped = train_features.reshape(-1, train_features.shape[-1]) if train_features.ndim == 3 else train_features
@@ -200,7 +239,7 @@ class UniversalPipeline:
                  seed_len = train_X.shape[1]
             seed_data = train_X[:, -seed_len:, :]
 
-            for lam in tqdm(ridge_lambdas, desc="[Closed-Loop Search]"):
+            for lam in tqdm(lambda_candidates, desc="[Closed-Loop Search]"):
                 lam_val = float(lam)
 
                 if hasattr(self.readout, "ridge_lambda"):
@@ -307,10 +346,11 @@ class UniversalPipeline:
              print("    [Runner] Warning: No Test predictions available.")
 
         results["train"] = {
-            "best_lambda": best_lambda,
             "search_history": search_history,
             "weight_norms": weight_norms
         }
+        if best_lambda is not None:
+            results["train"]["best_lambda"] = best_lambda
         results["test"] = {self.metric_name: test_score}
 
         # Validation Result (Prioritize Closed-Loop best_score)
@@ -329,7 +369,6 @@ class UniversalPipeline:
         results["meta"] = {
             "metric": self.metric_name,
             "elapsed_sec": time.time() - start,
-            "pretrain_sec": train_time
         }
 
         # Cleanup

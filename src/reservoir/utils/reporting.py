@@ -292,7 +292,12 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
     # Readout type suffix
     if readout is not None:
         readout_type = type(readout).__name__
-        filename_parts.append(f"{readout_type}RO")
+        # Include hidden layers info for FNN readout
+        if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
+            layers_str = "-".join(str(int(v)) for v in readout.hidden_layers)
+            filename_parts.append(f"{readout_type}{layers_str}")
+        else:
+            filename_parts.append(f"{readout_type}RO")
 
     # NN marker
     if is_fnn:
