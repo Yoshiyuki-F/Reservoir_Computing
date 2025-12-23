@@ -6,7 +6,7 @@ Training configurations and Hyperparameter search spaces.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,10 @@ class TrainingConfig:
     learning_rate: float
     seed: int
 
+    # Learning Rate Scheduler
+    scheduler_type: Optional[str]  # "cosine", "piecewise", or None (constant)
+    warmup_epochs: int
+
     # Data Splitting
     train_size: float
     val_size: float
@@ -32,6 +36,8 @@ class TrainingConfig:
             "batch_size": int(self.batch_size),
             "epochs": int(self.epochs),
             "learning_rate": float(self.learning_rate),
+            "scheduler_type": self.scheduler_type,
+            "warmup_epochs": int(self.warmup_epochs),
             "seed": int(self.seed),
             "train_size": float(self.train_size),
             "val_size": float(self.val_size),

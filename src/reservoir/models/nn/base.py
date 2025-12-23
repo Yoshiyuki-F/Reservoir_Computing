@@ -62,10 +62,36 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # Training utilities                                                 #
     # ------------------------------------------------------------------ #
-    def _init_train_state(self, key: jnp.ndarray, sample_input: jnp.ndarray) -> train_state.TrainState:
+    def _build_optimizer(self, num_train_steps: int) -> optax.GradientTransformation:
+        """Build optimizer with optional learning rate schedule."""
+        scheduler_type = getattr(self.training_config, 'scheduler_type', None)
+        warmup_epochs = getattr(self.training_config, 'warmup_epochs', 0)
+        warmup_steps = warmup_epochs * (num_train_steps // self.epochs) if warmup_epochs > 0 else 0
+        
+        if scheduler_type == "cosine":
+            # Cosine decay with optional warmup
+            if warmup_steps > 0:
+                schedule = optax.warmup_cosine_decay_schedule(
+                    init_value=0.0,
+                    peak_value=self.learning_rate,
+                    warmup_steps=warmup_steps,
+                    decay_steps=num_train_steps,
+                    end_value=0,
+                )
+            else:
+                schedule = optax.cosine_decay_schedule(
+                    init_value=self.learning_rate,
+                    decay_steps=num_train_steps,
+                )
+            return optax.adam(schedule)
+        else:
+            # Constant learning rate
+            return optax.adam(self.learning_rate)
+
+    def _init_train_state(self, key: jnp.ndarray, sample_input: jnp.ndarray, num_train_steps: int) -> train_state.TrainState:
         variables = self._model_def.init(key, sample_input)
         params = variables["params"]
-        tx = optax.adam(self.learning_rate)
+        tx = self._build_optimizer(num_train_steps)
         return train_state.TrainState.create(
             apply_fn=self._model_def.apply,
             params=params,
@@ -102,7 +128,8 @@ class BaseFlaxModel(BaseModel, ABC):
         targets = jax.device_put(jnp.asarray(targets, dtype=jnp.float32))  # 回帰ならfloat, 分類ならint注意
 
         num_samples = inputs.shape[0]
-        # ... (初期化ロジックは同じ) ...
+        num_batches = num_samples // self.batch_size
+        num_train_steps = self.epochs * num_batches  # Total training steps for scheduler
 
         # Initialize State
         rng = jax.random.PRNGKey(self.seed)
@@ -111,7 +138,7 @@ class BaseFlaxModel(BaseModel, ABC):
 
         if self._state is None:
             print(f"    [JAX] Initializing parameters...")
-            self._state = self._init_train_state(init_key, sample_input)
+            self._state = self._init_train_state(init_key, sample_input, num_train_steps)
 
         # JIT function
         @jax.jit
@@ -123,7 +150,6 @@ class BaseFlaxModel(BaseModel, ABC):
             return new_state, loss
 
         loss_history = []
-        num_batches = num_samples // self.batch_size
         limit = num_batches * self.batch_size
 
         print(f"    [JAX] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")

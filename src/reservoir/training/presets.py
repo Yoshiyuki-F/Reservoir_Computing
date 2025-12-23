@@ -15,6 +15,10 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         learning_rate = 0.006,
         seed= 0,
 
+        # Learning Rate Scheduler
+        scheduler_type="cosine",  # "cosine", "piecewise", or None
+        warmup_epochs=10,
+
         # Data Splitting
         train_size=0.8,
         val_size=0.1,
