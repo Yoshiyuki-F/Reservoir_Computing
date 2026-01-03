@@ -32,7 +32,6 @@ class ClassicalReservoir(Reservoir):
         self.rc_connectivity = float(rc_connectivity)
         if not isinstance(aggregation_mode, AggregationMode):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
-        self.aggregation_mode = aggregation_mode
         self.aggregator = StateAggregator(mode=aggregation_mode)
         self._rng = jax.random.PRNGKey(self.seed)
         self._init_weights()
@@ -107,7 +106,7 @@ class ClassicalReservoir(Reservoir):
                 "leak_rate": self.leak_rate,
                 "rc_connectivity": self.rc_connectivity,
                 "seed": self.seed,
-                "aggregation": self.aggregation_mode.value,
+                "aggregation": self.aggregator.mode.value,
             }
         )
         return data
