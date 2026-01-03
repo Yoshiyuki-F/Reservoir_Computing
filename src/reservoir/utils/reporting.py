@@ -258,14 +258,13 @@ def plot_classification_report(
     )
 
 
-def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None) -> list[str]:
+def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
     feature_shape = None
     student_layers = None
     readout_label = None
     preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower or "rnn" in type_lower or "nn" in type_lower
-    has_reservoir = "reservoir" in type_lower or "distillation" in type_lower
     if isinstance(topo_meta, dict):
         shapes = topo_meta.get("shapes") or {}
         feature_shape = shapes.get("feature")
@@ -277,17 +276,13 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
-        has_reservoir = has_reservoir or "reservoir" in topo_type or "distillation" in topo_type
 
     filename_parts = [model_type_str, preprocess_label]
 
-    # Reservoir marker (nr) only if reservoir is involved
-    if has_reservoir:
-        if isinstance(feature_shape, tuple) and feature_shape:
-            # Use last dimension as feature/units count (handles both (N,) and (B, T, N))
-            filename_parts.append(f"nr{int(feature_shape[-1])}")
-        else:
-            filename_parts.append("nr0")
+    # Projection marker (Proj) only if config.projection is defined
+    if config is not None and hasattr(config, 'projection') and config.projection is not None:
+        proj_units = getattr(config.projection, 'n_units', 0)
+        filename_parts.append(f"Proj{int(proj_units)}")
 
     # Readout type suffix
     if readout is not None:
@@ -336,7 +331,7 @@ def generate_report(
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
     if training_logs:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
         loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
         lr = getattr(training_obj, 'learning_rate', None)
         plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss", learning_rate=lr)
@@ -354,7 +349,7 @@ def generate_report(
 
     # Classification plots
     if classification:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
         confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
         selected_lambda = None
         lambda_norm = None
@@ -394,7 +389,7 @@ def generate_report(
                 plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss", learning_rate=lr)
     elif metric == "mse":
         # Regression Plots
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout)
+        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
         prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
         test_mse = _safe_get(results, "test", {}).get("mse")
         scaler = results.get("scaler")
