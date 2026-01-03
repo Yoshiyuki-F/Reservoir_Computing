@@ -254,7 +254,7 @@ def _build_model_stack(
         input_shape=frontend_ctx.input_shape_for_meta,
     )
 
-    topo_meta = model.get_topology_meta() if hasattr(model, "get_topology_meta") else {}
+    topo_meta = model.get_topology_meta()
     if not isinstance(topo_meta, dict):
         topo_meta = {}
     shapes_meta = topo_meta.get("shapes", {}) or {}

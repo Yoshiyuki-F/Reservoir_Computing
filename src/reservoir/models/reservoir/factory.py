@@ -16,7 +16,7 @@ class ReservoirFactory:
     """Factory for creating Reservoir Nodes (Steps 5-6)."""
 
     @staticmethod
-    def create_pipeline(
+    def create_model(
         pipeline_config: PipelineConfig,
         projected_input_dim: int,
         output_dim: int,

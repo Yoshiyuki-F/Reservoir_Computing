@@ -41,7 +41,7 @@ class ModelFactory:
             if not isinstance(config.model, ClassicalReservoirConfig):
                 raise TypeError(f"Reservoir pipelines require ClassicalReservoirConfig, got {type(config.model)}.")
 
-            return ReservoirFactory.create_pipeline(
+            return ReservoirFactory.create_model(
                 pipeline_config=config,
                 projected_input_dim=input_dim,
                 output_dim=output_dim,
@@ -101,5 +101,7 @@ class ModelFactory:
             model.topology_meta = topo_meta
             return model
 
+        if pipeline_enum == Model.NONE:
+            return
 
         raise ValueError(f"Unsupported model_type: {pipeline_enum}")
