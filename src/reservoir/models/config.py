@@ -242,6 +242,12 @@ class FNNConfig:
 
 
 @dataclass(frozen=True)
+class NONEConfig:
+    def __post_init__(self) -> None:
+        pass
+
+
+@dataclass(frozen=True)
 class RidgeReadoutConfig:
     """Step 7 readout configuration (structure/defaults)."""
     init_lambda: float

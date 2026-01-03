@@ -59,7 +59,7 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 
 
-"=============================================Classification Presets============================================"
+"=============================================RESERVOIR and Distillation Classification Presets============================================"
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
@@ -94,7 +94,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT
 )
 
-"=============================================Time series Presets============================================"
+"=============================================RESERVOIR Time series Presets============================================"
 
 #TODO which params are the best for time series
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
@@ -138,6 +138,26 @@ FNN_PRESET = PipelineConfig(
         hidden_layers=(100,),
     ),
     readout=None
+)
+
+
+NONE_PRESET = PipelineConfig(
+    name="none",
+    model_type=Model.NONE,
+    description="No model",
+    preprocess=PreprocessingConfig(
+        method=Preprocessing.MAX_SCALER,
+        poly_degree=1,
+    ),
+    projection=ProjectionConfig(
+        n_units=100,
+        input_scale=0.2,
+        input_connectivity=1.0,
+        bias_scale=0.1,
+        seed=1,
+    ),
+    model=NONEConfig,
+    readout=DEFAULT_RIDGE_READOUT
 )
 
 MODEL_PRESETS: Dict[Model, PipelineConfig] = {
