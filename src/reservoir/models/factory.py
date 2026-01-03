@@ -101,7 +101,16 @@ class ModelFactory:
             model.topology_meta = topo_meta
             return model
 
-        if pipeline_enum == Model.NONE:
-            return
+        if pipeline_enum == Model.PASSTHROUGH:
+            from reservoir.models.config import PassthroughConfig
+            if not isinstance(config.model, PassthroughConfig):
+                raise TypeError(f"PASSTHROUGH pipeline requires PassthroughConfig, got {type(config.model)}.")
+            from reservoir.models.passthrough.factory import PassthroughFactory
+            return PassthroughFactory.create_model(
+                pipeline_config=config,
+                projected_input_dim=input_dim,
+                output_dim=output_dim,
+                input_shape=input_shape,
+            )
 
         raise ValueError(f"Unsupported model_type: {pipeline_enum}")
