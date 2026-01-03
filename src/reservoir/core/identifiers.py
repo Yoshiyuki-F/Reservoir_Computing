@@ -22,7 +22,7 @@ class Model(str, enum.Enum):
     RNN_DISTILLATION = "rnn-distillation"
     QUANTUM_GATE_BASED = "gate_based-quantum-reservoir"
     QUANTUM_ANALOG = "analog-quantum-reservoir"
-    NONE = "none"
+    PASSTHROUGH = "passthrough"
 
     def __str__(self) -> str:
         return self.value

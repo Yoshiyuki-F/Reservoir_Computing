@@ -242,12 +242,13 @@ class FNNConfig:
 
 
 @dataclass(frozen=True)
-class NONEConfig:
+class PassthroughConfig:
+    """Configuration for passthrough model that skips dynamics (Step 5)."""
     aggregation: AggregationMode
 
-    def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
+    def validate(self, context: str = "passthrough") -> "PassthroughConfig":
         if not isinstance(self.aggregation, AggregationMode):
-            raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
+            raise TypeError(f"{context}: aggregation must be AggregationMode, got {type(self.aggregation)}.")
         return self
 
     def to_dict(self) -> dict[str, Any]:

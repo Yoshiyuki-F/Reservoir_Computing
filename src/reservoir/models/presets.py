@@ -16,7 +16,7 @@ from reservoir.models.config import (
     DistillationConfig,
     FNNConfig,
     PipelineConfig,
-    RidgeReadoutConfig, FNNReadoutConfig,NONEConfig
+    RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -141,10 +141,10 @@ FNN_PRESET = PipelineConfig(
 )
 
 
-NONE_PRESET = PipelineConfig(
-    name="none",
-    model_type=Model.NONE,
-    description="No model",
+PASSTHROUGH_PRESET = PipelineConfig(
+    name="passthrough",
+    model_type=Model.PASSTHROUGH,
+    description="Passthrough model (Projection -> Aggregation, no dynamics)",
     preprocess=PreprocessingConfig(
         method=Preprocessing.MAX_SCALER,
         poly_degree=1,
@@ -156,7 +156,7 @@ NONE_PRESET = PipelineConfig(
         bias_scale=0.1,
         seed=1,
     ),
-    model=NONEConfig(
+    model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -165,7 +165,8 @@ NONE_PRESET = PipelineConfig(
 MODEL_PRESETS: Dict[Model, PipelineConfig] = {
     Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_PRESET,
     Model.FNN_DISTILLATION: FNN_DISTILLATION_PRESET,
-    Model.FNN: FNN_PRESET
+    Model.FNN: FNN_PRESET,
+    Model.PASSTHROUGH: PASSTHROUGH_PRESET,
 }
 
 __all__ = [
