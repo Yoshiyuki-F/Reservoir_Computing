@@ -165,7 +165,7 @@ class ProjectionConfig:
 
 @dataclass(frozen=True)
 class ClassicalReservoirConfig:
-    """Step 5 reservoir dynamics parameters."""
+    """Step 5 and 6 reservoir dynamics parameters."""
 
     spectral_radius: float
     leak_rate: float
@@ -199,7 +199,7 @@ class ClassicalReservoirConfig:
 @dataclass(frozen=True)
 class DistillationConfig:
     """Configuration for distilling reservoir dynamics into a Student FNN."""
-    """Step 5 distillation fnn dynamics parameters."""
+    """Step 5 and 6 distillation fnn dynamics parameters."""
 
     teacher: ClassicalReservoirConfig
     student: FNNConfig
@@ -243,8 +243,17 @@ class FNNConfig:
 
 @dataclass(frozen=True)
 class NONEConfig:
-    def __post_init__(self) -> None:
-        pass
+    aggregation: AggregationMode
+
+    def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
+        if not isinstance(self.aggregation, AggregationMode):
+            raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "aggregation": self.aggregation.value,
+        }
 
 
 @dataclass(frozen=True)

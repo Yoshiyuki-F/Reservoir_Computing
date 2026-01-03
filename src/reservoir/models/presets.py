@@ -16,7 +16,7 @@ from reservoir.models.config import (
     DistillationConfig,
     FNNConfig,
     PipelineConfig,
-    RidgeReadoutConfig, FNNReadoutConfig,
+    RidgeReadoutConfig, FNNReadoutConfig,NONEConfig
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -156,7 +156,9 @@ NONE_PRESET = PipelineConfig(
         bias_scale=0.1,
         seed=1,
     ),
-    model=NONEConfig,
+    model=NONEConfig(
+        aggregation=AggregationMode.MEAN,
+    ),
     readout=DEFAULT_RIDGE_READOUT
 )
 
