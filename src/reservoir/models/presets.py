@@ -97,14 +97,13 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
 "=============================================Time series Presets============================================"
 
 DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
-    n_units=10000,
+    n_units=400,
     input_scale=0.2,
     input_connectivity=1.0,
     bias_scale=0.1,
     seed=1,
 )
 
-#TODO which params are the best for time series
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical-reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
@@ -116,7 +115,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     projection=DEFAULT_PROJECTION_REGRESSION,
     model=ClassicalReservoirConfig(
         spectral_radius=1,
-        leak_rate=0.5,
+        leak_rate=0.4,
         rc_connectivity=0.02,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
