@@ -97,7 +97,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
 "=============================================Time series Presets============================================"
 
 DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
-    n_units=400,
+    n_units=10000,
     input_scale=0.2,
     input_connectivity=1.0,
     bias_scale=0.1,
@@ -110,7 +110,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=PreprocessingConfig(
-        method=Preprocessing.MAX_SCALER,
+        method=Preprocessing.STANDARD_SCALER,
         poly_degree=1,
     ),
     projection=DEFAULT_PROJECTION_REGRESSION,
@@ -129,7 +129,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
     preprocess=PreprocessingConfig(
-        method=Preprocessing.MAX_SCALER,
+        method=Preprocessing.STANDARD_SCALER,
         poly_degree=1,
     ),
     projection=DEFAULT_PROJECTION_REGRESSION,
