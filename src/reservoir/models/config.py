@@ -290,5 +290,5 @@ class FNNReadoutConfig:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
-ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig]
-ReadoutConfig = Union[RidgeReadoutConfig, None]
+ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig]
+ReadoutConfig = Union[RidgeReadoutConfig, FNNReadoutConfig, None]

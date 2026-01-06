@@ -106,7 +106,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         poly_degree=1,
     ),
     projection=ProjectionConfig(
-        n_units=10000,
+        n_units=400,
         input_scale=0.2,
         input_connectivity=1.0,
         bias_scale=0.1,
@@ -157,7 +157,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
         seed=1,
     ),
     model=PassthroughConfig(
-        aggregation=AggregationMode.MEAN,
+        aggregation=AggregationMode.SEQUENCE,
     ),
     readout=DEFAULT_RIDGE_READOUT
 )
