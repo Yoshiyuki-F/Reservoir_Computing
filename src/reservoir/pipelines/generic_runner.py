@@ -287,7 +287,7 @@ class UniversalPipeline:
             print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
 
             # 4. Closed-Loop Generation (Test)
-            if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value:
+            if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value or "passthrough" in self.config.model_type.value:
                  try:
                      generation_steps = test_X.shape[1] if hasattr(test_X, "shape") else 0
 

@@ -445,12 +445,16 @@ def plot_regression_report(
     if precalc_test_pred is not None:
         test_pred = np.asarray(precalc_test_pred)
     else:
-        # Fallback
-        test_features = runner.batch_transform(test_X, batch_size=0)
-        if readout is None:
-            test_pred = test_features
+        # Fallback: Use model directly if available
+        if hasattr(runner, 'model') and runner.model is not None:
+            test_features = runner.model(np.asarray(test_X))
+            if readout is None:
+                test_pred = test_features
+            else:
+                test_pred = readout.predict(test_features)
         else:
-            test_pred = readout.predict(test_features)
+            print("  [Report] Cannot generate test predictions: no model or precalc data")
+            return
 
     # Infer global time offset
     # Offset = Length(Train) + Length(Val)

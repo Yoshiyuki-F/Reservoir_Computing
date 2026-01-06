@@ -47,7 +47,7 @@ DEFAULT_PROJECTION = ProjectionConfig(
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
-    seed=42,
+    seed=1,
 )
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
@@ -94,7 +94,15 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT
 )
 
-"=============================================RESERVOIR Time series Presets============================================"
+"=============================================Time series Presets============================================"
+
+DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
+    n_units=400,
+    input_scale=0.2,
+    input_connectivity=1.0,
+    bias_scale=0.1,
+    seed=1,
+)
 
 #TODO which params are the best for time series
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
@@ -102,21 +110,30 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=PreprocessingConfig(
-        method=Preprocessing.STANDARD_SCALER,
+        method=Preprocessing.MAX_SCALER,
         poly_degree=1,
     ),
-    projection=ProjectionConfig(
-        n_units=400,
-        input_scale=0.2,
-        input_connectivity=1.0,
-        bias_scale=0.1,
-        seed=1,
-    ),
+    projection=DEFAULT_PROJECTION_REGRESSION,
     model=ClassicalReservoirConfig(
         spectral_radius=1,
         leak_rate=0.5,
         rc_connectivity=0.02,
         seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+    ),
+    readout=DEFAULT_RIDGE_READOUT
+)
+
+PASSTHROUGH_PRESET = PipelineConfig(
+    name="passthrough",
+    model_type=Model.PASSTHROUGH,
+    description="Passthrough model (Projection -> Aggregation, no dynamics)",
+    preprocess=PreprocessingConfig(
+        method=Preprocessing.MAX_SCALER,
+        poly_degree=1,
+    ),
+    projection=DEFAULT_PROJECTION_REGRESSION,
+    model=PassthroughConfig(
         aggregation=AggregationMode.SEQUENCE,
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -140,27 +157,6 @@ FNN_PRESET = PipelineConfig(
     readout=None
 )
 
-
-PASSTHROUGH_PRESET = PipelineConfig(
-    name="passthrough",
-    model_type=Model.PASSTHROUGH,
-    description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.MAX_SCALER,
-        poly_degree=1,
-    ),
-    projection=ProjectionConfig(
-        n_units=1200,
-        input_scale=0.2,
-        input_connectivity=1.0,
-        bias_scale=0.1,
-        seed=1,
-    ),
-    model=PassthroughConfig(
-        aggregation=AggregationMode.SEQUENCE,
-    ),
-    readout=DEFAULT_RIDGE_READOUT
-)
 
 MODEL_PRESETS: Dict[Model, PipelineConfig] = {
     Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_PRESET,

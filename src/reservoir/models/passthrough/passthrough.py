@@ -5,8 +5,9 @@ Flow: [Batch, Time, Hidden] -> Aggregation -> [Batch, Feature]
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Optional
 
+import jax
 import jax.numpy as jnp
 
 from reservoir.core.identifiers import AggregationMode
@@ -16,7 +17,7 @@ from reservoir.layers.aggregation import StateAggregator
 class PassthroughModel:
     """
     Model that skips dynamics (Step 5) and directly aggregates projected features.
-    Only needs aggregation mode - derives everything else from input.
+    Implements the same interface as Reservoir for compatibility with GenericRunner.
     """
 
     def __init__(self, aggregation_mode: AggregationMode) -> None:
@@ -24,16 +25,52 @@ class PassthroughModel:
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
         self.aggregator = StateAggregator(mode=aggregation_mode)
         self.topology_meta: Dict[str, Any] = {}
+        self._n_units: Optional[int] = None  # Set on first forward pass
 
     def train(self, inputs: jnp.ndarray, targets: Any = None, **_: Any) -> Dict[str, Any]:
         """No-op: Passthrough has no trainable parameters."""
         return {}
+
+    # ------------------------------------------------------------------ #
+    # Stateful Interface (Compatible with Reservoir)                     #
+    # ------------------------------------------------------------------ #
+
+    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+        """Return zero state. Passthrough is stateless but needs compatible interface."""
+        if self._n_units is None:
+            raise RuntimeError("Passthrough n_units not set. Call forward() first.")
+        return jnp.zeros((batch_size, self._n_units), dtype=jnp.float64)
+
+    def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Passthrough step: ignore state, return input as next state."""
+        # projected_input: [batch, features] - ensure dtype matches state
+        next_state = jnp.asarray(projected_input, dtype=jnp.float64)
+        return next_state, next_state
+
+    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Process sequence. Returns (final_state, all_states)."""
+        if input_data.ndim != 3:
+            raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
+        
+        # Use scan for consistency with Reservoir
+        proj_transposed = jnp.swapaxes(input_data, 0, 1)  # [time, batch, feat]
+        final_states, stacked = jax.lax.scan(self.step, state, proj_transposed)
+        stacked = jnp.swapaxes(stacked, 0, 1)  # [batch, time, feat]
+        return final_states, stacked
+
+    # ------------------------------------------------------------------ #
+    # Standard Interface                                                 #
+    # ------------------------------------------------------------------ #
 
     def __call__(self, inputs: jnp.ndarray, **_: Any) -> jnp.ndarray:
         """Aggregate projected features directly. Input: [B, T, H] -> Output: [B, F]"""
         arr = jnp.asarray(inputs, dtype=jnp.float64)
         if arr.ndim != 3:
             raise ValueError(f"PassthroughModel expects 3D input (batch, time, features), got {arr.shape}")
+        
+        # Track n_units for initialize_state
+        self._n_units = arr.shape[-1]
+        
         return self.aggregator.transform(arr)
 
     def get_feature_dim(self, n_units: int, time_steps: int) -> int:
