@@ -37,7 +37,6 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
         config=LorenzConfig(
             n_input=1,
             n_output=1,
-            dt=0.01,
             noise_level=0.01,
             seed=0,
             sigma=10.0,
@@ -45,9 +44,10 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             beta=2.666667,
             lyapunov_time_unit=1.1,  # 1 LT ≈ 1.1 time units @ dt=0.01 → 110 steps
             washup_lt=5,
-            train_lt=60,
+            train_lt=100,
             val_lt=5,
-            test_lt=10,
+            test_lt=20,
+            dt=0.01,
         ),
         use_dimensions=(0,),
     ),
@@ -74,7 +74,6 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
         config=MackeyGlassConfig(
             n_input=1,
             n_output=1,
-            dt=1,
             noise_level=0.0,
             seed=0,
             tau=17,
@@ -84,9 +83,10 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             downsample=1,
             lyapunov_time_unit=166.6,  # Mackey-Glass LT
             washup_lt=5,
-            train_lt=40,
+            train_lt=100,
             val_lt=5,
-            test_lt=10,
+            test_lt=20,
+            dt=1,
         ),
         use_dimensions=None
     ),
