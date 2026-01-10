@@ -94,8 +94,9 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     z = 1.0
     
     # Calculate steps from LT parameters
+    # steps_per_lt = lyapunov_time_unit / dt
     # Add +1 to account for input/target shift (X=data[:-1], y=data[1:])
-    steps_per_lt = int(config.steps_per_lt)
+    steps_per_lt = int(config.lyapunov_time_unit / config.dt)
     warmup_steps = int(config.washup_lt * steps_per_lt)
     data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
     total_steps = warmup_steps + data_steps
@@ -227,9 +228,10 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
         delay_steps = 1
 
     # 初期化とトランジェント除去用のウォームアップ（省略可）
+    # steps_per_lt = lyapunov_time_unit / dt
     # Add +1 to account for input/target shift (X=data[:-1], y=data[1:])
     history_length = delay_steps + 1
-    steps_per_lt = int(config.steps_per_lt)
+    steps_per_lt = int(config.lyapunov_time_unit / config.dt)
     warmup_steps = max(int(config.washup_lt * steps_per_lt), 0)
     data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
     total_steps = data_steps + history_length + warmup_steps

@@ -12,7 +12,7 @@ def test_mackey_glass_warmup_changes_series(washup_a: int, washup_b: int):
     base_params = dict(
         n_input=1,
         n_output=1,
-        dt=0.1,
+        dt=1,  # dt=1 so steps_per_lt = lyapunov_time_unit / dt = 166
         noise_level=0.0,
         seed=0,
         tau=17,
@@ -20,7 +20,7 @@ def test_mackey_glass_warmup_changes_series(washup_a: int, washup_b: int):
         gamma=0.1,
         n=10,
         downsample=1,
-        steps_per_lt=167,
+        lyapunov_time_unit=166.6,  # Mackey-Glass LT
         train_lt=1,
         val_lt=0,
         test_lt=0,
@@ -32,8 +32,8 @@ def test_mackey_glass_warmup_changes_series(washup_a: int, washup_b: int):
     series_a, _ = generate_mackey_glass_data(config_a)
     series_b, _ = generate_mackey_glass_data(config_b)
 
-    # Ensure same shape (train_lt=1 -> 167 steps + 1 - 1 = 167)
-    assert series_a.shape == series_b.shape == (167, 1)
+    # Ensure same shape (train_lt=1 -> int(166.6/1)=166 steps + 1 - 1 = 166)
+    assert series_a.shape == series_b.shape == (166, 1)
 
     # The warmup shift should give us different trajectories.
     assert not np.allclose(

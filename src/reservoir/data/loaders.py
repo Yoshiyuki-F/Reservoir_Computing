@@ -235,12 +235,14 @@ def load_dataset_with_validation_split(
             hasattr(config, 'train_lt') and 
             hasattr(config, 'val_lt') and 
             hasattr(config, 'test_lt') and
-            hasattr(config, 'steps_per_lt')
+            hasattr(config, 'lyapunov_time_unit') and
+            hasattr(config, 'dt')
         )
 
-        if has_lt_split and config.steps_per_lt > 0:
+        if has_lt_split and config.lyapunov_time_unit > 0:
             # LT-based splitting for chaotic datasets
-            steps_per_lt = int(config.steps_per_lt)
+            # steps_per_lt = lyapunov_time_unit / dt
+            steps_per_lt = int(config.lyapunov_time_unit / config.dt)
             train_count = int(config.train_lt * steps_per_lt)
             val_count = int(config.val_lt * steps_per_lt)
             test_count = int(config.test_lt * steps_per_lt)
