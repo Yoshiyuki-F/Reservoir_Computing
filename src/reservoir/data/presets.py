@@ -1,7 +1,6 @@
 #/home/yoshi/PycharmProjects/Reservoir/src/reservoir/data/presets.py
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Optional
 
 from reservoir.core.presets import StrictRegistry
@@ -17,21 +16,20 @@ from reservoir.core.identifiers import Dataset
 
 
 DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
-    Dataset.SINE_WAVE: DatasetPreset(
-        name="sine_wave",
-        description="Multi-frequency sine wave composite",
-        classification=False,
-        config=SineWaveConfig(
-            n_input=1,
-            n_output=1,
-            time_steps=2000,
-            dt=0.01,
-            noise_level=0.05,
-            seed=0,
-            frequencies=(1.0, 2.0, 5.0),
-        ),
-        use_dimensions=(0,),
-    ),
+    # Dataset.SINE_WAVE: DatasetPreset(
+    #     name="sine_wave",
+    #     description="Multi-frequency sine wave composite",
+    #     classification=False,
+    #     config=SineWaveConfig(
+    #         n_input=1,
+    #         n_output=1,
+    #         time_steps=2000,
+    #         noise_level=0.05,
+    #         seed=0,
+    #         frequencies=(1.0, 2.0, 5.0),
+    #     ),
+    #     use_dimensions=(0,),
+    # ),
     Dataset.LORENZ: DatasetPreset(
         name="lorenz",
         description="Lorenz attractor chaotic time series",
@@ -39,35 +37,36 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
         config=LorenzConfig(
             n_input=1,
             n_output=1,
-            time_steps=3000,
             dt=0.01,
             noise_level=0.01,
             seed=0,
             sigma=10.0,
             rho=28.0,
             beta=2.666667,
-            warmup_steps=0,
-            lt = 1
+            lyapunov_time_unit=1.1,  # 1 LT ≈ 1.1 time units @ dt=0.01 → 110 steps
+            washup_lt=5,
+            train_lt=60,
+            val_lt=5,
+            test_lt=10,
         ),
         use_dimensions=(0,),
     ),
-    Dataset.LORENZ96: DatasetPreset(
-        name="lorenz96",
-        description="Lorenz 96 chaotic system",
-        classification=False,
-        config=Lorenz96Config(
-            n_input=40,
-            n_output=40,
-            time_steps=2000,
-            dt=0.05,
-            noise_level=0.0,
-            seed=0,
-            F=8.0,
-            warmup_steps=100,
-            lt=0 #idk
-        ),
-        use_dimensions=None,
-    ),
+    # Dataset.LORENZ96: DatasetPreset(
+    #     name="lorenz96",
+    #     description="Lorenz 96 chaotic system",
+    #     classification=False,
+    #     config=Lorenz96Config(
+    #         n_input=40,
+    #         n_output=40,
+    #         dt=0.05,
+    #         noise_level=0.0,
+    #         seed=0,
+    #         F=8.0,
+    #         washup_lt=5,
+    #         lyapunov_time_unit=0,  # TODO: calculate correct value
+    #     ),
+    #     use_dimensions=None,
+    # ),
     Dataset.MACKEY_GLASS: DatasetPreset(
         name="mackey_glass",
         description="Mackey-Glass chaotic time series",
@@ -75,8 +74,6 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
         config=MackeyGlassConfig(
             n_input=1,
             n_output=1,
-            time_steps=10000,
-            warmup_steps=0,
             dt=1,
             noise_level=0.0,
             seed=0,
@@ -85,7 +82,11 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             gamma=0.1,
             n=10,
             downsample=1,
-            lt=167
+            lyapunov_time_unit=166.6,  # Mackey-Glass LT
+            washup_lt=5,
+            train_lt=40,
+            val_lt=5,
+            test_lt=10,
         ),
         use_dimensions=None
     ),
@@ -97,7 +98,6 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             n_input=28,
             n_output=10,
             time_steps=28,
-            dt=1.0,
             noise_level=0.0,
             seed=0,
             split="train",

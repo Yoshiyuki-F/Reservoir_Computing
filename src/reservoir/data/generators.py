@@ -86,15 +86,23 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     Note:
         数値積分にはオイラー法を使用。より高精度が必要な場合は
         Runge-Kutta法の実装を検討してください。
+        washup_lt * lt でウォームアップステップ数を計算します。
     """
     # 初期値（互換性のためオプショナル）
     x = 1.0
     y = 1.0
     z = 1.0
     
-    data = np.zeros((config.time_steps, 3), dtype=np.float64)
+    # Calculate steps from LT parameters
+    # Add +1 to account for input/target shift (X=data[:-1], y=data[1:])
+    steps_per_lt = int(config.steps_per_lt)
+    warmup_steps = int(config.washup_lt * steps_per_lt)
+    data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
+    total_steps = warmup_steps + data_steps
     
-    for i in range(config.time_steps):
+    data = np.zeros((total_steps, 3), dtype=np.float64)
+    
+    for i in range(total_steps):
         # Lorenz方程式の数値積分（オイラー法）
         dx = config.sigma * (y - x)
         dy = x * (config.rho - z) - y
@@ -105,6 +113,9 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
         z += dz * config.dt
         
         data[i] = [x, y, z]
+    
+    # Discard warmup steps
+    data = data[warmup_steps:]
     
     # 入力は現在の状態、ターゲットは次の状態
     input_data = jnp.array(data[:-1], dtype=jnp.float64)
@@ -143,7 +154,8 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
     x0 += np.random.normal(0, 0.01, N)
     x0 = jnp.array(x0, dtype=jnp.float64)
     
-    total_steps = config.time_steps + config.warmup_steps
+    warmup_steps = config.washup_lt * config.steps_per_lt
+    total_steps = config.time_steps + warmup_steps
 
     # Pre-compute indices for cyclic boundary conditions
     indices = jnp.arange(N)
@@ -176,7 +188,7 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
     _, data = jax.lax.scan(step_fn, x0, None, length=total_steps)
         
     # Discard warmup steps
-    data = data[config.warmup_steps:]
+    data = data[warmup_steps:]
     
     # Input is current state, Target is next state
     input_data = data[:-1]
@@ -196,7 +208,8 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
         (input_data, target_data): 入力データとターゲットデータのタプル
 
     Note:
-        トランジェント除去が不要な場合は`warmup_steps`を省略（または0）できます。
+        トランジェント除去が不要な場合は`washup_lt`を0に設定できます。
+        washup_lt * lt でウォームアップステップ数を計算します。
         tauは連続時間の遅延として解釈され、離散化ステップdtで割ることでサンプル遅延数に変換されます。
     """
     tau = int(config.tau)
@@ -214,9 +227,12 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
         delay_steps = 1
 
     # 初期化とトランジェント除去用のウォームアップ（省略可）
+    # Add +1 to account for input/target shift (X=data[:-1], y=data[1:])
     history_length = delay_steps + 1
-    warmup_steps = max(int(config.warmup_steps), 0)
-    total_steps = config.time_steps + history_length + warmup_steps
+    steps_per_lt = int(config.steps_per_lt)
+    warmup_steps = max(int(config.washup_lt * steps_per_lt), 0)
+    data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
+    total_steps = data_steps + history_length + warmup_steps
 
     x = np.full(total_steps, fill_value=0.0, dtype=np.float64)
     initial_value = 1.2
@@ -230,7 +246,7 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
 
     # トランジェント除去
     start_idx = history_length + warmup_steps
-    end_idx = start_idx + config.time_steps
+    end_idx = start_idx + data_steps
     if end_idx > len(x):
         raise ValueError("Warmup and history exceed generated sequence length")
     x = x[start_idx:end_idx]

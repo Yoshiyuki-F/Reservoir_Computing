@@ -145,10 +145,8 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     X, y = generate_lorenz_data(config)
     X_arr = jnp.asarray(X, dtype=jnp.float64)
     y_arr = jnp.asarray(y, dtype=jnp.float64)
-    if X_arr.ndim == 2:
-        X_arr = X_arr[:, None, :]
-    if y_arr.ndim == 2:
-        y_arr = y_arr[:, None, :]
+    # Return (T, F) so that splitting happens along the time axis (axis 0).
+    # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     return X_arr, y_arr
 
 
@@ -231,35 +229,67 @@ def load_dataset_with_validation_split(
         if total < 2:
             raise ValueError(f"Dataset '{dataset_enum}' is too small to split (size={total}).")
 
-        train_ratio = float(training_cfg.train_size)
-        test_ratio = float(training_cfg.test_ratio)
+        # Check if this is a chaotic dataset with LT-based splitting
+        config = preset.config
+        has_lt_split = (
+            hasattr(config, 'train_lt') and 
+            hasattr(config, 'val_lt') and 
+            hasattr(config, 'test_lt') and
+            hasattr(config, 'steps_per_lt')
+        )
 
-        if not (0.0 < train_ratio < 1.0):
-            raise ValueError(f"train_size must be in (0,1), got {train_ratio}.")
-        if not (0.0 <= test_ratio < 1.0):
-            raise ValueError(f"test_ratio must be in [0,1), got {test_ratio}.")
+        if has_lt_split and config.steps_per_lt > 0:
+            # LT-based splitting for chaotic datasets
+            steps_per_lt = int(config.steps_per_lt)
+            train_count = int(config.train_lt * steps_per_lt)
+            val_count = int(config.val_lt * steps_per_lt)
+            test_count = int(config.test_lt * steps_per_lt)
+            
+            required_total = train_count + val_count + test_count
+            if total < required_total:
+                raise ValueError(
+                    f"Dataset '{dataset_enum}' has {total} samples but LT-based split requires "
+                    f"{required_total} (train={train_count}, val={val_count}, test={test_count})."
+                )
+            
+            # Use the first (train+val+test) samples, ignore any extra
+            train_X, train_y = X[:train_count], y[:train_count]
+            val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
+            test_X, test_y = X[train_count + val_count:train_count + val_count + test_count], y[train_count + val_count:train_count + val_count + test_count]
+            
+            print(f"    [Dataset] LT-based split: train={train_count} ({config.train_lt} LT), "
+                  f"val={val_count} ({config.val_lt} LT), test={test_count} ({config.test_lt} LT)")
+        else:
+            # Percentage-based splitting (original logic)
+            train_ratio = float(training_cfg.train_size)
+            test_ratio = float(training_cfg.test_ratio)
 
-        # Correct 8:1:1 split: calculate all counts from total
-        import math
-        train_count = max(1, math.ceil(total * train_ratio))
-        val_count = max(1, round(total * val_size)) if val_size > 0 else 0
-        test_count = total - train_count - val_count
+            if not (0.0 < train_ratio < 1.0):
+                raise ValueError(f"train_size must be in (0,1), got {train_ratio}.")
+            if not (0.0 <= test_ratio < 1.0):
+                raise ValueError(f"test_ratio must be in [0,1), got {test_ratio}.")
 
-        if train_count < 1 or test_count < 1:
-            raise ValueError(f"Invalid split sizes: train={train_count}, val={val_count}, test={test_count} for total={total}.")
+            # Correct 8:1:1 split: calculate all counts from total
+            import math
+            train_count = max(1, math.ceil(total * train_ratio))
+            val_count = max(1, round(total * val_size)) if val_size > 0 else 0
+            test_count = total - train_count - val_count
 
-        train_X, train_y = X[:train_count], y[:train_count]
-        # Always create validation split (minimum 1 sample)
-        if val_count < 1:
-            val_count = 1
-            train_count = train_count - 1 if train_count > 1 else train_count
-        val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
-        test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
+            if train_count < 1 or test_count < 1:
+                raise ValueError(f"Invalid split sizes: train={train_count}, val={val_count}, test={test_count} for total={total}.")
 
-    # Special handling for Lorenz96 and Mackey-Glass
+            train_X, train_y = X[:train_count], y[:train_count]
+            # Always create validation split (minimum 1 sample)
+            if val_count < 1:
+                val_count = 1
+                train_count = train_count - 1 if train_count > 1 else train_count
+            val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
+            test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
+
+    # Special handling for Lorenz, Lorenz96 and Mackey-Glass
     # The user requires (Batch=1, Time, Feature) for these datasets.
     # Currently X is (Steps, Feature). We reshape to (1, Steps, Feature).
-    if dataset_enum in (Dataset.LORENZ96, Dataset.MACKEY_GLASS):
+    if dataset_enum in (Dataset.LORENZ, Dataset.LORENZ96, Dataset.MACKEY_GLASS):
         def _reshape_to_batch1(arr: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
             if arr is None: 
                 return None

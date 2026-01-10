@@ -9,44 +9,50 @@ from typing import Optional, Tuple
 class BaseDatasetConfig:
     n_input: int
     n_output: int
-    time_steps: int
-    dt: float
     noise_level: float
     seed: Optional[int]
 
 @dataclass(frozen=True)
-class SineWaveConfig(BaseDatasetConfig):
-    frequencies: Tuple[float, ...]
+class ChaosDatasetConfig(BaseDatasetConfig):
+    lyapunov_time_unit: float   # Steps per Lyapunov time (e.g., 110 for dt=0.01) = int(LT/dt)
+    washup_lt: int
+    train_lt: int
+    val_lt: int
+    test_lt: int
+    dt: float
 
 @dataclass(frozen=True)
-class LorenzConfig(BaseDatasetConfig):
+class SineWaveConfig(BaseDatasetConfig):
+    frequencies: Tuple[float, ...]
+    time_steps: int
+
+
+@dataclass(frozen=True)
+class LorenzConfig(ChaosDatasetConfig):
     sigma: float
     rho: float
     beta: float
-    warmup_steps: int
-    lt: int
+
 
 @dataclass(frozen=True)
-class Lorenz96Config(BaseDatasetConfig):
+class Lorenz96Config(ChaosDatasetConfig):
     F: float
-    warmup_steps: int
-    lt:int
+
 
 @dataclass(frozen=True)
-class MackeyGlassConfig(BaseDatasetConfig):
+class MackeyGlassConfig(ChaosDatasetConfig):
     tau: int
     beta: float
     gamma: float
     n: int
-    warmup_steps: int
     downsample: int
-    lt: int
 
 @dataclass(frozen=True)
 class MNISTConfig(BaseDatasetConfig):
     split: str
     train_fraction: float
     test_fraction: float
+    time_steps: int
 
 @dataclass(frozen=True)
 class DatasetPreset:
