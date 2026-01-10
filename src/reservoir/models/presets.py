@@ -97,7 +97,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
 "=============================================Time series Presets============================================"
 
 DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
-    n_units=100,
+    n_units=40,
     input_scale=0.2,
     input_connectivity=1.0,
     bias_scale=0.1,
