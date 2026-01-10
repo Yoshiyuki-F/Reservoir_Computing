@@ -35,8 +35,8 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
         description="Lorenz attractor chaotic time series",
         classification=False,
         config=LorenzConfig(
-            n_input=1,
-            n_output=1,
+            n_input=3,  # All 3 dimensions (x, y, z)
+            n_output=3,
             noise_level=0.01,
             seed=0,
             sigma=10.0,
@@ -49,7 +49,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             test_lt=20,
             dt=0.01,
         ),
-        use_dimensions=(0,),
+        use_dimensions=None,  # Use all 3 dimensions
     ),
     # Dataset.LORENZ96: DatasetPreset(
     #     name="lorenz96",
