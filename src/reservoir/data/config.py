@@ -30,6 +30,7 @@ class LorenzConfig(BaseDatasetConfig):
 class Lorenz96Config(BaseDatasetConfig):
     F: float
     warmup_steps: int
+    lt:int
 
 @dataclass(frozen=True)
 class MackeyGlassConfig(BaseDatasetConfig):

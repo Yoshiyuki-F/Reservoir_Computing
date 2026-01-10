@@ -64,6 +64,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             seed=0,
             F=8.0,
             warmup_steps=100,
+            lt=0 #idk
         ),
         use_dimensions=None,
     ),
