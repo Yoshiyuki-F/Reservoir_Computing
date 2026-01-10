@@ -26,7 +26,6 @@ from reservoir.data.config import (
     MNISTConfig,
 )
 from reservoir.core.presets import StrictRegistry
-from reservoir.models.presets import PipelineConfig
 from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 

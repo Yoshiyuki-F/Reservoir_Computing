@@ -24,6 +24,7 @@ class LorenzConfig(BaseDatasetConfig):
     rho: float
     beta: float
     warmup_steps: int
+    lt: int
 
 @dataclass(frozen=True)
 class Lorenz96Config(BaseDatasetConfig):
@@ -38,6 +39,7 @@ class MackeyGlassConfig(BaseDatasetConfig):
     n: int
     warmup_steps: int
     downsample: int
+    lt: int
 
 @dataclass(frozen=True)
 class MNISTConfig(BaseDatasetConfig):

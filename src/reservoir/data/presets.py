@@ -47,6 +47,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             rho=28.0,
             beta=2.666667,
             warmup_steps=0,
+            lt = 1
         ),
         use_dimensions=(0,),
     ),
@@ -83,6 +84,7 @@ DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
             gamma=0.1,
             n=10,
             downsample=1,
+            lt=167
         ),
         use_dimensions=None
     ),
