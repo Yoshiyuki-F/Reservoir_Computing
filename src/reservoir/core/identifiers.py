@@ -16,7 +16,7 @@ import enum
 class Model(str, enum.Enum):
     """モデルアーキテクチャの種類。"""
 
-    CLASSICAL_RESERVOIR = "classical-reservoir"
+    CLASSICAL_RESERVOIR = "classical_reservoir"
     FNN = "fnn"
     FNN_DISTILLATION = "fnn-distillation"
     RNN_DISTILLATION = "rnn-distillation"

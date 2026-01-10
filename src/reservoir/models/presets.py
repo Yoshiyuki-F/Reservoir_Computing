@@ -70,7 +70,7 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 )
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
-    name="classical-reservoir",
+    name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=DEFAULT_PREPROCESS,
@@ -105,7 +105,7 @@ DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
 )
 
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
-    name="classical-reservoir",
+    name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=PreprocessingConfig(

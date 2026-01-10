@@ -24,7 +24,7 @@ def main() -> None:
         type=str,
         required=True,
         choices=[p.value for p in Model],
-        help="Model preset name (Pipeline enum value, e.g., classical-reservoir, fnn-distillation)",
+        help="Model preset name (Pipeline enum value, e.g., classical_reservoir, fnn-distillation)",
     )
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--force-cpu", action="store_true")

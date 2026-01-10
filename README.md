@@ -42,7 +42,7 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
 ### Arguments
 
 - `--model`: **(Required)** The model architecture to use.
-    - `classical-reservoir`
+    - `classical_reservoir`
     - `fnn`
     - `fnn-distillation`
     - `rnn-distillation` #TODO
@@ -59,7 +59,7 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
 
 **1. Classical Reservoir on Sine Wave**
 ```bash
-uv run reservoir-cli --model classical-reservoir --dataset sine_wave
+uv run reservoir-cli --model classical_reservoir --dataset sine_wave
 ```
 
 **2. Quantum Gate-based Reservoir on Lorenz Attractor**
@@ -84,7 +84,7 @@ uv run poe test
 uv run poe test-gpu
 
 # Run CLI with GPU environment variables set
-uv run poe cli-gpu -- --model classical-reservoir --dataset sine_wave
+uv run poe cli-gpu -- --model classical_reservoir --dataset sine_wave
 ```
 
 ## File Structure

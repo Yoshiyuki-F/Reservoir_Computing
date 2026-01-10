@@ -38,8 +38,8 @@ def test_dynamic_runner_reservoir_wiring(monkeypatch):
     # Patch reservoir factory
     monkeypatch.setattr("reservoir.pipelines.run.ReservoirFactory.create", fake_create)
     config = {
-        "model_type": "classical-reservoir",
-        "reservoir_type": "classical-reservoir",
+        "model_type": "classical_reservoir",
+        "reservoir_type": "classical_reservoir",
         "reservoir_config": {"params": {"n_hidden_layer": 5}},
     }
     data = {
