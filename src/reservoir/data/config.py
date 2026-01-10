@@ -13,6 +13,18 @@ class BaseDatasetConfig:
     seed: Optional[int]
 
 @dataclass(frozen=True)
+class MNISTConfig(BaseDatasetConfig):
+    split: str
+    train_fraction: float
+    test_fraction: float
+    time_steps: int
+
+@dataclass(frozen=True)
+class SineWaveConfig(BaseDatasetConfig):
+    frequencies: Tuple[float, ...]
+    time_steps: int
+
+@dataclass(frozen=True)
 class ChaosDatasetConfig(BaseDatasetConfig):
     lyapunov_time_unit: float   # Steps per Lyapunov time (e.g., 110 for dt=0.01) = int(LT/dt)
     washup_lt: int
@@ -20,12 +32,6 @@ class ChaosDatasetConfig(BaseDatasetConfig):
     val_lt: int
     test_lt: int
     dt: float
-
-@dataclass(frozen=True)
-class SineWaveConfig(BaseDatasetConfig):
-    frequencies: Tuple[float, ...]
-    time_steps: int
-
 
 @dataclass(frozen=True)
 class LorenzConfig(ChaosDatasetConfig):
@@ -47,12 +53,6 @@ class MackeyGlassConfig(ChaosDatasetConfig):
     n: int
     downsample: int
 
-@dataclass(frozen=True)
-class MNISTConfig(BaseDatasetConfig):
-    split: str
-    train_fraction: float
-    test_fraction: float
-    time_steps: int
 
 @dataclass(frozen=True)
 class DatasetPreset:
