@@ -102,6 +102,7 @@ class UniversalPipeline:
         best_score = None
         search_history = {}
         weight_norms = {}
+        chaos_results = None  # VPT and other chaos metrics
 
         # 1. Train Model (Reservoir Warmup)
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
@@ -323,8 +324,16 @@ class UniversalPipeline:
                              global_end = global_start + generation_steps
 
                              print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+                             # Pass LT parameters for VPT calculation
+                             dataset_config = dataset_meta.preset.config
+                             dt = getattr(dataset_config, 'dt', 1.0)
+                             ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
                              # Delegated to reporting
-                             calculate_chaos_metrics(truth_raw, cl_pred_raw)
+                             chaos_results = calculate_chaos_metrics(
+                                 truth_raw, cl_pred_raw,
+                                 dt=dt,
+                                 lyapunov_time_unit=ltu,
+                             )
 
                  except Exception as e:
                      print(f"[Warning] Closed-loop generation failed: {e}")
@@ -352,6 +361,12 @@ class UniversalPipeline:
         if best_lambda is not None:
             results["train"]["best_lambda"] = best_lambda
         results["test"] = {self.metric_name: test_score}
+        
+        # Add chaos metrics (VPT, NDEI, etc.) if available
+        if chaos_results is not None:
+            results["test"]["chaos_metrics"] = chaos_results
+            results["test"]["vpt_lt"] = chaos_results.get("vpt_lt", 0.0)
+            results["test"]["ndei"] = chaos_results.get("ndei", float("inf"))
 
         # Validation Result (Prioritize Closed-Loop best_score)
         val_score = best_score if best_score is not None else compute_score(val_pred, val_y, self.metric_name)

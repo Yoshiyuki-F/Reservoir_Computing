@@ -334,6 +334,7 @@ def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Opti
         stack.topo_meta,
         **report_payload,
         classification=dataset_meta.classification,
+        dataset_preset=dataset_meta.preset,
     )
 
     return results

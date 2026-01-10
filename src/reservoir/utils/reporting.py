@@ -32,12 +32,33 @@ def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
 
     return float(jnp.mean((aligned_preds - targets_arr) ** 2))
 
-def calculate_chaos_metrics(y_true: Any, y_pred: Any) -> Tuple[float, float]:
+def calculate_chaos_metrics(
+    y_true: Any, 
+    y_pred: Any,
+    dt: float,
+    lyapunov_time_unit: float,
+    vpt_threshold: float = 0.4,
+) -> Dict[str, float]:
     """
     Mackey-Glassなどのカオス予測専用の評価指標
+    
+    Args:
+        y_true: Ground truth time series
+        y_pred: Predicted time series
+        dt: Simulation time step
+        lyapunov_time_unit: 1 LT in time units (e.g., 1.1 for Lorenz 63)
+        vpt_threshold: Threshold for VPT calculation (default 0.4 = sqrt(2)*0.3)
+    
+    Returns:
+        Dictionary with NDEI, var_ratio, correlation, VPT (steps), VPT (LT)
     """
     y_true_np = np.asarray(y_true).flatten()
     y_pred_np = np.asarray(y_pred).flatten()
+
+    # Ensure same length
+    min_len = min(len(y_true_np), len(y_pred_np))
+    y_true_np = y_true_np[:min_len]
+    y_pred_np = y_pred_np[:min_len]
 
     mse = np.mean((y_true_np - y_pred_np) ** 2)
     rmse = np.sqrt(mse)
@@ -51,13 +72,41 @@ def calculate_chaos_metrics(y_true: Any, y_pred: Any) -> Tuple[float, float]:
     if std_true > 1e-9 and std_pred > 1e-9:
         corr = np.corrcoef(y_true_np, y_pred_np)[0, 1]
 
+    # --- VPT Calculation ---
+    # Normalized error at each time step: |y_pred - y_true| / std(y_true)
+    # VPT = first time step where error exceeds threshold
+    if std_true > 1e-9:
+        normalized_errors = np.abs(y_pred_np - y_true_np) / std_true
+        # Find first index where error exceeds threshold
+        exceed_indices = np.where(normalized_errors > vpt_threshold)[0]
+        if len(exceed_indices) > 0:
+            vpt_steps = int(exceed_indices[0])
+        else:
+            # Prediction never exceeds threshold
+            vpt_steps = len(y_true_np)
+    else:
+        vpt_steps = 0
+    
+    # Convert VPT to Lyapunov time
+    steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
+    vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
+
     print(f"=== Chaos Prediction Metrics ===")
     print(f"MSE       : {mse:.5f}")
     print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
     print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
     print(f"Corr      : {corr:.5f} (Target > 0.95)")
+    print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
 
-    return ndei, var_ratio
+    return {
+        "mse": mse,
+        "ndei": ndei,
+        "var_ratio": var_ratio,
+        "correlation": corr,
+        "vpt_steps": vpt_steps,
+        "vpt_lt": vpt_lt,
+        "vpt_threshold": vpt_threshold,
+    }
 
 # --- Logging / Printing ---
 
@@ -327,6 +376,7 @@ def generate_report(
     model_type_str: str,
     classification: bool = False,
     preprocessors: Optional[list[Any]] = None,
+    dataset_preset: Optional[Any] = None,  # DatasetPreset for dt/lyapunov_time_unit
 ) -> None:
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
@@ -400,6 +450,15 @@ def generate_report(
         test_pred_cached = precalc_preds.get("test_pred")
         is_closed_loop = results.get("is_closed_loop", False)
 
+        # Get dt and lyapunov_time_unit for VPT calculation
+        dt = None
+        ltu = None
+        if dataset_preset is not None:
+            ds_config = getattr(dataset_preset, 'config', None)
+            if ds_config is not None:
+                dt = getattr(ds_config, 'dt', None)
+                ltu = getattr(ds_config, 'lyapunov_time_unit', None)
+
         plot_regression_report(
              runner=runner,
              readout=readout,
@@ -414,6 +473,8 @@ def generate_report(
              preprocessors=preprocessors,
              scaler=scaler,
              is_closed_loop=is_closed_loop,
+             dt=dt,
+             lyapunov_time_unit=ltu,
          )
          
 
@@ -434,6 +495,9 @@ def plot_regression_report(
     preprocessors: Optional[list[Any]] = None,
     scaler: Optional[Any] = None,
     is_closed_loop: bool = False,
+    dt: Optional[float] = None,
+    lyapunov_time_unit: Optional[float] = None,
+    vpt_threshold: float = 0.4,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
@@ -519,11 +583,16 @@ def plot_regression_report(
     if is_closed_loop:
         title_str = f"{title_str} closed-loop"
     
-    # Calculate NDEI if possible
-    ndei = None
-    if test_y is not None and test_pred is not None:
+    # Calculate VPT if dt and lyapunov_time_unit are provided
+    vpt_lt = None
+    if dt is not None and lyapunov_time_unit is not None and test_y is not None and test_pred is not None:
         y_true_flat = test_y.flatten()
         y_pred_flat = test_pred.flatten()
+        
+        # Ensure same length
+        min_len = min(len(y_true_flat), len(y_pred_flat))
+        y_true_flat = y_true_flat[:min_len]
+        y_pred_flat = y_pred_flat[:min_len]
         
         # Avoid NaN
         valid_mask = ~np.isnan(y_true_flat) & ~np.isnan(y_pred_flat)
@@ -531,14 +600,24 @@ def plot_regression_report(
             y_t = y_true_flat[valid_mask]
             y_p = y_pred_flat[valid_mask]
             
-            rmse = np.sqrt(np.mean((y_t - y_p) ** 2))
             std_true = np.std(y_t)
-            
             if std_true > 1e-9:
-                ndei = rmse / std_true
+                # Normalized error at each step
+                normalized_errors = np.abs(y_p - y_t) / std_true
+                # Find first index where error exceeds threshold
+                exceed_indices = np.where(normalized_errors > vpt_threshold)[0]
+                if len(exceed_indices) > 0:
+                    vpt_steps = int(exceed_indices[0])
+                else:
+                    vpt_steps = len(y_t)
+                
+                # Convert to LT
+                steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
+                vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
 
-    if ndei is not None:
-        title_str += f" | NDEI: {ndei:.4f}"
+    # Display VPT if calculated, otherwise fallback to MSE
+    if vpt_lt is not None:
+        title_str += f" | VPT: {vpt_lt:.2f} LT"
     elif mse is not None:
         title_str += f" | MSE: {mse:.4f} (Scaled)"
 
