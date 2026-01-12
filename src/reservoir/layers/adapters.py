@@ -2,14 +2,13 @@
 Step 4 Adapters between architectural steps.
 """
 import jax.numpy as jnp
-import numpy as np
 
 class Flatten:
     """
     Structural adapter to flatten inputs between architectural steps.
     Transforms (Batch, Time, Feat) -> (Batch, Time * Feat).
     """
-    def fit(self, X):
+    def fit(self):
         return self
     
     def transform(self, X):
@@ -62,7 +61,7 @@ class TimeDelayEmbedding:
         
         # Concat along feature axis -> (N, T', W*F)
         X_embedded = jnp.concatenate(windows, axis=-1)
-        
+
         if flatten_batch:
             # (N * T', W*F)
             X_embedded = X_embedded.reshape(-1, X_embedded.shape[-1])
