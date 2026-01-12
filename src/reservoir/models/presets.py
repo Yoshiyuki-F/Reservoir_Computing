@@ -15,7 +15,6 @@ from reservoir.models.config import (
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
-    WindowedFNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig
 )
@@ -159,16 +158,16 @@ FNN_PRESET = PipelineConfig(
 
 WINDOWED_FNN_PRESET = PipelineConfig(
     name="windowed_fnn",
-    model_type=Model.WINDOWED_FNN,
+    model_type=Model.FNN,  # Same model type, different config
     description="FNN with sliding window embedding for time series regression",
     preprocess=PreprocessingConfig(
         method=Preprocessing.STANDARD_SCALER,
         poly_degree=1,
     ),
     projection=None,  # No projection needed
-    model=WindowedFNNConfig(
-        window_size=10,  # Default K
+    model=FNNConfig(
         hidden_layers=(64, 32),
+        window_size=10,  # This enables TimeDelayEmbedding adapter
     ),
     readout=None,  # FNN is end-to-end
 )
@@ -178,7 +177,6 @@ MODEL_PRESETS: Dict[Model, PipelineConfig] = {
     Model.CLASSICAL_RESERVOIR: CLASSICAL_RESERVOIR_PRESET,
     Model.FNN_DISTILLATION: FNN_DISTILLATION_PRESET,
     Model.FNN: FNN_PRESET,
-    Model.WINDOWED_FNN: WINDOWED_FNN_PRESET,
     Model.PASSTHROUGH: PASSTHROUGH_PRESET,
 }
 
