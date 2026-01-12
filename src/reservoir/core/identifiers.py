@@ -18,7 +18,6 @@ class Model(str, enum.Enum):
 
     CLASSICAL_RESERVOIR = "classical_reservoir"
     FNN = "fnn"
-    WINDOWED_FNN = "windowed_fnn"
     FNN_DISTILLATION = "fnn-distillation"
     RNN_DISTILLATION = "rnn-distillation"
     QUANTUM_GATE_BASED = "gate_based-quantum-reservoir"
