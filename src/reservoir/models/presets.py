@@ -28,6 +28,10 @@ def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     if not ds_preset.classification and model == Model.CLASSICAL_RESERVOIR:
         return TIME_CLASSICAL_RESERVOIR_PRESET
     
+    # For FNN on regression tasks, use windowed version
+    if not ds_preset.classification and model == Model.FNN:
+        return WINDOWED_FNN_PRESET
+    
     preset = StrictRegistry(MODEL_PRESETS).get(model)
     if preset is None:
         raise KeyError(f"Model preset '{model}' not found.")
