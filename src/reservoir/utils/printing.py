@@ -40,7 +40,7 @@ def print_topology(meta: Dict[str, Any]) -> None:
 
     preprocess_method = details.get("preprocess") or "None"
     agg_mode = details.get("agg_mode") or "None"
-    readout_label = details.get("readout") or "Ridge Regression"
+    readout_label = details.get("readout")
     adapter_label = details.get("adapter") or "Skipped"
     student_layers_raw = details.get("student_layers")
     student_layers = _fmt_layers(student_layers_raw)
