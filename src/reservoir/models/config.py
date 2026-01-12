@@ -242,6 +242,30 @@ class FNNConfig:
 
 
 @dataclass(frozen=True)
+class WindowedFNNConfig:
+    """Configuration for WindowedFNN (FNN with time-delay embedding adapter for regression)."""
+    window_size: int  # K parameter: number of timesteps in sliding window
+    hidden_layers: Optional[Tuple[int, ...]] = None
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "window_size": int(self.window_size),
+            "hidden_layers": tuple(int(v) for v in (self.hidden_layers or ())),
+        }
+
+    def validate(self, *, context: str = "") -> None:
+        prefix = f"{context}: " if context else ""
+        if int(self.window_size) < 1:
+            raise ValueError(f"{prefix}window_size must be >= 1.")
+        layers = self.hidden_layers or ()
+        if any(width < 0 for width in layers):
+            raise ValueError(f"{prefix}hidden_layers values must be non-negative.")
+
+
+@dataclass(frozen=True)
 class PassthroughConfig:
     """Configuration for passthrough model that skips dynamics (Step 5)."""
     aggregation: AggregationMode
@@ -290,5 +314,5 @@ class FNNReadoutConfig:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
-ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig]
+ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, WindowedFNNConfig, PassthroughConfig]
 ReadoutConfig = Union[RidgeReadoutConfig, FNNReadoutConfig, None]

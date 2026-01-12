@@ -27,8 +27,7 @@ Examples: Last state, Mean, Concat
 
 7. Readout - [Batch, Feature] -> [Batch, Output]
 Role: Final decoding/classification.
-Examples: Ridge Regression, Softmax
-WHERE TO FIND THEM (Location Mapping)
+Examples: Ridge Regression, ReadOutFNN
 
 Factory (/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/factory.py) should just include 4-5-6
 where should /home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/generic_runner.py do then?
@@ -40,7 +39,7 @@ layers/projection.py (Input Projection) 3
 layers/adapters.py (Structural Glues: Flatten, Reshape) 4
 models/ (Model Engine & Assemblers) 5
     reservoir/, nn/, distillation/
-layers/aggregation.py (Aggregation) 6
+layers/aggregation.py (Aggregation) 6 a part of 5 actually
 readout/ridge.py (Readout) 7
 
 
@@ -50,7 +49,7 @@ models/factory.py (Manufacturer)
 特徴: 状態を持たない。作って渡すだけ。
 
 pipelines/generic_runner.py (Driver)
-責務: 1-7 の実行（ChatGPTの言う「実験ロジックの正本」）。
+責務: 1-7 の実行（実験ロジックの正本）。
 特徴: 何のモデルか（FNNかReservoirか）を知らない。「学習して、特徴とって、Readoutする」という抽象的な手順だけを知っている。
 
 pipelines/run.py (Manager/Frontend)
