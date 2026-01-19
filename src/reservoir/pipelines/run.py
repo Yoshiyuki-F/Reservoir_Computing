@@ -17,7 +17,6 @@ import numpy as np
 from reservoir.models import ModelFactory
 from reservoir.core.identifiers import Dataset
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
-from reservoir.utils.printing import print_topology
 from reservoir.pipelines.generic_runner import UniversalPipeline
 from reservoir.readout.factory import ReadoutFactory
 from reservoir.data.loaders import load_dataset_with_validation_split
@@ -70,6 +69,42 @@ def _log_split_stats(stage: str, train_X: np.ndarray, val_X: np.ndarray, test_X:
         print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
 
 
+def _log_adapter_stats(model: Any, train_X: np.ndarray, val_X: np.ndarray, test_X: np.ndarray) -> None:
+    """Log adapter output stats (Step 4) using safe batch sampling."""
+    def _probe(split_name: str, data: np.ndarray) -> None:
+        if data is None: return
+        try:
+            batch_size = 100
+            total = data.shape[0] if hasattr(data, 'shape') else 0
+            if total == 0: return
+            
+            sample = data[:min(batch_size, total)]
+            import jax.numpy as jnp
+            
+            out = None
+            if hasattr(model, 'student_adapter') and model.student_adapter is not None:
+                out = model.student_adapter(jnp.array(sample))
+            elif hasattr(model, 'adapter') and model.adapter is not None:
+                out = model.adapter(jnp.array(sample))
+                
+            if out is not None:
+                # Extrapolate full shape for display (Batch, Features...)
+                full_shape = (total,) + out.shape[1:]
+                # Calculate stats on sample
+                mean = float(jnp.mean(out))
+                std = float(jnp.std(out))
+                min_v = float(jnp.min(out))
+                max_v = float(jnp.max(out))
+                print(f"[FeatureStats:4:{split_name}] shape={full_shape}, mean={mean:.4f}, std={std:.4f}, min={min_v:.4f}, max={max_v:.4f}, nans=0")
+        except Exception as e:
+            # Silently fail or log error if strictly needed, but better to avoid noise if just stats
+            print(f"[FeatureStats:4:{split_name}] Unable to log stats: {e}")
+
+    _probe("train", train_X)
+    _probe("val", val_X)
+    _probe("test", test_X)
+
+
 
 def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfig] = None) -> Tuple[DatasetMetadata, SplitDataset]:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
@@ -83,7 +118,7 @@ def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfi
         require_3d=True,
     )
 
-    _log_split_stats("raw", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
+    _log_split_stats("1", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
 
     # User Request: Use full 3D shape (Batch, Time, Feature) for topology logging
     input_shape = dataset_split.train_X.shape if dataset_split.train_X is not None else ()
@@ -133,7 +168,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
              if data_split.test_y is not None:
                  data_split = replace(data_split, test_y=_apply_layers(pre_layers, data_split.test_y, fit=False))
 
-    _log_split_stats("preprocess", train_X, val_X, test_X)
+    _log_split_stats("2", train_X, val_X, test_X)
     # Use full 3D shape
     preprocessed_shape = train_X.shape
 
@@ -154,7 +189,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         input_shape_for_meta = preprocessed_shape
         # input_dim_for_factory still needs the feature dimension (last dim)
         input_dim_for_factory = int(preprocessed_shape[-1])
-        _log_split_stats("projection", train_X, val_X, test_X)
+        _log_split_stats("3", train_X, val_X, test_X)
         return FrontendContext(
             processed_split=processed_split,
             preprocess_labels=preprocess_labels,
@@ -211,7 +246,7 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         val_y=data_split.val_y,
     )
 
-    _log_split_stats("projection", projected_train, projected_val, projected_test)
+    _log_split_stats("3", projected_train, projected_val, projected_test)
     return FrontendContext(
         processed_split=processed_split,
         preprocess_labels=preprocess_labels,
@@ -258,13 +293,18 @@ def _build_model_stack(
     if not isinstance(topo_meta, dict):
         topo_meta = {}
     shapes_meta = topo_meta.get("shapes", {}) or {}
+    
+    # Initialize with metadata/defaults, then overwrite with runtime captures
     shapes_meta["input"] = dataset_meta.input_shape
     shapes_meta["preprocessed"] = frontend_ctx.preprocessed_shape
-    shapes_meta["projected"] = frontend_ctx.projected_shape
     shapes_meta["projected"] = frontend_ctx.projected_shape
     if "output" not in shapes_meta:
         shapes_meta["output"] = (meta_n_outputs,)
     topo_meta["shapes"] = shapes_meta
+
+    # Step 4: Log stats for adapter output (safe batching)
+    _log_adapter_stats(model, processed.train_X, processed.val_X, processed.test_X)
+
     details_meta = topo_meta.get("details", {}) or {}
     details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
     topo_meta["details"] = details_meta
@@ -280,15 +320,13 @@ def _build_model_stack(
     else:
         details_meta["readout"] = None
     
-    print_topology(topo_meta)
-
     metric = "accuracy" if dataset_meta.classification else "mse"
     return ModelStack(
         model=model,
         readout=readout,
         topo_meta=topo_meta,
         metric=metric,
-        model_label=config.model_type.value,
+        model_label=config.model_type.value.replace("-", "_"),
     )
 
 

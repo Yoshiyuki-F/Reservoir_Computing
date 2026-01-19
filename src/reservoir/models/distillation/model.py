@@ -39,10 +39,10 @@ class DistillationModel(BaseModel):
         self.training_config = training_config
         self.student_adapter = student_adapter
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         return self.predict(inputs)
 
-    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         if self.student_adapter is not None:
              # Preserve batch dimension if input is 3D sequence
              is_sequence = (X.ndim == 3)

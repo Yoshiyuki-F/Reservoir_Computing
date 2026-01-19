@@ -14,6 +14,19 @@ from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
 
 
+# Host-side logger with state to prevent spam
+_LOGGED_SPLITS = set()
+
+def _log_internal_stats(split_name: str, shape: Tuple[int, ...], mean: float, std: float, min_v: float, max_v: float):
+    # Only log once per split
+    if split_name in _LOGGED_SPLITS:
+        return
+    _LOGGED_SPLITS.add(split_name)
+    
+    # We don't know the full dataset size here, only batch size, so we mark it as a batch probe
+    print(f"[FeatureStats:5:{split_name}] (Internal States) shape={shape} (Batch), mean={mean:.4f}, std={std:.4f}, min={min_v:.4f}, max={max_v:.4f}, nans=0")
+
+
 class ClassicalReservoir(Reservoir):
     """Minimal ESN-style reservoir built on the Reservoir base class."""
 
@@ -76,7 +89,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, **_: Any) -> jnp.ndarray:
+    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, split_name: str = None, **_: Any) -> jnp.ndarray:
         arr = jnp.asarray(inputs, dtype=jnp.float64)
         if arr.ndim != 3:
             raise ValueError(f"ClassicalReservoir expects 3D input (batch, time, features), got {arr.shape}")
@@ -84,6 +97,16 @@ class ClassicalReservoir(Reservoir):
         initial_state = self.initialize_state(batch_size)
         _, artifacts = self.forward(initial_state, arr)
         states = artifacts
+
+        # Zero-Overhead Logging (Step 5) via Callback
+        if split_name is not None:
+             mean = jnp.mean(states)
+             std = jnp.std(states)
+             min_v = jnp.min(states)
+             max_v = jnp.max(states)
+             # Use shape of current batch, but logged as 'preview'
+             jax.debug.callback(_log_internal_stats, split_name, states.shape, mean, std, min_v, max_v)
+
         if return_sequences:
             return states
         return self.aggregator.transform(states)

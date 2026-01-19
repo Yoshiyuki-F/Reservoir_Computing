@@ -34,6 +34,9 @@ class StateAggregator(Transformer):
         agg_mode = StateAggregator._resolve_mode(mode)
         arr = jnp.asarray(states, dtype=jnp.float64)
         if agg_mode is AggregationMode.SEQUENCE:
+            # Flatten to 2D (Batch * Time, Features) to match readout expectation and metadata
+            if arr.ndim == 3:
+                return arr.reshape(-1, arr.shape[-1])
             return arr
         if arr.ndim == 3:
             if agg_mode is AggregationMode.LAST:
@@ -90,6 +93,47 @@ class StateAggregator(Transformer):
         if mode is AggregationMode.SEQUENCE:
             return units
         raise ValueError(f"Unknown aggregation mode: {mode}")
+
+    def get_output_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+        """
+        Compute output shape based on input shape.
+        Handles (Batch, Time, Units) -> (Batch, OutputDim) or flattened (Batch*Time, Units) for Sequence.
+        scan
+        """
+        mode = self.mode
+        
+        if len(input_shape) == 3:
+            # (Batch, Time, Units)
+            batch, steps, units = input_shape
+            
+            if mode is AggregationMode.SEQUENCE:
+                # Flatten time dimension for sequence mode: (Batch * Time, Units)
+                return (batch * steps, units)
+            
+            if mode is AggregationMode.CONCAT:
+                 # (Batch, Time * Units)
+                 return (batch, steps * units)
+
+            # For LAST, MEAN, etc. -> (Batch, Units) (or Units*2 for bidirectional/MTS)
+            out_dim = self.get_output_dim(units, steps)
+            return (batch, out_dim)
+
+        elif len(input_shape) == 2:
+            # (Time, Units) -> Single sample context
+            steps, units = input_shape
+            
+            if mode is AggregationMode.SEQUENCE:
+                # (Time, Units) - effectively already flat
+                return (steps, units)
+            
+            if mode is AggregationMode.CONCAT:
+                return (steps * units,)
+                
+            # For LAST, MEAN -> (OutputDim,)
+            out_dim = self.get_output_dim(units, steps)
+            return (out_dim,)
+            
+        raise ValueError(f"Unsupported input shape: {input_shape}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {"mode": self.mode.value if isinstance(self.mode, AggregationMode) else str(self.mode)}

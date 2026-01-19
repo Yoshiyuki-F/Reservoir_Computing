@@ -69,7 +69,7 @@ class FNNModel(BaseFlaxModel):
             
         return super().train(adapted_inputs, aligned_targets, **kwargs)
 
-    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         """Predict with adapter-transformed inputs."""
         adapted_inputs = self.adapter(X)
         return super().predict(adapted_inputs)
@@ -85,7 +85,7 @@ class FNNModel(BaseFlaxModel):
             
         return super().evaluate(adapted_inputs, aligned_targets)
 
-    def __call__(self, X: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         """Make model callable for batched_compute compatibility."""
         return self.predict(X)
 

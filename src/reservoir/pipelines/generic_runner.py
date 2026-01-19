@@ -21,6 +21,7 @@ from reservoir.utils.reporting import (
     compute_score
 )
 from reservoir.utils.batched_compute import batched_compute
+from reservoir.utils.printing import print_topology
 
 
 class UniversalPipeline:
@@ -31,6 +32,7 @@ class UniversalPipeline:
         self.readout = stack.readout
         self.metric_name = stack.metric
         self.config = config
+        self.topo_meta = stack.topo_meta  # Store for runtime shape updates
 
     # ------------------------------------------------------------------ #
     # Phase 1: Generation Primitives                                     #
@@ -141,35 +143,54 @@ class UniversalPipeline:
         test_X: jnp.ndarray,
         batch_size: int
     ) -> tuple:
-        """Extract features from all splits."""
+        """Extract features from all splits and aggregate (squeeze) if needed."""
         if self.readout is None:
             print("    [Runner] End-to-End mode: Using model.predict directly.")
-            train_Z = self.model.predict(train_X)
-            print_feature_stats(train_Z, "post_adapter_train")
+            train_Z = self._squeeze_if_needed(self.model.predict(train_X))
 
             val_Z = None
             if val_X is not None:
-                val_Z = self.model.predict(val_X)
-                print_feature_stats(val_Z, "post_adapter_val")
+                val_Z = self._squeeze_if_needed(self.model.predict(val_X))
 
-            test_Z = self.model.predict(test_X)
-            print_feature_stats(test_Z, "post_adapter_test")
+            test_Z = self._squeeze_if_needed(self.model.predict(test_X))
         else:
-            train_Z = batched_compute(self.model, train_X, batch_size, desc="[Extracting] train")
-            print_feature_stats(train_Z, "post_train_features")
+            from functools import partial
+            
+            # Pass 'split_name' to prompt the zero-overhead logging callback inside the model
+            
+            # Train
+            model_train = partial(self.model, split_name="train")
+            train_Z = self._squeeze_if_needed(batched_compute(model_train, train_X, batch_size, desc="[Extracting] train"))
 
             val_Z = None
             if val_X is not None:
-                val_Z = batched_compute(self.model, val_X, batch_size, desc="[Extracting] val")
-                print_feature_stats(val_Z, "post_val_features")
+                # Val
+                model_val = partial(self.model, split_name="val")
+                val_Z = self._squeeze_if_needed(batched_compute(model_val, val_X, batch_size, desc="[Extracting] val"))
 
-            test_Z = batched_compute(self.model, test_X, batch_size, desc="[Extracting] test")
-            print_feature_stats(test_Z, "post_test_features")
+            # Test
+            model_test = partial(self.model, split_name="test")
+            test_Z = self._squeeze_if_needed(batched_compute(model_test, test_X, batch_size, desc="[Extracting] test"))
 
         return train_Z, val_Z, test_Z
 
+    def _squeeze_if_needed(self, arr: jnp.ndarray) -> jnp.ndarray:
+        """Squeeze time dimension if it equals 1: (N, 1, F) -> (N, F). Aggregation step."""
+        if arr.ndim == 3 and arr.shape[1] == 1:
+            return arr.squeeze(axis=1)
+        return arr
+
+    def _print_runtime_topology(self, processed, train_Z: jnp.ndarray, test_Z: jnp.ndarray) -> None:
+        """Print topology using static metadata (no runtime overwriting)."""
+        if not self.topo_meta:
+            return
+        # Removed runtime probing of 'feature' shape. Rely entirely on Factory metadata.
+        print_topology(self.topo_meta)
+
+
+
     def _align_targets(self, features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
-        """Align target length to match feature length."""
+        """Align target length (dim 0) to match feature length (warmup handling)."""
         if features is None or targets is None:
             return targets
 
@@ -382,7 +403,7 @@ class UniversalPipeline:
         tf_reshaped = train_Z.reshape(-1, train_Z.shape[-1]) if train_Z.ndim == 3 else train_Z
         ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
 
-        val_steps = val_Z.shape[1] if val_Z is not None and val_Z.ndim == 3 else 0
+        val_steps = processed.val_X.shape[1] if processed.val_X is not None and processed.val_X.ndim == 3 else 0
         seed_len = min(processed.train_X.shape[1], val_steps) if val_steps > 0 else processed.train_X.shape[1]
         seed_data = processed.train_X[:, -seed_len:, :]
 
@@ -479,12 +500,9 @@ class UniversalPipeline:
         processed = frontend_ctx.processed_split
         start = time.time()
 
-        # Step 1: Train Model
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
         train_logs = self.model.train(processed.train_X, processed.train_y) or {}
 
-        # Step 2: Extract Features
-        print(f"\n=== Step 6: Feature Extraction / Aggregation ===")
         train_Z, val_Z, test_Z = self._extract_all_features(
             processed.train_X,
             processed.val_X,
@@ -492,20 +510,38 @@ class UniversalPipeline:
             dataset_meta.training.batch_size
         )
 
-        # Step 3: Align Targets
-        train_y = self._align_targets(train_Z, processed.train_y)
-        val_y = self._align_targets(val_Z, processed.val_y)
-        test_y = self._align_targets(test_Z, processed.test_y)
+        print(f"\n=== Step 6: Feature Extraction / Aggregation Flattened(output is 2D) ===")
+
+        # Log FeatureStats for Step 6 here (moved from inside _extract_all_features)
+        print_feature_stats(train_Z, "6:train")
+        print_feature_stats(val_Z, "6:val")
+        print_feature_stats(test_Z, "6:test")
+
+        # Assert 2D (Batch*Time, Features)
+        assert train_Z.ndim == 2, f"Features must be 2D (Samples, Units), got {train_Z.shape}"
+        assert val_Z.ndim == 2, f"Val Features must be 2D, got {val_Z.shape}"
+        assert test_Z.ndim == 2, f"Test Features must be 2D, got {test_Z.shape}"
+
+        # Flatten targets to match flattened features for alignment
+        def _flat_y(y): return y.reshape(-1, y.shape[-1]) if y is not None and y.ndim == 3 else y
+
+        train_y = self._align_targets(train_Z, _flat_y(processed.train_y))
+        val_y = self._align_targets(val_Z, _flat_y(processed.val_y))
+        test_y = self._align_targets(test_Z, _flat_y(processed.test_y))
+
 
         # Step 4: Fit Readout (Strategy Pattern)
         readout_name = type(self.readout).__name__ if self.readout else "None"
         print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
-
+        
         fit_result = self._fit_readout_strategy(
             train_Z, val_Z, test_Z,
             train_y, val_y, test_y,
             frontend_ctx, dataset_meta
         )
+
+        # Print topology with actual runtime shapes (after Step 7)
+        self._print_runtime_topology(processed, train_Z, test_Z)
 
         # Step 5: Build Results
         return self._build_results(fit_result, train_logs, train_Z, val_Z, test_Z, test_y, frontend_ctx, start)

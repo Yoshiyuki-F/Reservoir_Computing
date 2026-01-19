@@ -21,9 +21,10 @@ Note: FNN Student also uses this to match Teacher's input projection logic.
 Role: Stateful dynamics or Deep Non-linear mapping.
 Examples: Classical Reservoir, Quantum Reservoir, FNN (Student)
 
-6. Aggregation - [Batch, Time, Hidden] -> [Batch, Feature] (only at Reservoir).
-Role: Temporal reduction to fixed feature vector. 
-Examples: Last state, Mean, Concat
+6. Aggregation - [Batch, Time, Hidden] -> [TotalSamples, FeatureDim] (Always 2D)
+Role: Temporal reduction or Flattening to fixed feature vector matrix.
+Invariant: Output MUST be 2D `(N, F)`. For Sequence mode, this is `(Batch*Time, F)`.
+Examples: Last state, Mean, Concat, Sequence(Flatten)
 
 7. Readout - [Batch, Feature] -> [Batch, Output]
 Role: Final decoding/classification.

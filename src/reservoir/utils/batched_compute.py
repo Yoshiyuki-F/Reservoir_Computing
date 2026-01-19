@@ -40,7 +40,17 @@ def batched_compute(
     dummy_input_jax = jnp.array(inputs_np[:1])
     dummy_out_jax = fn(dummy_input_jax)
 
-    output_shape = (n_samples,) + dummy_out_jax.shape[1:]
+    # Detect Expansion Factor (e.g. 1 sample -> 16600 samples)
+    dummy_in_size = dummy_input_jax.shape[0]
+    dummy_out_size = dummy_out_jax.shape[0]
+    
+    expansion_factor = 1
+    if dummy_in_size > 0:
+        expansion_factor = dummy_out_size // dummy_in_size
+
+    # Calculate Total Output Size
+    total_output_samples = n_samples * expansion_factor
+    output_shape = (total_output_samples,) + dummy_out_jax.shape[1:]
 
     # 2. CPU側に結果格納用のメモリを確保 (float32でメモリ節約)
     output = np.empty(output_shape, dtype=np.float32)
@@ -51,6 +61,9 @@ def batched_compute(
         return fn(x)
 
     # 4. バッチ処理ループ (tqdm適用)
+    # Output Index Tracker
+    out_idx = 0
+    
     with tqdm(total=n_samples, desc=desc, unit="samples") as pbar:
         for i in range(0, n_samples, batch_size):
             batch_end = min(i + batch_size, n_samples)
@@ -61,9 +74,19 @@ def batched_compute(
 
             # (B) GPUへ転送 -> 計算
             batch_out_jax = step(jnp.array(batch_np))
-
+            
             # (C) CPUへ戻す (同期)
-            output[i:batch_end] = np.asarray(batch_out_jax)
+            # Map input batch size to output batch size
+            current_out_size = current_batch_size * expansion_factor
+            
+            # Ensure shape match (handle partial batches or simple mismatches)
+            batch_result_np = np.asarray(batch_out_jax)
+            
+            # If flattening happens (e.g. (B, T, F) -> (B*T, F)), shape[0] is B*T
+            # So we just fill the buffer sequentially
+            output[out_idx : out_idx + current_out_size] = batch_result_np
+            
+            out_idx += current_out_size
 
             # 進捗更新
             pbar.update(current_batch_size)

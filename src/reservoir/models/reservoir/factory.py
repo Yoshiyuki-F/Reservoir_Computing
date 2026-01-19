@@ -57,26 +57,26 @@ class ReservoirFactory:
         topo_meta: Dict[str, Any] = {}
         agg_mode_enum = model.aggregation
 
-        feature_units = int(node.get_feature_dim(time_steps=t_steps))
-        
         # Determine shapes with batch dimension if present
         def _with_batch(shape_wo_batch: tuple[int, ...]) -> tuple[int, ...]:
              if batch_dim is not None:
                  return (batch_dim,) + shape_wo_batch
              return shape_wo_batch
 
-        # Correction for SEQUENCE mode: Feature shape includes time dimension
-        from reservoir.core.identifiers import AggregationMode
-        if agg_mode_enum == AggregationMode.SEQUENCE:
-             feat_core = (t_steps, feature_units)
-             out_core = (t_steps, output_dim)
-        else:
-             feat_core = (feature_units,)
-             out_core = (output_dim,)
-             
-        feature_shape = _with_batch(feat_core)
+        # Use Aggregator execution logic to determine feature shape
+        from reservoir.layers.aggregation import StateAggregator
+        
+        # internal_shape/projected_shape is the input to aggregation
         projected_shape = _with_batch((t_steps, projected_input_dim))
-        output_shape = _with_batch(out_core)
+        
+        aggregator = StateAggregator(agg_mode_enum)
+        feature_shape = aggregator.get_output_shape(projected_shape)
+        
+        # Output shape matches feature shape but with last dimension replaced by output_dim
+        # (Assuming Readout preserves sample structure and maps features -> output_dim)
+        output_shape = feature_shape[:-1] + (output_dim,)
+             
+        projected_shape = _with_batch((t_steps, projected_input_dim))
 
         topo_meta["type"] = pipeline_config.model_type.value.upper()
         topo_meta["shapes"] = {
