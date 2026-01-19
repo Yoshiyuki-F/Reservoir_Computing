@@ -440,7 +440,7 @@ class UniversalPipeline:
                 best_lambda = lam_val
 
         # Display as positive VPT
-        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val MSE: {best_score:.5f})")
+        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val VPT: {-best_score:.5f} LT)")
         print_ridge_search_results({
             "search_history": search_history,
             "best_lambda": best_lambda,
@@ -499,7 +499,7 @@ class UniversalPipeline:
         dataset_meta: DatasetMetadata,
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Execute the unified pipeline flow:
+        Execute the unified pipeline phase (in Step 4 5 6 ):
         1. Train Model
         2. Extract Features
         3. Align Targets
@@ -508,6 +508,36 @@ class UniversalPipeline:
         """
         processed = frontend_ctx.processed_split
         start = time.time()
+
+        # --- Step 4: Adapter Stats (Full Dataset) ---
+        # This Log was previously in run.py (Probe), moved here for accuracy.
+        print("\n=== Step 4: Adapter (Full Dataset Probe) ===")
+        # Check for adapter
+        adapter_fn = None
+        if hasattr(self.model, "student_adapter") and self.model.student_adapter is not None:
+             adapter_fn = self.model.student_adapter
+        elif hasattr(self.model, "adapter") and self.model.adapter is not None:
+             adapter_fn = self.model.adapter
+        
+        if adapter_fn is not None:
+             # Compute and Log
+             from functools import partial
+             # Adapter is usually stateless and fast, but safely reuse batched_compute
+             
+             # Train
+             train_A = batched_compute(adapter_fn, processed.train_X, dataset_meta.training.batch_size, desc="[Adapter] train")
+             print_feature_stats(train_A, "4:train")
+             
+             # Val
+             if processed.val_X is not None:
+                 val_A = batched_compute(adapter_fn, processed.val_X, dataset_meta.training.batch_size, desc="[Adapter] val")
+                 print_feature_stats(val_A, "4:val")
+                 
+             # Test
+             test_A = batched_compute(adapter_fn, processed.test_X, dataset_meta.training.batch_size, desc="[Adapter] test")
+             print_feature_stats(test_A, "4:test")
+        else:
+             print("    [Runner] No adapter found (Skipped Step 4 details).")
 
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
         train_logs = self.model.train(processed.train_X, processed.train_y) or {}
@@ -521,7 +551,6 @@ class UniversalPipeline:
 
         print(f"\n=== Step 6: Feature Extraction / Aggregation Flattened(output is 2D) ===")
 
-        # Log FeatureStats for Step 6 here (moved from inside _extract_all_features)
         print_feature_stats(train_Z, "6:train")
         print_feature_stats(val_Z, "6:val")
         print_feature_stats(test_Z, "6:test")

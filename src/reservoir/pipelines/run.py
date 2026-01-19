@@ -26,7 +26,7 @@ from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.layers.preprocessing import create_preprocessor
 from reservoir.layers.projection import InputProjection
 from reservoir.models.presets import PipelineConfig
-from reservoir.utils.reporting import generate_report
+from reservoir.utils.reporting import generate_report, print_feature_stats
 from reservoir.utils.batched_compute import batched_compute
 
 # Ensure dataset loaders are registered
@@ -50,62 +50,6 @@ def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) ->
     return np.asarray(arr)
 
 
-def _log_split_stats(stage: str, train_X: np.ndarray, val_X: np.ndarray, test_X: np.ndarray) -> None:
-    """Lightweight stats logger for each split at a given processing stage."""
-    def _stats(arr: np.ndarray) -> str:
-        arr64 = np.asarray(arr)
-        sample = arr64
-        if sample.shape[0] > 2000:
-            sample = sample[:2000]
-        return (
-            f"shape={arr64.shape}, mean={float(np.mean(sample)):.4f}, std={float(np.std(sample)):.4f}, "
-            f"min={float(np.min(sample)):.4f}, max={float(np.max(sample)):.4f}, nans={int(np.isnan(sample).sum())}"
-        )
-
-    print(f"[FeatureStats:{stage}:train] {_stats(train_X)}")
-    if val_X is not None:
-        print(f"[FeatureStats:{stage}:val] {_stats(val_X)}")
-    if test_X is not None:
-        print(f"[FeatureStats:{stage}:test] {_stats(test_X)}")
-
-
-def _log_adapter_stats(model: Any, train_X: np.ndarray, val_X: np.ndarray, test_X: np.ndarray) -> None:
-    """Log adapter output stats (Step 4) using safe batch sampling."""
-    def _probe(split_name: str, data: np.ndarray) -> None:
-        if data is None: return
-        try:
-            batch_size = 100
-            total = data.shape[0] if hasattr(data, 'shape') else 0
-            if total == 0: return
-            
-            sample = data[:min(batch_size, total)]
-            import jax.numpy as jnp
-            
-            out = None
-            if hasattr(model, 'student_adapter') and model.student_adapter is not None:
-                out = model.student_adapter(jnp.array(sample))
-            elif hasattr(model, 'adapter') and model.adapter is not None:
-                out = model.adapter(jnp.array(sample))
-                
-            if out is not None:
-                # Extrapolate full shape for display (Batch, Features...)
-                full_shape = (total,) + out.shape[1:]
-                # Calculate stats on sample
-                mean = float(jnp.mean(out))
-                std = float(jnp.std(out))
-                min_v = float(jnp.min(out))
-                max_v = float(jnp.max(out))
-                print(f"[FeatureStats:4:{split_name}] shape={full_shape}, mean={mean:.4f}, std={std:.4f}, min={min_v:.4f}, max={max_v:.4f}, nans=0")
-        except Exception as e:
-            # Silently fail or log error if strictly needed, but better to avoid noise if just stats
-            print(f"[FeatureStats:4:{split_name}] Unable to log stats: {e}")
-
-    _probe("train", train_X)
-    _probe("val", val_X)
-    _probe("test", test_X)
-
-
-
 def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfig] = None) -> Tuple[DatasetMetadata, SplitDataset]:
     """Step 1: Resolve presets and load dataset without mutating inputs later."""
     print("=== Step 1: Loading Dataset ===")
@@ -118,7 +62,11 @@ def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfi
         require_3d=True,
     )
 
-    _log_split_stats("1", dataset_split.train_X, dataset_split.val_X, dataset_split.test_X)
+    print_feature_stats(dataset_split.train_X, "1:train")
+    if dataset_split.val_X is not None:
+        print_feature_stats(dataset_split.val_X, "1:val")
+    if dataset_split.test_X is not None:
+        print_feature_stats(dataset_split.test_X, "1:test")
 
     # User Request: Use full 3D shape (Batch, Time, Feature) for topology logging
     input_shape = dataset_split.train_X.shape if dataset_split.train_X is not None else ()
@@ -168,7 +116,11 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
              if data_split.test_y is not None:
                  data_split = replace(data_split, test_y=_apply_layers(pre_layers, data_split.test_y, fit=False))
 
-    _log_split_stats("2", train_X, val_X, test_X)
+    print_feature_stats(train_X, "2:train")
+    if val_X is not None:
+        print_feature_stats(val_X, "2:val")
+    if test_X is not None:
+        print_feature_stats(test_X, "2:test")
     # Use full 3D shape
     preprocessed_shape = train_X.shape
 
@@ -189,7 +141,11 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         input_shape_for_meta = preprocessed_shape
         # input_dim_for_factory still needs the feature dimension (last dim)
         input_dim_for_factory = int(preprocessed_shape[-1])
-        _log_split_stats("3", train_X, val_X, test_X)
+        print_feature_stats(train_X, "3:train")
+        if val_X is not None:
+            print_feature_stats(val_X, "3:val")
+        if test_X is not None:
+            print_feature_stats(test_X, "3:test")
         return FrontendContext(
             processed_split=processed_split,
             preprocess_labels=preprocess_labels,
@@ -246,7 +202,11 @@ def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_m
         val_y=data_split.val_y,
     )
 
-    _log_split_stats("3", projected_train, projected_val, projected_test)
+    print_feature_stats(projected_train, "3:train")
+    if projected_val is not None:
+        print_feature_stats(projected_val, "3:val")
+    if projected_test is not None:
+        print_feature_stats(projected_test, "3:test")
     return FrontendContext(
         processed_split=processed_split,
         preprocess_labels=preprocess_labels,
@@ -266,9 +226,8 @@ def _build_model_stack(
     frontend_ctx: FrontendContext,
 ) -> ModelStack:
 
-    print("\n=== Step 4: Build Model Stack (Sample, TimeStep, Dimension) ===")
-
-
+    # Step 4: Adapter Stats moved to generic_runner.py for full dataset logging
+    # --- Step 5: Factory Model Construction ---
     """Step 4: Instantiate model + readout and enrich topology metadata."""
     processed = frontend_ctx.processed_split
     if dataset_meta.preset.config.n_output is not None:
@@ -303,7 +262,8 @@ def _build_model_stack(
     topo_meta["shapes"] = shapes_meta
 
     # Step 4: Log stats for adapter output (safe batching)
-    _log_adapter_stats(model, processed.train_X, processed.val_X, processed.test_X)
+    # Step 4: Log stats for adapter output (safe batching)
+    # _log_adapter_stats(model, processed.train_X, processed.val_X, processed.test_X) -> Moved to generic_runner
 
     details_meta = topo_meta.get("details", {}) or {}
     details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
