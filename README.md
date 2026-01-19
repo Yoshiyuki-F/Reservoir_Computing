@@ -44,7 +44,7 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
 - `--model`: **(Required)** The model architecture to use.
     - `classical_reservoir`
     - `fnn`
-    - `fnn-distillation`
+    - `fnn_distillation`
     - `gate_based-quantum-reservoir` #TODO
     - `analog-quantum-reservoir` #TODO
 - `--dataset`: **(Required)** The dataset to use.
