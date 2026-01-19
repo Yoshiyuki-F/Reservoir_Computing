@@ -36,7 +36,7 @@ class BaseModel(ABC):
 
     def get_topology_meta(self) -> Dict[str, Any]:
         """Optional topology metadata for visualization."""
-        return {}
+        return getattr(self, "topology_meta", {})
 
 
 class BaseFlaxModel(BaseModel, ABC):

@@ -22,7 +22,6 @@ class FrontendContext:
     input_dim_for_factory: int
     scaler: Optional[Any]
     projection_layer: Optional[Any] = None
-    runtime_shapes: Dict[str, Any] = None
 
 
 @dataclass(frozen=True)
