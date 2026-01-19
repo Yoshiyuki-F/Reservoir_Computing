@@ -338,6 +338,16 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
     filename_parts = [model_type_str, preprocess_label]
 
+    # Window Size marker (for WindowsFNN/TDE)
+    if config is not None:
+        # Check direct model config (FNNConfig)
+        model_cfg = getattr(config, 'model', None)
+        if hasattr(model_cfg, 'window_size') and model_cfg.window_size is not None:
+             filename_parts.append(f"k{int(model_cfg.window_size)}")
+        # Check student config (Distillation)
+        elif hasattr(model_cfg, 'student') and hasattr(model_cfg.student, 'window_size') and model_cfg.student.window_size is not None:
+             filename_parts.append(f"k{int(model_cfg.student.window_size)}")
+
     # Projection marker (Proj) only if config.projection is defined
     if config is not None and hasattr(config, 'projection') and config.projection is not None:
         proj_units = getattr(config.projection, 'n_units', 0)
