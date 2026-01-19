@@ -17,6 +17,7 @@ from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.nn.base import BaseModel
 from reservoir.training.presets import TrainingConfig
+from reservoir.utils.reporting import print_feature_stats
 
 
 class DistillationModel(BaseModel):
@@ -135,6 +136,7 @@ class DistillationModel(BaseModel):
 
         # Use batched computation for teacher targets (safe for large datasets)
         teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
+        print_feature_stats(teacher_targets, "5:teacher")
 
         # Apply Adapter and Align Targets
         student_X, student_targets = self._prepare_student_data(inputs, teacher_targets)

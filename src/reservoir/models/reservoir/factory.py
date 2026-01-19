@@ -83,6 +83,7 @@ class ReservoirFactory:
             "input": input_shape,
             "preprocessed": None,
             "projected": projected_shape,
+            "adapter": None,  # No adapter for reservoir (direct sequence processing)
             "internal": projected_shape,
             "feature": feature_shape,
             "output": output_shape,

@@ -1,9 +1,9 @@
-"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/none/factory.py
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/passthrough/factory.py
 Factory for Passthrough model (projection + aggregation only).
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.config import PassthroughConfig
@@ -46,7 +46,12 @@ class PassthroughFactory:
             
         model.topology_meta = {
             "type": "PASSTHROUGH",
-            "shapes": {"feature": feat_shape, "output": (output_dim,)},
+            "shapes": {
+                "adapter": None,  # No adapter for passthrough
+                "internal": None,  # No internal layers
+                "feature": feat_shape,
+                "output": (output_dim,),
+            },
             "details": {"agg_mode": model_config.aggregation.value, "structure": "Projection -> Aggregation"},
         }
         return model
