@@ -1,6 +1,6 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/generic_runner.py
 Universal pipeline that treats models as feature extractors and owns the readout.
-Refactored to delegate reporting/logging to reservoir.utils.reporting.
+Refactored V2: Strategy pattern for readout, separated generation primitives.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from reservoir.utils.reporting import (
 )
 from reservoir.utils.batched_compute import batched_compute
 
+
 class UniversalPipeline:
     """Runs the V2 flow: pre-train model -> extract features -> fit ridge -> evaluate."""
 
@@ -32,7 +33,7 @@ class UniversalPipeline:
         self.config = config
 
     # ------------------------------------------------------------------ #
-    # Utilities (Computation only)                                       #
+    # Phase 1: Generation Primitives                                     #
     # ------------------------------------------------------------------ #
 
     def generate_closed_loop(
@@ -42,7 +43,7 @@ class UniversalPipeline:
         projection_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
         verbose: bool = True
     ) -> jnp.ndarray:
-        """Generate closed-loop predictions using Fast JAX Scan."""
+        """Generate closed-loop predictions using Fast JAX Scan (for Reservoir models)."""
         history = jnp.asarray(initial_input)
         if history.ndim == 2: history = history[None, ...]
         elif history.ndim == 1: history = history[None, None, ...]
@@ -61,7 +62,7 @@ class UniversalPipeline:
                 out = self.readout.predict(s_in)
                 return out[:, 0, :]
             else:
-                 return s
+                return s
 
         first_prediction = predict_one(final_state)
 
@@ -76,306 +77,489 @@ class UniversalPipeline:
 
         return jnp.swapaxes(predictions, 0, 1)
 
+    def generate_closed_loop_windowed(
+        self,
+        seed_window: jnp.ndarray,
+        steps: int,
+        verbose: bool = True
+    ) -> jnp.ndarray:
+        """Generate closed-loop predictions for windowed FNN models."""
+        window = jnp.asarray(seed_window)
+        if window.ndim == 2:
+            window = window[None, ...]
+
+        batch_size, window_size, n_features = window.shape
+
+        if verbose:
+            print(f"[Closed-Loop Windowed] Generating {steps} steps (window_size={window_size})...")
+
+        predictions = []
+
+        for step in range(steps):
+            flat_window = window.reshape(batch_size, -1)
+
+            if hasattr(self.model, '_state') and self.model._state is not None:
+                pred = self.model._model_def.apply({"params": self.model._state.params}, flat_window)
+            else:
+                pred = jnp.zeros((batch_size, n_features))
+
+            predictions.append(pred)
+            pred_expanded = pred[:, None, :]
+            window = jnp.concatenate([window[:, 1:, :], pred_expanded], axis=1)
+
+        return jnp.stack(predictions, axis=1)
+
+    def _generate_trajectory(
+        self,
+        seed_data: jnp.ndarray,
+        steps: int,
+        projection_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
+        verbose: bool = True
+    ) -> jnp.ndarray:
+        """Dispatcher: routes to appropriate generation method based on model type."""
+        if hasattr(self.model, 'window_size') and self.model.window_size is not None:
+            window_size = self.model.window_size
+            seed_window = seed_data[:, -window_size:, :]
+            return self.generate_closed_loop_windowed(seed_window, steps, verbose=verbose)
+        else:
+            return self.generate_closed_loop(seed_data, steps, projection_fn, verbose=verbose)
+
+    def _get_seed_sequence(self, train_X: jnp.ndarray, val_X: Optional[jnp.ndarray]) -> jnp.ndarray:
+        """Extract seed sequence from Train+Val for closed-loop generation."""
+        if val_X is not None:
+            return jnp.concatenate([jnp.array(train_X), jnp.array(val_X)], axis=1)
+        return jnp.array(train_X)
+
     # ------------------------------------------------------------------ #
-    # Run                                                                #
+    # Phase 2: Helper Methods                                            #
     # ------------------------------------------------------------------ #
+
+    def _extract_all_features(
+        self,
+        train_X: jnp.ndarray,
+        val_X: Optional[jnp.ndarray],
+        test_X: jnp.ndarray,
+        batch_size: int
+    ) -> tuple:
+        """Extract features from all splits."""
+        if self.readout is None:
+            print("    [Runner] End-to-End mode: Using model.predict directly.")
+            train_Z = self.model.predict(train_X)
+            print_feature_stats(train_Z, "post_adapter_train")
+
+            val_Z = None
+            if val_X is not None:
+                val_Z = self.model.predict(val_X)
+                print_feature_stats(val_Z, "post_adapter_val")
+
+            test_Z = self.model.predict(test_X)
+            print_feature_stats(test_Z, "post_adapter_test")
+        else:
+            train_Z = batched_compute(self.model, train_X, batch_size, desc="[Extracting] train")
+            print_feature_stats(train_Z, "post_train_features")
+
+            val_Z = None
+            if val_X is not None:
+                val_Z = batched_compute(self.model, val_X, batch_size, desc="[Extracting] val")
+                print_feature_stats(val_Z, "post_val_features")
+
+            test_Z = batched_compute(self.model, test_X, batch_size, desc="[Extracting] test")
+            print_feature_stats(test_Z, "post_test_features")
+
+        return train_Z, val_Z, test_Z
+
+    def _align_targets(self, features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
+        """Align target length to match feature length."""
+        if features is None or targets is None:
+            return targets
+
+        def get_len(arr):
+            return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
+
+        len_f = get_len(features)
+        len_t = get_len(targets)
+
+        if len_f < len_t:
+            diff = len_t - len_f
+            if targets.ndim == 3:
+                return targets[:, diff:, :]
+            return targets[diff:]
+        return targets
+
+    def _compute_chaos_metrics(
+        self,
+        truth: jnp.ndarray,
+        pred: jnp.ndarray,
+        scaler,
+        dataset_config,
+        global_start: int,
+        global_end: int
+    ) -> Optional[Dict[str, Any]]:
+        """Compute VPT, NDEI, and other chaos metrics with inverse transform."""
+        if scaler is None:
+            return None
+
+        shape_pred = pred.shape
+        shape_truth = truth.shape
+        pred_raw = scaler.inverse_transform(pred.reshape(-1, shape_pred[-1])).reshape(shape_pred)
+        truth_raw = scaler.inverse_transform(truth.reshape(-1, shape_truth[-1])).reshape(shape_truth)
+
+        print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+
+        dt = getattr(dataset_config, 'dt', 1.0)
+        ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
+
+        return calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu)
+
+    # ------------------------------------------------------------------ #
+    # Phase 3: Readout Strategy Pattern                                  #
+    # ------------------------------------------------------------------ #
+
+    def _fit_readout_strategy(
+        self,
+        train_Z: jnp.ndarray,
+        val_Z: Optional[jnp.ndarray],
+        test_Z: jnp.ndarray,
+        train_y: jnp.ndarray,
+        val_y: Optional[jnp.ndarray],
+        test_y: jnp.ndarray,
+        frontend_ctx: FrontendContext,
+        dataset_meta: DatasetMetadata
+    ) -> Dict[str, Any]:
+        """Route to appropriate readout fitting strategy."""
+        if self.readout is None:
+            return self._strategy_end_to_end(
+                train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta)
+        elif dataset_meta.classification:
+            return self._strategy_classification(train_Z, val_Z, test_Z, train_y, val_y)
+        else:
+            return self._strategy_regression_closed_loop(
+                train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta)
+
+    def _strategy_end_to_end(
+        self,
+        train_Z: jnp.ndarray,
+        val_Z: Optional[jnp.ndarray],
+        test_Z: jnp.ndarray,
+        train_y: jnp.ndarray,
+        val_y: Optional[jnp.ndarray],
+        test_y: jnp.ndarray,
+        frontend_ctx: FrontendContext,
+        dataset_meta: DatasetMetadata
+    ) -> Dict[str, Any]:
+        """End-to-End mode: features are predictions."""
+        print("Readout is None. End-to-End mode.")
+
+        result = {
+            "train_pred": train_Z,
+            "val_pred": val_Z,
+            "test_pred": test_Z,
+            "best_lambda": None,
+            "best_score": None,
+            "search_history": {},
+            "weight_norms": {},
+            "closed_loop_pred": None,
+            "closed_loop_truth": None,
+            "chaos_results": None,
+        }
+
+        # FNN Closed-Loop for regression
+        if not dataset_meta.classification and hasattr(self.model, 'window_size') and self.model.window_size is not None:
+            print("\n=== Step 8: FNN Closed-Loop Generation ===")
+            try:
+                processed = frontend_ctx.processed_split
+                generation_steps = processed.test_X.shape[1] if hasattr(processed.test_X, "shape") else 0
+
+                seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
+                closed_loop_pred = self._generate_trajectory(seed_data, steps=generation_steps)
+
+                global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
+                global_end = global_start + generation_steps
+
+                chaos_results = self._compute_chaos_metrics(
+                    processed.test_y, closed_loop_pred, frontend_ctx.scaler,
+                    dataset_meta.preset.config, global_start, global_end)
+
+                result["closed_loop_pred"] = closed_loop_pred
+                result["closed_loop_truth"] = processed.test_y  # Use original, not aligned
+                result["chaos_results"] = chaos_results
+            except Exception as e:
+                print(f"[Warning] FNN Closed-loop generation failed: {e}")
+
+        return result
+
+    def _strategy_classification(
+        self,
+        train_Z: jnp.ndarray,
+        val_Z: Optional[jnp.ndarray],
+        test_Z: jnp.ndarray,
+        train_y: jnp.ndarray,
+        val_y: Optional[jnp.ndarray]
+    ) -> Dict[str, Any]:
+        """Classification: Open-Loop grid search (accuracy, higher is better)."""
+        print("    [Runner] Classification task: Using Open-Loop evaluation.")
+
+        tf_reshaped = train_Z.reshape(-1, train_Z.shape[-1]) if train_Z.ndim == 3 else train_Z
+        ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
+        vf_reshaped = val_Z.reshape(-1, val_Z.shape[-1]) if val_Z is not None and val_Z.ndim == 3 else val_Z
+        vy_reshaped = val_y.reshape(-1, val_y.shape[-1]) if val_y is not None and val_y.ndim == 3 else val_y
+
+        search_history = {}
+        weight_norms = {}
+        best_lambda = None
+        best_score = None
+
+        if hasattr(self.readout, 'ridge_lambda'):
+            lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or [self.readout.ridge_lambda]
+            print(f"    [Runner] Running hyperparameter search over {len(lambda_candidates)} lambdas...")
+            best_score = -float("inf")
+            best_lambda = lambda_candidates[0]
+
+            for lam in tqdm(lambda_candidates, desc="[Lambda Search]"):
+                lam_val = float(lam)
+                self.readout.ridge_lambda = lam_val
+                self.readout.fit(tf_reshaped, ty_reshaped)
+
+                val_pred_tmp = self.readout.predict(vf_reshaped)
+                score = compute_score(val_pred_tmp, vy_reshaped, self.metric_name)
+                search_history[lam_val] = float(score)
+
+                if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
+                    weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
+
+                if score > best_score:
+                    best_score = score
+                    best_lambda = lam_val
+
+            self.readout.ridge_lambda = best_lambda
+            self.readout.fit(tf_reshaped, ty_reshaped)
+            print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
+
+            print_ridge_search_results({
+                "search_history": search_history,
+                "best_lambda": best_lambda,
+                "weight_norms": weight_norms
+            }, self.metric_name)
+        else:
+            print("    [Runner] No hyperparameter search needed for this readout.")
+            self.readout.fit(tf_reshaped, ty_reshaped)
+
+        return {
+            "train_pred": self.readout.predict(train_Z),
+            "val_pred": self.readout.predict(val_Z) if val_Z is not None else None,
+            "test_pred": self.readout.predict(test_Z),
+            "best_lambda": best_lambda,
+            "best_score": best_score,
+            "search_history": search_history,
+            "weight_norms": weight_norms,
+            "closed_loop_pred": None,
+            "closed_loop_truth": None,
+            "chaos_results": None,
+        }
+
+    def _strategy_regression_closed_loop(
+        self,
+        train_Z: jnp.ndarray,
+        val_Z: Optional[jnp.ndarray],
+        test_Z: jnp.ndarray,
+        train_y: jnp.ndarray,
+        val_y: Optional[jnp.ndarray],
+        test_y: jnp.ndarray,
+        frontend_ctx: FrontendContext,
+        dataset_meta: DatasetMetadata
+    ) -> Dict[str, Any]:
+        """Regression: Closed-Loop grid search (MSE, lower is better)."""
+        processed = frontend_ctx.processed_split
+
+        lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or \
+            ([self.readout.ridge_lambda] if hasattr(self.readout, 'ridge_lambda') else [1e-3])
+        print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(lambda_candidates)} candidates...")
+
+        proj_fn = None
+        if self.config.projection is not None and hasattr(frontend_ctx, "projection_layer"):
+            def proj_fn(x): return frontend_ctx.projection_layer(x)
+
+        tf_reshaped = train_Z.reshape(-1, train_Z.shape[-1]) if train_Z.ndim == 3 else train_Z
+        ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
+
+        val_steps = val_Z.shape[1] if val_Z is not None and val_Z.ndim == 3 else 0
+        seed_len = min(processed.train_X.shape[1], val_steps) if val_steps > 0 else processed.train_X.shape[1]
+        seed_data = processed.train_X[:, -seed_len:, :]
+
+        search_history = {}
+        weight_norms = {}
+        best_score = float("inf")
+        best_lambda = lambda_candidates[0]
+
+        for lam in tqdm(lambda_candidates, desc="[Closed-Loop Search]"):
+            lam_val = float(lam)
+
+            if hasattr(self.readout, "ridge_lambda"):
+                self.readout.ridge_lambda = lam_val
+
+            self.readout.fit(tf_reshaped, ty_reshaped)
+
+            if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
+                weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
+
+            val_gen = self.generate_closed_loop(jnp.array(seed_data), steps=val_steps, projection_fn=proj_fn, verbose=False)
+            score = compute_score(val_gen, val_y, self.metric_name)
+            search_history[lam_val] = float(score)
+
+            if score < best_score:
+                best_score = score
+                best_lambda = lam_val
+
+        print(f"    [Runner] Best Closed-Loop Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+        print_ridge_search_results({
+            "search_history": search_history,
+            "best_lambda": best_lambda,
+            "weight_norms": weight_norms
+        }, self.metric_name)
+
+        print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
+        if hasattr(self.readout, "ridge_lambda"):
+            self.readout.ridge_lambda = best_lambda
+        self.readout.fit(tf_reshaped, ty_reshaped)
+
+        print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
+        closed_loop_pred = None
+        closed_loop_truth = None
+        chaos_results = None
+
+        if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value or "passthrough" in self.config.model_type.value:
+            try:
+                generation_steps = processed.test_X.shape[1] if hasattr(processed.test_X, "shape") else 0
+
+                seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
+                print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
+
+                closed_loop_pred = self._generate_trajectory(seed_data, steps=generation_steps, projection_fn=proj_fn)
+                closed_loop_truth = test_y
+
+                global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
+                global_end = global_start + generation_steps
+
+                chaos_results = self._compute_chaos_metrics(
+                    closed_loop_truth, closed_loop_pred, frontend_ctx.scaler,
+                    dataset_meta.preset.config, global_start, global_end)
+            except Exception as e:
+                print(f"[Warning] Closed-loop generation failed: {e}")
+
+        return {
+            "train_pred": self.readout.predict(train_Z),
+            "val_pred": None,
+            "test_pred": None,
+            "best_lambda": best_lambda,
+            "best_score": best_score,
+            "search_history": search_history,
+            "weight_norms": weight_norms,
+            "closed_loop_pred": closed_loop_pred,
+            "closed_loop_truth": closed_loop_truth,
+            "chaos_results": chaos_results,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Phase 4: Main Execution Flow                                       #
+    # ------------------------------------------------------------------ #
+
     def run(
         self,
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
     ) -> Dict[str, Dict[str, Any]]:
+        """
+        Execute the unified pipeline flow:
+        1. Train Model
+        2. Extract Features
+        3. Align Targets
+        4. Fit Readout (Strategy Pattern)
+        5. Build Results
+        """
         processed = frontend_ctx.processed_split
-        train_X = processed.train_X
-        train_y = processed.train_y
-        test_X = processed.test_X
-        test_y = processed.test_y
-
-        cfg = dataset_meta.training
-        feature_batch_size = int(cfg.batch_size)
-
         start = time.time()
 
-        # Initialize Output Variables
-        closed_loop_pred_val = None
-        closed_loop_truth_val = None
-        best_lambda = None
-        best_score = None
-        search_history = {}
-        weight_norms = {}
-        chaos_results = None  # VPT and other chaos metrics
-
-        # 1. Train Model (Reservoir Warmup)
+        # Step 1: Train Model
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{self.config.model_type.value}] ===")
-        train_logs = self.model.train(train_X, train_y) or {}
+        train_logs = self.model.train(processed.train_X, processed.train_y) or {}
 
-        
+        # Step 2: Extract Features
+        print(f"\n=== Step 6: Feature Extraction / Aggregation ===")
+        train_Z, val_Z, test_Z = self._extract_all_features(
+            processed.train_X,
+            processed.val_X,
+            processed.test_X,
+            dataset_meta.training.batch_size
+        )
 
+        # Step 3: Align Targets
+        train_y = self._align_targets(train_Z, processed.train_y)
+        val_y = self._align_targets(val_Z, processed.val_y)
+        test_y = self._align_targets(test_Z, processed.test_y)
 
-
-
-        print("\n=== Step 6: Feature Extraction / Aggregation ===")
-        # 2. Extract Features
-        train_features = batched_compute(self.model, train_X, feature_batch_size, desc="[Extracting] train")
-        print_feature_stats(train_features, "post_train_features")
-
-        val_Z = None
-        val_y = processed.val_y
-        if processed.val_X is not None and processed.val_y is not None:
-            val_Z = batched_compute(self.model, processed.val_X, feature_batch_size, desc="[Extracting] val")
-            print_feature_stats(val_Z, "post_val_features")
-
-        test_features = batched_compute(self.model, test_X, feature_batch_size, desc="[Extracting] test")
-        print_feature_stats(test_features, "post_test_features")
-
+        # Step 4: Fit Readout (Strategy Pattern)
         readout_name = type(self.readout).__name__ if self.readout else "None"
-
-
-
-
         print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
 
-        # Align lengths Helper (Local)
-        def align_length(feat, targ):
-             if feat is not None and targ is not None:
-                 def get_len(arr): return arr.shape[1] if arr.ndim == 3 else arr.shape[0]
-                 len_f = get_len(feat)
-                 len_t = get_len(targ)
-                 if len_f < len_t:
-                     diff = len_t - len_f
-                     if targ.ndim == 3: return targ[:, diff:, :]
-                     return targ[diff:]
-             return targ
+        fit_result = self._fit_readout_strategy(
+            train_Z, val_Z, test_Z,
+            train_y, val_y, test_y,
+            frontend_ctx, dataset_meta
+        )
 
-        train_y = align_length(train_features, train_y)
-        val_y = align_length(val_Z, val_y)
-        test_y = align_length(test_features, test_y)
+        # Step 5: Build Results
+        return self._build_results(fit_result, train_logs, train_Z, val_Z, test_Z, test_y, frontend_ctx, start)
 
-        # 3. Fit Readout
-        if self.readout is None:
-            print("Readout is None. End-to-End mode.")
-            train_pred = train_features
-            test_pred = test_features
-            val_pred = val_Z
+    def _build_results(
+        self,
+        fit_result: Dict[str, Any],
+        train_logs: Dict[str, Any],
+        train_Z: jnp.ndarray,
+        val_Z: Optional[jnp.ndarray],
+        test_Z: jnp.ndarray,
+        test_y: jnp.ndarray,
+        frontend_ctx: FrontendContext,
+        start: float
+    ) -> Dict[str, Dict[str, Any]]:
+        """Construct the final results dictionary."""
+        results: Dict[str, Any] = {}
 
-
-        elif dataset_meta.classification:
-            # === Classification: Open-Loop Evaluation ===
-            print("    [Runner] Classification task: Using Open-Loop evaluation.")
-            
-            # Reshape for fit
-            tf_reshaped = train_features.reshape(-1, train_features.shape[-1]) if train_features.ndim == 3 else train_features
-            ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
-            vf_reshaped = val_Z.reshape(-1, val_Z.shape[-1]) if val_Z.ndim == 3 else val_Z
-            vy_reshaped = val_y.reshape(-1, val_y.shape[-1]) if val_y.ndim == 3 else val_y
-            
-            # Hyperparameter search (sklearn convention: Runner handles search)
-            if hasattr(self.readout, 'ridge_lambda'):
-                # Ridge: Search over lambda candidates
-                lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or [self.readout.ridge_lambda]
-                print(f"    [Runner] Running hyperparameter search over {len(lambda_candidates)} lambdas...")
-                best_score = -float("inf")  # Accuracy: higher is better
-                best_lambda = lambda_candidates[0]
-                
-                for lam in tqdm(lambda_candidates, desc="[Lambda Search]"):
-                    lam_val = float(lam)
-                    self.readout.ridge_lambda = lam_val
-                    self.readout.fit(tf_reshaped, ty_reshaped)
-                    
-                    val_pred = self.readout.predict(vf_reshaped)
-                    score = compute_score(val_pred, vy_reshaped, self.metric_name)
-                    search_history[lam_val] = float(score)
-                    
-                    if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
-                        weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
-                    
-                    if score > best_score:  # Accuracy: higher is better
-                        best_score = score
-                        best_lambda = lam_val
-                
-                # Re-fit with best lambda
-                self.readout.ridge_lambda = best_lambda
-                self.readout.fit(tf_reshaped, ty_reshaped)
-                print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
-                
-                # Report Search Results
-                search_results = {
-                    "search_history": search_history,
-                    "best_lambda": best_lambda,
-                    "weight_norms": weight_norms
-                }
-                print_ridge_search_results(search_results, self.metric_name)
-            else:
-                # FNN or other: Simple fit (no hyperparameter search)
-                print("    [Runner] No hyperparameter search needed for this readout.")
-                self.readout.fit(tf_reshaped, ty_reshaped)
-            
-            # Predictions
-            train_pred = self.readout.predict(train_features)
-            test_pred = self.readout.predict(test_features) if test_features is not None else None
-            val_pred = self.readout.predict(val_Z) if val_Z is not None else None
-
-            
+        if fit_result["closed_loop_pred"] is not None:
+            print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
+            test_pred = fit_result["closed_loop_pred"]
+            test_y_final = fit_result["closed_loop_truth"]
+            results["is_closed_loop"] = True
         else:
-            # === Regression: Closed-Loop Hyperparameter Search ===
-            lambda_candidates = getattr(self.readout, 'lambda_candidates', None) or [self.readout.ridge_lambda] if hasattr(self.readout, 'ridge_lambda') else [1e-3]
-            print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(lambda_candidates)} candidates...")
-
-            # Setup Projection Fn
-            proj_fn = None
-            if self.config.projection is not None and hasattr(frontend_ctx, "projection_layer"):
-                 def proj_fn(x): return frontend_ctx.projection_layer(x)
-
-            # Search Loop
-            best_score = float("inf")
-            best_lambda = lambda_candidates[0]
-
-            # Reshape for fit
-            tf_reshaped = train_features.reshape(-1, train_features.shape[-1]) if train_features.ndim == 3 else train_features
-            ty_reshaped = train_y.reshape(-1, train_y.shape[-1]) if train_y.ndim == 3 else train_y
-
-            # Val Seed
-            val_steps = val_Z.shape[1] if val_Z.ndim == 3 else 0
-            seed_len = val_steps
-            if train_X.shape[1] < seed_len:
-                 seed_len = train_X.shape[1]
-            seed_data = train_X[:, -seed_len:, :]
-
-            for lam in tqdm(lambda_candidates, desc="[Closed-Loop Search]"):
-                lam_val = float(lam)
-
-                if hasattr(self.readout, "ridge_lambda"):
-                    self.readout.ridge_lambda = lam_val
-
-                # Fit
-                self.readout.fit(tf_reshaped, ty_reshaped)
-
-                # Track norm
-                if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
-                     weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
-
-                # Generate & Score
-                val_gen_features = self.generate_closed_loop(jnp.array(seed_data), steps=val_steps, projection_fn=proj_fn, verbose=False)
-                # Use centralized compute_score
-                score = compute_score(val_gen_features, val_y, self.metric_name)
-
-                search_history[lam_val] = float(score)
-
-                if score < best_score:
-                    best_score = score
-                    best_lambda = lam_val
-
-            print(f"    [Runner] Best Closed-Loop Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
-
-            # Report Search Results (Delegated)
-            search_results = {
-                "search_history": search_history,
-                "best_lambda": best_lambda,
-                "weight_norms": weight_norms
-            }
-            print_ridge_search_results(search_results, self.metric_name)
-
-            # Refit with Best Lambda
-            print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
-            if hasattr(self.readout, "ridge_lambda"):
-                self.readout.ridge_lambda = best_lambda
-            self.readout.fit(tf_reshaped, ty_reshaped)
-
-            # Open-Loop Predictions (Train only)
-            train_pred = self.readout.predict(train_features)
-            test_pred = None
-            val_pred = None
-
-            print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
-
-            # 4. Closed-Loop Generation (Test)
-            if "reservoir" in self.config.model_type.value or "distillation" in self.config.model_type.value or "passthrough" in self.config.model_type.value:
-                 try:
-                     generation_steps = test_X.shape[1] if hasattr(test_X, "shape") else 0
-
-                     # === Test Seed Preparation: Train + Val Inputs (Fixed Logic) ===
-                     print(f"    [Runner] Preparing seed for Test (Train + Val)...")
-                     val_X_input = processed.val_X
-                     # Concatenate Train and Val features for continuous history
-                     full_history_inputs = jnp.concatenate([jnp.array(train_X), jnp.array(val_X_input)], axis=1)
-                     context_len = full_history_inputs.shape[1]
-                     seed_input = full_history_inputs[:, -context_len:, :]
-
-                     print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
-
-                     # Generate
-                     closed_loop_pred_val = self.generate_closed_loop(
-                         seed_input, steps=generation_steps, projection_fn=proj_fn)
-
-                     # Evaluate (Chaos Metrics)
-                     if frontend_ctx.scaler is not None:
-                         scaler = frontend_ctx.scaler
-                         shape_cl = closed_loop_pred_val.shape
-                         cl_pred_raw = (scaler.inverse_transform(closed_loop_pred_val.reshape(-1, shape_cl[-1]))
-                         .reshape(shape_cl))
-
-                         # Truth = Full Test Y
-                         closed_loop_truth_val = test_y
-                         if hasattr(closed_loop_truth_val, "shape"):
-                             shape_tr = closed_loop_truth_val.shape
-                             truth_raw = scaler.inverse_transform(
-                                 closed_loop_truth_val.reshape(-1, shape_tr[-1])).reshape(shape_tr)
-
-                             global_start = train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
-                             global_end = global_start + generation_steps
-
-                             print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
-                             # Pass LT parameters for VPT calculation
-                             dataset_config = dataset_meta.preset.config
-                             dt = getattr(dataset_config, 'dt', 1.0)
-                             ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
-                             # Delegated to reporting
-                             chaos_results = calculate_chaos_metrics(
-                                 truth_raw, cl_pred_raw,
-                                 dt=dt,
-                                 lyapunov_time_unit=ltu,
-                             )
-
-                 except Exception as e:
-                     print(f"[Warning] Closed-loop generation failed: {e}")
-
-        # --- Construct Results ---
+            test_pred = fit_result["test_pred"]
+            test_y_final = test_y
 
         test_score = 0.0
-        results = {}
-        if closed_loop_pred_val is not None and closed_loop_truth_val is not None:
-            print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
-            test_pred = closed_loop_pred_val
-            test_y = closed_loop_truth_val
-            if self.readout is not None:
-                # Use centralized score
-                test_score = compute_score(test_pred, test_y, self.metric_name)
-                print(f"    [Runner] Closed-Loop MSE: {test_score:.5f}")
-            results["is_closed_loop"] = True
-        elif test_pred is None:
-             print("    [Runner] Warning: No Test predictions available.")
+        if test_pred is not None and test_y_final is not None:
+            test_score = compute_score(test_pred, test_y_final, self.metric_name)
+            if results.get("is_closed_loop"):
+                print(f"    [Runner] Closed-Loop {self.metric_name.upper()}: {test_score:.5f}")
 
         results["train"] = {
-            "search_history": search_history,
-            "weight_norms": weight_norms
+            "search_history": fit_result["search_history"],
+            "weight_norms": fit_result["weight_norms"],
         }
-        if best_lambda is not None:
-            results["train"]["best_lambda"] = best_lambda
-        results["test"] = {self.metric_name: test_score}
-        
-        # Add chaos metrics (VPT, NDEI, etc.) if available
-        if chaos_results is not None:
-            results["test"]["chaos_metrics"] = chaos_results
-            results["test"]["vpt_lt"] = chaos_results.get("vpt_lt", 0.0)
-            results["test"]["ndei"] = chaos_results.get("ndei", float("inf"))
+        if fit_result["best_lambda"] is not None:
+            results["train"]["best_lambda"] = fit_result["best_lambda"]
 
-        # Validation Result (Prioritize Closed-Loop best_score)
-        val_score = best_score if best_score is not None else compute_score(val_pred, val_y, self.metric_name)
+        results["test"] = {self.metric_name: test_score}
+        if fit_result["chaos_results"] is not None:
+            chaos = fit_result["chaos_results"]
+            results["test"]["chaos_metrics"] = chaos
+            results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
+            results["test"]["ndei"] = chaos.get("ndei", float("inf"))
+
+        val_score = fit_result["best_score"] if fit_result["best_score"] is not None else 0.0
         results["validation"] = {self.metric_name: val_score}
 
         results["outputs"] = {
-            "train_pred": train_pred,
+            "train_pred": fit_result["train_pred"],
             "test_pred": test_pred,
-            "val_pred": val_pred
+            "val_pred": fit_result["val_pred"],
         }
 
         results["readout"] = self.readout
@@ -386,7 +570,6 @@ class UniversalPipeline:
             "elapsed_sec": time.time() - start,
         }
 
-        # Cleanup
-        del train_features, test_features, val_Z
+        del train_Z, val_Z, test_Z
 
         return results

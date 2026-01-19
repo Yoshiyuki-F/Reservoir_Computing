@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import numpy as np
-
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
@@ -63,37 +61,62 @@ class ModelFactory:
             if not isinstance(config.model, FNNConfig):
                 raise TypeError(f"FNN pipeline requires FNNConfig, got {type(config.model)}.")
 
-            # Calculate correct flattened dimension from input_shape if available
-            flattened_dim = int(input_dim)  # fallback
+            # Check if windowed mode
+            window_size = config.model.window_size
+            
+            # Calculate correct dimensions
             batch_size = None
+            timesteps = None
             if input_shape:
                 batch_size = int(input_shape[0])
                 if len(input_shape) > 1:
-                     flattened_dim = int(np.prod(input_shape[1:]))
+                    timesteps = int(input_shape[1])
+            
+            if window_size is not None:
+                # Windowed FNN: flattened_dim = window_size * input_dim
+                flattened_dim = window_size * int(input_dim)
+                # Number of samples after windowing
+                if timesteps:
+                    windowed_samples = timesteps - window_size + 1
+            else:
+                # Standard FNN: flatten all timesteps
+                flattened_dim = timesteps * int(input_dim) if timesteps else int(input_dim)
+                windowed_samples = None
 
             model = FNNModel(
                 model_config=config.model,
                 training_config=training_cfg,
-                input_dim=flattened_dim,
+                input_dim=input_dim,  # Original feature dim, model calculates effective dim
                 output_dim=output_dim,
             )
+            
             # Attach topology metadata for FNN
             hidden_layers = tuple(int(h) for h in (config.model.hidden_layers or ()) if int(h) > 0)
-            internal_shape = hidden_layers or (output_dim,)
+            
+            # Build adapter string and shape
+            if window_size is not None:
+                adapter_type = f"TimeDelayEmbedding(K={window_size})"
+                adapter_shape = (windowed_samples, flattened_dim) if windowed_samples else (flattened_dim,)
+                structure = f"TimeDelayEmbedding(K={window_size}) -> FNN -> Output"
+            else:
+                adapter_type = "Flatten"
+                adapter_shape = (batch_size, flattened_dim) if batch_size else (flattened_dim,)
+                structure = "Flatten -> FNN -> Output"
             
             topo_meta: Dict[str, Any] = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,
                     "projected": input_shape,
-                    "adapter": (batch_size, flattened_dim) if batch_size else (flattened_dim,),
+                    "adapter": adapter_shape,
                     "internal": tuple(hidden_layers) if hidden_layers else None,
-                    "feature": (batch_size, output_dim) if batch_size else (output_dim,),
-                    "output": (batch_size, output_dim) if batch_size else (output_dim,),
+                    "feature": (windowed_samples or batch_size, output_dim) if (windowed_samples or batch_size) else (output_dim,),
+                    "output": (windowed_samples or batch_size, output_dim) if (windowed_samples or batch_size) else (output_dim,),
                 },
                 "details": {
+                    "window_size": window_size,
                     "student_layers": hidden_layers or None,
-                    "structure": "Flatten -> FNN -> Output",
+                    "structure": structure,
                     "agg_mode": "None",
                     "readout": "None",
                 },
