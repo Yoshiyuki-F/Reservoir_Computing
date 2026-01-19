@@ -86,7 +86,14 @@ def print_topology(meta: Dict[str, Any]) -> None:
     if not agg_mode or agg_mode == "None":
         print("6. Aggregation     : Skipped (Architecture implies flat output)")
     else:
-        print(f"6. Aggregation     : {_fmt_dim(prev_dim)} -> {_fmt_dim(s_feat)} (Mode: {agg_mode})")
+        # User Request: Report flattened 2D output for Sequence Aggregation
+        s_feat_disp = s_feat
+        if agg_mode.lower() == "sequence" and s_feat and len(s_feat) == 3:
+             # (Batch, Time, Feat) -> (Batch*Time, Feat)
+             flattened_dim = s_feat[0] * s_feat[1]
+             s_feat_disp = (flattened_dim, s_feat[2])
+        
+        print(f"6. Aggregation     : {_fmt_dim(prev_dim)} -> {_fmt_dim(s_feat_disp)} (Mode: {agg_mode})")
 
     if readout_label in ("None", None):
         print("7. Readout         : Skipped (end-to-end model output)")

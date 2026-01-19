@@ -180,12 +180,38 @@ class UniversalPipeline:
             return arr.squeeze(axis=1)
         return arr
 
-    def _print_runtime_topology(self, processed, train_Z: jnp.ndarray, test_Z: jnp.ndarray) -> None:
-        """Print topology using static metadata (no runtime overwriting)."""
+    def _print_runtime_topology(self, train_Z: jnp.ndarray) -> None:
+        """Print topology using actual runtime shapes (User Request: Match FeatureStats)."""
         if not self.topo_meta:
             return
-        # Removed runtime probing of 'feature' shape. Rely entirely on Factory metadata.
-        print_topology(self.topo_meta)
+
+        # Create a shallow copy to avoid mutating the original metadata permanently
+        # But we DO want to overwrite the displayed shapes with reality.
+        meta_copy = self.topo_meta.copy()
+        shapes = meta_copy.get("shapes", {}).copy()
+        
+        # Overwrite with actual runtime shapes from FeatureStats source
+        if train_Z is not None:
+            shapes["feature"] = train_Z.shape
+        
+        # Update output shape if readout is fitted
+        out_dim = None
+        if self.readout:
+            if hasattr(self.readout, "W_out") and self.readout.W_out is not None:
+                 out_dim = self.readout.W_out.shape[-1]
+            elif hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
+                 # coef_ is (Features, Outputs) or (Features,) depending on implementation
+                 # In ridge.py: (F, O) usually, or (F,) if 1D.
+                 c = self.readout.coef_
+                 out_dim = c.shape[1] if c.ndim > 1 else 1
+
+        if out_dim is not None:
+             n_samples = train_Z.shape[0]
+             shapes["output"] = (n_samples, out_dim)
+
+        meta_copy["shapes"] = shapes
+        print_topology(meta_copy)
+
 
 
 
@@ -579,18 +605,15 @@ class UniversalPipeline:
         )
 
         # Print topology with actual runtime shapes (after Step 7)
-        self._print_runtime_topology(processed, train_Z, test_Z)
+        self._print_runtime_topology(train_Z)
 
         # Step 5: Build Results
-        return self._build_results(fit_result, train_logs, train_Z, val_Z, test_Z, test_y, frontend_ctx, start)
+        return self._build_results(fit_result, train_logs, test_y, frontend_ctx, start)
 
     def _build_results(
         self,
         fit_result: Dict[str, Any],
         train_logs: Dict[str, Any],
-        train_Z: jnp.ndarray,
-        val_Z: Optional[jnp.ndarray],
-        test_Z: jnp.ndarray,
         test_y: jnp.ndarray,
         frontend_ctx: FrontendContext,
         start: float
@@ -643,7 +666,5 @@ class UniversalPipeline:
             "metric": self.metric_name,
             "elapsed_sec": time.time() - start,
         }
-
-        del train_Z, val_Z, test_Z
 
         return results
