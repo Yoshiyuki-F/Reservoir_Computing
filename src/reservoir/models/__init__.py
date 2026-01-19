@@ -8,7 +8,6 @@ from .nn.rnn import RNNModel, SimpleRNN
 from .reservoir import ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
     PipelineConfig,
-    MODEL_PRESETS,
     get_model_preset,
     DistillationConfig,
 )
