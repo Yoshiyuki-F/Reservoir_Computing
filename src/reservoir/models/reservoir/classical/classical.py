@@ -105,7 +105,8 @@ class ClassicalReservoir(Reservoir):
              min_v = jnp.min(states)
              max_v = jnp.max(states)
              # Use shape of current batch, but logged as 'preview'
-             jax.debug.callback(_log_internal_stats, split_name, states.shape, mean, std, min_v, max_v)
+             # FIXME: Disabling callback to debug internal XLA error with large units (1000)
+             # jax.debug.callback(_log_internal_stats, split_name, states.shape, mean, std, min_v, max_v)
 
         if return_sequences:
             return states

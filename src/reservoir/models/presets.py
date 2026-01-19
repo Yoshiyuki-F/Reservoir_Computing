@@ -120,7 +120,7 @@ FNN_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 
 DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
-    n_units=40,
+    n_units=1000,
     input_scale=0.2,
     input_connectivity=1.0,
     bias_scale=0.1,

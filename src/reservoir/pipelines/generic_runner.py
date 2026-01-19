@@ -213,8 +213,9 @@ class UniversalPipeline:
         pred: jnp.ndarray,
         scaler,
         dataset_config,
-        global_start: int,
-        global_end: int
+        global_start: int = 0,
+        global_end: int = 0,
+        verbose: bool = True
     ) -> Optional[Dict[str, Any]]:
         """Compute VPT, NDEI, and other chaos metrics with inverse transform."""
         if scaler is None:
@@ -225,12 +226,13 @@ class UniversalPipeline:
         pred_raw = scaler.inverse_transform(pred.reshape(-1, shape_pred[-1])).reshape(shape_pred)
         truth_raw = scaler.inverse_transform(truth.reshape(-1, shape_truth[-1])).reshape(shape_truth)
 
-        print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+        if verbose:
+            print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
 
         dt = getattr(dataset_config, 'dt', 1.0)
         ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
 
-        return calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu)
+        return calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu, verbose=verbose)
 
     # ------------------------------------------------------------------ #
     # Phase 3: Readout Strategy Pattern                                  #
@@ -360,7 +362,7 @@ class UniversalPipeline:
                 "search_history": search_history,
                 "best_lambda": best_lambda,
                 "weight_norms": weight_norms
-            }, self.metric_name)
+            }, is_classification=True)
         else:
             print("    [Runner] No hyperparameter search needed for this readout.")
             self.readout.fit(tf_reshaped, ty_reshaped)
@@ -424,19 +426,26 @@ class UniversalPipeline:
                 weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
 
             val_gen = self.generate_closed_loop(jnp.array(seed_data), steps=val_steps, projection_fn=proj_fn, verbose=False)
-            score = compute_score(val_gen, val_y, self.metric_name)
+
+            # Closed-Loop (Regression) always optimizes VPT
+            current_metrics = self._compute_chaos_metrics(val_y, val_gen, frontend_ctx.scaler, dataset_meta.preset.config, verbose=False)
+            
+            # Maximize VPT (Lyapunov Time) by negating (loop logic minimizes)
+            score = -current_metrics.get("vpt_lt", 0.0)
+
             search_history[lam_val] = float(score)
 
             if score < best_score:
                 best_score = score
                 best_lambda = lam_val
 
-        print(f"    [Runner] Best Closed-Loop Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+        # Display as positive VPT
+        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val MSE: {best_score:.5f})")
         print_ridge_search_results({
             "search_history": search_history,
             "best_lambda": best_lambda,
             "weight_norms": weight_norms
-        }, self.metric_name)
+        }, is_classification=False)
 
         print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
         if hasattr(self.readout, "ridge_lambda"):

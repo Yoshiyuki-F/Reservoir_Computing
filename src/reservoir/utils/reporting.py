@@ -38,6 +38,7 @@ def calculate_chaos_metrics(
     dt: float,
     lyapunov_time_unit: float,
     vpt_threshold: float = 0.4,
+    verbose: bool = True,
 ) -> Dict[str, float]:
     """
     Mackey-Glassなどのカオス予測専用の評価指標
@@ -48,6 +49,7 @@ def calculate_chaos_metrics(
         dt: Simulation time step
         lyapunov_time_unit: 1 LT in time units (e.g., 1.1 for Lorenz 63)
         vpt_threshold: Threshold for VPT calculation (default 0.4 = sqrt(2)*0.3)
+        verbose: If True, print metrics to console
     
     Returns:
         Dictionary with NDEI, var_ratio, correlation, VPT (steps), VPT (LT)
@@ -91,12 +93,13 @@ def calculate_chaos_metrics(
     steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
     vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
 
-    print(f"=== Chaos Prediction Metrics ===")
-    print(f"MSE       : {mse:.5f}")
-    print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
-    print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
-    print(f"Corr      : {corr:.5f} (Target > 0.95)")
-    print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
+    if verbose:
+        print(f"=== Chaos Prediction Metrics ===")
+        print(f"MSE       : {mse:.5f}")
+        print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
+        print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
+        print(f"Corr      : {corr:.5f} (Target > 0.95)")
+        print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
 
     return {
         "mse": mse,
@@ -140,7 +143,7 @@ def print_feature_stats(features: Any, stage: str) -> None:
     if stats["std"] < 1e-6:
         print("Feature matrix has near-zero variance. Model output may be inactive.")
 
-def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
+def print_ridge_search_results(train_res: Dict[str, Any], is_classification: bool) -> None:
     if not isinstance(train_res, dict):
         return
     history = train_res.get("search_history")
@@ -148,14 +151,13 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
         return
     best_lam = train_res.get("best_lambda")
     weight_norms = train_res.get("weight_norms", {}) or {}
-    metric_label = "Accuracy" if metric == "accuracy" else "MSE"
+    
+    # Determine Metric Label based on Task Type
+    metric_label = "MSE" if is_classification else "VPT (Lyapunov Time)"
 
     # Decide best logic for marking
-    best_by_metric = None
-    if metric == "accuracy":
-        best_by_metric = max(history, key=history.get)
-    else:
-        best_by_metric = min(history, key=history.get)
+    # Both minimize score internally (MSE is min, -VPT is min)
+    best_by_metric = min(history, key=history.get)
 
     best_marker = best_lam if best_lam is not None else best_by_metric
 
@@ -165,10 +167,18 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric: str) -> None:
     sorted_lambdas = sorted(history.keys())
     for lam in sorted_lambdas:
         score = float(history[lam])
+        
+        # Format score for display
+        score_disp = score
+        label = "Val Score"
+        if not is_classification:
+            score_disp = -score  # flip back to positive VPT
+            label = "Val VPT"
+            
         norm = weight_norms.get(lam)
         norm_str = f"(Norm: {norm:.2e})" if norm is not None else "(Norm: n/a)"
         marker = " <= best" if (best_marker is not None and abs(float(lam) - float(best_marker)) < 1e-12) else ""
-        print(f"   λ = {float(lam):.2e} : Val Score = {score:.4f} {norm_str}{marker}")
+        print(f"   λ = {float(lam):.2e} : {label} = {score_disp:.4f} {norm_str}{marker}")
     print("=" * 40 + "\n")
 
 
