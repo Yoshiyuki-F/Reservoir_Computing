@@ -119,12 +119,20 @@ FNN_PRESET = PipelineConfig(
 # Definitions
 # -----------------------------------------------------------------------------
 
-DEFAULT_PROJECTION_REGRESSION = ProjectionConfig(
-    n_units=1000,
+TIME_PROJECTION = ProjectionConfig(
+    n_units=100,
     input_scale=0.2,
     input_connectivity=1.0,
     bias_scale=0.1,
     seed=1,
+)
+
+TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
+    spectral_radius=1,
+    leak_rate=0.4, #best for n ,not for n=1000
+    rc_connectivity=0.02, #best
+    seed=42,
+    aggregation=AggregationMode.SEQUENCE,
 )
 
 # -------------------------------------------------------------------------------
@@ -138,16 +146,27 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
         method=Preprocessing.STANDARD_SCALER,
         poly_degree=1,
     ),
-    projection=DEFAULT_PROJECTION_REGRESSION,
-    model=ClassicalReservoirConfig(
-        spectral_radius=1,
-        leak_rate=0.4, #best for n ,not for n=1000
-        rc_connectivity=0.02, #best
-        seed=42,
-        aggregation=AggregationMode.SEQUENCE,
+    projection=TIME_PROJECTION,
+    model=TIME_RESERVOIR_DYNAMICS,
+    readout=DEFAULT_RIDGE_READOUT
+)
+
+TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
+    name="fnn_distillation",
+    model_type=Model.FNN_DISTILLATION,
+    description="Feedforward Neural Network with Reservoir Distillation",
+    preprocess=DEFAULT_PREPROCESS,
+    projection=TIME_PROJECTION,
+    model=DistillationConfig(
+        teacher=TIME_RESERVOIR_DYNAMICS,
+        student=FNNConfig(
+            hidden_layers=(64, 32),
+            window_size=3,  # This enables TimeDelayEmbedding adapter
+        ),
     ),
     readout=DEFAULT_RIDGE_READOUT
 )
+
 
 TIME_PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
@@ -157,7 +176,7 @@ TIME_PASSTHROUGH_PRESET = PipelineConfig(
         method=Preprocessing.STANDARD_SCALER,
         poly_degree=1,
     ),
-    projection=DEFAULT_PROJECTION_REGRESSION,
+    projection=TIME_PROJECTION,
     model=PassthroughConfig(
         aggregation=AggregationMode.SEQUENCE,
     ),
@@ -195,6 +214,7 @@ SPECIFIC_PRESETS = {
     (Model.CLASSICAL_RESERVOIR, False): TIME_CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, False): WINDOWED_FNN_PRESET,
     (Model.PASSTHROUGH, False): TIME_PASSTHROUGH_PRESET,
+    (Model.FNN_DISTILLATION, False): TIME_FNN_DISTILLATION_PRESET,
 }
 
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
