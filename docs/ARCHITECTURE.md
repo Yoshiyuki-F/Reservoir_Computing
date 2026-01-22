@@ -1,37 +1,70 @@
 Revised Architecture Blueprint (V2.1)
-1-6 Process Flow (Tensor Flow Style)
+1-8 Process Flow (Tensor Flow Style)
 データの流れと各ステップの役割定義です。
 
 STEP
-1. Input Data - [Batch, Time, Features]
-Examples: MNIST [28x28], Audio, Text
+1. Input Data - [N, Time, Features]Role: Raw time-series input.
+Examples: MNIST [54000, 28, 28], MackeyGlass [1, 16600, 1]
 
-2. Preprocessing - [Batch, Time, Features] -> [Batch, Time, Features]
-Role: Data scaling, polynomial features (Stateless or independent of model internal structure).
-Examples: Raw, StandardScaler, DesignMatrix
+2. Preprocessing - [N, Time, Features] => [N, Time, Features]
+Role: Stateless data scaling or polynomial features.
+Examples: StandardScaler, MaxScaler.
 
-3. Input Projection - [Batch, Time, Features] -> [Batch, Time, Hidden]
-Role: Mapping input space to high-dimensional hidden space (Random or Learned).
-Examples: Random Projection (W_in)
-Note: FNN Student also uses this to match Teacher's input projection logic.
+3. Input Projection - [N, Time, Features] => [N, Time, Hidden]
+Role: Mapping input space to a high-dimensional hidden space using a Matrix (e.g., $28 * 100$). 
+This happens before the branching into Reservoir or FNN paths.Examples: Random Projection (W_in), Learned Linear Layer.
 
-4. Adapter: Flatten is used here if Model requires 2D input [Batch, Time*Hidden] (only at FNN).
+### 4-6. Branching Processes: Teacher vs. Student
 
-5. Model (Engine) - [Batch, Time, Hidden] -> [Batch, Time, Hidden] (Reservoir) OR [Batch, Hidden] (FNN)
-Role: Stateful dynamics or Deep Non-linear mapping.
-Examples: Classical Reservoir, Quantum Reservoir, FNN (Student)
+Projected Data `[N, Time, Hidden]` の生成後（Step 3）、プロセスは2つのパスに分岐します。
 
-6. Aggregation - [Batch, Time, Hidden] -> [TotalSamples, FeatureDim] (Always 2D)
-Role: Temporal reduction or Flattening to fixed feature vector matrix.
-Invariant: Output MUST be 2D `(N, F)`. For Sequence mode, this is `(Batch*Time, F)`.
-Examples: Last state, Mean, Concat, Sequence(Flatten)
+#### Path A: Reservoir Process (The Teacher)
+**役割:** リカレントな力学系を用いて時間的な特徴を抽出し、教師信号となる特徴量（Aggregated Features）を生成します。
 
-7. Readout - [Batch, Feature] -> [Batch, Output]
-Role: Final decoding/classification.
-Examples: Ridge Regression, ReadOutFNN
+* **4A. Adapter (Identity/Passthrough)**
+    * **Input:** `[N, Time, Hidden]`
+    * **Action:** 何もしません（恒等写像）。Reservoirは時間次元を持つ3Dデータをそのまま受け取ります。
 
-Factory (/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/factory.py) should just include 4-5-6
-where should /home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/generic_runner.py do then?
+* **5A. Model (Reservoir Loop)**
+    * **Input:** `[N, Time, Hidden]`
+    * **Action:** 固定された（学習しない）リカレント結合 $W_{res}$ を用いて、入力を高次元の状態空間へ展開します。
+    * **Output:** **Reservoir States** `[N, Time, Hidden]`
+
+* **6A. Aggregation (Creating Teacher Features)**
+    * **Input:** `[N, Time, Hidden]` (Reservoir States)
+    * **Action:** 時間次元を集約または整形し、最終的な特徴ベクトルを生成します。これが **FNNの学習目標（正解ラベルのような役割）** となります。
+        * **Classification (MNIST):** **Mean Pooling**. 時間方向に平均化します。
+            * Shape: `[N, 28, 100]` $\rightarrow$ `[N, 100]`
+        * **Regression (MackeyGlass):** **Sequence/Identity**. バッチ次元の除去やシーケンスの整列を行います。
+            * Shape: `[1, 16600, 100]` $\rightarrow$ `[16600, 100]`
+    * **Output:** **Aggregated Features** `[N', Hidden]` Always 2D output!
+
+---
+
+#### Path B: FNN Distillation Process (The Student)
+**役割:** 教師（Path A）が生成した特徴量「Aggregated Features」を、フィードフォワード・ニューラルネットワーク（FNN）で模倣するように学習します。
+
+* **4B. Adapter (Reshaping for FNN)**
+    * **Input:** `[N, Time, Hidden]` (Projected Data)
+    * **Action:** 3DデータをFNNが処理可能な2D形式に変換します。
+        * **Classification (MNIST):** **Flatten**. 時間と特徴量を結合します。
+            * Shape: `[N, Time \times Hidden]` (例: `[N, 2800]`)
+        * **Regression (MackeyGlass):** **Windowing**. スライディングウィンドウを作成します。
+            * Shape: `[Time - Window + 1', Window \times Hidden]` (例: `[16598, 300]`)
+
+* **5B. Model (FNN Engine & Distillation)**
+    * **Input:** `[N', InputDim_FNN]` (Flattened or Windowed Data)
+    * **Action:** 多層パーセプトロン（例: 64x32層）を通して特徴抽出を行います。
+    * **Distillation (蒸留):** このFNNの重み $W_{fnn}$ は、出力が **Step 6Aの「Aggregated Features」に近づくように** 学習（Train）されます。
+        * *Goal:* $FNN(x) \approx \text{Aggregation}(\text{Reservoir}(x))$
+    * **Output:** **FNN Features** `[N', Hidden]`
+        * ※ Path Bには明示的なStep 6（Aggregation）はなく、FNNの出力がそのまま最終特徴量となります。
+
+
+7. Readout - [N', Hidden] => [N', Output]
+Role: Final decoding/classification using linear models. Both paths use their own Readout.7A (Reservoir): Ridge Regression trained on Aggregated Features.7B (FNN): Ridge Regression trained on FNN Features.
+Targets Y: One-hot encoding [N, 10] or continuous values.
+
 
 ファイル配置と責務のマッピングです。
 data/ (Input Data) 1
