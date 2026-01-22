@@ -20,8 +20,7 @@ class Model(str, enum.Enum):
     FNN = "fnn"
     FNN_DISTILLATION = "fnn_distillation"
     RNN_DISTILLATION = "rnn-distillation"
-    QUANTUM_GATE_BASED = "gate_based-quantum-reservoir"
-    QUANTUM_ANALOG = "analog-quantum-reservoir"
+    QUANTUM_RESERVOIR = "quantum_reservoir"
     PASSTHROUGH = "passthrough"
 
     def __str__(self) -> str:

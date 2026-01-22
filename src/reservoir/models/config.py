@@ -270,6 +270,53 @@ class PassthroughConfig:
 
 
 @dataclass(frozen=True)
+class QuantumReservoirConfig:
+    """Step 5 Quantum Reservoir dynamics parameters.
+    
+    Note: n_qubits is NOT stored here - it is derived from projection.n_units at runtime.
+    
+    measurement_basis options:
+        - 'Z': 1st moment only (n_qubits features)
+        - 'ZZ': 2-point correlations only (n_qubits*(n_qubits-1)/2 features)
+        - 'Z+ZZ': 1st moment + 2-point correlations (n_qubits + n_qubits*(n_qubits-1)/2 features)
+                  For 4 qubits: 4 + 6 = 10 features
+    """
+    
+    n_layers: int                    # Number of variational layers
+    seed: int                        # Random seed for fixed parameters
+    aggregation: AggregationMode     # How to aggregate time steps
+    dynamics_type: str               # 'cnot_ladder' or 'ising'
+    input_scaling: float             # Scaling factor for input encoding (typically 2π)
+    measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
+
+    def validate(self, context: str = "quantum_reservoir") -> "QuantumReservoirConfig":
+        prefix = f"{context}: "
+        if int(self.n_layers) <= 0:
+            raise ValueError(f"{prefix}n_layers must be positive.")
+        if self.dynamics_type not in ("cnot_ladder", "ising"):
+            raise ValueError(f"{prefix}dynamics_type must be 'cnot_ladder' or 'ising'.")
+        if float(self.input_scaling) <= 0:
+            raise ValueError(f"{prefix}input_scaling must be positive.")
+        if not isinstance(self.aggregation, AggregationMode):
+            raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
+        # Validate measurement_basis
+        valid_bases = ("Z", "ZZ", "Z+ZZ")
+        if self.measurement_basis not in valid_bases:
+            raise ValueError(f"{prefix}measurement_basis must be one of {valid_bases}.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n_layers": int(self.n_layers),
+            "seed": int(self.seed),
+            "dynamics_type": str(self.dynamics_type),
+            "input_scaling": float(self.input_scaling),
+            "aggregation": self.aggregation.value,
+            "measurement_basis": str(self.measurement_basis),
+        }
+
+
+@dataclass(frozen=True)
 class RidgeReadoutConfig:
     """Step 7 readout configuration (structure/defaults)."""
     init_lambda: float
@@ -302,5 +349,5 @@ class FNNReadoutConfig:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
-ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig]
+ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig, QuantumReservoirConfig]
 ReadoutConfig = Union[RidgeReadoutConfig, FNNReadoutConfig, None]

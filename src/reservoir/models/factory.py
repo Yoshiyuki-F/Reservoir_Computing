@@ -9,7 +9,7 @@ from typing import Any, Dict
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
-from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig, FNNConfig
+from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig, FNNConfig, QuantumReservoirConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
@@ -35,9 +35,9 @@ class ModelFactory:
         training_cfg = training
         pipeline_enum = config.model_type
 
-        if pipeline_enum in {Model.CLASSICAL_RESERVOIR, Model.QUANTUM_GATE_BASED, Model.QUANTUM_ANALOG}:
-            if not isinstance(config.model, ClassicalReservoirConfig):
-                raise TypeError(f"Reservoir pipelines require ClassicalReservoirConfig, got {type(config.model)}.")
+        if pipeline_enum in {Model.CLASSICAL_RESERVOIR, Model.QUANTUM_RESERVOIR}:
+            if not isinstance(config.model, (ClassicalReservoirConfig, QuantumReservoirConfig)):
+                raise TypeError(f"Reservoir pipelines require ClassicalReservoirConfig or QuantumReservoirConfig, got {type(config.model)}.")
 
             return ReservoirFactory.create_model(
                 pipeline_config=config,

@@ -16,7 +16,8 @@ from reservoir.models.config import (
     DistillationConfig,
     FNNConfig,
     PipelineConfig,
-    RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig
+    RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig,
+    QuantumReservoirConfig,
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -113,6 +114,41 @@ FNN_PRESET = PipelineConfig(
     readout=None
 )
 
+
+# -----------------------------------------------------------------------------
+# Quantum Reservoir Definitions
+# -----------------------------------------------------------------------------
+
+# Quantum projection: n_units defines the number of qubits
+QUANTUM_PROJECTION = ProjectionConfig(
+    n_units=4,  # This becomes n_qubits for quantum reservoir
+    input_scale=0.6,
+    input_connectivity=1.0,
+    bias_scale=0.0,
+    seed=1,
+)
+
+# Quantum reservoir dynamics (Classification - MEAN aggregation)
+# Quantum reservoir dynamics (Classification - MEAN aggregation)
+QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
+    n_layers=3,
+    seed=42,
+    aggregation=AggregationMode.MEAN,
+    dynamics_type="cnot_ladder",
+    input_scaling=6.283185307179586,  # 2π
+    measurement_basis="Z+ZZ",
+)
+
+QUANTUM_RESERVOIR_PRESET = PipelineConfig(
+    name="quantum_reservoir",
+    model_type=Model.QUANTUM_RESERVOIR,
+    description="Quantum Gate-Based Reservoir Computing",
+    preprocess=DEFAULT_PREPROCESS,
+    projection=QUANTUM_PROJECTION,
+    model=QUANTUM_RESERVOIR_DYNAMICS,
+    readout=DEFAULT_RIDGE_READOUT,
+)
+
 "=============================================Time series Presets============================================"
 
 # -----------------------------------------------------------------------------
@@ -201,6 +237,29 @@ WINDOWED_FNN_PRESET = PipelineConfig(
     readout=None,  # FNN is end-to-end
 )
 
+# Time-series Quantum Reservoir (SEQUENCE aggregation)
+TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
+    n_layers=3,
+    seed=42,
+    aggregation=AggregationMode.SEQUENCE,
+    dynamics_type="cnot_ladder",
+    input_scaling=6.283185307179586,  # 2π
+    measurement_basis="Z+ZZ",
+)
+
+TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
+    name="quantum_reservoir",
+    model_type=Model.QUANTUM_RESERVOIR,
+    description="Quantum Gate-Based Reservoir Computing (Time Series)",
+    preprocess=PreprocessingConfig(
+        method=Preprocessing.STANDARD_SCALER,
+        poly_degree=1,
+    ),
+    projection=QUANTUM_PROJECTION,  # Reuse the 4-qubit projection
+    model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
+    readout=DEFAULT_RIDGE_READOUT,
+)
+
 "============================================================================================"
 
 # Dispatch table based on (Model, is_classification)
@@ -210,11 +269,13 @@ SPECIFIC_PRESETS = {
     (Model.FNN, True): FNN_PRESET,
     (Model.FNN_DISTILLATION, True): FNN_DISTILLATION_PRESET,
     (Model.PASSTHROUGH, True): PASSTHROUGH_PRESET,
+    (Model.QUANTUM_RESERVOIR, True): QUANTUM_RESERVOIR_PRESET,
 
     (Model.CLASSICAL_RESERVOIR, False): TIME_CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, False): WINDOWED_FNN_PRESET,
     (Model.PASSTHROUGH, False): TIME_PASSTHROUGH_PRESET,
     (Model.FNN_DISTILLATION, False): TIME_FNN_DISTILLATION_PRESET,
+    (Model.QUANTUM_RESERVOIR, False): TIME_QUANTUM_RESERVOIR_PRESET,
 }
 
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:

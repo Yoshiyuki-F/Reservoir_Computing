@@ -45,8 +45,7 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
     - `classical_reservoir`
     - `fnn`
     - `fnn_distillation`
-    - `gate_based-quantum-reservoir` #TODO
-    - `analog-quantum-reservoir` #TODO
+    - `quantum_reservoir`
 - `--dataset`: **(Required)** The dataset to use.
     - `sine_wave` (Regression)
     - `lorenz` (Regression)
@@ -63,7 +62,7 @@ uv run reservoir-cli --model classical_reservoir --dataset sine_wave
 
 **2. Quantum Gate-based Reservoir on Lorenz Attractor**
 ```bash
-uv run reservoir-cli --model gate_based-quantum-reservoir --dataset lorenz
+uv run reservoir-cli --model quantum_reservoir --dataset lorenz
 ```
 
 **3. MLP Training (FNN) on MNIST**

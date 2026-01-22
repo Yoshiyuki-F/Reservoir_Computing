@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from reservoir.models.config import ClassicalReservoirConfig
+from reservoir.models.config import ClassicalReservoirConfig, QuantumReservoirConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
+from reservoir.models.reservoir.quantum import QuantumReservoir
+from reservoir.models.reservoir.base import Reservoir
 
 
 class ReservoirFactory:
@@ -21,7 +23,7 @@ class ReservoirFactory:
         projected_input_dim: int,
         output_dim: int,
         input_shape: Optional[tuple[int, ...]],
-    ) -> ClassicalReservoir:
+    ) -> Reservoir:
         """
         Assemble reservoir node with embedded aggregation (Steps 5-6).
         Assumes inputs are already projected to the reservoir dimensionality (input_dim).
@@ -29,17 +31,30 @@ class ReservoirFactory:
         if not isinstance(pipeline_config, PipelineConfig):
             raise TypeError(f"ReservoirFactory expects PipelineConfig, got {type(pipeline_config)}.")
         model = pipeline_config.model
-        if not isinstance(model, ClassicalReservoirConfig):
-            raise TypeError(f"ReservoirFactory requires ClassicalReservoirConfig, got {type(model)}.")
-
-        node = ClassicalReservoir(
-            n_units=projected_input_dim,
-            spectral_radius=model.spectral_radius,
-            leak_rate=model.leak_rate,
-            rc_connectivity=model.rc_connectivity,
-            seed=model.seed,
-            aggregation_mode=model.aggregation,
-        )
+        
+        if isinstance(model, ClassicalReservoirConfig):
+            node = ClassicalReservoir(
+                n_units=projected_input_dim,
+                spectral_radius=model.spectral_radius,
+                leak_rate=model.leak_rate,
+                rc_connectivity=model.rc_connectivity,
+                seed=model.seed,
+                aggregation_mode=model.aggregation,
+            )
+        elif isinstance(model, QuantumReservoirConfig):
+            # n_qubits implies the size of the projected input vector (Step 3)
+            # which is `projected_input_dim`
+            node = QuantumReservoir(
+                n_qubits=projected_input_dim,
+                n_layers=model.n_layers,
+                seed=model.seed,
+                aggregation_mode=model.aggregation,
+                dynamics_type=model.dynamics_type,
+                input_scaling=model.input_scaling,
+                measurement_basis=model.measurement_basis,
+            )
+        else:
+            raise TypeError(f"ReservoirFactory requires Classical or Quantum config, got {type(model)}.")
 
         if input_shape is None:
             raise ValueError("input_shape must be provided.")
