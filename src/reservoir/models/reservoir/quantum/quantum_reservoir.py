@@ -80,9 +80,7 @@ class QuantumReservoir(Reservoir):
         self.input_scaling = float(input_scaling)
         self.measurement_basis = measurement_basis
         self.n_correlations = n_correlations
-        
-        if not isinstance(aggregation_mode, AggregationMode):
-            raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
+
         self.aggregator = StateAggregator(mode=aggregation_mode)
         
         # Initialize random generator
@@ -207,7 +205,7 @@ class QuantumReservoir(Reservoir):
 
         return step_fn
 
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int) -> jnp.ndarray:
         """Initialize reservoir state (feedback vector)."""
         return jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float64)
 
