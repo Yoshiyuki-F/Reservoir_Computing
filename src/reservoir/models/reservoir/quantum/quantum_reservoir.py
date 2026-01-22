@@ -5,12 +5,18 @@ This module implements Step 5A (Reservoir Loop) using quantum circuits:
 - Encoding: Input features are encoded via Rx rotations
 - Dynamics: Fixed random unitaries (CNOT ladder + random rotations)
 - Measurement: Pauli-Z expectation values per qubit
+
+Optimized for JAX JIT compilation with backprop diff_method.
 """
 
 from __future__ import annotations
 
 from typing import Dict, Any, Tuple, Literal
 from functools import partial
+import warnings
+
+# Suppress PennyLane FutureWarning about functools.partial
+warnings.filterwarnings("ignore", message="functools.partial will be a method descriptor", category=FutureWarning)
 
 import jax
 import jax.numpy as jnp
@@ -29,9 +35,11 @@ class QuantumReservoir(Reservoir):
     Architecture:
         1. Encoding Layer: Rx(θ) rotations where θ = input features (scaled to [0, 2π])
         2. Reservoir Dynamics: Fixed random unitary (CNOT ladder + random rotations)
-        3. Measurement: Pauli-Z expectation values on each qubit
+        3. Measurement: Pauli-Z expectation values and/or correlations
     
-    Note: All dynamics parameters are randomly initialized and FIXED (no training).
+    Optimization:
+        - Uses 'default.qubit' with diff_method="backprop" for JAX JIT compatibility.
+        - The entire step function is JIT-compiled for performance.
     """
 
     def __init__(
@@ -54,12 +62,9 @@ class QuantumReservoir(Reservoir):
             aggregation_mode: How to aggregate time steps (MEAN, LAST, SEQUENCE, etc.)
             dynamics_type: Type of reservoir dynamics ('cnot_ladder' or 'ising')
             input_scaling: Scaling factor for input features (typically 2π)
-            measurement_basis: 'Z' (1st moment), 'ZZ' (correlations), or 'Z+ZZ' (both)
+            measurement_basis: 'Z' (1st moment), 'ZZ' (2-point correlations), or 'Z+ZZ' (both)
         """
         # Calculate output dimension based on measurement basis
-        # Z: n_qubits (1st moment)
-        # ZZ: n_qubits*(n_qubits-1)/2 (2-point correlations)
-        # Z+ZZ: n_qubits + n_qubits*(n_qubits-1)/2 (combined)
         n_correlations = n_qubits * (n_qubits - 1) // 2
         
         if measurement_basis == "Z":
@@ -69,7 +74,7 @@ class QuantumReservoir(Reservoir):
         elif measurement_basis == "Z+ZZ":
             output_dim = n_qubits + n_correlations
         else:
-            output_dim = n_qubits  # Default fallback
+            output_dim = n_qubits
         
         super().__init__(n_units=output_dim, seed=seed)
         
@@ -87,240 +92,157 @@ class QuantumReservoir(Reservoir):
         # Initialize random generator
         self._rng = np.random.default_rng(seed)
         
-        # 2.1 Quantum device definition (PennyLane default.qubit with JAX interface)
-        self.dev = qml.device("default.qubit", wires=n_qubits)
-        
-        # Initialize fixed random parameters for reservoir dynamics (2.3)
+        # 1. Initialize fixed random parameters
         self._init_fixed_parameters()
         
-        # Create the quantum circuit (QNode)
-        self._create_quantum_circuit()
+        # 2. Define Quantum Device (JAX compatible)
+        # Use simple default.qubit which is pure Python/JAX compatible
+        self.dev = qml.device("default.qubit", wires=n_qubits)
+        
+        # 3. Create JIT-compiled step function
+        self._step_fn = self._create_jit_step_fn()
 
     def _init_fixed_parameters(self) -> None:
-        """
-        Initialize fixed random parameters for the reservoir dynamics.
-        These parameters are NEVER updated during training.
-        """
-        # Random rotation angles for each layer
-        # Shape: (n_layers, n_qubits, 3) for Rx, Ry, Rz per qubit per layer
-        self.reservoir_params = self._rng.uniform(
-            low=0.0,
-            high=2 * np.pi,
-            size=(self.n_layers, self.n_qubits, 3)
-        ).astype(np.float64)
+        """Initialize fixed random parameters."""
+        # Random rotation angles: (n_layers, n_qubits, 3)
+        self.reservoir_params = jnp.array(
+            self._rng.uniform(0.0, 2 * np.pi, size=(self.n_layers, self.n_qubits, 3)).astype(np.float64)
+        )
         
-        # Convert to JAX array (frozen)
-        self.reservoir_params = jnp.array(self.reservoir_params)
+        # Initial state (zeros)
+        self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float64)
         
-        # For Ising dynamics: random coupling strengths
+        # Ising parameters if needed
+        self.ising_J = None
+        self.ising_h = None
+        # Use a dummy array for JIT compatibility if not used (to pass as arg)
+        # But clearer to just pass None or zeros if dynamics type known at compile time
+        
         if self.dynamics_type == "ising":
-            # Coupling strengths between adjacent qubits
             self.ising_J = jnp.array(
                 self._rng.uniform(-1.0, 1.0, size=self.n_qubits - 1).astype(np.float64)
             )
-            # Transverse field strengths
             self.ising_h = jnp.array(
                 self._rng.uniform(-1.0, 1.0, size=self.n_qubits).astype(np.float64)
             )
-            # Time step for evolution
-            self.ising_dt = 0.1
+        else:
+            # Create dummy arrays to satisfy signature if needed, though we can handle this via closure too
+            # For simplicity in create_jit_step_fn, we'll use closure capture for ising params
+            # or pass them. Let's pass them.
+            self.ising_J = jnp.zeros((1,)) # Dummy
+            self.ising_h = jnp.zeros((1,)) # Dummy
 
-    def _create_quantum_circuit(self) -> None:
-        """Create the PennyLane QNode for the quantum reservoir circuit."""
+    def _create_jit_step_fn(self):
+        """Creates the JIT-compiled QNode and step logic."""
         
+        # Capture config variables to avoid self dependency in JIT
         n_qubits = self.n_qubits
         n_layers = self.n_layers
         dynamics_type = self.dynamics_type
         input_scaling = self.input_scaling
         measurement_basis = self.measurement_basis
         
-        # Store Ising params if needed
-        if dynamics_type == "ising":
-            ising_J = self.ising_J
-            ising_h = self.ising_h
-            ising_dt = self.ising_dt
-        
-        @qml.qnode(self.dev, interface="jax")
-        def quantum_circuit(inputs: jnp.ndarray, reservoir_params: jnp.ndarray) -> list:
-            """
-            Quantum reservoir circuit.
-            
-            Args:
-                inputs: Input features of shape (n_qubits,)
-                reservoir_params: Fixed random parameters of shape (n_layers, n_qubits, 3)
-            
-            Returns:
-                Expectation values based on measurement_basis setting
-            """
-            # 2.2 Encoding Layer: Apply Rx rotations with scaled input features
+        # Define the QNode with backprop
+        @qml.qnode(self.dev, interface="jax", diff_method="backprop")
+        def circuit(inputs, params, ising_J, ising_h):
+            # Encoding
             scaled_inputs = inputs * input_scaling
             for i in range(n_qubits):
                 qml.RX(scaled_inputs[i], wires=i)
             
-            # 2.3 Reservoir Dynamics: Fixed random unitaries
+            # Dynamics
             if dynamics_type == "cnot_ladder":
-                # CNOT ladder + random single-qubit rotations
                 for layer in range(n_layers):
-                    # CNOT ladder for entanglement
                     for i in range(n_qubits - 1):
                         qml.CNOT(wires=[i, i + 1])
-                    
-                    # Fixed random single-qubit rotations
                     for i in range(n_qubits):
-                        qml.RX(reservoir_params[layer, i, 0], wires=i)
-                        qml.RY(reservoir_params[layer, i, 1], wires=i)
-                        qml.RZ(reservoir_params[layer, i, 2], wires=i)
-                    
-                    # Reverse CNOT ladder for more mixing
+                        qml.RX(params[layer, i, 0], wires=i)
+                        qml.RY(params[layer, i, 1], wires=i)
+                        qml.RZ(params[layer, i, 2], wires=i)
                     for i in range(n_qubits - 2, -1, -1):
                         qml.CNOT(wires=[i, i + 1])
             else:
-                # Ising dynamics
+                # Ising
+                dt = 0.1
                 for _ in range(n_layers):
                     for i in range(n_qubits - 1):
-                        qml.IsingZZ(ising_J[i] * ising_dt, wires=[i, i + 1])
+                        qml.IsingZZ(ising_J[i] * dt, wires=[i, i + 1])
                     for i in range(n_qubits):
-                        qml.RX(2 * ising_h[i] * ising_dt, wires=i)
+                        qml.RX(2 * ising_h[i] * dt, wires=i)
             
-            # Measurement: Expectation values based on measurement_basis
+            # Measurement
             measurements = []
-            
             # 1st moment (Z)
             if measurement_basis in ("Z", "Z+ZZ"):
                 for i in range(n_qubits):
                     measurements.append(qml.expval(qml.PauliZ(i)))
-                    
-            # 2nd moment correlations (ZZ)
+            # 2nd moment (ZZ)
             if measurement_basis in ("ZZ", "Z+ZZ"):
                 for i in range(n_qubits):
                     for j in range(i + 1, n_qubits):
                         measurements.append(qml.expval(qml.PauliZ(i) @ qml.PauliZ(j)))
             
             return measurements
-        
-        self._quantum_circuit = quantum_circuit
 
-    def _apply_cnot_ladder_dynamics(self, params: jnp.ndarray) -> None:
-        """
-        Apply CNOT ladder + random single-qubit rotations.
-        
-        This creates entanglement between qubits and applies fixed random rotations.
-        Structure per layer:
-            1. CNOT cascade (0→1, 1→2, ..., n-2→n-1)
-            2. Random Rx, Ry, Rz rotations on each qubit
-        """
-        for layer in range(self.n_layers):
-            # CNOT ladder for entanglement
-            for i in range(self.n_qubits - 1):
-                qml.CNOT(wires=[i, i + 1])
+        # Define the step logic
+        @jax.jit
+        def step_fn(state, projected_input, reservoir_params, ising_J, ising_h):
+            # Recurrence: Input + Weak Feedback
+            combined_input = projected_input + 0.1 * state
             
-            # Fixed random single-qubit rotations
-            for i in range(self.n_qubits):
-                qml.RX(params[layer, i, 0], wires=i)
-                qml.RY(params[layer, i, 1], wires=i)
-                qml.RZ(params[layer, i, 2], wires=i)
+            # Execute circuit
+            # PennyLane QNode output is a list/tuple of scalars for backprop
+            # We stack them into a single tensor
+            measurements = circuit(combined_input, reservoir_params, ising_J, ising_h)
+            output = jnp.stack(measurements)
             
-            # Reverse CNOT ladder for more mixing
-            for i in range(self.n_qubits - 2, -1, -1):
-                qml.CNOT(wires=[i, i + 1])
+            # Next state (feedback) extraction
+            # Always need vector of size n_qubits
+            if measurement_basis in ("Z", "Z+ZZ"):
+                next_state = output[:n_qubits]
+            else:  # ZZ
+                if output.shape[0] >= n_qubits:
+                    next_state = output[:n_qubits]
+                else:
+                    padding = jnp.zeros((n_qubits - output.shape[0],))
+                    next_state = jnp.concatenate([output, padding], axis=0)
+            
+            return next_state, output
 
-    def _apply_ising_dynamics(self) -> None:
-        """
-        Apply Ising Hamiltonian time evolution: e^{-iHΔt}
-        
-        H = -Σ J_ij Z_i Z_j - Σ h_i X_i
-        
-        This is approximated using Trotterization with IsingZZ and RX gates.
-        """
-        for _ in range(self.n_layers):
-            # ZZ interactions between adjacent qubits
-            for i in range(self.n_qubits - 1):
-                qml.IsingZZ(self.ising_J[i] * self.ising_dt, wires=[i, i + 1])
-            
-            # Transverse field (X rotations)
-            for i in range(self.n_qubits):
-                qml.RX(2 * self.ising_h[i] * self.ising_dt, wires=i)
+        return step_fn
 
     def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
-        """
-        Initialize reservoir state.
-        
-        For quantum reservoir, the 'state' is used for memory/feedback and always
-        matches the input dimension (n_qubits). The output dimension may differ if
-        measuring multiple Pauli axes (e.g., XYZ gives 3x features).
-        """
+        """Initialize reservoir state (feedback vector)."""
         return jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float64)
 
-    def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Single timestep of quantum reservoir processing.
-        
-        Args:
-            state: Previous state for memory/feedback of shape (batch, n_qubits)
-            projected_input: Input features of shape (batch, n_qubits)
-        
-        Returns:
-            next_state: State for next step (n_qubits dimension, for feedback)
-            output: Full measurement output (may be larger if multiple axes measured)
-        """
-        # Combine input with previous state for recurrence (weak feedback for memory)
-        combined_input = projected_input + 0.1 * state
-        
-        # Process each sample in batch through quantum circuit
-        # vmap for batch processing - QNode returns a tuple/list of values, stack them
-        def circuit_wrapper(x):
-            result = self._quantum_circuit(x, self.reservoir_params)
-            # PennyLane returns list/tuple of measurements, stack into array
-            return jnp.stack(result)
-        
-        batch_circuit = jax.vmap(circuit_wrapper)
-        
-        output = batch_circuit(combined_input)
-        
-        # For state feedback, we need a vector of size n_qubits.
-        # - If "Z" or "Z+ZZ": Use the first n_qubits (which are the Z moments)
-        # - If "ZZ": We don't have Z moments. Use first n_qubits of correlations (or pad if n_corr < n)
-        if self.measurement_basis in ("Z", "Z+ZZ"):
-            next_state = output[:, :self.n_qubits]
-        else:  # "ZZ"
-            if output.shape[1] >= self.n_qubits:
-                next_state = output[:, :self.n_qubits]
-            else:
-                # Pad with zeros if we have fewer correlations than qubits (e.g. n=2 -> 1 corr)
-                padding = jnp.zeros((output.shape[0], self.n_qubits - output.shape[1]))
-                next_state = jnp.concatenate([output, padding], axis=1)
-        
-        return next_state, output
-
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Process a sequence through the quantum reservoir.
-        
-        Args:
-            state: Initial state of shape (batch, n_qubits)
-            input_data: Input sequence of shape (batch, time, n_qubits)
-        
-        Returns:
-            final_states: Final state after processing sequence
-            stacked: All intermediate states of shape (batch, time, n_qubits)
-        """
+        """Forward pass using JIT-compiled scan."""
         if input_data.ndim != 3:
-            raise ValueError(f"Expected batched sequences (batch, time, features), got {input_data.shape}")
+            raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
         
-        batch, time, feat = input_data.shape
-        if feat != self.n_qubits:
-            raise ValueError(f"Quantum reservoir expects feature dim {self.n_qubits}, got {feat}")
+        # Create a vmapped version of step_fn for the scan body
+        # Takes (state(batched), input(batched)) -> (state(batched), output(batched))
+        # Params are shared (unbatched)
+        step_fn_vmapped = jax.vmap(
+            partial(
+                self._step_fn,
+                reservoir_params=self.reservoir_params,
+                ising_J=self.ising_J,
+                ising_h=self.ising_h
+            ),
+            in_axes=(0, 0)
+        )
         
-        # Transpose for scan: (time, batch, features)
+        # Transpose to (time, batch, feat)
         inputs_transposed = jnp.swapaxes(input_data, 0, 1)
         
-        # Use jax.lax.scan for efficient sequential processing
-        final_states, stacked = jax.lax.scan(self.step, state, inputs_transposed)
+        # Scan
+        final_state, stacked = jax.lax.scan(step_fn_vmapped, state, inputs_transposed)
         
-        # Transpose back: (batch, time, features)
+        # Transpose back to (batch, time, feat)
         stacked = jnp.swapaxes(stacked, 0, 1)
         
-        return final_states, stacked
+        return final_state, stacked
 
     def __call__(
         self,
@@ -331,22 +253,14 @@ class QuantumReservoir(Reservoir):
     ) -> jnp.ndarray:
         """
         Process inputs through quantum reservoir and optionally aggregate.
-        
-        Args:
-            inputs: Input data of shape (batch, time, n_qubits)
-            return_sequences: If True, return full sequence; else aggregate
-            split_name: Optional split name for logging
-        
-        Returns:
-            Quantum reservoir states (aggregated if return_sequences=False)
         """
         arr = jnp.asarray(inputs, dtype=jnp.float64)
         if arr.ndim != 3:
-            raise ValueError(f"QuantumReservoir expects 3D input (batch, time, features), got {arr.shape}")
+            raise ValueError(f"QuantumReservoir expects 3D input, got {arr.shape}")
         
         batch_size = arr.shape[0]
-        initial_state = self.initialize_state(batch_size)
-        _, states = self.forward(initial_state, arr)
+        state = self.initialize_state(batch_size)
+        _, states = self.forward(state, arr)
         
         if return_sequences:
             return states
@@ -354,13 +268,11 @@ class QuantumReservoir(Reservoir):
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""
-        return self.aggregator.get_output_dim(self.n_qubits, int(time_steps))
+        return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
     def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
         """
         Quantum Reservoir has no trainable parameters; return empty logs.
-        
-        Note: All parameters are fixed random values initialized at construction.
         """
         return {}
 
@@ -386,8 +298,8 @@ class QuantumReservoir(Reservoir):
                 n_qubits=int(data["n_qubits"]),
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                dynamics_type=data["dynamics_type"],
-                input_scaling=float(data["input_scaling"]),
+                dynamics_type=data.get("dynamics_type", "cnot_ladder"),
+                input_scaling=float(data.get("input_scaling", 2 * np.pi)),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
             )
