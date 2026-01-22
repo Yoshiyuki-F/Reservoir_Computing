@@ -376,7 +376,7 @@ class UniversalPipeline:
                 if hasattr(self.readout, "coef_") and self.readout.coef_ is not None:
                     weight_norms[lam_val] = float(jnp.linalg.norm(self.readout.coef_))
 
-                if score > best_score:
+                if score >= best_score:
                     best_score = score
                     best_lambda = lam_val
 
@@ -461,7 +461,7 @@ class UniversalPipeline:
 
             search_history[lam_val] = float(score)
 
-            if score < best_score:
+            if score <= best_score:
                 best_score = score
                 best_lambda = lam_val
 

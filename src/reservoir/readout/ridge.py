@@ -22,11 +22,7 @@ class RidgeRegression(ReadoutModule):
         use_intercept: bool,
         lambda_candidates: Optional[tuple] = None,
     ) -> None:
-        if ridge_lambda is None:
-            raise ValueError("RidgeRegression requires an explicit, positive ridge_lambda.")
         lambda_val = float(ridge_lambda)
-        if lambda_val <= 0.0:
-            raise ValueError(f"RidgeRegression ridge_lambda must be positive, got {lambda_val}.")
         self.ridge_lambda = lambda_val
         self.use_intercept = bool(use_intercept)
         self.lambda_candidates = lambda_candidates
