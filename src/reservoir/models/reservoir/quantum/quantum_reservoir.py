@@ -13,10 +13,6 @@ from __future__ import annotations
 
 from typing import Dict, Any, Tuple, Literal
 from functools import partial
-import warnings
-
-# Suppress PennyLane FutureWarning about functools.partial
-warnings.filterwarnings("ignore", message="functools.partial will be a method descriptor", category=FutureWarning)
 
 import jax
 import jax.numpy as jnp
