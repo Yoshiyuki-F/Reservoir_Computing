@@ -41,10 +41,23 @@ class EndToEndStrategy(ReadoutStrategy):
     ) -> Dict[str, Any]:
         print("Readout is None. End-to-End mode.")
         
+        # For FNN windowed mode, align targets using the model's adapter
+        aligned_train_y = train_y
+        aligned_val_y = val_y
+        aligned_test_y = test_y
+
+        if hasattr(model, 'adapter'):
+            aligned_train_y = model.adapter.align_targets(train_y)
+            if val_y is not None:
+                aligned_val_y = model.adapter.align_targets(val_y)
+            if test_y is not None:
+                aligned_test_y = model.adapter.align_targets(test_y)
+
         result = {
             "train_pred": train_Z,
             "val_pred": val_Z,
             "test_pred": test_Z,
+            "aligned_test_y": aligned_test_y,  # Pass aligned y for scoring
             "best_lambda": None,
             "best_score": None,
             "search_history": {},
@@ -90,6 +103,7 @@ class EndToEndStrategy(ReadoutStrategy):
             axis = 1 if train_X.ndim == 3 else 0
             return jnp.concatenate([jnp.array(train_X), jnp.array(val_X)], axis=axis)
         return jnp.array(train_X)
+
 
 
 class ClassificationStrategy(ReadoutStrategy):
