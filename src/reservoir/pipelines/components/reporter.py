@@ -1,8 +1,6 @@
 import time
 from typing import Dict, Any
 
-import jax.numpy as jnp
-
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.reporting import compute_score, generate_report
@@ -31,6 +29,9 @@ class ResultReporter:
         metric_name = self.stack.metric
         test_y = processed.test_y
 
+        # Use aligned_test_y from fit_result if available (for FNN windowed mode)
+        aligned_test_y = fit_result.get("aligned_test_y", test_y)
+
         if fit_result["closed_loop_pred"] is not None:
             print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
             test_pred = fit_result["closed_loop_pred"]
@@ -38,7 +39,7 @@ class ResultReporter:
             results["is_closed_loop"] = True
         else:
             test_pred = fit_result["test_pred"]
-            test_y_final = test_y
+            test_y_final = aligned_test_y
 
         # Debug Logging for User
         print("\n[DEBUG] Inspecting Test Predictions (First 20 steps):")

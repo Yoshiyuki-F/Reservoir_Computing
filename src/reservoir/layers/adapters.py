@@ -3,6 +3,8 @@ Step 4 Adapters before the actual model layers
 """
 import jax.numpy as jnp
 from typing import Optional
+from reservoir.utils.reporting import print_feature_stats
+
 
 class Flatten:
     """
@@ -12,7 +14,8 @@ class Flatten:
     def fit(self):
         return self
     
-    def transform(self, X, log_label: Optional[str] = None):
+    @staticmethod
+    def transform(X, log_label: Optional[str] = None):
         X = jnp.asarray(X)
         if X.ndim == 3:
             result = X.reshape(X.shape[0], -1)
@@ -27,6 +30,11 @@ class Flatten:
         
         return result
 
+    @staticmethod
+    def align_targets(targets):
+        """No alignment needed for Flatten adapter."""
+        return targets
+
     def __call__(self, X, log_label: Optional[str] = None):
         return self.transform(X, log_label=log_label)
 
@@ -40,15 +48,17 @@ class TimeDelayEmbedding:
     def __init__(self, window_size: int = 10):
         self.window_size = window_size
 
-    def fit(self, X):
+    def fit(self):
         return self
 
     def transform(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
         X = jnp.asarray(X)
-        if X.ndim != 3:
-             # Assuming shape is static or JAX handles error
-             pass 
-            
+
+        # Support 2D input (T, F) - treat as single batch
+        is_2d = X.ndim == 2
+        if is_2d:
+            X = X[jnp.newaxis, :, :]  # (1, T, F)
+
         # Shape: (N, T, F)
         W = self.window_size
         
@@ -70,15 +80,28 @@ class TimeDelayEmbedding:
         # Concat along feature axis -> (N, T', W*F)
         X_embedded = jnp.concatenate(windows, axis=-1)
 
-        if flatten_batch:
-            # (N * T', W*F)
+        if flatten_batch or is_2d:
+            # (N * T', W*F) or (T', W*F) for 2D input
             X_embedded = X_embedded.reshape(-1, X_embedded.shape[-1])
         
+        # Log feature stats only when log_label is provided
         if log_label is not None:
-            from reservoir.utils.reporting import print_feature_stats
             print_feature_stats(X_embedded, log_label)
-            
+
         return X_embedded
+
+    def align_targets(self, targets):
+        """Align targets by dropping first (window_size-1) timesteps to match windowed X."""
+        targets = jnp.asarray(targets)
+        W = self.window_size
+        # Support 2D (T, Out)
+        if targets.ndim == 2:
+            return targets[W-1:, :]
+        # 3D (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
+        aligned = targets[:, W-1:, :]
+        reshaped = aligned.reshape(-1, aligned.shape[-1])
+        print_feature_stats(reshaped, "4:TimeDelayEmbedding:y")
+        return reshaped
 
     def __call__(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
         return self.transform(X, flatten_batch=flatten_batch, log_label=log_label)

@@ -38,23 +38,26 @@ class FNNReadout(ReadoutModule):
         if y.ndim == 1:
             y = y[:, None]
 
-        self._input_dim = X.shape[1]
-        self._output_dim = y.shape[1]
+        input_dim: int = X.shape[1]
+        output_dim: int = y.shape[1]
+        self._input_dim = input_dim
+        self._output_dim = output_dim
 
         # Create FNNModel with appropriate dimensions
         fnn_config = FNNConfig(hidden_layers=self.hidden_layers)
         if self.training_config is None:
             raise ValueError("FNNReadout requires training_config. Use Factory to create properly configured instance.")
-        self._model = FNNModel(
+        model = FNNModel(
             model_config=fnn_config,
             training_config=self.training_config,
-            input_dim=self._input_dim,
-            output_dim=self._output_dim,
+            input_dim=input_dim,
+            output_dim=output_dim,
             classification=self.classification
         )
+        self._model = model
 
         # Train the model and store logs
-        self.training_logs = self._model.train(X, y)
+        self.training_logs = model.train(X, y)
         return self
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:

@@ -1,7 +1,7 @@
 """Step 2 Preprocessing layers."""
 import numpy as np
 import jax.numpy as jnp
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Any
 from reservoir.core.identifiers import Preprocessing
 
 
@@ -26,7 +26,8 @@ class FeatureScaler:
             self.mean_ = np.mean(X, axis=reduce_axis)
         if self.with_std:
             self.scale_ = np.std(X, axis=reduce_axis)
-            self.scale_[self.scale_ == 0] = 1.0
+            if self.scale_ is not None:
+                self.scale_[self.scale_ == 0] = 1.0
         return self
 
     def transform(self, X: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
@@ -35,7 +36,7 @@ class FeatureScaler:
             X = X - self.mean_
         if self.scale_ is not None:
             X = X / self.scale_
-        return X
+        return jnp.asarray(X)
 
     def inverse_transform(self, X: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         X = jnp.array(X)
@@ -43,7 +44,7 @@ class FeatureScaler:
             X = X * self.scale_
         if self.mean_ is not None:
             X = X + self.mean_
-        return X
+        return jnp.asarray(X)
 
     def fit_transform(self, X: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         return self.fit(X).transform(X)
@@ -75,8 +76,8 @@ class DesignMatrix:
 
         return out
 
-    # DesignMatrix is generally not invertible (expanding features)
-    def inverse_transform(self, X):
+    @staticmethod
+    def inverse_transform(X):
         return X
 
     def __call__(self, X):
@@ -112,7 +113,7 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
     STANDARD_SCALER: FeatureScaler
     DESIGN_MATRIX: FeatureScaler + DesignMatrix
     """
-    layers: List[object] = []
+    layers: List[Any] = []
     preprocess_labels: list[str] = []
     if p_type == Preprocessing.STANDARD_SCALER:
         layers.append(FeatureScaler())
@@ -130,7 +131,7 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
 
 
 
-def apply_layers(layers: List[object], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
+def apply_layers(layers: List[Any], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
     """Sequentially apply preprocessing layers."""
     arr = data
     for layer in layers:

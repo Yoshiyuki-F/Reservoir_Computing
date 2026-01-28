@@ -154,13 +154,11 @@ class PipelineDataManager:
         projected_val = None
         if val_X is not None:
             projected_val = batched_compute(projection, val_X, batch_size, desc=desc + "val")
-            # del val_X
 
         projected_test = None
         if test_X is not None:
             projected_test = batched_compute(projection, test_X, batch_size, desc=desc + "test")
-            # del test_X
-        
+
         projected_shape = projected_train.shape # (Batch, Time, ProjUnits)
         input_dim_for_factory = int(projected_shape[-1])
 

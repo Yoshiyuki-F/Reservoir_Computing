@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 import jax.numpy as jnp
 from tqdm.auto import tqdm
 
@@ -13,6 +13,24 @@ class ReadoutStrategy(ABC):
     def __init__(self, evaluator: Evaluator, metric_name: str):
         self.evaluator = evaluator
         self.metric_name = metric_name
+
+    @staticmethod
+    def _flatten_3d_to_2d(arr: Optional[jnp.ndarray], label: str = "array") -> Optional[jnp.ndarray]:
+        """Flatten 3D states (Batch, Time, Features) -> 2D (Batch, Features)."""
+        if arr is None:
+            return None
+        if arr.ndim == 3:
+            print(f"    [Runner] Flattening 3D {label} {arr.shape} -> 2D")
+            return arr.reshape(arr.shape[0], -1)
+        return arr
+
+    @staticmethod
+    def _get_seed_sequence(train_X, val_X):
+        """Prepare seed for closed-loop (concat train+val)."""
+        if val_X is not None:
+            axis = 1 if train_X.ndim == 3 else 0
+            return jnp.concatenate([jnp.array(train_X), jnp.array(val_X)], axis=axis)
+        return jnp.array(train_X)
 
     @abstractmethod
     def fit_and_evaluate(
@@ -42,16 +60,10 @@ class EndToEndStrategy(ReadoutStrategy):
         print("Readout is None. End-to-End mode.")
         
         # For FNN windowed mode, align targets using the model's adapter
-        aligned_train_y = train_y
-        aligned_val_y = val_y
         aligned_test_y = test_y
 
-        if hasattr(model, 'adapter'):
-            aligned_train_y = model.adapter.align_targets(train_y)
-            if val_y is not None:
-                aligned_val_y = model.adapter.align_targets(val_y)
-            if test_y is not None:
-                aligned_test_y = model.adapter.align_targets(test_y)
+        if hasattr(model, 'adapter') and test_y is not None:
+            aligned_test_y = model.adapter.align_targets(test_y)
 
         result = {
             "train_pred": train_Z,
@@ -86,7 +98,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 global_end = global_start + generation_steps
 
                 chaos_results = self.evaluator.compute_chaos_metrics(
-                    processed.test_y, closed_loop_pred, frontend_ctx.scaler,
+                    jnp.array(processed.test_y), jnp.array(closed_loop_pred), frontend_ctx.scaler,
                     dataset_meta.preset.config, global_start, global_end)
 
                 result["closed_loop_pred"] = closed_loop_pred
@@ -96,13 +108,6 @@ class EndToEndStrategy(ReadoutStrategy):
                 print(f"[Warning] FNN Closed-loop generation failed: {e}")
         
         return result
-
-    def _get_seed_sequence(self, train_X, val_X):
-        # Helper duplicated or shared. 
-        if val_X is not None:
-            axis = 1 if train_X.ndim == 3 else 0
-            return jnp.concatenate([jnp.array(train_X), jnp.array(val_X)], axis=axis)
-        return jnp.array(train_X)
 
 
 
@@ -114,18 +119,10 @@ class ClassificationStrategy(ReadoutStrategy):
     ) -> Dict[str, Any]:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         
-        tf_reshaped, ty_reshaped = train_Z, train_y
-        vf_reshaped, vy_reshaped = val_Z, val_y
-
-        # Robustly handle 3D states (Batch, 1, Features) or (Batch, Time, Features) -> (Batch, Features)
-        # This can happen if batched_compute preserves a singleton dimension or model output is 3D
-        if tf_reshaped.ndim == 3:
-            print(f"    [Runner] Flattening 3D train states {tf_reshaped.shape} -> 2D")
-            tf_reshaped = tf_reshaped.reshape(tf_reshaped.shape[0], -1)
-        if vf_reshaped is not None and vf_reshaped.ndim == 3:
-            vf_reshaped = vf_reshaped.reshape(vf_reshaped.shape[0], -1)
-        if test_Z.ndim == 3:
-            test_Z = test_Z.reshape(test_Z.shape[0], -1)
+        tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
+        vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
+        test_Z = self._flatten_3d_to_2d(test_Z, "test states")
+        ty_reshaped, vy_reshaped = train_y, val_y
         
         search_history = {}
         weight_norms = {}
@@ -198,14 +195,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         if pipeline_config.projection is not None and hasattr(frontend_ctx, "projection_layer"):
              def proj_fn(x): return frontend_ctx.projection_layer(x)
 
-        tf_reshaped, ty_reshaped = train_Z, train_y
-        
-        # Robustly handle 3D states -> 2D (same as ClassificationStrategy)
-        if tf_reshaped.ndim == 3:
-            print(f"    [Runner] Flattening 3D train states {tf_reshaped.shape} -> 2D")
-            tf_reshaped = tf_reshaped.reshape(tf_reshaped.shape[0], -1)
-        if test_Z is not None and test_Z.ndim == 3:
-            test_Z = test_Z.reshape(test_Z.shape[0], -1)
+        tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
+        ty_reshaped = train_y
         
         # Prepare Validation Seeds
         val_steps = processed.val_X.shape[0] if processed.val_X is not None else 0
@@ -234,9 +225,12 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             )
             
             # Metrics
-            current_metrics = self.evaluator.compute_chaos_metrics(
-                val_y, val_gen, frontend_ctx.scaler, dataset_meta.preset.config, verbose=False
-            )
+            if val_y is not None:
+                current_metrics = self.evaluator.compute_chaos_metrics(
+                    val_y, val_gen, frontend_ctx.scaler, dataset_meta.preset.config, verbose=False
+                )
+            else:
+                current_metrics = None
             
             # Score (minimize -VPT)
             score = -current_metrics.get("vpt_lt", 0.0) if current_metrics else 0.0
@@ -310,10 +304,3 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "closed_loop_truth": closed_loop_truth,
             "chaos_results": chaos_results,
         }
-
-    def _get_seed_sequence(self, train_X, val_X):
-        """Prepare seed for closed-loop (concat train+val)."""
-        if val_X is not None:
-            axis = 1 if train_X.ndim == 3 else 0
-            return jnp.concatenate([jnp.array(train_X), jnp.array(val_X)], axis=axis)
-        return jnp.array(train_X)

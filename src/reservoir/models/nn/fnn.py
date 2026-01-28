@@ -50,23 +50,13 @@ class FNNModel(BaseFlaxModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def _align_targets(self, targets: jnp.ndarray) -> jnp.ndarray:
-        """Align targets for windowed mode by dropping first (window_size-1) timesteps."""
-        # targets shape: (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
-        W = self.window_size
-        aligned = targets[:, W-1:, :]
-        return aligned.reshape(-1, aligned.shape[-1])
-
     def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **kwargs: Any) -> Dict[str, Any]:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
-        adapted_inputs = self.adapter(inputs)
-        
-        if self.window_size is not None and targets is not None:
-            # Align targets for windowed mode
-            aligned_targets = self._align_targets(targets)
-        else:
-            aligned_targets = targets
-            
+        # Log Step 4 (Adapter) only during training
+        log_label = f"4:TimeDelayEmbedding(k={self.window_size}):train" if self.window_size else None
+        adapted_inputs = self.adapter(inputs, log_label=log_label)
+        aligned_targets = self.adapter.align_targets(targets) if targets is not None else None
+
         return super().train(adapted_inputs, aligned_targets, **kwargs)
 
     def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
@@ -77,12 +67,8 @@ class FNNModel(BaseFlaxModel):
     def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
         """Evaluate with adapter-transformed inputs (and aligned targets if windowed)."""
         adapted_inputs = self.adapter(X)
-        
-        if self.window_size is not None:
-            aligned_targets = self._align_targets(y)
-        else:
-            aligned_targets = y
-            
+        aligned_targets = self.adapter.align_targets(y)
+
         return super().evaluate(adapted_inputs, aligned_targets)
 
     def __call__(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:

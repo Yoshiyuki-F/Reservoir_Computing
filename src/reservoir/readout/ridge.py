@@ -69,14 +69,16 @@ class RidgeRegression(ReadoutModule):
         if not jnp.all(jnp.isfinite(w)):
             w = jnp.zeros_like(w)
         if self.use_intercept:
-            self.intercept_ = jnp.asarray(w[0], dtype=jnp.float64)
-            self.coef_ = jnp.asarray(w[1:], dtype=jnp.float64)
+            intercept = jnp.asarray(w[0], dtype=jnp.float64)
+            coef = jnp.asarray(w[1:], dtype=jnp.float64)
         else:
-            self.intercept_ = jnp.zeros(w.shape[1], dtype=jnp.float64)
-            self.coef_ = jnp.asarray(w, dtype=jnp.float64)
+            intercept = jnp.zeros(w.shape[1], dtype=jnp.float64)
+            coef = jnp.asarray(w, dtype=jnp.float64)
         if y_is_1d:
-            self.coef_ = self.coef_.ravel()
-            self.intercept_ = self.intercept_.ravel()
+            coef = coef.ravel()
+            intercept = intercept.ravel()
+        self.coef_ = coef
+        self.intercept_ = intercept
         return self
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
@@ -86,9 +88,10 @@ class RidgeRegression(ReadoutModule):
         return X @ self.coef_ + self.intercept_ if self.use_intercept else X @ self.coef_
 
     def to_dict(self) -> Dict[str, Any]:
-        data = {"ridge_lambda": self.ridge_lambda, "use_intercept": self.use_intercept}
+        data: Dict[str, Any] = {"ridge_lambda": self.ridge_lambda, "use_intercept": self.use_intercept}
         if self.coef_ is not None:
             data["coef"] = jnp.asarray(self.coef_).tolist()
+        if self.intercept_ is not None:
             data["intercept"] = jnp.asarray(self.intercept_).tolist()
         return data
 

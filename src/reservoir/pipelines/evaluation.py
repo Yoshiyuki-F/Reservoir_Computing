@@ -5,8 +5,8 @@ from reservoir.utils.reporting import calculate_chaos_metrics
 class Evaluator:
     """Encapsulates evaluation logic including inverse transformation and metric calculation."""
 
+    @staticmethod
     def compute_chaos_metrics(
-        self,
         truth: jnp.ndarray,
         pred: jnp.ndarray,
         scaler: Any,
@@ -33,7 +33,8 @@ class Evaluator:
 
         return calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu, verbose=verbose)
 
-    def align_targets(self, features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
+    @staticmethod
+    def align_targets(features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
         """Align target length (dim 0) to match feature length (warmup handling)."""
         if features is None or targets is None:
             return targets

@@ -41,22 +41,24 @@ def run_pipeline(
     # It handles memory management and stats logging internally.
     data_mgr = PipelineDataManager(dataset, config, training_config)
     frontend_ctx = data_mgr.prepare()
+    assert data_mgr.metadata is not None, "DataManager.prepare() must set metadata"
+    metadata = data_mgr.metadata
 
     # === Step 2: Model Stack Construction ===
     # ModelBuilder encapsulates ModelFactory and ReadoutFactory calls.
     # It computes topology metadata automatically.
-    stack = PipelineModelBuilder.build(config, frontend_ctx, data_mgr.metadata)
+    stack = PipelineModelBuilder.build(config, frontend_ctx, metadata)
 
     # === Step 3: Execution ===
     # Executor handles the training loop, feature extraction (batched),
     # strategy selection (Classification vs ClosedLoop), and fitting.
-    executor = PipelineExecutor(stack, frontend_ctx, data_mgr.metadata)
+    executor = PipelineExecutor(stack, frontend_ctx, metadata)
     execution_results = executor.run(config)
 
     # === Step 4: Reporting ===
     # Reporter handles result formatting, computing final scores, 
     # and generating the HTML/JSON report.
-    reporter = ResultReporter(stack, frontend_ctx, data_mgr.metadata)
+    reporter = ResultReporter(stack, frontend_ctx, metadata)
     final_results = reporter.compile_and_save(execution_results, config)
 
     return final_results

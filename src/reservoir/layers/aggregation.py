@@ -62,7 +62,7 @@ class StateAggregator(Transformer):
                 return arr.reshape(-1)
         raise ValueError(f"Unsupported shape {arr.shape} or aggregation mode: {agg_mode}")
 
-    def fit(self, features: jnp.ndarray) -> "StateAggregator":
+    def fit(self, features: jnp.ndarray, y: Any = None) -> "StateAggregator":
         return self
 
     def transform(self, features: jnp.ndarray, log_label: Optional[str] = None) -> jnp.ndarray:
@@ -116,15 +116,15 @@ class StateAggregator(Transformer):
             
             if mode is AggregationMode.SEQUENCE:
                 # Flatten time dimension for sequence mode: (Batch * Time, Units)
-                return (batch * steps, units)
+                return batch * steps, units
             
             if mode is AggregationMode.CONCAT:
                  # (Batch, Time * Units)
-                 return (batch, steps * units)
+                 return batch, steps * units
 
             # For LAST, MEAN, etc. -> (Batch, Units) (or Units*2 for bidirectional/MTS)
             out_dim = self.get_output_dim(units, steps)
-            return (batch, out_dim)
+            return batch, out_dim
 
         elif len(input_shape) == 2:
             # (Time, Units) -> Single sample context
@@ -132,7 +132,7 @@ class StateAggregator(Transformer):
             
             if mode is AggregationMode.SEQUENCE:
                 # (Time, Units) - effectively already flat
-                return (steps, units)
+                return steps, units
             
             if mode is AggregationMode.CONCAT:
                 return (steps * units,)
