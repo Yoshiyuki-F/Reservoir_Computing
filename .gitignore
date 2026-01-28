@@ -7,3 +7,4 @@ data/mnist/
 # Python
 *.pyc
 __pycache__/
+.agent
