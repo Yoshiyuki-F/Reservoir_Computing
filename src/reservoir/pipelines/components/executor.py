@@ -36,7 +36,6 @@ class PipelineExecutor:
         processed = self.frontend_ctx.processed_split
         
         # Step 5: Model Dynamics (Training/Warmup)
-        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [{config.model_type.value}] ===")
         train_logs = self.stack.model.train(processed.train_X, processed.train_y) or {}
 
         # Step 6: Extract Features

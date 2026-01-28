@@ -122,6 +122,7 @@ class BaseFlaxModel(BaseModel, ABC):
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
+        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
         # 1. ここで一括してGPUに転送してしまう (MNIST程度なら余裕で乗ります)
         print("    [JAX] Transferring data to GPU...")
         inputs = jax.device_put(jnp.asarray(inputs, dtype=jnp.float32))

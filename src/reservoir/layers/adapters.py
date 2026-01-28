@@ -46,6 +46,7 @@ class TimeDelayEmbedding:
     Flattening the batch and time dimensions allows standard FNNs to process the windows as independent samples.
     """
     def __init__(self, window_size: int = 10):
+        print(f"\n=== Step 4: Adapter ===")
         self.window_size = window_size
 
     def fit(self):
@@ -90,17 +91,21 @@ class TimeDelayEmbedding:
 
         return X_embedded
 
-    def align_targets(self, targets):
+    def align_targets(self, targets, log_label: Optional[str] = None):
         """Align targets by dropping first (window_size-1) timesteps to match windowed X."""
         targets = jnp.asarray(targets)
         W = self.window_size
         # Support 2D (T, Out)
         if targets.ndim == 2:
-            return targets[W-1:, :]
+            result = targets[W-1:, :]
+            if log_label is not None:
+                print_feature_stats(result, log_label)
+            return result
         # 3D (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
         aligned = targets[:, W-1:, :]
         reshaped = aligned.reshape(-1, aligned.shape[-1])
-        print_feature_stats(reshaped, "4:TimeDelayEmbedding:y")
+        if log_label is not None:
+            print_feature_stats(reshaped, log_label)
         return reshaped
 
     def __call__(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
