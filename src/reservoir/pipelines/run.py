@@ -1,338 +1,62 @@
 """
 pipelines/run.py
-Unified Pipeline Runner for JAX-based Models and Datasets.
+Unified Pipeline Runner (Refactored)
 
-V2 Architecture Compliance:
-- Strict Configuration: No implicit defaults. Rely entirely on Presets + User Config.
-- Canonical Names Only: No alias resolution (e.g., 'alpha' -> 'leak_rate') happens here.
-- Fail Fast: Dictionary access raises KeyError if parameters are missing.
+Architecture V2 Compliance:
+- Orchestration Only: No low-level logic (loops, math, printing) allowed.
+- Component-Based: Delegates to DataManager, ModelBuilder, Executor, and Reporter.
 """
 
-from dataclasses import replace
-from typing import Any, Dict, Optional, Tuple
-from typing import Any as _Any
-import numpy as np
+from typing import Any, Dict, Optional
 
 # Core Imports
-from reservoir.models import ModelFactory
 from reservoir.core.identifiers import Dataset
-from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
-from reservoir.pipelines.generic_runner import UniversalPipeline
-from reservoir.readout.factory import ReadoutFactory
-from reservoir.data.loaders import load_dataset_with_validation_split
-from reservoir.data.presets import DATASET_REGISTRY
-from reservoir.data.structs import SplitDataset
-from reservoir.training.presets import get_training_preset, TrainingConfig
-from reservoir.layers.preprocessing import create_preprocessor
-from reservoir.layers.projection import InputProjection
 from reservoir.models.presets import PipelineConfig
-from reservoir.utils.reporting import generate_report, print_feature_stats
-from reservoir.utils.batched_compute import batched_compute
+from reservoir.training.presets import TrainingConfig
 
-# Ensure dataset loaders are registered
-from reservoir.data import loaders as _data_loaders  # noqa: F401
-
-def _apply_layers(layers: list[_Any], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
-    """Sequentially apply preprocessing layers."""
-    arr = data
-    for layer in layers:
-        if fit and hasattr(layer, "fit_transform"):
-            arr = layer.fit_transform(arr)
-            fit = False
-        elif fit and hasattr(layer, "fit") and hasattr(layer, "transform"):
-            layer.fit(arr)
-            arr = layer.transform(arr)
-            fit = False
-        elif hasattr(layer, "transform"):
-            arr = layer.transform(arr)
-        else:
-            arr = layer(arr)
-    return np.asarray(arr)
+# Refactored Components
+from reservoir.pipelines.components.data_manager import PipelineDataManager
+from reservoir.pipelines.components.model_builder import PipelineModelBuilder
+from reservoir.pipelines.components.executor import PipelineExecutor
+from reservoir.pipelines.components.reporter import ResultReporter
 
 
-def _prepare_dataset(dataset: Dataset, training_override: Optional[TrainingConfig] = None) -> Tuple[DatasetMetadata, SplitDataset]:
-    """Step 1: Resolve presets and load dataset without mutating inputs later."""
-    print("=== Step 1: Loading Dataset ===")
-    dataset_enum, dataset_preset = dataset, DATASET_REGISTRY.get(dataset)
-
-    training_cfg = training_override or get_training_preset("standard")
-    dataset_split = load_dataset_with_validation_split(
-        dataset,
-        training_cfg,
-        require_3d=True,
-    )
-
-    print_feature_stats(dataset_split.train_X, "1:train")
-    if dataset_split.val_X is not None:
-        print_feature_stats(dataset_split.val_X, "1:val")
-    if dataset_split.test_X is not None:
-        print_feature_stats(dataset_split.test_X, "1:test")
-
-    # User Request: Use full 3D shape (Batch, Time, Feature) for topology logging
-    input_shape = dataset_split.train_X.shape if dataset_split.train_X is not None else ()
-
-    metadata = DatasetMetadata(
-        dataset=dataset_enum,
-        dataset_name=dataset_preset.name,
-        preset=dataset_preset,
-        training=training_cfg,
-        classification=dataset_preset.classification,
-        input_shape=input_shape,
-    )
-    return metadata, dataset_split
-
-
-def _process_frontend(config: PipelineConfig, raw_split: SplitDataset, dataset_meta: DatasetMetadata) -> FrontendContext:
-    """
-    Step 2 & 3: Apply preprocessing and projection without mutating raw splits.
-    Returns processed datasets and shape metadata for model creation.
-    """
-    batch_size = dataset_meta.training.batch_size
-    print(f"\n=== Step 2: Preprocessing ===")
-    preprocessing_config = config.preprocess
-    pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
-
-    data_split = raw_split
-    train_X = data_split.train_X
-    val_X = data_split.val_X
-    test_X = data_split.test_X
-
-    if pre_layers:
-        train_X = _apply_layers(pre_layers, train_X, fit=True)
-        if val_X is not None:
-            val_X = _apply_layers(pre_layers, val_X, fit=False)
-        if test_X is not None:
-            test_X = _apply_layers(pre_layers, test_X, fit=False)
-            
-        # Fix: For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
-        # This ensures model output is scaled, matching the inverse_transform expectation.
-        if not dataset_meta.classification:
-             print("    [Preprocessing] Applying transforms to targets (y) for REGRESSION task.")
-             # Note: fit=False to reuse scaler fitted on X
-             if data_split.train_y is not None:
-                 data_split = replace(data_split, train_y=_apply_layers(pre_layers, data_split.train_y, fit=False))
-             if data_split.val_y is not None:
-                 data_split = replace(data_split, val_y=_apply_layers(pre_layers, data_split.val_y, fit=False))
-             if data_split.test_y is not None:
-                 data_split = replace(data_split, test_y=_apply_layers(pre_layers, data_split.test_y, fit=False))
-
-    print_feature_stats(train_X, "2:train")
-    if val_X is not None:
-        print_feature_stats(val_X, "2:val")
-    if test_X is not None:
-        print_feature_stats(test_X, "2:test")
-    # Use full 3D shape
-    preprocessed_shape = train_X.shape
-
-    print("\n=== Step 3: Projection (for reservoir/distillation) ===")
-    projection_config = config.projection
-
-    if projection_config is None:
-        processed_split = SplitDataset(
-            train_X=train_X,
-            train_y=data_split.train_y,
-            test_X=test_X,
-            test_y=data_split.test_y,
-            val_X=val_X,
-            val_y=data_split.val_y,
-        )
-        # Use full 3D shape
-        preprocessed_shape = train_X.shape
-        input_shape_for_meta = preprocessed_shape
-        # input_dim_for_factory still needs the feature dimension (last dim)
-        input_dim_for_factory = int(preprocessed_shape[-1])
-        print_feature_stats(train_X, "3:train")
-        if val_X is not None:
-            print_feature_stats(val_X, "3:val")
-        if test_X is not None:
-            print_feature_stats(test_X, "3:test")
-        return FrontendContext(
-            processed_split=processed_split,
-            preprocess_labels=preprocess_labels,
-            preprocessors=pre_layers,
-            preprocessed_shape=preprocessed_shape,
-            projected_shape=None,
-            input_shape_for_meta=input_shape_for_meta,
-            input_dim_for_factory=input_dim_for_factory,
-            scaler=pre_layers[0] if pre_layers else None,
-        )
-
-    projection = InputProjection(
-        input_dim=int(preprocessed_shape[-1]),
-        output_dim=int(projection_config.n_units),
-        input_scale=float(projection_config.input_scale),
-        input_connectivity=float(projection_config.input_connectivity),
-        seed=int(projection_config.seed),
-        bias_scale=float(projection_config.bias_scale),
-    )
-
-    # --- 修正箇所: バッチ処理で射影を実行 ---
-    # ここで OOM を防ぐために batched_compute を使用
-    desc = f"[Projection] (Batch: {batch_size})"
-    print(f"Applying Projection in batches of {batch_size}...")
-    projected_train = batched_compute(projection, train_X, batch_size, desc=desc + "train")
-    del train_X  # メモリ解放
-
-    projected_val = None
-    if val_X is not None:
-        projected_val = batched_compute(projection, val_X, batch_size, desc=desc + "val")
-        del val_X  # メモリ解放
-
-    projected_test = None
-    if test_X is not None:
-        projected_test = batched_compute(projection, test_X, batch_size, desc=desc + "test")
-        del test_X  # メモリ解放
-    
-    # Use full 3D shape
-    projected_shape = projected_train.shape # (Batch, Time, ProjUnits)
-
-    transformed_shape = projected_shape
-    input_shape_for_meta = transformed_shape
-
-    # ★ ここは「Teacherが受け取る1ステップの次元数」を渡すのが正解
-    # Flatten後のサイズは Factory 側で input_shape から計算させる
-    input_dim_for_factory = int(transformed_shape[-1])
-
-    processed_split = SplitDataset(
-        train_X=projected_train,
-        train_y=data_split.train_y,
-        test_X=projected_test,
-        test_y=data_split.test_y,
-        val_X=projected_val,
-        val_y=data_split.val_y,
-    )
-
-    print_feature_stats(projected_train, "3:train")
-    if projected_val is not None:
-        print_feature_stats(projected_val, "3:val")
-    if projected_test is not None:
-        print_feature_stats(projected_test, "3:test")
-    return FrontendContext(
-        processed_split=processed_split,
-        preprocess_labels=preprocess_labels,
-        preprocessors=pre_layers,
-        preprocessed_shape=preprocessed_shape,
-        projected_shape=projected_shape,
-        input_shape_for_meta=input_shape_for_meta,
-        input_dim_for_factory=input_dim_for_factory,
-        scaler=pre_layers[0] if pre_layers else None,
-        projection_layer=projection,
-    )
-
-
-def _build_model_stack(
-    config: PipelineConfig,
-    dataset_meta: DatasetMetadata,
-    frontend_ctx: FrontendContext,
-) -> ModelStack:
-
-    # Step 4: Adapter Stats moved to generic_runner.py for full dataset logging
-    # --- Step 5: Factory Model Construction ---
-    """Step 4: Instantiate model + readout and enrich topology metadata."""
-    processed = frontend_ctx.processed_split
-    if dataset_meta.preset.config.n_output is not None:
-        meta_n_outputs = int(dataset_meta.preset.config.n_output)
-    else:
-        target_sample = processed.train_y if processed.train_y is not None else processed.test_y
-        if target_sample is None:
-            raise ValueError("Unable to infer output dimension without targets.")
-        meta_n_outputs = (
-            int(target_sample.shape[-1]) if hasattr(target_sample, "shape") and len(target_sample.shape) > 1 else 1
-        )
-
-    model = ModelFactory.create_model(
-        config=config,
-        training=dataset_meta.training,
-        input_dim=frontend_ctx.input_dim_for_factory,
-        output_dim=meta_n_outputs,
-        input_shape=frontend_ctx.input_shape_for_meta,
-    )
-
-    topo_meta = model.get_topology_meta()
-    if not isinstance(topo_meta, dict):
-        topo_meta = {}
-    shapes_meta = topo_meta.get("shapes", {}) or {}
-    
-    # Initialize with metadata/defaults, then overwrite with runtime captures
-    shapes_meta["input"] = dataset_meta.input_shape
-    shapes_meta["preprocessed"] = frontend_ctx.preprocessed_shape
-    shapes_meta["projected"] = frontend_ctx.projected_shape
-    if "output" not in shapes_meta:
-        shapes_meta["output"] = (meta_n_outputs,)
-    topo_meta["shapes"] = shapes_meta
-
-    # Step 4: Log stats for adapter output (safe batching)
-    # Step 4: Log stats for adapter output (safe batching)
-    # _log_adapter_stats(model, processed.train_X, processed.val_X, processed.test_X) -> Moved to generic_runner
-
-    details_meta = topo_meta.get("details", {}) or {}
-    details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
-    topo_meta["details"] = details_meta
-    
-    # Add readout name to details for topology printing
-    is_classification = dataset_meta.classification
-    readout = ReadoutFactory.create_readout(config.readout, is_classification, dataset_meta.training)
-    if readout is not None:
-        readout_name = type(readout).__name__
-        if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
-            readout_name += f" ({'-'.join(str(v) for v in readout.hidden_layers)})"
-        details_meta["readout"] = readout_name
-    else:
-        details_meta["readout"] = None
-    
-    metric = "accuracy" if dataset_meta.classification else "mse"
-    return ModelStack(
-        model=model,
-        readout=readout,
-        topo_meta=topo_meta,
-        metric=metric,
-        model_label=config.model_type.value.replace("-", "_"),
-    )
-
-
-def run_pipeline(config: PipelineConfig, dataset: Dataset, training_config: Optional[TrainingConfig]=None) -> Dict[str, Any]:
+def run_pipeline(
+    config: PipelineConfig, 
+    dataset: Dataset, 
+    training_config: Optional[TrainingConfig] = None
+) -> Dict[str, Any]:
     """
     Declarative orchestrator for the unified pipeline.
+    
+    Flow:
+    1. Data Preparation (Load -> Preprocess -> Project)
+    2. Model Construction (Factory -> Topology)
+    3. Execution (Train -> Extract Features -> Readout Fit)
+    4. Reporting (Metrics -> Logs -> Disk)
     """
+    
+    # === Step 1: Data Preparation ===
+    # DataManager encapsulates loading, splitting, scaling, and projection logic.
+    # It handles memory management and stats logging internally.
+    data_mgr = PipelineDataManager(dataset, config, training_config)
+    frontend_ctx = data_mgr.prepare()
 
-    #Step1.
-    dataset_meta, raw_split = _prepare_dataset(dataset, training_config)
+    # === Step 2: Model Stack Construction ===
+    # ModelBuilder encapsulates ModelFactory and ReadoutFactory calls.
+    # It computes topology metadata automatically.
+    stack = PipelineModelBuilder.build(config, frontend_ctx, data_mgr.metadata)
 
-    #Step2&3.
-    frontend_ctx = _process_frontend(config, raw_split, dataset_meta)
-    del raw_split
+    # === Step 3: Execution ===
+    # Executor handles the training loop, feature extraction (batched),
+    # strategy selection (Classification vs ClosedLoop), and fitting.
+    executor = PipelineExecutor(stack, frontend_ctx, data_mgr.metadata)
+    execution_results = executor.run(config)
 
-    #Step 4: Build Model Stack
-    print("DEBUG: Calling _build_model_stack...")
-    stack = _build_model_stack(config, dataset_meta, frontend_ctx)
-    print("DEBUG: Returned from _build_model_stack.")
+    # === Step 4: Reporting ===
+    # Reporter handles result formatting, computing final scores, 
+    # and generating the HTML/JSON report.
+    reporter = ResultReporter(stack, frontend_ctx, data_mgr.metadata)
+    final_results = reporter.compile_and_save(execution_results, config)
 
-    print("DEBUG: Initializing UniversalPipeline...")
-    runner = UniversalPipeline(stack, config)
-    print("DEBUG: Calling runner.run...")
-    results = runner.run(frontend_ctx, dataset_meta)
-
-    report_payload = dict(
-        runner=runner,
-        readout=stack.readout,
-        train_X=frontend_ctx.processed_split.train_X,
-        train_y=frontend_ctx.processed_split.train_y,
-        test_X=frontend_ctx.processed_split.test_X,
-        test_y=frontend_ctx.processed_split.test_y,
-        val_X=frontend_ctx.processed_split.val_X,
-        val_y=frontend_ctx.processed_split.val_y,
-        training_obj=dataset_meta.training,
-        dataset_name=dataset_meta.dataset_name,
-        model_type_str=stack.model_label,
-        preprocessors=frontend_ctx.preprocessors,
-    )
-    generate_report(
-        results,
-        config,
-        stack.topo_meta,
-        **report_payload,
-        classification=dataset_meta.classification,
-        dataset_preset=dataset_meta.preset,
-    )
-
-    return results
+    return final_results
