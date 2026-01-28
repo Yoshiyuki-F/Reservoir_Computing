@@ -231,8 +231,8 @@ WINDOWED_FNN_PRESET = PipelineConfig(
     ),
     projection=None,  # No projection needed
     model=FNNConfig(
-        hidden_layers=(1000, 1000),
-        window_size=64,  # This enables TimeDelayEmbedding adapter
+        hidden_layers=(100, 100),
+        window_size=3,  # This enables TimeDelayEmbedding adapter
     ),
     readout=None,  # FNN is end-to-end
 )

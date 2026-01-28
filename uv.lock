@@ -1424,7 +1424,7 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "optax" },
-    { name = "pennylane" },
+    { name = "pennylane", specifier = ">=0.44.0" },
     { name = "poethepoet", specifier = ">=0.36.0" },
     { name = "pydantic" },
     { name = "pytest" },

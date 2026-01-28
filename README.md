@@ -57,7 +57,7 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
 
 **1. Classical Reservoir on Sine Wave**
 ```bash
-uv run reservoir-cli --model classical_reservoir --dataset sine_wave
+uv run reservoir-cli --model classical_reservoir --dataset mnist
 ```
 
 **2. Quantum Gate-based Reservoir on Lorenz Attractor**
