@@ -209,6 +209,22 @@ class QuantumReservoir(Reservoir):
         """Initialize reservoir state (feedback vector)."""
         return jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float64)
 
+    def step(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Batched step function for closed-loop generation.
+        Returns: (next_state, output)
+        """
+        step_fn_vmapped = jax.vmap(
+            partial(
+                self._step_fn,
+                reservoir_params=self.reservoir_params,
+                ising_J=self.ising_J,
+                ising_h=self.ising_h
+            ),
+            in_axes=(0, 0)
+        )
+        return step_fn_vmapped(state, input_data)
+
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Forward pass using JIT-compiled scan."""
         if input_data.ndim != 3:

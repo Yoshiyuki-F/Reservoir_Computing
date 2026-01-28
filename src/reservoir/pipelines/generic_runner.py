@@ -56,23 +56,28 @@ class UniversalPipeline:
             print(f"[Closed-Loop] Generating {steps} steps (Fast JAX Scan)...")
 
         initial_state = self.model.initialize_state(batch_size)
-        final_state, _ = self.model.forward(initial_state, history)
+        final_state, history_outputs = self.model.forward(initial_state, history)
 
-        def predict_one(s):
-            s_in = s[:, None, :]
+        def predict_one(features):
+            f_in = features[:, None, :]
             if self.readout is not None:
-                out = self.readout.predict(s_in)
+                # Readout expects (batch, time, features)
+                out = self.readout.predict(f_in)
                 return out[:, 0, :]
             else:
-                return s
+                return features
 
-        first_prediction = predict_one(final_state)
+        # Use the last output from history for the first prediction
+        # history_outputs is (batch, time, features)
+        last_output = history_outputs[:, -1, :]
+        first_prediction = predict_one(last_output)
 
         def scan_step(carry, _):
             h_prev, x_raw = carry
             x_proj = projection_fn(x_raw) if projection_fn else x_raw
-            h_next, _ = self.model.step(h_prev, x_proj)
-            y_next = predict_one(h_next)
+            # step returns (next_state, output_features)
+            h_next, output = self.model.step(h_prev, x_proj)
+            y_next = predict_one(output)
             return (h_next, y_next), y_next
 
         _, predictions = jax.lax.scan(scan_step, (final_state, first_prediction), None, length=steps)
@@ -629,6 +634,16 @@ class UniversalPipeline:
         else:
             test_pred = fit_result["test_pred"]
             test_y_final = test_y
+
+        # Debug Logging for User
+        print("\n[DEBUG] Inspecting Test Predictions (First 20 steps):")
+        if test_pred is not None:
+            tp_flat = test_pred.flatten()[:20]
+            print(f"  Pred: {tp_flat}")
+            print(f"  Pred Stats: min={test_pred.min():.4f}, max={test_pred.max():.4f}, mean={test_pred.mean():.4f}, std={test_pred.std():.4f}")
+        if test_y_final is not None:
+            ty_flat = test_y_final.flatten()[:20]
+            print(f"  True: {ty_flat}")
 
         test_score = 0.0
         if test_pred is not None and test_y_final is not None:

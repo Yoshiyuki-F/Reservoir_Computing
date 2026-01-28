@@ -81,16 +81,19 @@ class ReservoirFactory:
         # Use Aggregator execution logic to determine feature shape
         from reservoir.layers.aggregation import StateAggregator
         
-        # internal_shape/projected_shape is the input to aggregation
-        projected_shape = _with_batch((t_steps, projected_input_dim))
+        # internal_shape is the output of the Reservoir (Step 5), which is input to Aggregation (Step 6)
+        # Use node.n_units because QuantumReservoir (and others) might expand dimension (e.g., 4 -> 10)
+        internal_dim = node.n_units
+        internal_shape = _with_batch((t_steps, internal_dim))
         
         aggregator = StateAggregator(agg_mode_enum)
-        feature_shape = aggregator.get_output_shape(projected_shape)
+        feature_shape = aggregator.get_output_shape(internal_shape)
         
         # Output shape matches feature shape but with last dimension replaced by output_dim
         # (Assuming Readout preserves sample structure and maps features -> output_dim)
         output_shape = feature_shape[:-1] + (output_dim,)
              
+        # projected_shape is the input to the Reservoir (Step 3/4)
         projected_shape = _with_batch((t_steps, projected_input_dim))
 
         topo_meta["type"] = pipeline_config.model_type.value.upper()
@@ -99,7 +102,7 @@ class ReservoirFactory:
             "preprocessed": None,
             "projected": projected_shape,
             "adapter": None,  # No adapter for reservoir (direct sequence processing)
-            "internal": projected_shape,
+            "internal": internal_shape,
             "feature": feature_shape,
             "output": output_shape,
         }
