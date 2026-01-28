@@ -78,3 +78,13 @@ class PipelineModelBuilder:
             metric=metric,
             model_label=config.model_type.value.replace("-", "_"),
         )
+
+    @staticmethod
+    def get_adapter(stack: ModelStack) -> Any:
+        """Helper to retrieve adapter from various model wrappers in the stack."""
+        model = stack.model
+        # Only return adapter if it's a direct adapter (e.g. FNNModel)
+        # DistillationModel has 'student', but needs raw input for Teacher, so we return None.
+        if hasattr(model, 'adapter') and not hasattr(model, 'student'):
+            return model.adapter
+        return None

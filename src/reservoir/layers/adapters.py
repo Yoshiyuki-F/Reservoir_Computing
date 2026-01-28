@@ -99,13 +99,13 @@ class TimeDelayEmbedding:
         if targets.ndim == 2:
             result = targets[W-1:, :]
             if log_label is not None:
-                print_feature_stats(result, log_label)
+                print_feature_stats(result, f"{log_label} (Time-Trimmed)")
             return result
         # 3D (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
         aligned = targets[:, W-1:, :]
         reshaped = aligned.reshape(-1, aligned.shape[-1])
         if log_label is not None:
-            print_feature_stats(reshaped, log_label)
+            print_feature_stats(reshaped, f"{log_label} (Time-Trimmed)")
         return reshaped
 
     def __call__(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):

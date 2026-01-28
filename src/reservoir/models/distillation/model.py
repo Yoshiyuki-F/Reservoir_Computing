@@ -35,63 +35,22 @@ class DistillationModel(ClosedLoopGenerativeModel):
         teacher: ClassicalReservoir,
         student: FNNModel,
         training_config: TrainingConfig,
-        student_adapter: Any = None,
     ):
         self.teacher = teacher
         self.student = student
         self.training_config = training_config
-        self.student_adapter = student_adapter
         
         # State management for closed-loop generation
         self._input_dim: Optional[int] = None
-        self._window_size: int = 1
-        if hasattr(self.student_adapter, "window_size"):
-            self._window_size = self.student_adapter.window_size
+        # Get window_size from student's adapter if available
+        self._window_size: int = getattr(student, 'window_size', 1) or 1
 
     def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         return self.predict(inputs)
 
     def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
-        if self.student_adapter is not None:
-             # Preserve batch dimension if input is 3D sequence
-             is_sequence = (X.ndim == 3)
-             batch_size = X.shape[0] if is_sequence else 1
-
-             X_in = self.student_adapter(X)
-             out = self.student.predict(X_in)
-
-             if is_sequence:
-                 # Reshape (N*T', F) -> (N, T', F)
-                 return out.reshape(batch_size, -1, out.shape[-1])
-             return out
+        """Delegate to student's predict (which handles adapter internally)."""
         return self.student.predict(X)
-
-    def _prepare_student_data(self, inputs: jnp.ndarray, targets: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Aligns inputs and targets when an adapter (e.g. TimeDelay) changes the time dimension."""
-        if self.student_adapter is None:
-            return inputs, targets
-
-        # 1. Transform Inputs
-        # TimeDelayEmbedding returns (Batch * (Time-Window+1), Window*Feat)
-        student_X = self.student_adapter(inputs)
-
-        # 2. Align Targets
-        # Targets are teacher outputs (Batch, Time, TeacherFeat)
-        # We need to slice off the initial window accumulation
-        # and flatten to match student_X samples.
-        
-        # Infer window size from adapter if possible, or deduce from shape change
-        if hasattr(self.student_adapter, "window_size"):
-             w = self.student_adapter.window_size
-             # Slice targets: discard first w-1 steps
-             # targets[:, w-1:, :]
-             if targets.ndim == 3:
-                 targets_sliced = targets[:, w-1:, :]
-                 student_y = targets_sliced.reshape(-1, targets_sliced.shape[-1])
-                 return student_X, student_y
-        
-        # Fallback if logic is generic or flat
-        return student_X, targets
 
     def _compute_teacher_targets(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
@@ -136,26 +95,28 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Capture input dimension for later state initialization
         self._input_dim = inputs.shape[-1]
         
-        # --- Phase 1: Teacher Target Generation ---
+        # --- Phase A: Teacher Target Generation ---
         print("\n    [Distillation] ==========================================")
-        print("    [Distillation] Phase 1: Teacher Target Generation")
+        print("    [Distillation] Phase A: Teacher Target Generation")
         print("    [Distillation] ==========================================")
 
         # Use batched computation for teacher targets (safe for large datasets)
         teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
-        print_feature_stats(teacher_targets, "5:teacher")
+        print_feature_stats(teacher_targets, "5A:teacher")
 
-        # Apply Adapter and Align Targets
-        student_X, student_targets = self._prepare_student_data(inputs, teacher_targets)
-
-        # --- Phase 2: Student Model Training ---
+        # --- Phase B: Student Model Training ---
         print("\n    [Distillation] ==========================================")
-        print("    [Distillation] Phase 2: Student Model Training")
+        print("    [Distillation] Phase B: Student Model Training")
         print("    [Distillation] ==========================================")
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
-        # Student training (uses its own progress bar)
-        student_logs = self.student.train(student_X, student_targets, **kwargs) or {}
+        # Student training - FNNModel.train() handles adapter and alignment internally
+        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
+        
+        # --- Generate 5B: Student Output (Predicted State) ---
+        # To verify Distillation, we show the student's output stats
+        student_outputs = self.student.predict(inputs)
+        print_feature_stats(student_outputs, "5B:student_output")
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = student_logs.get("final_loss", 0.0)
@@ -166,33 +127,21 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def evaluate(self, X: jnp.ndarray, y: Any = None) -> Dict[str, float]:
         """
-        Distillation evaluation aligns student outputs with teacher features (not labels).
+        Distillation evaluation: compare student output with teacher output.
         """
-        # Use batched generation if dataset is large to prevent OOM during evaluation
+         # Use batched generation if dataset is large to prevent OOM during evaluation
         if X.shape[0] > 4096:
              teacher_targets = self._compute_teacher_targets_batched(X, batch_size=2048)
         else:
              teacher_targets = self._compute_teacher_targets(X)
 
-        # Align for student
-        student_X, teacher_targets_aligned = self._prepare_student_data(X, teacher_targets)
-        
-        student_out = self.student.predict(student_X)
-        
-        if student_out.shape != teacher_targets_aligned.shape:
-             # Just in case fallback didn't work
-            raise ValueError(
-                f"Distillation shape mismatch: student {student_out.shape} vs teacher {teacher_targets_aligned.shape}"
-            )
-
-        distill_mse = float(jnp.mean((student_out - teacher_targets_aligned) ** 2))
-        student_metrics = self.student.evaluate(student_X, teacher_targets_aligned)
+        # Delegate to student's evaluate (handles adapter and alignment internally)
+        student_metrics = self.student.evaluate(X, teacher_targets)
 
         if isinstance(student_metrics, dict):
             metrics: Dict[str, float] = dict(student_metrics)
         else:
             metrics = {}
-        metrics.setdefault("distill_mse", distill_mse)
         return metrics
 
     def get_topology_meta(self) -> Dict[str, Any]:
@@ -239,7 +188,10 @@ class DistillationModel(ClosedLoopGenerativeModel):
         batch_size = next_state.shape[0]
         flat_input = next_state.reshape(batch_size, -1)
         
-        output = self.student.predict(flat_input)
+        # Call BaseFlaxModel.predict directly to bypass FNN's adapter
+        # (flat_input is already windowed)
+        from reservoir.models.nn.base import BaseFlaxModel
+        output = BaseFlaxModel.predict(self.student, flat_input)
         return next_state, output
 
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:

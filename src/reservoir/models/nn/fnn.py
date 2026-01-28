@@ -54,11 +54,16 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
+        # Check if inputs are already adapted (Step 4 done externally)
+        # Heuristic: if input feature dim matches the network's input layer dim
+        if inputs.ndim == 2 and inputs.shape[-1] == self.layer_dims[0]:
+            return super().train(inputs, targets, **kwargs)
+
         # Log Step 4 (Adapter) only during training
-        x_log_label = f"4:TimeDelayEmbedding(k={self.window_size}):X:train" if self.window_size else None
-        y_log_label = f"4:TimeDelayEmbedding(k={self.window_size}):y:train" if self.window_size else None
+        x_log_label = f"{log_prefix}:TimeDelayEmbedding(k={self.window_size}):X:train" if self.window_size else None
+        y_log_label = f"{log_prefix}:TimeDelayEmbedding(k={self.window_size}):y:train" if self.window_size else None
         adapted_inputs = self.adapter(inputs, log_label=x_log_label)
         aligned_targets = self.adapter.align_targets(targets, log_label=y_log_label) if targets is not None else None
 
@@ -66,14 +71,21 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
     def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         """Predict with adapter-transformed inputs."""
+        # Check if inputs are already adapted
+        if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
+            return super().predict(X)
+            
         adapted_inputs = self.adapter(X)
         return super().predict(adapted_inputs)
 
     def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
         """Evaluate with adapter-transformed inputs (and aligned targets if windowed)."""
+        # Check if inputs are already adapted
+        if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
+            return super().evaluate(X, y)
+
         adapted_inputs = self.adapter(X)
         aligned_targets = self.adapter.align_targets(y)
-
         return super().evaluate(adapted_inputs, aligned_targets)
 
     def __call__(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:

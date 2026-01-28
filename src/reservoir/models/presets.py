@@ -196,8 +196,8 @@ TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=TIME_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(64, 32),
-            window_size=3,  # This enables TimeDelayEmbedding adapter
+            hidden_layers=(1000, 1000),
+            window_size=64,  # This enables TimeDelayEmbedding adapter
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT

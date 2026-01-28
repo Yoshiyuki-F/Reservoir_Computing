@@ -13,7 +13,6 @@ from reservoir.models.presets import DistillationConfig
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.training.presets import TrainingConfig
-from reservoir.layers.adapters import TimeDelayEmbedding, Flatten
 
 
 class DistillationFactory:
@@ -60,23 +59,21 @@ class DistillationFactory:
         )
         teacher_feature_dim = teacher_node.get_feature_dim(time_steps=time_steps)
 
-        #2. configure student FNN adapter and input dimension
+        #2. configure student FNN input dimension based on window or flatten
         # Use window_size from config if set, otherwise flatten all time steps
         window_size = distillation_config.student.window_size
         if window_size is not None:
             student_input_dim = projected_input_dim * window_size
-            student_adapter = TimeDelayEmbedding(window_size=window_size)
         else:
             student_input_dim = time_steps * projected_input_dim
-            student_adapter = Flatten()
         h_layers = distillation_config.student.hidden_layers
         hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
 
-        #3, create student
+        #3, create student (FNNModel handles adapter internally based on window_size)
         student_model = FNNModel(
             model_config=distillation_config.student,
             training_config=training,
-            input_dim=student_input_dim,
+            input_dim=projected_input_dim,  # Raw input dim, adapter will expand
             output_dim=int(teacher_feature_dim),
             classification=False,
         )
@@ -85,7 +82,6 @@ class DistillationFactory:
             teacher=teacher_node,
             student=student_model,
             training_config=training,
-            student_adapter=student_adapter
         )
 
         topo_meta: Dict[str, Any] = {

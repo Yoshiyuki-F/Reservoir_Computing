@@ -185,11 +185,63 @@ class PipelineDataManager:
             projection_layer=projection,
         )
 
+    def apply_adapter(self, frontend_ctx: FrontendContext, adapter: Any) -> FrontendContext:
+        """
+        Step 4: Apply adapter (e.g., TimeDelayEmbedding) to all splits.
+        This is called by the model builder after creating the model with adapter.
+        """
+        print("\n=== Step 4: Adapter ===")
+        
+        if adapter is None or not hasattr(adapter, '__call__'):
+            return frontend_ctx
+        
+        processed = frontend_ctx.processed_split
+        window_size = getattr(adapter, 'window_size', None)
+        adapter_name = f"TimeDelayEmbedding(k={window_size})" if window_size else "Adapter"
+        
+        # Apply adapter to X (all splits)
+        adapted_train_X = adapter(processed.train_X, log_label=f"4:{adapter_name}:X:train")
+        adapted_val_X = adapter(processed.val_X, log_label=f"4:{adapter_name}:X:val") if processed.val_X is not None else None
+        adapted_test_X = adapter(processed.test_X, log_label=f"4:{adapter_name}:X:test") if processed.test_X is not None else None
+        
+        # Align y (all splits) to match adapted X
+        aligned_train_y = adapter.align_targets(processed.train_y, log_label=f"4:{adapter_name}:y:train") if processed.train_y is not None else None
+        aligned_val_y = adapter.align_targets(processed.val_y, log_label=f"4:{adapter_name}:y:val") if processed.val_y is not None else None
+        aligned_test_y = adapter.align_targets(processed.test_y, log_label=f"4:{adapter_name}:y:test") if processed.test_y is not None else None
+        
+        # Create new processed split with adapted data
+        adapted_split = SplitDataset(
+            train_X=adapted_train_X,
+            train_y=aligned_train_y,
+            val_X=adapted_val_X,
+            val_y=aligned_val_y,
+            test_X=adapted_test_X,
+            test_y=aligned_test_y,
+        )
+        
+        # Update input dimension for factory (now windowed)
+        new_input_dim = int(adapted_train_X.shape[-1]) if adapted_train_X.ndim >= 2 else frontend_ctx.input_dim_for_factory
+        
+        from dataclasses import replace as dc_replace
+        return dc_replace(
+            frontend_ctx,
+            processed_split=adapted_split,
+            input_dim_for_factory=new_input_dim,
+        )
+
     @staticmethod
     def _log_dataset_stats(dataset: SplitDataset, stage: str):
         """Centralized stats logging."""
-        print_feature_stats(dataset.train_X, f"{stage}:train")
+        print_feature_stats(dataset.train_X, f"{stage}:X:train")
+        if dataset.train_y is not None:
+             print_feature_stats(dataset.train_y, f"{stage}:y:train")
+             
         if dataset.val_X is not None:
-            print_feature_stats(dataset.val_X, f"{stage}:val")
+            print_feature_stats(dataset.val_X, f"{stage}:X:val")
+            if dataset.val_y is not None:
+                print_feature_stats(dataset.val_y, f"{stage}:y:val")
+                
         if dataset.test_X is not None:
-            print_feature_stats(dataset.test_X, f"{stage}:test")
+            print_feature_stats(dataset.test_X, f"{stage}:X:test")
+            if dataset.test_y is not None:
+                print_feature_stats(dataset.test_y, f"{stage}:y:test")

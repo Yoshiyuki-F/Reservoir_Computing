@@ -36,7 +36,7 @@ def run_pipeline(
     4. Reporting (Metrics -> Logs -> Disk)
     """
     
-    # === Step 1: Data Preparation ===
+    # === Step 1-3: Data Preparation ===
     # DataManager encapsulates loading, splitting, scaling, and projection logic.
     # It handles memory management and stats logging internally.
     data_mgr = PipelineDataManager(dataset, config, training_config)
