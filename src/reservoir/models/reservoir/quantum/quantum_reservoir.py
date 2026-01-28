@@ -225,6 +225,27 @@ class QuantumReservoir(Reservoir):
         )
         return step_fn_vmapped(state, input_data)
 
+    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Single step execution for closed-loop generation.
+        Args:
+            state: (batch, n_qubits)
+            inputs: (batch, features)
+        Returns:
+            next_state: (batch, n_qubits)
+            output: (batch, output_dim)
+        """
+        step_fn_vmapped = jax.vmap(
+            partial(
+                self._step_fn,
+                reservoir_params=self.reservoir_params,
+                ising_J=self.ising_J,
+                ising_h=self.ising_h
+            ),
+            in_axes=(0, 0)
+        )
+        return step_fn_vmapped(state, inputs)
+
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Forward pass using JIT-compiled scan."""
         if input_data.ndim != 3:
@@ -263,18 +284,29 @@ class QuantumReservoir(Reservoir):
     ) -> jnp.ndarray:
         """
         Process inputs through quantum reservoir and optionally aggregate.
+        Accepts both 2D (Time, Features) and 3D (Batch, Time, Features) input.
+        Output is always 2D from aggregation.
         """
         arr = jnp.asarray(inputs, dtype=jnp.float64)
-        if arr.ndim != 3:
-            raise ValueError(f"QuantumReservoir expects 3D input, got {arr.shape}")
+        
+        # Convert 2D to 3D for internal processing (scan requires 3D)
+        input_was_2d = (arr.ndim == 2)
+        if input_was_2d:
+            arr = arr[None, :, :]  # (T, F) -> (1, T, F)
+        elif arr.ndim != 3:
+            raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
         
         batch_size = arr.shape[0]
         state = self.initialize_state(batch_size)
         _, states = self.forward(state, arr)
         
         if return_sequences:
-            return states
-        return self.aggregator.transform(states)
+            # Return 3D states (or squeeze if input was 2D)
+            return states[0] if input_was_2d else states
+        
+        # Aggregation always returns 2D
+        log_label = f"6:{split_name}" if split_name else None
+        return self.aggregator.transform(states, log_label=log_label)
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""

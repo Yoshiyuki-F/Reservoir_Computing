@@ -1,7 +1,8 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/adapters.py
-Step 4 Adapters between architectural steps.
+Step 4 Adapters before the actual model layers
 """
 import jax.numpy as jnp
+from typing import Optional
 
 class Flatten:
     """
@@ -11,16 +12,23 @@ class Flatten:
     def fit(self):
         return self
     
-    def transform(self, X):
+    def transform(self, X, log_label: Optional[str] = None):
         X = jnp.asarray(X)
         if X.ndim == 3:
-            return X.reshape(X.shape[0], -1)
-        if X.ndim == 2:
-            return X.reshape(X.shape[0], -1)
-        return X.flatten()
+            result = X.reshape(X.shape[0], -1)
+        elif X.ndim == 2:
+            result = X.reshape(X.shape[0], -1)
+        else:
+            result = X.flatten()
+        
+        if log_label is not None:
+            from reservoir.utils.reporting import print_feature_stats
+            print_feature_stats(result, log_label)
+        
+        return result
 
-    def __call__(self, X):
-        return self.transform(X)
+    def __call__(self, X, log_label: Optional[str] = None):
+        return self.transform(X, log_label=log_label)
 
 
 class TimeDelayEmbedding:
@@ -35,7 +43,7 @@ class TimeDelayEmbedding:
     def fit(self, X):
         return self
 
-    def transform(self, X, flatten_batch: bool = True):
+    def transform(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
         X = jnp.asarray(X)
         if X.ndim != 3:
              # Assuming shape is static or JAX handles error
@@ -65,8 +73,13 @@ class TimeDelayEmbedding:
         if flatten_batch:
             # (N * T', W*F)
             X_embedded = X_embedded.reshape(-1, X_embedded.shape[-1])
+        
+        if log_label is not None:
+            from reservoir.utils.reporting import print_feature_stats
+            print_feature_stats(X_embedded, log_label)
             
         return X_embedded
 
-    def __call__(self, X, flatten_batch: bool = True):
-        return self.transform(X, flatten_batch=flatten_batch)
+    def __call__(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
+        return self.transform(X, flatten_batch=flatten_batch, log_label=log_label)
+

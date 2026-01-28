@@ -6,7 +6,7 @@ Updated with clear logging phases.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -15,16 +15,19 @@ from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.models.nn.base import BaseModel
+from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.utils.reporting import print_feature_stats
 
 
-class DistillationModel(BaseModel):
+class DistillationModel(ClosedLoopGenerativeModel):
     """
     Distills reservoir dynamics into a student FNN.
     Teacher: ClassicalReservoir (handles aggregation internally; no gradients).
     Student: FNNModel trained to regress onto teacher targets.
+    
+    Implements ClosedLoopGenerativeModel to allow autonomous closed-loop generation.
+    State representation: Sliding window of input features.
     """
 
     def __init__(
@@ -38,6 +41,12 @@ class DistillationModel(BaseModel):
         self.student = student
         self.training_config = training_config
         self.student_adapter = student_adapter
+        
+        # State management for closed-loop generation
+        self._input_dim: Optional[int] = None
+        self._window_size: int = 1
+        if hasattr(self.student_adapter, "window_size"):
+            self._window_size = self.student_adapter.window_size
 
     def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
         return self.predict(inputs)
@@ -72,9 +81,6 @@ class DistillationModel(BaseModel):
         # and flatten to match student_X samples.
         
         # Infer window size from adapter if possible, or deduce from shape change
-        # Assuming linear mapping: N_out = N_in - N_per_window * (W-1) ?
-        # Harder to guess. 
-        # But TimeDelayEmbedding class has `window_size`.
         if hasattr(self.student_adapter, "window_size"):
              w = self.student_adapter.window_size
              # Slice targets: discard first w-1 steps
@@ -85,8 +91,6 @@ class DistillationModel(BaseModel):
                  return student_X, student_y
         
         # Fallback if logic is generic or flat
-        # If flattened, just return targets? No, might mismatch.
-        # This fallback is risky but minimal.
         return student_X, targets
 
     def _compute_teacher_targets(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -129,6 +133,9 @@ class DistillationModel(BaseModel):
         """
         Orchestrate the distillation process with clear phase separation in logs.
         """
+        # Capture input dimension for later state initialization
+        self._input_dim = inputs.shape[-1]
+        
         # --- Phase 1: Teacher Target Generation ---
         print("\n    [Distillation] ==========================================")
         print("    [Distillation] Phase 1: Teacher Target Generation")
@@ -151,7 +158,6 @@ class DistillationModel(BaseModel):
         student_logs = self.student.train(student_X, student_targets, **kwargs) or {}
 
         # Optional: Compute final distillation MSE for logging
-        # If dataset is huge, consider batching this predict as well, but usually student is faster.
         distill_mse = student_logs.get("final_loss", 0.0)
         logs = dict(student_logs) if isinstance(student_logs, dict) else {}
         logs.setdefault("distill_mse", distill_mse)
@@ -196,3 +202,59 @@ class DistillationModel(BaseModel):
             or getattr(self.teacher, "topology_meta", {})
             or {}
         )
+    
+    # ------------------------------------------------------------------ #
+    # ClosedLoopGenerativeModel Interface                                #
+    # ------------------------------------------------------------------ #
+
+    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+        """
+        Initialize the sliding window state.
+        CAUTION: Requires self._input_dim to be set via train().
+        """
+        if self._input_dim is None:
+            # Fallback for inference-only usage? 
+            # We cannot create a concrete array without dimension.
+            # Assuming training happened or input_dim provided manually.
+            raise RuntimeError("DistillationModel._input_dim not set. Call train() first.")
+            
+        return jnp.zeros((batch_size, self._window_size, self._input_dim), dtype=jnp.float64)
+
+    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Single step execution with window management.
+        Args:
+            state: (batch, window_size, features)
+            inputs: (batch, features)
+        Returns:
+            next_state: (batch, window_size, features)
+            output: (batch, features)
+        """
+        # Update window buffer by shifting and appending new input
+        # state[:, 1:] -> drops oldest, adds space
+        # inputs[:, None, :] -> adds time dim to input
+        next_state = jnp.concatenate([state[:, 1:], inputs[:, None, :]], axis=1)
+        
+        # Flatten state for FNN prediction: (batch, window_size*features)
+        batch_size = next_state.shape[0]
+        flat_input = next_state.reshape(batch_size, -1)
+        
+        output = self.student.predict(flat_input)
+        return next_state, output
+
+    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Process sequence using JAX scan.
+        Args:
+            state: Initial window (batch, window_size, features)
+            input_data: Sequence inputs (batch, time, features)
+        """
+        # Scan over time dimension
+        inputs_transposed = jnp.swapaxes(input_data, 0, 1)  # (time, batch, feat)
+        final_state, stacked_outputs = jax.lax.scan(self.step, state, inputs_transposed)
+        
+        # Swap back to (batch, time, feat)
+        stacked_outputs = jnp.swapaxes(stacked_outputs, 0, 1)
+        return final_state, stacked_outputs
+    
+    # generate_closed_loop is inherited from ClosedLoopGenerativeModel

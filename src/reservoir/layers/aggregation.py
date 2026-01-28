@@ -5,7 +5,7 @@ State aggregation components compatible with Transformer protocol.
 
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import jax.numpy as jnp
 from reservoir.core.interfaces import Transformer
@@ -65,14 +65,22 @@ class StateAggregator(Transformer):
     def fit(self, features: jnp.ndarray) -> "StateAggregator":
         return self
 
-    def transform(self, features: jnp.ndarray) -> jnp.ndarray:
-        return StateAggregator.aggregate(features, self.mode)
+    def transform(self, features: jnp.ndarray, log_label: Optional[str] = None) -> jnp.ndarray:
+        result = StateAggregator.aggregate(features, self.mode)
+        
+        # Assert output is 2D (Samples, Features) - required by readout layer
+        assert result.ndim == 2, f"Aggregation output must be 2D, got {result.shape}"
+        
+        if log_label is not None:
+            from reservoir.utils.reporting import print_feature_stats
+            print_feature_stats(result, log_label)
+        return result
 
     def fit_transform(self, features: jnp.ndarray) -> jnp.ndarray:
         return self.transform(features)
 
-    def __call__(self, features: jnp.ndarray) -> jnp.ndarray:
-        return self.transform(features)
+    def __call__(self, features: jnp.ndarray, log_label: Optional[str] = None) -> jnp.ndarray:
+        return self.transform(features, log_label=log_label)
 
     def get_output_dim(self, n_units: int, n_steps: int) -> int:
         """Compute aggregated feature dimension without materializing data."""

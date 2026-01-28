@@ -80,22 +80,27 @@ class ClassicalReservoir(Reservoir):
         return final_states, stacked
 
     def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, split_name: str = None, **_: Any) -> jnp.ndarray:
+        """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = jnp.asarray(inputs, dtype=jnp.float64)
-        if arr.ndim != 3:
-            raise ValueError(f"ClassicalReservoir expects 3D input (batch, time, features), got {arr.shape}")
+        
+        # Convert 2D to 3D for internal processing (scan requires 3D)
+        input_was_2d = (arr.ndim == 2)
+        if input_was_2d:
+            arr = arr[None, :, :]  # (T, F) -> (1, T, F)
+        elif arr.ndim != 3:
+            raise ValueError(f"ClassicalReservoir expects 2D or 3D input, got {arr.shape}")
+        
         batch_size = arr.shape[0]
         initial_state = self.initialize_state(batch_size)
         _, artifacts = self.forward(initial_state, arr)
         states = artifacts
 
-        # Zero-Overhead Logging (Step 5) via Callback - REMOVED due to XLA issues and redundancy
-        # if split_name is not None:
-        #      # Logic was causing INTERNAL: RET_CHECK failure
-        #      pass
-
         if return_sequences:
-            return states
-        return self.aggregator.transform(states)
+            return states[0] if input_was_2d else states
+        
+        # Aggregation always returns 2D
+        log_label = f"6:{split_name}" if split_name else None
+        return self.aggregator.transform(states, log_label=log_label)
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""

@@ -132,11 +132,14 @@ def plot_classification_results(
             color = 'white' if value > threshold else 'black'
             ax_conf.text(j, i, str(value), ha='center', va='center', color=color, fontsize=9)
 
-    accuracy_labels = ['Train', 'Test']
-    accuracy_values = [train_accuracy * 100.0, test_accuracy * 100.0]
-    bar_colors = ['tab:green', 'tab:orange']
+    # Plot from Bottom to Top, so for Top-to-Bottom order (Train, Val, Test),
+    # we need to supply them as [Test, Val, Train].
+    accuracy_labels = ['Test', 'Train']
+    accuracy_values = [test_accuracy * 100.0, train_accuracy * 100.0]
+    bar_colors = ['tab:orange', 'tab:green']
 
     if val_accuracy is not None:
+        # Insert Val in the middle
         accuracy_labels.insert(1, 'Val')
         accuracy_values.insert(1, val_accuracy * 100.0)
         bar_colors.insert(1, 'tab:purple')

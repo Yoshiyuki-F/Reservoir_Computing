@@ -129,4 +129,22 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
     return layers, preprocess_labels
 
 
-__all__ = ["FeatureScaler", "DesignMatrix", "create_preprocessor"]
+
+def apply_layers(layers: List[object], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
+    """Sequentially apply preprocessing layers."""
+    arr = data
+    for layer in layers:
+        if fit and hasattr(layer, "fit_transform"):
+            arr = layer.fit_transform(arr)
+            fit = False
+        elif fit and hasattr(layer, "fit") and hasattr(layer, "transform"):
+            layer.fit(arr)
+            arr = layer.transform(arr)
+            fit = False
+        elif hasattr(layer, "transform"):
+            arr = layer.transform(arr)
+        else:
+            arr = layer(arr)
+    return np.asarray(arr)
+
+__all__ = ["FeatureScaler", "DesignMatrix", "create_preprocessor", "apply_layers"]

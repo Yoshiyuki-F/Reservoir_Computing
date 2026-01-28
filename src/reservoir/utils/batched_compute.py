@@ -23,7 +23,7 @@ def batched_compute(
 
     Args:
         fn: JAX関数（projection, feature extractionなど）
-        inputs: 入力データ (numpy array)
+        inputs: 入力データ (numpy array) - 2D (T, F) or 3D (N, T, F)
         batch_size: バッチサイズ
         desc: tqdm進捗表示のラベル
 
@@ -31,6 +31,14 @@ def batched_compute(
         出力データ (numpy array)
     """
     inputs_np = np.asarray(inputs)
+    
+    # Handle 2D input (T, F) - Regression time series
+    # Process entire sequence at once (no batching along time axis)
+    if inputs_np.ndim == 2:
+        result_jax = fn(jnp.array(inputs_np))
+        return np.asarray(result_jax, dtype=np.float32)
+    
+    # 3D input (N, T, F) - Classification batching
     n_samples = inputs_np.shape[0]
 
     if n_samples == 0:
@@ -40,7 +48,7 @@ def batched_compute(
     dummy_input_jax = jnp.array(inputs_np[:1])
     dummy_out_jax = fn(dummy_input_jax)
 
-    # Detect Expansion Factor (e.g. 1 sample -> 16600 samples)
+    # Detect Expansion Factor (e.g. 1 sample -> N samples after aggregation)
     dummy_in_size = dummy_input_jax.shape[0]
     dummy_out_size = dummy_out_jax.shape[0]
     

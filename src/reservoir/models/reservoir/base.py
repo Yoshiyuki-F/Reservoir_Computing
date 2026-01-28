@@ -3,12 +3,14 @@ src/reservoir/models/reservoir/base.py
 Base class for Reservoir Computing models implementing ReservoirNode protocol.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any, Dict, Optional, Callable
 
 import jax.numpy as jnp
 
+from reservoir.models.generative import ClosedLoopGenerativeModel
 
-class Reservoir(ABC):
+
+class Reservoir(ClosedLoopGenerativeModel, ABC):
     """Abstract base class providing common scan-based trajectory generation."""
 
     def __init__(self, n_units: int, seed: int) -> None:
@@ -29,7 +31,15 @@ class Reservoir(ABC):
         """Compute single step dynamics returning next state and emitted features."""
         raise NotImplementedError
 
+    @abstractmethod
+    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Single time step - used for closed-loop generation."""
+        raise NotImplementedError
+
+    # generate_closed_loop is inherited from ClosedLoopGenerativeModel
+
     def generate_trajectory(self, initial_state: jnp.ndarray, inputs: jnp.ndarray) -> jnp.ndarray:
+
         """Process sequences by delegating to the subclass forward implementation."""
         is_sequence_batched = inputs.ndim == 3
         inputs_batched = inputs if is_sequence_batched else inputs[None, ...]
@@ -60,3 +70,4 @@ class Reservoir(ABC):
         batch_size = arr.shape[0] if arr.ndim == 3 else 1
         init_state = self.initialize_state(batch_size)
         return self.generate_trajectory(init_state, arr)
+

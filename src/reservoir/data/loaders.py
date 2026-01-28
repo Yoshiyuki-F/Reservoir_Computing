@@ -288,24 +288,8 @@ def load_dataset_with_validation_split(
             val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
             test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
 
-    # Special handling for Lorenz, Lorenz96 and Mackey-Glass
-    # The user requires (Batch=1, Time, Feature) for these datasets.
-    # Currently X is (Steps, Feature). We reshape to (1, Steps, Feature).
-    if dataset_enum in (Dataset.LORENZ, Dataset.LORENZ96, Dataset.MACKEY_GLASS):
-        def _reshape_to_batch1(arr: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
-            if arr is None: 
-                return None
-            # If (T, F) -> (1, T, F)
-            if arr.ndim == 2:
-                return arr[None, :, :]
-            return arr
-
-        train_X = _reshape_to_batch1(train_X)
-        train_y = _reshape_to_batch1(train_y)
-        test_X = _reshape_to_batch1(test_X)
-        test_y = _reshape_to_batch1(test_y)
-        val_X = _reshape_to_batch1(val_X)
-        val_y = _reshape_to_batch1(val_y)
+    # Regression datasets (Lorenz, Lorenz96, Mackey-Glass) stay as 2D (Time, Features)
+    # No reshape to 3D - aggregation and readout expect 2D directly
 
     # if require_3d:
     #     targets = {

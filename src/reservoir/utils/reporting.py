@@ -113,26 +113,18 @@ def calculate_chaos_metrics(
 
 # --- Logging / Printing ---
 
-def print_feature_stats(features: Any, stage: str) -> None:
-    """
-    特徴量の統計情報を表示する
-    Runnerの _feature_stats メソッドを移動
-    """
-    if isinstance(features, np.ndarray):
-        feats = features
-        lib = np
-    else:
-        feats = jnp.asarray(features)
-        lib = jnp
+import jax
 
+def _print_feature_stats_impl(features: np.ndarray, stage: str) -> None:
+    """Internal implementation handling concrete numpy arrays."""
     # 基本統計量
     stats = {
-        "shape": feats.shape,
-        "mean": float(lib.mean(feats)),
-        "std": float(lib.std(feats)),
-        "min": float(lib.min(feats)),
-        "max": float(lib.max(feats)),
-        "nans": int(lib.isnan(feats).sum()),
+        "shape": features.shape,
+        "mean": float(np.mean(features)),
+        "std": float(np.std(features)),
+        "min": float(np.min(features)),
+        "max": float(np.max(features)),
+        "nans": int(np.isnan(features).sum()),
     }
 
     print(
@@ -142,6 +134,24 @@ def print_feature_stats(features: Any, stage: str) -> None:
     )
     if stats["std"] < 1e-6:
         print("Feature matrix has near-zero variance. Model output may be inactive.")
+
+def print_feature_stats(features: Any, stage: str) -> None:
+    """
+    特徴量の統計情報を表示する
+    Runnerの _feature_stats メソッドを移動
+    JITコンパイル時は jax.debug.callback を経由してホスト側で実行する。
+    """
+    if features is None:
+        print(f"[FeatureStats:{stage}(skipped)] Closed-Loop mode: using raw data")
+        return
+
+    if isinstance(features, np.ndarray):
+        _print_feature_stats_impl(features, stage)
+    else:
+        # JAX array or Tracer
+        def _cb(f):
+            _print_feature_stats_impl(np.asarray(f), stage)
+        jax.debug.callback(_cb, features)
 
 def print_ridge_search_results(train_res: Dict[str, Any], is_classification: bool) -> None:
     if not isinstance(train_res, dict):
@@ -198,7 +208,7 @@ def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title:
 
 def plot_classification_report(
     *,
-    runner: Any,
+    runner: Optional[Any] = None,
     readout: Any,
     train_X: Any,
     train_y: Any,
@@ -267,11 +277,17 @@ def plot_classification_report(
         else:
             test_pred_np = np.asarray(readout.predict(test_features_np))
 
-    # Argmax adjustment
+    # Argmax adjustment only if multi-class logits
     if train_pred_np.ndim > 1:
-        train_pred_np = np.argmax(train_pred_np, axis=-1)
+        if train_pred_np.shape[-1] > 1:
+            train_pred_np = np.argmax(train_pred_np, axis=-1)
+        # Flatten to ensure (N,) for comparison, handling (N, 1) argmax result or (N, 1) raw input
+        train_pred_np = train_pred_np.ravel()
+            
     if test_pred_np.ndim > 1:
-        test_pred_np = np.argmax(test_pred_np, axis=-1)
+        if test_pred_np.shape[-1] > 1:
+            test_pred_np = np.argmax(test_pred_np, axis=-1)
+        test_pred_np = test_pred_np.ravel()
 
     # ---------------------------------------------------------
     # 3. Validation
@@ -296,11 +312,29 @@ def plot_classification_report(
                 val_pred_np = np.asarray(readout.predict(val_features_np))
 
         if val_pred_np.ndim > 1:
-            val_pred_np = np.argmax(val_pred_np, axis=-1)
+            if val_pred_np.shape[-1] > 1:
+                val_pred_np = np.argmax(val_pred_np, axis=-1)
+            val_pred_np = val_pred_np.ravel()
 
     # ---------------------------------------------------------
     # 4. Plot
     # ---------------------------------------------------------
+    def _calc_acc(y_true, y_pred):
+        if y_true is None or y_pred is None: return 0.0
+        # Ensure 1D
+        y_t = np.asarray(y_true).ravel()
+        y_p = np.asarray(y_pred).ravel()
+        return float(np.mean(y_t == y_p))
+
+    acc_train = _calc_acc(train_labels_np, train_pred_np)
+    acc_test = _calc_acc(test_labels_np, test_pred_np)
+    acc_val = _calc_acc(val_labels_np, val_pred_np) if val_labels_np is not None else 0.0
+    
+    print(f"\n[Report] Accuracy Check (Pre-Plot):")
+    print(f"  Train: {acc_train:.4%}")
+    print(f"  Val  : {acc_val:.4%}")
+    print(f"  Test : {acc_test:.4%}")
+
     metrics_payload = dict(results.get("test", {})) if isinstance(results, dict) else {}
     plot_classification_results(
         train_labels=train_labels_np,
@@ -383,7 +417,7 @@ def generate_report(
     config: Any,
     topo_meta: Dict[str, Any],
     *,
-    runner: Any,
+    runner: Optional[Any] = None,
     readout: Any,
     train_X: Any,
     train_y: Any,
@@ -502,7 +536,7 @@ def generate_report(
 
 def plot_regression_report(
     *,
-    runner: Any,
+    runner: Optional[Any] = None,
     readout: Any,
     train_y: Any,
     val_y: Optional[Any] = None, # New Argument

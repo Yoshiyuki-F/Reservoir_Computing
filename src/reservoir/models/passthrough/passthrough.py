@@ -11,10 +11,11 @@ import jax
 import jax.numpy as jnp
 
 from reservoir.core.identifiers import AggregationMode
+from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.aggregation import StateAggregator
 
 
-class PassthroughModel:
+class PassthroughModel(ClosedLoopGenerativeModel):
     """
     Model that skips dynamics (Step 5) and directly aggregates projected features.
     Implements the same interface as Reservoir for compatibility with GenericRunner.
@@ -57,21 +58,30 @@ class PassthroughModel:
         final_states, stacked = jax.lax.scan(self.step, state, proj_transposed)
         stacked = jnp.swapaxes(stacked, 0, 1)  # [batch, time, feat]
         return final_states, stacked
+    
+    # generate_closed_loop is inherited from ClosedLoopGenerativeModel
 
     # ------------------------------------------------------------------ #
     # Standard Interface                                                 #
     # ------------------------------------------------------------------ #
 
-    def __call__(self, inputs: jnp.ndarray, **_: Any) -> jnp.ndarray:
-        """Aggregate projected features directly. Input: [B, T, H] -> Output: [B, F]"""
+    def __call__(self, inputs: jnp.ndarray, split_name: str = None, **_: Any) -> jnp.ndarray:
+
+        """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = jnp.asarray(inputs, dtype=jnp.float64)
-        if arr.ndim != 3:
-            raise ValueError(f"PassthroughModel expects 3D input (batch, time, features), got {arr.shape}")
+        
+        # Convert 2D to 3D for internal processing
+        if arr.ndim == 2:
+            arr = arr[None, :, :]  # (T, F) -> (1, T, F)
+        elif arr.ndim != 3:
+            raise ValueError(f"PassthroughModel expects 2D or 3D input, got {arr.shape}")
         
         # Track n_units for initialize_state
         self._n_units = arr.shape[-1]
         
-        return self.aggregator.transform(arr)
+        # Aggregation always returns 2D
+        log_label = f"6:{split_name}" if split_name else None
+        return self.aggregator.transform(arr, log_label=log_label)
 
     def get_feature_dim(self, n_units: int, time_steps: int) -> int:
         """Return aggregated feature dimension."""
