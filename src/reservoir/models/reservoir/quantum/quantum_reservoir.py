@@ -80,6 +80,12 @@ from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
 
+# Pauli Constants for Monte Carlo Simulation (Manual Noise)
+I_MAT = jnp.eye(2, dtype=jnp.complex64)
+X_MAT = jnp.array([[0, 1], [1, 0]], dtype=jnp.complex64)
+Y_MAT = jnp.array([[0, -1j], [1j, 0]], dtype=jnp.complex64)
+Z_MAT = jnp.array([[1, 0], [0, -1]], dtype=jnp.complex64)
+
 
 # --- Pure Logic Functions (No JIT Decoration) ---
 
@@ -91,8 +97,10 @@ def _make_circuit_logic(
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
-    use_remat: bool
-) -> jnp.ndarray:
+    use_remat: bool,
+    use_reuploading: bool,
+    rng_key: Optional[jax.Array] = None
+) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
     """
     Core circuit construction logic with Noise and Encoding support.
     Refactored to use `jax.lax.scan` for the layer loop.
@@ -139,41 +147,98 @@ def _make_circuit_logic(
 
     # --- 2. Dynamics (Layer Scanned) ---
     def layer_step(carry_state, layer_params):
-        if is_noisy:
-            # inputs is density matrix or DMCircuit
+        # Context for MC
+        current_key = None
+        is_mc = rng_key is not None
+        
+        if is_mc:
+            state_vec, current_key = carry_state
+            # In MC mode, we use pure state circuit even if noisy (noise is manual)
+            c = tc.Circuit(n_qubits, inputs=state_vec)
+        elif is_noisy:
             c = tc.DMCircuit(n_qubits, inputs=carry_state)
         else:
             c = tc.Circuit(n_qubits, inputs=carry_state)
-        
+            
+        def apply_noise_in_layer(indices):
+            nonlocal current_key
+            if not is_noisy: return
+            
+            for idx in indices:
+                if is_mc:
+                    # Monte Carlo Noise Injection
+                    # TODO: Implement full Pauli channel selection
+                    # For now, just consume key to ensure loop dependency is correct
+                    k1, k2 = jax.random.split(current_key)
+                    current_key = k2
+                    # Placeholder: Apply Identity (No noise yet)
+                else:
+                    # Density Matrix Noise
+                    if noise_type == "depolarizing":
+                        c.depolarizing(idx, px=noise_prob, py=noise_prob, pz=noise_prob)
+                    elif noise_type == "damping":
+                        c.amplitude_damping(idx, gamma=noise_prob)
+
+        # --- Re-uploading (Optional) ---
+        if use_reuploading:
+            # Re-apply encoding gates with scaled inputs
+            # Note: inputs are captured from closure
+            for idx in range(n_qubits):
+                if encoding_strategy == "Rx":
+                    c.rx(idx, theta=scaled_inputs[idx])
+                elif encoding_strategy == "Ry":
+                    c.ry(idx, theta=scaled_inputs[idx])
+                elif encoding_strategy == "Rz":
+                    c.rz(idx, theta=scaled_inputs[idx])
+                elif encoding_strategy == "IQP":
+                    c.h(idx)
+                    c.rz(idx, theta=scaled_inputs[idx])
+                apply_noise_in_layer([idx])
+
         # Apply Entanglement (CNOT Ladder)
         for j in range(n_qubits - 1):
             c.cnot(j, j + 1)
-            apply_noise([j, j + 1])
+            apply_noise_in_layer([j, j + 1])
             
         # Apply Rotations
         for k in range(n_qubits):
             c.rx(k, theta=layer_params[k, 0])
-            apply_noise([k])
+            apply_noise_in_layer([k])
             
             c.ry(k, theta=layer_params[k, 1])
-            apply_noise([k])
+            apply_noise_in_layer([k])
             
             c.rz(k, theta=layer_params[k, 2])
-            apply_noise([k])
+            apply_noise_in_layer([k])
             
         # Apply Entanglement (Reverse Ladder)
         for l in range(n_qubits - 2, -1, -1):
             c.cnot(l, l + 1)
-            apply_noise([l, l + 1])
+            apply_noise_in_layer([l, l + 1])
             
         new_state = c.state()
+        
+        if is_mc:
+            return (new_state, current_key), None
         return new_state, None
 
     if use_remat:
         layer_step = jax.checkpoint(layer_step)
 
     # Scan over layers
-    final_state, _ = jax.lax.scan(layer_step, state, params)
+    # Initial carry setup
+    if rng_key is not None:
+        init_carry = (state, rng_key)
+    else:
+        init_carry = state
+        
+    final_carry, _ = jax.lax.scan(layer_step, init_carry, params)
+    
+    # Unpack Logic
+    if rng_key is not None:
+        final_state, final_key = final_carry
+    else:
+        final_state = final_carry
     
     # --- 3. Measurement ---
     if is_noisy:
@@ -190,7 +255,7 @@ def _make_circuit_logic(
 
 
 def _step_logic(
-    state: jnp.ndarray,
+    state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
     input_slice: jnp.ndarray,
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
@@ -202,14 +267,29 @@ def _step_logic(
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
-    use_remat: bool
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    use_remat: bool,
+    use_reuploading: bool
+) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
     """
     Core step logic (Single step).
     NOT JIT compiled here. Used by both standalone JIT and Scan JIT functions.
+    Handles both clean state (Array) and MC state (Tuple[Array, Key]).
     """
+    # Polymorphic State Unpacking
+    rng_key = None
+    if isinstance(state, (tuple, list)):
+        state_vec, rng_key = state
+    else:
+        state_vec = state
+
+    # Prepare RNG for this step and next step
+    step_key = None
+    next_key = None
+    if rng_key is not None:
+        step_key, next_key = jax.random.split(rng_key)
+
     # Feedback logic
-    combined_input = input_slice + feedback_scale * state
+    combined_input = input_slice + feedback_scale * state_vec
     
     # Circuit Execution
     probs = _make_circuit_logic(
@@ -220,7 +300,9 @@ def _step_logic(
         encoding_strategy,
         noise_type,
         noise_prob,
-        use_remat
+        use_remat,
+        use_reuploading,
+        step_key
     )
     
     # Vectorized Measurement: E = M @ p
@@ -231,18 +313,21 @@ def _step_logic(
     
     if padding_size > 0:
         padding = jnp.zeros((padding_size,))
-        next_state = jnp.concatenate([sliced, padding], axis=0)
+        next_state_vec = jnp.concatenate([sliced, padding], axis=0)
     else:
-        next_state = sliced
+        next_state_vec = sliced
             
-    return next_state, output
+    if next_key is not None:
+        return (next_state_vec, next_key), output
+        
+    return next_state_vec, output
 
 
 # --- JIT Compiled Wrappers ---
 
 @partial(jax.jit, static_argnames=[
     "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type", "use_remat"
+    "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
     state: jnp.ndarray,
@@ -257,7 +342,8 @@ def _step_jit(
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
-    use_remat: bool
+    use_remat: bool,
+    use_reuploading: bool
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Standalone JIT wrapper for single step execution.
@@ -265,12 +351,12 @@ def _step_jit(
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
         n_qubits, input_scaling, feedback_scale,
-        feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat
+        feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
     )
 
 @partial(jax.jit, static_argnames=[
     "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type", "use_remat"
+    "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
     state_init: jnp.ndarray,
@@ -285,7 +371,8 @@ def _forward_jit(
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
-    use_remat: bool
+    use_remat: bool,
+    use_reuploading: bool
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Forward pass (scan) execution (JIT Compiled).
@@ -305,7 +392,8 @@ def _forward_jit(
         encoding_strategy=encoding_strategy,
         noise_type=noise_type,
         noise_prob=noise_prob,
-        use_remat=use_remat
+        use_remat=use_remat,
+        use_reuploading=use_reuploading
     )
 
     # Vmap over the batch dimension
@@ -342,7 +430,10 @@ class QuantumReservoir(Reservoir):
         encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"] = "Rx",
         noise_type: Literal["clean", "depolarizing", "damping"] = "clean",
         noise_prob: float = 0.0,
+        readout_error: float = 0.0,
+        n_trajectories: int = 0, # 0 means Density Matrix (default), >0 means Monte Carlo
         use_remat: bool = False,
+        use_reuploading: bool = False,
         precision: Literal["complex64", "complex128"] = "complex64",
     ) -> None:
         """Initialize Quantum Reservoir."""
@@ -396,7 +487,10 @@ class QuantumReservoir(Reservoir):
         self.noise_type = noise_type
         self.noise_type = noise_type
         self.noise_prob = float(noise_prob)
+        self.readout_error = float(readout_error)
+        self.n_trajectories = n_trajectories
         self.use_remat = use_remat
+        self.use_reuploading = use_reuploading
         self.precision = precision
 
         self.aggregator = StateAggregator(mode=aggregation_mode)
@@ -433,8 +527,35 @@ class QuantumReservoir(Reservoir):
             zz_values = z_values[:, idx_i] * z_values[:, idx_j]
             row_blocks.append(zz_values.T)
             
+            
         matrix_np = jnp.vstack(row_blocks)
+        
+        # Apply Readout Error (Analytical Scaling)
+        # Expectation values scale by (1 - 2*epsilon)^weight
+        if self.readout_error > 0.0:
+            scale_factor = 1.0 - 2.0 * self.readout_error
+            # Calculate Hamming weight for each row (observable)
+            # Z_i has weight 1. ZZ_ij has weight 2.
+            # We constructed rows explicitly:
+            # First N rows are Z (weight 1)
+            # Next N*(N-1)/2 rows are ZZ (weight 2)
+            
+            weights = []
+            if self.measurement_basis in ("Z", "Z+ZZ"):
+                weights.append(self._broadcast_scalar(1, self.n_qubits)) # Weight 1
+            if self.measurement_basis in ("ZZ", "Z+ZZ"):
+                weights.append(self._broadcast_scalar(2, self.n_correlations)) # Weight 2
+                
+            w_vec = jnp.concatenate(weights)
+            # Reshape for broadcasting: (N_obs, 1)
+            damping = (scale_factor ** w_vec)[:, None]
+            matrix_np = matrix_np * damping
+
         return jnp.array(matrix_np)
+
+    @staticmethod
+    def _broadcast_scalar(val, count):
+        return jnp.full((count,), val)
 
     @staticmethod
     def _prepare_input(inputs: Union[jnp.ndarray, Array]) -> Tuple[jnp.ndarray, bool]:
@@ -448,11 +569,17 @@ class QuantumReservoir(Reservoir):
             raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
         return arr, input_was_2d
 
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
-        return jnp.zeros((batch_size, self.n_qubits))
+    def initialize_state(self, batch_size: int = 1) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        state = jnp.zeros((batch_size, self.n_qubits))
+        if self.n_trajectories > 0:
+            # Monte Carlo Mode: Return (state, key) tuple
+            # Update internal RNG state to ensure fresh noise per batch
+            key, self._rng = jax.random.split(self._rng)
+            return (state, jax.random.split(key, batch_size))
+        return state
 
     @jaxtyped(typechecker=beartype)
-    def step(self, state: Float[Array, "batch n_qubits"], input_data: Float[Array, "batch features"]) -> Tuple[Float[Array, "batch n_qubits"], Float[Array, "batch output_dim"]]:
+    def step(self, state: Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], input_data: Float[Array, "batch features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], Float[Array, "batch output_dim"]]:
         """Batched step function for debugging/stepping."""
         # Use vmapped step logic wrapper
         step_func = partial(
@@ -467,12 +594,13 @@ class QuantumReservoir(Reservoir):
             encoding_strategy=self.encoding_strategy,
             noise_type=self.noise_type,
             noise_prob=self.noise_prob,
-            use_remat=self.use_remat
+            use_remat=self.use_remat,
+            use_reuploading=self.use_reuploading
         )
         return jax.vmap(step_func, in_axes=(0, 0))(state, input_data)
 
     @jaxtyped(typechecker=beartype)
-    def forward(self, state: Float[Array, "batch n_qubits"], input_data: Float[Array, "batch time features"]) -> Tuple[Float[Array, "batch n_qubits"], Float[Array, "batch time output_dim"]]:
+    def forward(self, state: Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], input_data: Float[Array, "batch time features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], Float[Array, "batch time output_dim"]]:
         """Forward pass using optimized scan."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
@@ -493,7 +621,8 @@ class QuantumReservoir(Reservoir):
             self.encoding_strategy,
             self.noise_type,
             self.noise_prob,
-            self.use_remat
+            self.use_remat,
+            self.use_reuploading
         )
         
         # Transpose back (Batch, Time, Feat)
@@ -543,7 +672,10 @@ class QuantumReservoir(Reservoir):
             "encoding_strategy": self.encoding_strategy,
             "noise_type": self.noise_type,
             "noise_prob": self.noise_prob,
+            "readout_error": self.readout_error,
+            "n_trajectories": self.n_trajectories,
             "use_remat": self.use_remat,
+            "use_reuploading": self.use_reuploading,
             "precision": self.precision,
         })
         return data
@@ -562,7 +694,10 @@ class QuantumReservoir(Reservoir):
                 encoding_strategy=data.get("encoding_strategy", "Rx"),
                 noise_type=data.get("noise_type", "clean"),
                 noise_prob=float(data.get("noise_prob", 0.0)),
+                readout_error=float(data.get("readout_error", 0.0)),
+                n_trajectories=int(data.get("n_trajectories", 0)),
                 use_remat=bool(data.get("use_remat", False)),
+                use_reuploading=bool(data.get("use_reuploading", False)),
                 precision=data.get("precision", "complex64"),
             )
         except KeyError as exc:
@@ -572,7 +707,8 @@ class QuantumReservoir(Reservoir):
         return (
             f"QuantumReservoir(tc_backend, n_qubits={self.n_qubits}, n_layers={self.n_layers}, "
             f"measurement={self.measurement_basis}, encoding={self.encoding_strategy}, "
-            f"noise={self.noise_type}({self.noise_prob}), remat={self.use_remat}, {self.precision})"
+            f"noise={self.noise_type}({self.noise_prob}), ro_err={self.readout_error}, mc={self.n_trajectories}, "
+            f"remat={self.use_remat}, reup={self.use_reuploading}, {self.precision})"
         )
 
 
