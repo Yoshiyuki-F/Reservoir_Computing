@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 import jax.numpy as jnp
+import numpy as np
 from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
@@ -15,7 +16,7 @@ class ReadoutStrategy(ABC):
         self.metric_name = metric_name
 
     @staticmethod
-    def _flatten_3d_to_2d(arr: Optional[jnp.ndarray], label: str = "array") -> Optional[jnp.ndarray]:
+    def _flatten_3d_to_2d(arr: Optional[Union[jnp.ndarray, np.ndarray, Any]], label: str = "array") -> Optional[Union[jnp.ndarray, np.ndarray]]:
         """Flatten 3D states (Batch, Time, Features) -> 2D (Batch, Features)."""
         if arr is None:
             return None
@@ -25,7 +26,7 @@ class ReadoutStrategy(ABC):
         return arr
 
     @staticmethod
-    def _get_seed_sequence(train_X, val_X):
+    def _get_seed_sequence(train_X: Union[jnp.ndarray, np.ndarray, Any], val_X: Optional[Union[jnp.ndarray, np.ndarray, Any]]):
         """Prepare seed for closed-loop (concat train+val)."""
         if val_X is not None:
             axis = 1 if train_X.ndim == 3 else 0
@@ -37,12 +38,12 @@ class ReadoutStrategy(ABC):
         self,
         model: Any,
         readout: Any,
-        train_Z: jnp.ndarray,
-        val_Z: Optional[jnp.ndarray],
-        test_Z: jnp.ndarray,
-        train_y: jnp.ndarray,
-        val_y: Optional[jnp.ndarray],
-        test_y: jnp.ndarray,
+        train_Z: Union[jnp.ndarray, np.ndarray],
+        val_Z: Optional[Union[jnp.ndarray, np.ndarray]],
+        test_Z: Optional[Union[jnp.ndarray, np.ndarray]],
+        train_y: Optional[Union[jnp.ndarray, np.ndarray]],
+        val_y: Optional[Union[jnp.ndarray, np.ndarray]],
+        test_y: Optional[Union[jnp.ndarray, np.ndarray]],
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
         pipeline_config: Any
@@ -141,7 +142,7 @@ class ClassificationStrategy(ReadoutStrategy):
 
                 val_pred_tmp = readout.predict(vf_reshaped)
                 # Compute score using generic utility
-                score = compute_score(val_pred_tmp, vy_reshaped, self.metric_name)
+                score = compute_score(np.asarray(val_pred_tmp), np.asarray(vy_reshaped), self.metric_name)
                 search_history[lam_val] = float(score)
 
                 if hasattr(readout, "coef_") and readout.coef_ is not None:
@@ -227,7 +228,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             # Metrics
             if val_y is not None:
                 current_metrics = self.evaluator.compute_chaos_metrics(
-                    val_y, val_gen, frontend_ctx.scaler, dataset_meta.preset.config, verbose=False
+                    jnp.array(val_y), jnp.array(val_gen), frontend_ctx.scaler, dataset_meta.preset.config, verbose=False
                 )
             else:
                 current_metrics = None
@@ -282,10 +283,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
              global_end = global_start + generation_steps
              
-             chaos_results = self.evaluator.compute_chaos_metrics(
-                 closed_loop_truth, closed_loop_pred, frontend_ctx.scaler,
-                 dataset_meta.preset.config, global_start, global_end
-             )
+             if closed_loop_truth is not None:
+                 chaos_results = self.evaluator.compute_chaos_metrics(
+                     jnp.array(closed_loop_truth), jnp.array(closed_loop_pred), frontend_ctx.scaler,
+                     dataset_meta.preset.config, global_start, global_end
+                 )
 
         except Exception as e:
             print(f"[Warning] Closed-loop generation failed: {e}")

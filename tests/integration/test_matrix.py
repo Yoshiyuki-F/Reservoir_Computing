@@ -12,9 +12,9 @@ MODELS = [
 ]
 
 DATASETS = [
+    "lorenz",
     "mnist",
     "mackey_glass",
-    "lorenz"
 ]
 
 @pytest.mark.parametrize("model", MODELS)

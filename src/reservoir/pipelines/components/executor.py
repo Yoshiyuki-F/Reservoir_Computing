@@ -1,8 +1,9 @@
-import time
+
 from functools import partial
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Union
 
 import jax.numpy as jnp
+import numpy as np
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
@@ -51,6 +52,9 @@ class PipelineExecutor:
         if test_Z is not None:
              print_feature_stats(test_Z, "6:Z:test")
 
+        if train_Z is None:
+             raise ValueError("train_Z is None. Execution aborted.")
+             
         # Step 6.5: Target Alignment (Auto-Align y to Z)
         print("\n=== Step 6.5: Target Alignment (Auto-Align) ===")
         
@@ -77,7 +81,8 @@ class PipelineExecutor:
             "train_logs": train_logs,
         }
 
-    def _get_model_window_size(self, model: Any) -> int:
+    @staticmethod
+    def _get_model_window_size(model: Any) -> int:
         """Helper to find adapter window size from model structure."""
         # Case 1: DistillationModel -> student -> adapter
         if hasattr(model, 'student') and hasattr(model.student, 'adapter'):
@@ -87,7 +92,7 @@ class PipelineExecutor:
              return getattr(model.adapter, 'window_size', 0) or 0
         return 0
 
-    def _extract_states(self, model: Any, skip_val_test: bool = False) -> Tuple[Optional[jnp.ndarray], ...]:
+    def _extract_states(self, model: Any, skip_val_test: bool = False) -> Tuple[Optional[Union[jnp.ndarray, np.ndarray]], ...]:
         """
         Extract features (Z) from model using batched computation.
         Applies Halo Padding (Context Overlap) for time series validation/test to preserve length.
@@ -148,7 +153,7 @@ class PipelineExecutor:
             return ClosedLoopRegressionStrategy(self.evaluator, self.stack.metric)
 
     @staticmethod
-    def _auto_align_target(Z: Optional[jnp.ndarray], y: Optional[jnp.ndarray], label: str) -> Optional[jnp.ndarray]:
+    def _auto_align_target(Z: Optional[Union[jnp.ndarray, np.ndarray]], y: Optional[Union[jnp.ndarray, np.ndarray]], label: str) -> Optional[Union[jnp.ndarray, np.ndarray]]:
         """
         Automatically trim target (y) to match feature (Z) length.
         Assumes causal relationship (e.g. windowing removes first W-1 steps), so trims from start.

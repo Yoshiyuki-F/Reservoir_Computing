@@ -3,7 +3,7 @@ utils/batched_compute.py
 GPU OOMを防ぐためのバッチ処理ユーティリティ。
 """
 
-from typing import Callable
+from typing import Callable, Union, Any
 
 import jax
 import jax.numpy as jnp
@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 
 def batched_compute(
     fn: Callable[[jnp.ndarray], jnp.ndarray],
-    inputs: np.ndarray,
+    inputs: Union[np.ndarray, jnp.ndarray, Any],
     batch_size: int,
     desc: str = "[Batched]",
 ) -> np.ndarray:
