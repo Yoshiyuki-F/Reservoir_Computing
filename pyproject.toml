@@ -12,19 +12,20 @@ dependencies = [
     "matplotlib",
     "pytest",
     "pydantic",
-    "poethepoet>=0.36.0",
+    "poethepoet",
+    "tqdm",
     #ML
-    "jax[cuda12]==0.7.1",
-    "jaxlib==0.7.1",
+    "jax[cuda12]",
+    "jaxlib",
     "flax",
     "optax",
-    #this is the latest for pennylane https://docs.pennylane.ai/en/stable/development/release_notes.html
     #Quantum
-    "pennylane>=0.44.0",
+    "tensorcircuit-ng[jax]",
+    #mnist dataset
     "torch",
     "torchvision",
-    "tqdm",
-    "qutip",
+    "jaxtyping>=0.3.6",
+    "beartype>=0.22.9",
 ]
 
 [project.scripts]
