@@ -290,7 +290,12 @@ class QuantumReservoirConfig:
     measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
     encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
     noise_type: str        # 'clean', 'depolarizing', 'damping'
-    noise_prob: float          # Probability of noise (0.0 to 1.0) Default Value is forbidden, should be in the prefix.py
+    noise_prob: float          # Probability of noise (0.0 to 1.0)
+    readout_error: float     # Readout error probability (0.0 to 1.0)
+    n_trajectories: int      # Number of trajectories for Monte Carlo simulation (0 = Density Matrix)
+    use_remat: bool          # Use gradient checkpointing (rematerialization)
+    use_reuploading: bool    # Use data re-uploading strategy
+    precision: str           # "complex64" or "complex128"
 
     def validate(self, context: str = "quantum_reservoir") -> "QuantumReservoirConfig":
         prefix = f"{context}: "
@@ -306,6 +311,13 @@ class QuantumReservoirConfig:
         valid_bases = ("Z", "ZZ", "Z+ZZ")
         if self.measurement_basis not in valid_bases:
             raise ValueError(f"{prefix}measurement_basis must be one of {valid_bases}.")
+        if float(self.readout_error) < 0.0 or float(self.readout_error) > 1.0:
+            raise ValueError(f"{prefix}readout_error must be in [0, 1].")
+        if int(self.n_trajectories) < 0:
+             raise ValueError(f"{prefix}n_trajectories must be non-negative.")
+        valid_precisions = ("complex64", "complex128")
+        if self.precision not in valid_precisions:
+            raise ValueError(f"{prefix}precision must be one of {valid_precisions}.")
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -319,6 +331,11 @@ class QuantumReservoirConfig:
             "encoding_strategy": str(self.encoding_strategy),
             "noise_type": str(self.noise_type),
             "noise_prob": float(self.noise_prob),
+            "readout_error": float(self.readout_error),
+            "n_trajectories": int(self.n_trajectories),
+            "use_remat": bool(self.use_remat),
+            "use_reuploading": bool(self.use_reuploading),
+            "precision": str(self.precision),
         }
 
 

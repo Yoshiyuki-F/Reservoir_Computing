@@ -139,6 +139,11 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     encoding_strategy="Rx",
     noise_type="clean",
     noise_prob=0.0,
+    readout_error=0.0,
+    n_trajectories=0,
+    use_remat=False,
+    use_reuploading=False,
+    precision="complex64",
 )
 
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
@@ -246,6 +251,11 @@ TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     encoding_strategy="Rx",
     noise_type="clean",
     noise_prob=0.0,
+    readout_error=0.0,
+    n_trajectories=0,
+    use_remat=False,
+    use_reuploading=False,
+    precision="complex64",
 )
 
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
