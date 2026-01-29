@@ -35,7 +35,7 @@ DEFAULT_PREPROCESS = PreprocessingConfig(
 )
 
 DEFAULT_PROJECTION = ProjectionConfig(
-    n_units=100,
+    n_units=1000,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
@@ -121,7 +121,7 @@ FNN_PRESET = PipelineConfig(
 
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = ProjectionConfig(
-    n_units=4,  # This becomes n_qubits for quantum reservoir
+    n_units=10,  # This becomes n_qubits for quantum reservoir
     input_scale=0.6,
     input_connectivity=1.0,
     bias_scale=0.0,
@@ -129,14 +129,16 @@ QUANTUM_PROJECTION = ProjectionConfig(
 )
 
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
-# Quantum reservoir dynamics (Classification - MEAN aggregation)
 QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=42,
     aggregation=AggregationMode.MEAN,
-    dynamics_type="cnot_ladder",
     input_scaling=6.283185307179586,  # 2π
+    feedback_scale=0.1,
     measurement_basis="Z+ZZ",
+    encoding_strategy="Rx",
+    noise_type="clean",
+    noise_prob=0.0,
 )
 
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
@@ -238,19 +240,19 @@ TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=42,
     aggregation=AggregationMode.SEQUENCE,
-    dynamics_type="cnot_ladder",
     input_scaling=6.283185307179586,  # 2π
+    feedback_scale=0.1,
     measurement_basis="Z+ZZ",
+    encoding_strategy="Rx",
+    noise_type="clean",
+    noise_prob=0.0,
 )
 
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.STANDARD_SCALER,
-        poly_degree=1,
-    ),
+    preprocess=TIME_PREPROCESS,
     projection=QUANTUM_PROJECTION,  # Reuse the 4-qubit projection
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,

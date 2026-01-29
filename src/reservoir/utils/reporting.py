@@ -115,11 +115,12 @@ def calculate_chaos_metrics(
 
 import jax
 
-def _print_feature_stats_impl(features: np.ndarray, stage: str) -> None:
+def _print_feature_stats_impl(features: np.ndarray, stage: str, backend: str = "numpy") -> None:
     """Internal implementation handling concrete numpy arrays."""
     # 基本統計量
     stats = {
         "shape": features.shape,
+        "dtype": f"{backend}.{features.dtype}",
         "mean": float(np.mean(features)),
         "std": float(np.std(features)),
         "min": float(np.min(features)),
@@ -128,7 +129,7 @@ def _print_feature_stats_impl(features: np.ndarray, stage: str) -> None:
     }
 
     print(
-        f"[FeatureStats:{stage}] shape={stats['shape']}, "
+        f"[FeatureStats:{stage}] dtype={stats['dtype']}, shape={stats['shape']}, "
         f"mean={stats['mean']:.4f}, std={stats['std']:.4f}, "
         f"min={stats['min']:.4f}, max={stats['max']:.4f}, nans={stats['nans']}"
     )
@@ -145,12 +146,16 @@ def print_feature_stats(features: Any, stage: str) -> None:
         print(f"[FeatureStats:{stage}(skipped)] Closed-Loop mode: using raw data")
         return
 
+    # Determine original backend before any conversion
+    original_backend = type(features).__module__.split('.')[0]  # 'numpy' or 'jax'
+    
     if isinstance(features, np.ndarray):
-        _print_feature_stats_impl(features, stage)
+        _print_feature_stats_impl(features, stage, backend=original_backend)
     else:
         # JAX array or Tracer
         def _cb(f):
-            _print_feature_stats_impl(np.asarray(f), stage)
+            # Convert to numpy for stats calculation, but report original backend
+            _print_feature_stats_impl(np.asarray(f), stage, backend=original_backend)
         jax.debug.callback(_cb, features)
 
 def print_ridge_search_results(train_res: Dict[str, Any], is_classification: bool) -> None:

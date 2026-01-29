@@ -285,18 +285,21 @@ class QuantumReservoirConfig:
     n_layers: int                    # Number of variational layers
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
-    dynamics_type: str               # 'cnot_ladder' or 'ising'
     input_scaling: float             # Scaling factor for input encoding (typically 2π)
+    feedback_scale: float            # Scaling factor for state feedback (e.g. 0.1)
     measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
+    encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
+    noise_type: str        # 'clean', 'depolarizing', 'damping'
+    noise_prob: float          # Probability of noise (0.0 to 1.0) Default Value is forbidden, should be in the prefix.py
 
     def validate(self, context: str = "quantum_reservoir") -> "QuantumReservoirConfig":
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
-        if self.dynamics_type not in ("cnot_ladder", "ising"):
-            raise ValueError(f"{prefix}dynamics_type must be 'cnot_ladder' or 'ising'.")
         if float(self.input_scaling) <= 0:
             raise ValueError(f"{prefix}input_scaling must be positive.")
+        if float(self.feedback_scale) < 0:
+            raise ValueError(f"{prefix}feedback_scale must be non-negative.")
         if not isinstance(self.aggregation, AggregationMode):
             raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         # Validate measurement_basis
@@ -309,10 +312,13 @@ class QuantumReservoirConfig:
         return {
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
-            "dynamics_type": str(self.dynamics_type),
             "input_scaling": float(self.input_scaling),
+            "feedback_scale": float(self.feedback_scale),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),
+            "encoding_strategy": str(self.encoding_strategy),
+            "noise_type": str(self.noise_type),
+            "noise_prob": float(self.noise_prob),
         }
 
 
