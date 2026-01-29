@@ -47,8 +47,8 @@ def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig],
 def load_sine_wave(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X, y = generate_sine_data(config)
-    X_arr = jnp.asarray(X, dtype=jnp.float64)
-    y_arr = jnp.asarray(y, dtype=jnp.float64)
+    X_arr = jnp.asarray(X)
+    y_arr = jnp.asarray(y)
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -65,8 +65,8 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_seq, train_labels = generate_mnist_sequence_data(config, split=config.split)
     test_seq, test_labels = generate_mnist_sequence_data(config, split="test")
 
-    train_arr = jnp.asarray(train_seq, dtype=jnp.float64)
-    test_arr = jnp.asarray(test_seq, dtype=jnp.float64)
+    train_arr = jnp.asarray(train_seq)
+    test_arr = jnp.asarray(test_seq)
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
         train_arr = train_arr[..., None]
@@ -94,12 +94,12 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_labels_arr = train_labels_arr[:n_train_new]
 
     return SplitDataset(
-        train_X=np.asarray(train_arr),
-        train_y=np.asarray(train_labels_arr),
-        test_X=np.asarray(test_arr),
-        test_y=np.asarray(test_labels_arr),
-        val_X=np.asarray(val_arr),
-        val_y=np.asarray(val_labels_arr),
+        train_X=jnp.asarray(train_arr),
+        train_y=jnp.asarray(train_labels_arr),
+        test_X=jnp.asarray(test_arr),
+        test_y=jnp.asarray(test_labels_arr),
+        val_X=jnp.asarray(val_arr),
+        val_y=jnp.asarray(val_labels_arr),
     )
 
 
@@ -133,8 +133,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarr
     X_new = seq[:-1].reshape(-1, 1)
     y_new = seq[1:].reshape(-1, 1)
     
-    X_arr = jnp.asarray(X_new, dtype=jnp.float64)
-    y_arr = jnp.asarray(y_new, dtype=jnp.float64)
+    X_arr = jnp.asarray(X_new)
+    y_arr = jnp.asarray(y_new)
     
     return X_arr, y_arr
 
@@ -143,8 +143,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarr
 def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
-    X_arr = jnp.asarray(X, dtype=jnp.float64)
-    y_arr = jnp.asarray(y, dtype=jnp.float64)
+    X_arr = jnp.asarray(X)
+    y_arr = jnp.asarray(y)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     return X_arr, y_arr
@@ -154,8 +154,8 @@ def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
 def load_lorenz96(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
-    X_arr = jnp.asarray(X, dtype=jnp.float64)
-    y_arr = jnp.asarray(y, dtype=jnp.float64)
+    X_arr = jnp.asarray(X)
+    y_arr = jnp.asarray(y)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     # if X_arr.ndim == 2:
@@ -308,10 +308,10 @@ def load_dataset_with_validation_split(
 
     import numpy as np
     return SplitDataset(
-        train_X=np.asarray(train_X),
-        train_y=np.asarray(train_y),
-        test_X=np.asarray(test_X),
-        test_y=np.asarray(test_y),
-        val_X=np.asarray(val_X),
-        val_y=np.asarray(val_y),
+        train_X=jnp.asarray(train_X),
+        train_y=jnp.asarray(train_y),
+        test_X=jnp.asarray(test_X),
+        test_y=jnp.asarray(test_y),
+        val_X=jnp.asarray(val_X),
+        val_y=jnp.asarray(val_y),
     )

@@ -203,7 +203,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             return self.predict(seed_data)
         
         # seed_data: (time, features) - use last window_size values as initial state
-        seed = jnp.asarray(seed_data, dtype=jnp.float32)
+        seed = jnp.asarray(seed_data)
         if seed.ndim == 3:
             seed = seed[0]  # Remove batch dim if present: (1, T, F) -> (T, F)
         
@@ -245,7 +245,7 @@ class FNN(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray):
-        x = jnp.asarray(x, dtype=jnp.float32)
+        x = jnp.asarray(x)
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
         if len(self.layer_dims) < 2:

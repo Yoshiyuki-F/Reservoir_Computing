@@ -40,12 +40,12 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         """Return zero state. Passthrough is stateless but needs compatible interface."""
         if self._n_units is None:
             raise RuntimeError("Passthrough n_units not set. Call forward() first.")
-        return jnp.zeros((batch_size, self._n_units), dtype=jnp.float64)
+        return jnp.zeros((batch_size, self._n_units))
 
     def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Passthrough step: ignore state, return input as next state."""
         # projected_input: [batch, features] - ensure dtype matches state
-        next_state = jnp.asarray(projected_input, dtype=jnp.float64)
+        next_state = jnp.asarray(projected_input)
         return next_state, next_state
 
     def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -68,7 +68,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     def __call__(self, inputs: jnp.ndarray, split_name: str = None, **_: Any) -> jnp.ndarray:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
-        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        arr = jnp.asarray(inputs)
         
         # Convert 2D to 3D for internal processing
         if arr.ndim == 2:

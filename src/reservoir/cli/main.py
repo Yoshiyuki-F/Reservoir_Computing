@@ -7,10 +7,6 @@ import argparse
 import sys
 
 from reservoir.training import get_training_preset
-from reservoir.utils.jax_config import ensure_x64_enabled
-
-ensure_x64_enabled()
-
 from reservoir.utils import check_gpu_available
 from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline

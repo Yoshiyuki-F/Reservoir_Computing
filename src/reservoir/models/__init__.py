@@ -4,7 +4,6 @@ from .distillation import DistillationModel, DistillationFactory
 from .factory import ModelFactory
 from .nn.base import BaseFlaxModel, BaseModel
 from .nn.fnn import FNNModel, FNN
-from .nn.rnn import RNNModel, SimpleRNN
 from .reservoir import ReservoirFactory, Reservoir, ClassicalReservoir
 from .presets import (
     PipelineConfig,
@@ -13,11 +12,9 @@ from .presets import (
 )
 
 __all__ = [
-    "SimpleRNN",
     "FNN",
     "BaseFlaxModel",
     "FNNModel",
-    "RNNModel",
     "BaseModel",
     "ModelFactory",
     "DistillationModel",

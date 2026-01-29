@@ -82,7 +82,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         output_shape = (n_samples,) + dummy_out.shape[1:]
         # print(f"    [Teacher] Generating targets (Total: {n_samples}, Batch: {batch_size})...")
-        targets = np.empty(output_shape, dtype=np.float32)
+        targets = np.empty(output_shape)
 
         # 2. Define JIT step
         @jax.jit
@@ -96,7 +96,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
                 batch_x = inputs_np[i:end]
                 # Move to GPU, compute, move back to CPU
                 batch_out = step(jnp.array(batch_x))
-                targets[i:end] = np.asarray(batch_out, dtype=np.float32)
+                targets[i:end] = np.asarray(batch_out)
                 pbar.update(end - i)
 
         return jnp.array(targets)
@@ -180,7 +180,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
             # Assuming training happened or input_dim provided manually.
             raise RuntimeError("DistillationModel._input_dim not set. Call train() first.")
             
-        return jnp.zeros((batch_size, self._window_size, self._input_dim), dtype=jnp.float64)
+        return jnp.zeros((batch_size, self._window_size, self._input_dim))
 
     def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """

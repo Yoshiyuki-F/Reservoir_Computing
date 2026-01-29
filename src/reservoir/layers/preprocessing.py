@@ -131,9 +131,9 @@ def create_preprocessor(p_type: Preprocessing, poly_degree:int) -> tuple[List[ob
 
 
 
-def apply_layers(layers: List[Any], data: np.ndarray, *, fit: bool = False) -> np.ndarray:
+def apply_layers(layers: List[Any], data: np.ndarray, *, fit: bool = False) -> jnp.ndarray:
     """Sequentially apply preprocessing layers."""
-    arr = data
+    arr = jnp.asarray(data)  # Convert to JAX at start
     for layer in layers:
         if fit and hasattr(layer, "fit_transform"):
             arr = layer.fit_transform(arr)
@@ -146,6 +146,6 @@ def apply_layers(layers: List[Any], data: np.ndarray, *, fit: bool = False) -> n
             arr = layer.transform(arr)
         else:
             arr = layer(arr)
-    return np.asarray(arr)
+    return arr  # Keep as JAX array
 
 __all__ = ["FeatureScaler", "DesignMatrix", "create_preprocessor", "apply_layers"]

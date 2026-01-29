@@ -12,6 +12,16 @@ import jax.scipy.linalg
 
 from reservoir.core.interfaces import ReadoutModule
 
+# Lazy x64 enablement - only when Ridge methods are called
+_X64_ENABLED = False
+
+def _ensure_x64():
+    """Enable x64 precision on first Ridge computation."""
+    global _X64_ENABLED
+    if not _X64_ENABLED:
+        jax.config.update("jax_enable_x64", True)
+        _X64_ENABLED = True
+
 
 class RidgeRegression(ReadoutModule):
     """Ridge regression readout solved with JAX linear algebra."""
@@ -32,10 +42,10 @@ class RidgeRegression(ReadoutModule):
 
     def _prepare_xy(self, states: jnp.ndarray, targets: jnp.ndarray, *, update_dim: bool) \
             -> tuple[jnp.ndarray, jnp.ndarray, bool]:
-        X = jnp.asarray(states, dtype=jnp.float64)
+        X = jnp.asarray(states)
         if X.ndim != 2:
             raise ValueError(f"States must be 2D, got {X.shape}")
-        y_arr = jnp.asarray(targets, dtype=jnp.float64)
+        y_arr = jnp.asarray(targets)
         y_is_1d = y_arr.ndim == 1
         if y_is_1d:
             y_arr = y_arr[:, None]
@@ -49,15 +59,16 @@ class RidgeRegression(ReadoutModule):
             raise ValueError(f"Expected states with {self.input_dim_} features, got {n_features}.")
 
         if self.use_intercept:
-            ones = jnp.ones((n_samples, 1), dtype=X.dtype)
+            ones = jnp.ones((n_samples, 1))
             X = jnp.concatenate([ones, X], axis=1)
         return X, y_arr, y_is_1d
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
         """Fit a single ridge model without validation search."""
+        _ensure_x64()  # Enable float64 for numerical stability
         X, y_arr, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
         n_features = X.shape[1]
-        eye = jnp.eye(n_features, dtype=X.dtype)
+        eye = jnp.eye(n_features)
         XtX = X.T @ X
         Xty = X.T @ y_arr
         lam_val = float(self.ridge_lambda)
@@ -69,11 +80,11 @@ class RidgeRegression(ReadoutModule):
         if not jnp.all(jnp.isfinite(w)):
             w = jnp.zeros_like(w)
         if self.use_intercept:
-            intercept = jnp.asarray(w[0], dtype=jnp.float64)
-            coef = jnp.asarray(w[1:], dtype=jnp.float64)
+            intercept = jnp.asarray(w[0])
+            coef = jnp.asarray(w[1:])
         else:
-            intercept = jnp.zeros(w.shape[1], dtype=jnp.float64)
-            coef = jnp.asarray(w, dtype=jnp.float64)
+            intercept = jnp.zeros(w.shape[1])
+            coef = jnp.asarray(w)
         if y_is_1d:
             coef = coef.ravel()
             intercept = intercept.ravel()
@@ -84,7 +95,7 @@ class RidgeRegression(ReadoutModule):
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
         if self.coef_ is None:
             raise RuntimeError("RidgeRegression is not fitted yet.")
-        X = jnp.asarray(states, dtype=jnp.float64)
+        X = jnp.asarray(states)
         return X @ self.coef_ + self.intercept_ if self.use_intercept else X @ self.coef_
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,6 +112,6 @@ class RidgeRegression(ReadoutModule):
             raise ValueError("Serialized RidgeRegression is missing required 'ridge_lambda'.")
         model = cls(ridge_lambda=float(data["ridge_lambda"]), use_intercept=bool(data.get("use_intercept", True)))
         if "coef" in data:
-            model.coef_ = jnp.asarray(data["coef"], dtype=jnp.float64)
-            model.intercept_ = jnp.asarray(data.get("intercept", 0.0), dtype=jnp.float64)
+            model.coef_ = jnp.asarray(data["coef"])
+            model.intercept_ = jnp.asarray(data.get("intercept", 0.0))
         return model

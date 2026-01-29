@@ -30,8 +30,8 @@ class FNNReadout(ReadoutModule):
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "FNNReadout":
         """Fit the FNN readout on states and targets."""
-        X = jnp.asarray(states, dtype=jnp.float32)
-        y = jnp.asarray(targets, dtype=jnp.float32)
+        X = jnp.asarray(states)
+        y = jnp.asarray(targets)
 
         if X.ndim != 2:
             raise ValueError(f"States must be 2D, got {X.shape}")
@@ -64,7 +64,7 @@ class FNNReadout(ReadoutModule):
         """Predict using the trained FNN."""
         if self._model is None:
             raise RuntimeError("FNNReadout is not fitted yet.")
-        X = jnp.asarray(states, dtype=jnp.float32)
+        X = jnp.asarray(states)
         return self._model.predict(X)
 
     def to_dict(self) -> Dict[str, Any]:

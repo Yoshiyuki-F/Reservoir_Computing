@@ -9,6 +9,8 @@ import jax
 import jax.numpy as jnp
 
 
+
+
 class ClosedLoopGenerativeModel(ABC):
     """
     Abstract base class for models that can generate autoregressive trajectories.
@@ -52,7 +54,8 @@ class ClosedLoopGenerativeModel(ABC):
             2D predictions (steps, Features)
         """
         # Convert 2D to 3D for internal processing
-        history = jnp.asarray(seed_data, dtype=jnp.float64)
+        # Cast to float32 to ensure scan carry consistency (even after x64 is enabled)
+        history = jnp.asarray(seed_data)
         if history.ndim == 2:
             history = history[None, :, :]  # (T, F) -> (1, T, F)
         elif history.ndim == 1:

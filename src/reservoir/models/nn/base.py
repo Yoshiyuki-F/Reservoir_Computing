@@ -130,8 +130,8 @@ class BaseFlaxModel(BaseModel, ABC):
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
         # 1. ここで一括してGPUに転送してしまう (MNIST程度なら余裕で乗ります)
         print("    [JAX] Transferring data to GPU...")
-        inputs = jax.device_put(jnp.asarray(inputs, dtype=jnp.float32))
-        targets = jax.device_put(jnp.asarray(targets, dtype=jnp.float32))  # 回帰ならfloat, 分類ならint注意
+        inputs = jax.device_put(jnp.asarray(inputs))
+        targets = jax.device_put(jnp.asarray(targets))  # 回帰ならfloat, 分類ならint注意
 
         num_samples = inputs.shape[0]
         num_batches = num_samples // self.batch_size

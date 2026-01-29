@@ -3,7 +3,7 @@ src/reservoir/models/reservoir/base.py
 Base class for Reservoir Computing models implementing ReservoirNode protocol.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Any, Dict, Optional, Callable
+from typing import Tuple, Any, Dict
 
 import jax.numpy as jnp
 
@@ -64,7 +64,7 @@ class Reservoir(ClosedLoopGenerativeModel, ABC):
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.
         """
-        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        arr = jnp.asarray(inputs)
         if arr.ndim not in (2, 3):
             raise ValueError(f"Reservoir input must be 2D or 3D, got {arr.shape}")
         batch_size = arr.shape[0] if arr.ndim == 3 else 1

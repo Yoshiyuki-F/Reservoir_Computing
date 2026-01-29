@@ -43,7 +43,7 @@ class ClassicalReservoir(Reservoir):
         k_res, k_mask_res = jax.random.split(self._rng, 2)
         self._rng = k_res
 
-        W_dense = jax.random.normal(k_res, (self.n_units, self.n_units), dtype=jnp.float64)
+        W_dense = jax.random.normal(k_res, (self.n_units, self.n_units))
         if 0.0 < self.rc_connectivity < 1.0:
             mask_res = jax.random.bernoulli(k_mask_res, p=self.rc_connectivity, shape=W_dense.shape)
             W_dense = jnp.where(mask_res, W_dense, 0.0)
@@ -53,7 +53,7 @@ class ClassicalReservoir(Reservoir):
         self.W = W_dense * scale
 
     def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
-        return jnp.zeros((batch_size, self.n_units), dtype=jnp.float64)
+        return jnp.zeros((batch_size, self.n_units))
 
     def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # 論文の式:   (1 - a) * state + tanh(...)
@@ -81,7 +81,7 @@ class ClassicalReservoir(Reservoir):
 
     def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, split_name: str = None, **_: Any) -> jnp.ndarray:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
-        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        arr = jnp.asarray(inputs)
         
         # Convert 2D to 3D for internal processing (scan requires 3D)
         input_was_2d = (arr.ndim == 2)

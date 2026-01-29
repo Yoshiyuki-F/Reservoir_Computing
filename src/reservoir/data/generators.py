@@ -40,10 +40,10 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray
             - 目標データ: 形状 (time_steps-1, 1) の次時刻値
     """
 
-    t = np.arange(config.time_steps, dtype=np.float64) * config.dt
+    t = np.arange(config.time_steps) * config.dt
     
     # 複数の周波数のサインwave合成
-    signal = np.zeros(config.time_steps, dtype=np.float64)
+    signal = np.zeros(config.time_steps)
     frequencies = config.frequencies
     if not frequencies:
         raise ValueError("sine_wave requires non-empty frequencies.")
@@ -101,7 +101,7 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
     total_steps = warmup_steps + data_steps
     
-    data = np.zeros((total_steps, 3), dtype=np.float64)
+    data = np.zeros((total_steps, 3))
     
     for i in range(total_steps):
         # Lorenz方程式の数値積分（オイラー法）
@@ -119,8 +119,8 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     data = data[warmup_steps:]
     
     # 入力は現在の状態、ターゲットは次の状態
-    input_data = jnp.array(data[:-1], dtype=jnp.float64)
-    target_data = jnp.array(data[1:], dtype=jnp.float64)
+    input_data = jnp.array(data[:-1])
+    target_data = jnp.array(data[1:])
     
     return input_data, target_data
 
@@ -151,9 +151,9 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
         np.random.seed(config.seed)
     
     # Initial state (numpy)
-    x0 = np.full(N, F, dtype=np.float64)
+    x0 = np.full(N, F)
     x0 += np.random.normal(0, 0.01, N)
-    x0 = jnp.array(x0, dtype=jnp.float64)
+    x0 = jnp.array(x0)
     
     warmup_steps = config.washup_lt * config.steps_per_lt
     total_steps = config.time_steps + warmup_steps
@@ -236,7 +236,7 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
     data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
     total_steps = data_steps + history_length + warmup_steps
 
-    x = np.full(total_steps, fill_value=0.0, dtype=np.float64)
+    x = np.full(total_steps, fill_value=0.0)
     initial_value = 1.2
     x[:history_length] = initial_value
 
@@ -259,8 +259,8 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
         x += noise
 
     # 入力は現在の値、ターゲットは次の値
-    input_data = jnp.array(x[:-1].reshape(-1, 1), dtype=jnp.float64)
-    target_data = jnp.array(x[1:].reshape(-1, 1), dtype=jnp.float64)
+    input_data = jnp.array(x[:-1].reshape(-1, 1))
+    target_data = jnp.array(x[1:].reshape(-1, 1))
 
     return input_data, target_data
 
@@ -325,6 +325,6 @@ def generate_mnist_sequence_data(
         sequences.append(seq.astype(np.float64))
         labels.append(label)
 
-    input_data = jnp.array(sequences, dtype=jnp.float64)
-    target_labels = jnp.array(labels, dtype=jnp.int32)
+    input_data = jnp.array(sequences)
+    target_labels = jnp.array(labels)
     return input_data, target_labels

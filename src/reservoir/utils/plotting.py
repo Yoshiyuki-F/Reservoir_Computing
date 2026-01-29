@@ -53,15 +53,15 @@ def plot_classification_results(
     def _to_numpy(array: np.ndarray, dtype: Optional[np.dtype] = None) -> np.ndarray:
         if dtype is None:
             return np.asarray(array)
-        return np.asarray(array, dtype=dtype)
+        return np.asarray(array)
 
-    train_labels_np = _to_numpy(train_labels, dtype=np.int32)
-    test_labels_np = _to_numpy(test_labels, dtype=np.int32)
-    train_predictions_np = _to_numpy(train_predictions, dtype=np.int32)
-    test_predictions_np = _to_numpy(test_predictions, dtype=np.int32)
+    train_labels_np = _to_numpy(train_labels)
+    test_labels_np = _to_numpy(test_labels)
+    train_predictions_np = _to_numpy(train_predictions)
+    test_predictions_np = _to_numpy(test_predictions)
 
-    val_labels_np = _to_numpy(val_labels, dtype=np.int32) if val_labels is not None else None
-    val_predictions_np = _to_numpy(val_predictions, dtype=np.int32) if val_predictions is not None else None
+    val_labels_np = _to_numpy(val_labels) if val_labels is not None else None
+    val_predictions_np = _to_numpy(val_predictions) if val_predictions is not None else None
 
     def _safe_max(array: np.ndarray) -> int:
         return int(array.max()) if array.size > 0 else -1
@@ -130,7 +130,7 @@ def plot_classification_results(
         for j in range(num_classes):
             value = confusion_matrix[i, j]
             color = 'white' if value > threshold else 'black'
-            ax_conf.text(j, i, str(value), ha='center', va='center', color=color, fontsize=9)
+            ax_conf.text(j, i, str(int(value)), ha='center', va='center', color=color, fontsize=9)
 
     # Plot from Bottom to Top, so for Top-to-Bottom order (Train, Val, Test),
     # we need to supply them as [Test, Val, Train].

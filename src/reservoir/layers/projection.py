@@ -8,6 +8,8 @@ from typing import Any, Dict
 import jax
 import jax.numpy as jnp
 
+
+
 class InputProjection:
     """
     Fixed random input projection with sparsity and bias (separable from reservoir dynamics).
@@ -38,25 +40,23 @@ class InputProjection:
             (self.input_dim, self.output_dim),
             minval=-boundary,
             maxval=boundary,
-            dtype=jnp.float64,
         )
         if 0.0 < self.connectivity < 1.0:
             mask = jax.random.bernoulli(k_mask, p=self.connectivity, shape=W.shape)
             W = jnp.where(mask, W, 0.0)
-        bias = jnp.zeros((self.output_dim,), dtype=jnp.float64)
+        bias = jnp.zeros((self.output_dim,))
         if self.use_bias:
             bias = jax.random.uniform(
                 k_b,
                 (self.output_dim,),
                 minval=-self.bias_scale,
                 maxval=self.bias_scale,
-                dtype=jnp.float64,
             )
         self.W = W
         self.bias = bias
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(inputs, dtype=jnp.float64)
+        arr = jnp.asarray(inputs)
         if arr.ndim == 3:
             return jnp.einsum("bti,io->bto", arr, self.W) + self.bias
         if arr.ndim == 2:

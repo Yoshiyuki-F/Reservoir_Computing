@@ -32,7 +32,7 @@ class StateAggregator(Transformer):
     def aggregate(states: jnp.ndarray, mode: AggregationMode) -> jnp.ndarray:
         """Static aggregator for reuse in functional contexts."""
         agg_mode = StateAggregator._resolve_mode(mode)
-        arr = jnp.asarray(states, dtype=jnp.float64)
+        arr = jnp.asarray(states)
         if agg_mode is AggregationMode.SEQUENCE:
             # Flatten to 2D (Batch * Time, Features) to match readout expectation and metadata
             if arr.ndim == 3:
