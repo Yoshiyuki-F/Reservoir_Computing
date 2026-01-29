@@ -22,7 +22,7 @@ a measurement matrix $(N_{obs}, 2^N)$ with the state probability vector $(2^N,)$
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple, Literal, Union
+from typing import Dict, Any, Tuple, Literal, Union, cast
 from functools import partial
 
 
@@ -100,7 +100,7 @@ def _make_circuit_logic(
     use_remat: bool,
     use_reuploading: bool,
     rng_key: Optional[jax.Array] = None
-) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+) -> jnp.ndarray:
     """
     Core circuit construction logic with Noise and Encoding support.
     Refactored to use `jax.lax.scan` for the layer loop.
@@ -108,21 +108,23 @@ def _make_circuit_logic(
     """
     is_noisy = (noise_type != "clean")
 
+    def apply_encoding_gate(c_target, idx, val):
+        if encoding_strategy == "Rx":
+            c_target.rx(idx, theta=val)
+        elif encoding_strategy == "Ry":
+            c_target.ry(idx, theta=val)
+        elif encoding_strategy == "Rz":
+            c_target.rz(idx, theta=val)
+        elif encoding_strategy == "IQP":
+            c_target.h(idx)
+            c_target.rz(idx, theta=val)
+
     # --- 1. Encoding (Input -> State) ---
     c_enc = tc.Circuit(n_qubits)
     scaled_inputs = inputs * input_scaling
     
     for i in range(n_qubits):
-        if encoding_strategy == "Rx":
-            c_enc.rx(i, theta=scaled_inputs[i])
-        elif encoding_strategy == "Ry":
-            c_enc.ry(i, theta=scaled_inputs[i])
-        elif encoding_strategy == "Rz":
-            c_enc.rz(i, theta=scaled_inputs[i])
-        elif encoding_strategy == "IQP":
-            # Simple IQP-like encoding: H -> Rz(x)
-            c_enc.h(i)
-            c_enc.rz(i, theta=scaled_inputs[i])
+        apply_encoding_gate(c_enc, i, scaled_inputs[i])
             
     # Initial State
     # If noisy, state might implicitly be DM if channels were added?
@@ -137,13 +139,6 @@ def _make_circuit_logic(
             state = jnp.outer(state, jnp.conj(state))
         # ここで確実に (2^N, 2^N) であることを保証
 
-    def apply_noise(indices):
-        if not is_noisy: return
-        for idx in indices:
-            if noise_type == "depolarizing":
-                c.depolarizing(idx, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif noise_type == "damping":
-                c.amplitude_damping(idx, gamma=noise_prob)
 
     # --- 2. Dynamics (Layer Scanned) ---
     def layer_step(carry_state, layer_params):
@@ -164,35 +159,49 @@ def _make_circuit_logic(
             nonlocal current_key
             if not is_noisy: return
             
-            for idx in indices:
+            for target_idx in indices:
                 if is_mc:
-                    # Monte Carlo Noise Injection
-                    # TODO: Implement full Pauli channel selection
-                    # For now, just consume key to ensure loop dependency is correct
-                    k1, k2 = jax.random.split(current_key)
-                    current_key = k2
-                    # Placeholder: Apply Identity (No noise yet)
+                    # Monte Carlo Noise Injection (Depolarizing)
+                    # Use current_key to select Pauli error
+                    # Check safe key usage
+                    if current_key is None:
+                         # Should not happen in MC mode, but safe guard
+                         continue
+                         
+                    k1, current_key = jax.random.split(current_key)
+                    r = jax.random.uniform(k1)
+                    
+                    # Depolarizing Channel: (1-p)I, p/3 X, p/3 Y, p/3 Z
+                    p = noise_prob
+                    
+                    # Branchless selection of matrix index
+                    # 0:I, 1:X, 2:Y, 3:Z
+                    gate_idx = jnp.zeros((), dtype=jnp.int32)
+                    gate_idx = jax.lax.select(r < 3*p, jnp.array(3, dtype=jnp.int32), gate_idx) # Z
+                    gate_idx = jax.lax.select(r < 2*p, jnp.array(2, dtype=jnp.int32), gate_idx) # Y
+                    gate_idx = jax.lax.select(r < p, jnp.array(1, dtype=jnp.int32), gate_idx)   # X
+                    
+                    # Switch mechanism to get matrix
+                    def get_mat_i(_): return I_MAT
+                    def get_mat_x(_): return X_MAT
+                    def get_mat_y(_): return Y_MAT
+                    def get_mat_z(_): return Z_MAT
+                    
+                    mat = jax.lax.switch(gate_idx, [get_mat_i, get_mat_x, get_mat_y, get_mat_z], None)
+                    c.unitary(target_idx, unitary=mat, name="mc_noise")
                 else:
                     # Density Matrix Noise
                     if noise_type == "depolarizing":
-                        c.depolarizing(idx, px=noise_prob, py=noise_prob, pz=noise_prob)
+                        c.depolarizing(target_idx, px=noise_prob, py=noise_prob, pz=noise_prob)
                     elif noise_type == "damping":
-                        c.amplitude_damping(idx, gamma=noise_prob)
+                        c.amplitude_damping(target_idx, gamma=noise_prob)
 
         # --- Re-uploading (Optional) ---
         if use_reuploading:
             # Re-apply encoding gates with scaled inputs
             # Note: inputs are captured from closure
             for idx in range(n_qubits):
-                if encoding_strategy == "Rx":
-                    c.rx(idx, theta=scaled_inputs[idx])
-                elif encoding_strategy == "Ry":
-                    c.ry(idx, theta=scaled_inputs[idx])
-                elif encoding_strategy == "Rz":
-                    c.rz(idx, theta=scaled_inputs[idx])
-                elif encoding_strategy == "IQP":
-                    c.h(idx)
-                    c.rz(idx, theta=scaled_inputs[idx])
+                apply_encoding_gate(c, idx, scaled_inputs[idx])
                 apply_noise_in_layer([idx])
 
         # Apply Entanglement (CNOT Ladder)
@@ -241,17 +250,15 @@ def _make_circuit_logic(
         final_state = final_carry
     
     # --- 3. Measurement ---
-    if is_noisy:
+    if is_noisy and not is_mc:
         # final_state is Density Matrix (2^N, 2^N)
         # Probabilities are diagonal elements.
-        probs = jnp.real(jnp.diag(final_state))
-        
-        # Guard: Ensure shape is (2^N,)
-        # In JAX/TC, diag might keep complex type, but imaginary part should be 0 for valid DM.
+        probs = jnp.real(jnp.diag(cast(jnp.ndarray, final_state)))
         return probs.astype(jnp.float32)
     else:
+        # Pure State (Clean or MC)
         # final_state is Vector (2^N,)
-        return (jnp.abs(final_state) ** 2).astype(jnp.float32)
+        return (jnp.abs(cast(jnp.ndarray, final_state)) ** 2).astype(jnp.float32)
 
 
 def _step_logic(
@@ -318,7 +325,7 @@ def _step_logic(
         next_state_vec = sliced
             
     if next_key is not None:
-        return (next_state_vec, next_key), output
+        return (next_state_vec, cast(jnp.ndarray, next_key)), output
         
     return next_state_vec, output
 
@@ -330,7 +337,7 @@ def _step_logic(
     "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
-    state: jnp.ndarray,
+    state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
     input_slice: jnp.ndarray,
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
@@ -344,7 +351,7 @@ def _step_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
     """
     Standalone JIT wrapper for single step execution.
     """
@@ -359,7 +366,7 @@ def _step_jit(
     "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
-    state_init: jnp.ndarray,
+    state_init: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
     inputs_time_major: jnp.ndarray,
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
@@ -373,7 +380,7 @@ def _forward_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
     """
     Forward pass (scan) execution (JIT Compiled).
     Uses uncompiled `_step_logic` inside to ensure proper XLA fusion.
@@ -575,7 +582,7 @@ class QuantumReservoir(Reservoir):
             # Monte Carlo Mode: Return (state, key) tuple
             # Update internal RNG state to ensure fresh noise per batch
             key, self._rng = jax.random.split(self._rng)
-            return (state, jax.random.split(key, batch_size))
+            return state, jax.random.split(key, batch_size)
         return state
 
     @jaxtyped(typechecker=beartype)
@@ -604,12 +611,45 @@ class QuantumReservoir(Reservoir):
         """Forward pass using optimized scan."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
+
+        # --- Monte Carlo Ensemble Expansion ---
+        original_batch_size = input_data.shape[0]
+        traj_count = self.n_trajectories if self.n_trajectories > 1 else 1
+        is_ensemble = traj_count > 1
         
+        run_state = state
+        run_inputs = input_data
+        
+        if is_ensemble:
+            # Polymorphic State Check
+            if isinstance(state, (tuple, list)):
+                state_vec, rng_keys = state
+                # keys shape: (Batch, 2) -> Broaden to (Batch * K, 2)
+                
+                # Split each key into traj_count keys
+                # vmap over batch
+                keys_expanded = jax.vmap(lambda k: jax.random.split(k, traj_count))(rng_keys)
+                # Shape: (Batch, K, 2) -> Flatten: (Batch*K, 2)
+                keys_flat = keys_expanded.reshape(original_batch_size * traj_count, 2)
+                
+                # Expand Vector: (Batch, N) -> (Batch*K, N)
+                state_vec_flat = jnp.repeat(state_vec, traj_count, axis=0)
+                
+                run_state = (state_vec_flat, keys_flat)
+            else:
+                # If state is array but n_trajectories > 1 (Maybe density matrix mode overridden?)
+                # Just repeat state
+                run_state = jnp.repeat(state, traj_count, axis=0)
+                
+            # Expand Inputs: (Batch, T, F) -> (Batch*K, T, F)
+            run_inputs = jnp.repeat(input_data, traj_count, axis=0)
+        
+        # --- Execution ---
         # Transpose for scan (Time, Batch, Feat)
-        inputs_time_major = jnp.swapaxes(input_data, 0, 1)
+        inputs_time_major = jnp.swapaxes(run_inputs, 0, 1)
         
         final_state, stacked_outputs = _forward_jit(
-            state,
+            run_state,
             inputs_time_major,
             self.reservoir_params,
             self._measurement_matrix,
@@ -625,8 +665,37 @@ class QuantumReservoir(Reservoir):
             self.use_reuploading
         )
         
-        # Transpose back (Batch, Time, Feat)
-        stacked_outputs = jnp.swapaxes(stacked_outputs, 0, 1)
+        # --- Ensemble Aggregation ---
+        if is_ensemble:
+            # stacked_outputs: (Time, Batch*K, Out) -> Transpose -> (Batch*K, Time, Out)
+            stacked_outputs = jnp.swapaxes(stacked_outputs, 0, 1) # Now (B*K, T, O)
+            
+            # Reshape to (Batch, K, Time, Out)
+            out_shape = stacked_outputs.shape
+            reshaped_out = stacked_outputs.reshape(original_batch_size, traj_count, out_shape[1], out_shape[2])
+            
+            # Mean over trajectories (axis 1)
+            stacked_outputs = jnp.mean(reshaped_out, axis=1) # (Batch, Time, Out)
+            
+            # Reduce final_state (Optional implementation)
+            # Just take the first trajectory's key/state to maintain shape for next steps if needed
+            if isinstance(final_state, (tuple, list)):
+                 f_vec, f_keys = final_state
+                 # f_vec: (B*K, N) -> (B, K, N) -> Mean
+                 f_vec_mean = f_vec.reshape(original_batch_size, traj_count, -1).mean(axis=1)
+                 
+                 # f_keys: (B*K, 2). Pick first one per batch.
+                 f_keys_reshaped = f_keys.reshape(original_batch_size, traj_count, 2)
+                 f_keys_reduced = f_keys_reshaped[:, 0, :]
+                 
+                 final_state = (f_vec_mean, f_keys_reduced)
+            else:
+                 final_state = final_state.reshape(original_batch_size, traj_count, -1).mean(axis=1)
+            
+        else:
+            # Standard single trajectory / density matrix
+            # Transpose back (Batch, Time, Feat)
+            stacked_outputs = jnp.swapaxes(stacked_outputs, 0, 1)
         
         return final_state, stacked_outputs
 
