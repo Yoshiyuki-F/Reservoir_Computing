@@ -22,7 +22,7 @@ a measurement matrix $(N_{obs}, 2^N)$ with the state probability vector $(2^N,)$
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple, Literal
+from typing import Dict, Any, Tuple, Literal, Union
 from functools import partial
 
 
@@ -30,19 +30,26 @@ from functools import partial
 # --- Lazy Initialization for Safety & Isolation ---
 _TC_INITIALIZED = False
 
-def _ensure_tensorcircuit_initialized():
+def _ensure_tensorcircuit_initialized(precision: str = "complex64"):
     """
     Lazily configure TensorCircuit and patch Numpy.
     Ensures global side effects only happen when QuantumReservoir is verified to be used.
     """
     global _TC_INITIALIZED
+    
+    # Enable x64 if needed for complex128
+    if precision == "complex128":
+        jax.config.update("jax_enable_x64", True)
+
     if _TC_INITIALIZED:
+        if precision != tc.dtypestr:
+            tc.set_dtype(precision)
         return
 
     # Configure TensorCircuit
     # Localize backend setting to avoid affecting other modules on import
     tc.set_backend("jax")
-    tc.set_dtype("complex64") # Optim: Use complex64 as per Mixed Precision strategy
+    tc.set_dtype(precision)
 
     # --- Numpy 2.x Compatibility Patch ---
     # TensorCircuit usage of 'newshape' argument is incompatible with some Numpy versions/wrappers.
@@ -83,7 +90,8 @@ def _make_circuit_logic(
     input_scaling: float,
     encoding_strategy: str,
     noise_type: str,
-    noise_prob: float
+    noise_prob: float,
+    use_remat: bool
 ) -> jnp.ndarray:
     """
     Core circuit construction logic with Noise and Encoding support.
@@ -121,10 +129,18 @@ def _make_circuit_logic(
             state = jnp.outer(state, jnp.conj(state))
         # ここで確実に (2^N, 2^N) であることを保証
 
+    def apply_noise(indices):
+        if not is_noisy: return
+        for idx in indices:
+            if noise_type == "depolarizing":
+                c.depolarizing(idx, px=noise_prob, py=noise_prob, pz=noise_prob)
+            elif noise_type == "damping":
+                c.amplitude_damping(idx, gamma=noise_prob)
+
     # --- 2. Dynamics (Layer Scanned) ---
     def layer_step(carry_state, layer_params):
         if is_noisy:
-            # inputsが密度行列であることを明示、またはDMCircuitを使用
+            # inputs is density matrix or DMCircuit
             c = tc.DMCircuit(n_qubits, inputs=carry_state)
         else:
             c = tc.Circuit(n_qubits, inputs=carry_state)
@@ -132,52 +148,29 @@ def _make_circuit_logic(
         # Apply Entanglement (CNOT Ladder)
         for j in range(n_qubits - 1):
             c.cnot(j, j + 1)
-            if is_noisy and noise_type == "depolarizing":
-                c.depolarizing(j, px=noise_prob, py=noise_prob, pz=noise_prob)
-                c.depolarizing(j+1, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif is_noisy and noise_type == "damping":
-                c.amplitude_damping(j, gamma=noise_prob)
-                c.amplitude_damping(j+1, gamma=noise_prob)
+            apply_noise([j, j + 1])
             
         # Apply Rotations
         for k in range(n_qubits):
             c.rx(k, theta=layer_params[k, 0])
-            if is_noisy and noise_type == "depolarizing": c.depolarizing(k, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif is_noisy and noise_type == "damping": c.amplitude_damping(k, gamma=noise_prob)
-                
+            apply_noise([k])
+            
             c.ry(k, theta=layer_params[k, 1])
-            if is_noisy and noise_type == "depolarizing": c.depolarizing(k, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif is_noisy and noise_type == "damping": c.amplitude_damping(k, gamma=noise_prob)
-                
+            apply_noise([k])
+            
             c.rz(k, theta=layer_params[k, 2])
-            if is_noisy and noise_type == "depolarizing": c.depolarizing(k, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif is_noisy and noise_type == "damping": c.amplitude_damping(k, gamma=noise_prob)
+            apply_noise([k])
             
         # Apply Entanglement (Reverse Ladder)
         for l in range(n_qubits - 2, -1, -1):
             c.cnot(l, l + 1)
-            if is_noisy and noise_type == "depolarizing":
-                c.depolarizing(l, px=noise_prob, py=noise_prob, pz=noise_prob)
-                c.depolarizing(l+1, px=noise_prob, py=noise_prob, pz=noise_prob)
-            elif is_noisy and noise_type == "damping":
-                c.amplitude_damping(l, gamma=noise_prob)
-                c.amplitude_damping(l+1, gamma=noise_prob)
+            apply_noise([l, l + 1])
             
         new_state = c.state()
-
-        # JITコンパイル時の形状チェックを安定させる
-        if is_noisy:
-            # もし何らかの理由でベクトルが返ってきた場合、DMへ昇格させる
-            # (reshapeだけだと、純粋状態に戻ってしまった場合に計算がおかしくなる)
-            if new_state.ndim == 1:
-                new_state = jnp.outer(new_state, jnp.conj(new_state))
-            elif new_state.ndim == 2:
-                pass  # OK
-            else:
-                # FlattenされたDMの場合の救済
-                new_state = new_state.reshape(carry_state.shape)
-
         return new_state, None
+
+    if use_remat:
+        layer_step = jax.checkpoint(layer_step)
 
     # Scan over layers
     final_state, _ = jax.lax.scan(layer_step, state, params)
@@ -208,7 +201,8 @@ def _step_logic(
     padding_size: int,
     encoding_strategy: str,
     noise_type: str,
-    noise_prob: float
+    noise_prob: float,
+    use_remat: bool
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Core step logic (Single step).
@@ -225,7 +219,8 @@ def _step_logic(
         input_scaling,
         encoding_strategy,
         noise_type,
-        noise_prob
+        noise_prob,
+        use_remat
     )
     
     # Vectorized Measurement: E = M @ p
@@ -247,7 +242,7 @@ def _step_logic(
 
 @partial(jax.jit, static_argnames=[
     "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type"
+    "encoding_strategy", "noise_type", "use_remat"
 ])
 def _step_jit(
     state: jnp.ndarray,
@@ -261,7 +256,8 @@ def _step_jit(
     padding_size: int,
     encoding_strategy: str,
     noise_type: str,
-    noise_prob: float
+    noise_prob: float,
+    use_remat: bool
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Standalone JIT wrapper for single step execution.
@@ -269,12 +265,12 @@ def _step_jit(
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
         n_qubits, input_scaling, feedback_scale,
-        feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob
+        feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat
     )
 
 @partial(jax.jit, static_argnames=[
     "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type"
+    "encoding_strategy", "noise_type", "use_remat"
 ])
 def _forward_jit(
     state_init: jnp.ndarray,
@@ -288,7 +284,8 @@ def _forward_jit(
     padding_size: int,
     encoding_strategy: str,
     noise_type: str,
-    noise_prob: float
+    noise_prob: float,
+    use_remat: bool
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Forward pass (scan) execution (JIT Compiled).
@@ -307,7 +304,8 @@ def _forward_jit(
         padding_size=padding_size,
         encoding_strategy=encoding_strategy,
         noise_type=noise_type,
-        noise_prob=noise_prob
+        noise_prob=noise_prob,
+        use_remat=use_remat
     )
 
     # Vmap over the batch dimension
@@ -344,10 +342,12 @@ class QuantumReservoir(Reservoir):
         encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"] = "Rx",
         noise_type: Literal["clean", "depolarizing", "damping"] = "clean",
         noise_prob: float = 0.0,
+        use_remat: bool = False,
+        precision: Literal["complex64", "complex128"] = "complex64",
     ) -> None:
         """Initialize Quantum Reservoir."""
         # Ensure TC backend and patches are applied (lazy, idempotent)
-        _ensure_tensorcircuit_initialized()
+        _ensure_tensorcircuit_initialized(precision)
         
         n_correlations = n_qubits * (n_qubits - 1) // 2
 
@@ -394,7 +394,10 @@ class QuantumReservoir(Reservoir):
         self.n_correlations = n_correlations
         self.encoding_strategy = encoding_strategy
         self.noise_type = noise_type
+        self.noise_type = noise_type
         self.noise_prob = float(noise_prob)
+        self.use_remat = use_remat
+        self.precision = precision
 
         self.aggregator = StateAggregator(mode=aggregation_mode)
         self._rng = jax.random.key(seed)
@@ -433,7 +436,19 @@ class QuantumReservoir(Reservoir):
         matrix_np = jnp.vstack(row_blocks)
         return jnp.array(matrix_np)
 
-    def initialize_state(self, batch_size: int) -> jnp.ndarray:
+    @staticmethod
+    def _prepare_input(inputs: Union[jnp.ndarray, Array]) -> Tuple[jnp.ndarray, bool]:
+        """Preprocess input: cast to float32 and ensure 3D shape (Batch, Time, Feat)."""
+        # Cast to float32 to ensure consistent dtypes in scan (even if x64 is enabled)
+        arr = jnp.asarray(inputs, dtype=jnp.float32)
+        input_was_2d = (arr.ndim == 2)
+        if input_was_2d:
+            arr = arr[None, :, :]
+        elif arr.ndim != 3:
+            raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
+        return arr, input_was_2d
+
+    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
         return jnp.zeros((batch_size, self.n_qubits))
 
     @jaxtyped(typechecker=beartype)
@@ -445,14 +460,14 @@ class QuantumReservoir(Reservoir):
             reservoir_params=self.reservoir_params,
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
-            n_layers=self.n_layers,
             input_scaling=self.input_scaling,
             feedback_scale=self.feedback_scale,
             feedback_slice=self._feedback_slice,
             padding_size=self._padding_size,
             encoding_strategy=self.encoding_strategy,
             noise_type=self.noise_type,
-            noise_prob=self.noise_prob
+            noise_prob=self.noise_prob,
+            use_remat=self.use_remat
         )
         return jax.vmap(step_func, in_axes=(0, 0))(state, input_data)
 
@@ -477,7 +492,8 @@ class QuantumReservoir(Reservoir):
             self._padding_size,
             self.encoding_strategy,
             self.noise_type,
-            self.noise_prob
+            self.noise_prob,
+            self.use_remat
         )
         
         # Transpose back (Batch, Time, Feat)
@@ -494,12 +510,7 @@ class QuantumReservoir(Reservoir):
         **_: Any
     ) -> Float[Array, "batch out_features"] | Float[Array, "batch time out_features"] | Float[Array, "time out_features"]:
         # Cast to float32 to ensure consistent dtypes in scan (even if x64 is enabled)
-        arr = jnp.asarray(inputs, dtype=jnp.float32)
-        input_was_2d = (arr.ndim == 2)
-        if input_was_2d:
-            arr = arr[None, :, :]
-        elif arr.ndim != 3:
-            raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
+        arr, input_was_2d = self._prepare_input(inputs)
         
         batch_size = arr.shape[0]
         state = self.initialize_state(batch_size)
@@ -514,7 +525,9 @@ class QuantumReservoir(Reservoir):
     def get_feature_dim(self, time_steps: int) -> int:
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
+    @staticmethod
+    def train(_inputs: jnp.ndarray, _targets: Any = None, **__: Any) -> Dict[str, Any]:
+        # Reservoir has no trainable parameters; arguments are unused.
         return {}
 
     def to_dict(self) -> Dict[str, Any]:
@@ -530,6 +543,8 @@ class QuantumReservoir(Reservoir):
             "encoding_strategy": self.encoding_strategy,
             "noise_type": self.noise_type,
             "noise_prob": self.noise_prob,
+            "use_remat": self.use_remat,
+            "precision": self.precision,
         })
         return data
 
@@ -547,6 +562,8 @@ class QuantumReservoir(Reservoir):
                 encoding_strategy=data.get("encoding_strategy", "Rx"),
                 noise_type=data.get("noise_type", "clean"),
                 noise_prob=float(data.get("noise_prob", 0.0)),
+                use_remat=bool(data.get("use_remat", False)),
+                precision=data.get("precision", "complex64"),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc
@@ -555,7 +572,7 @@ class QuantumReservoir(Reservoir):
         return (
             f"QuantumReservoir(tc_backend, n_qubits={self.n_qubits}, n_layers={self.n_layers}, "
             f"measurement={self.measurement_basis}, encoding={self.encoding_strategy}, "
-            f"noise={self.noise_type}({self.noise_prob}))"
+            f"noise={self.noise_type}({self.noise_prob}), remat={self.use_remat}, {self.precision})"
         )
 
 
