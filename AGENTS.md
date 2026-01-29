@@ -1,1 +1,0 @@
-Read ARCHITECTURE.md for detailed pipelines.
