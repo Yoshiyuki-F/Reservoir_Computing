@@ -30,22 +30,25 @@ def batched_compute(
     Returns:
         出力データ (numpy array on CPU)
     """
-    inputs_jax = jnp.asarray(inputs)
+    # Do NOT force inputs to GPU/JAX immediately if it's numpy
+    # inputs_jax = jnp.asarray(inputs) 
     
     # Handle 2D input (T, F) - Regression time series
-    # Process entire sequence at once (no batching along time axis)
-    if inputs_jax.ndim == 2:
+    # Check ndim on inputs (works for both np and jnp)
+    if inputs.ndim == 2:
+        inputs_jax = jnp.asarray(inputs)
         result_jax = fn(inputs_jax)
         return np.asarray(result_jax)  # Transfer to CPU
     
     # 3D input (N, T, F) - Classification batching
-    n_samples = inputs_jax.shape[0]
+    n_samples = inputs.shape[0]
 
     if n_samples == 0:
         return np.array([])
 
     # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
-    dummy_input_jax = inputs_jax[:1]
+    # Ensure dummy input is on GPU
+    dummy_input_jax = jnp.asarray(inputs[:1])
     dummy_out_jax = fn(dummy_input_jax)
 
     # Detect Expansion Factor (e.g. 1 sample -> N samples after aggregation)
@@ -71,7 +74,8 @@ def batched_compute(
             current_batch_size = batch_end - i
 
             # (A) GPUでスライス & 計算
-            batch_jax = inputs_jax[i:batch_end]
+            batch_data = inputs[i:batch_end]
+            batch_jax = jnp.asarray(batch_data)
             batch_out_jax = step(batch_jax)
             
             # (B) Transfer to CPU immediately to free GPU memory

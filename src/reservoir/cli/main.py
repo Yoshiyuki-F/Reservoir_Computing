@@ -37,7 +37,13 @@ def main() -> None:
     model_enum = Model(args.model)
     dataset = Dataset(args.dataset)
     pipeline_config = get_model_preset(model_enum, dataset)
-    training_config = get_training_preset("standard")
+    
+    # Auto-select "quantum" training config for Quantum Reservoir to prevent OOM
+    training_preset_name = "standard"
+    if pipeline_config.model_type == Model.QUANTUM_RESERVOIR:
+        training_preset_name = "quantum"
+        
+    training_config = get_training_preset(training_preset_name)
 
     print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}...")
     print(f"With training preset: '{training_config.name}'")

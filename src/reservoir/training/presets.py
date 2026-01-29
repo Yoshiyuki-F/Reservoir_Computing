@@ -24,6 +24,22 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
         val_size=0.1,
         test_ratio=0.1,
     ),
+    "quantum": TrainingConfig(
+        name="quantum",
+        batch_size=128,  # Smaller batch size for quantum simulation (OOM prevention)
+        epochs = 300,
+        learning_rate = 0.006,
+        seed= 0,
+
+        # Learning Rate Scheduler
+        scheduler_type="cosine",  # "cosine", "piecewise", or None
+        warmup_epochs=10,
+
+        # Data Splitting
+        train_size=0.8,
+        val_size=0.1,
+        test_ratio=0.1,
+    ),
 }
 
 

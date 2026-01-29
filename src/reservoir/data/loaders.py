@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from reservoir.core.identifiers import Dataset
 from reservoir.data.generators import (
@@ -82,7 +83,6 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     test_labels_arr = jax.nn.one_hot(jnp.asarray(test_labels).astype(int), num_classes)
 
     # Create validation split from training data (10%)
-    import numpy as np
     val_ratio = 0.1
     n_train = train_arr.shape[0]
     n_val = max(1, int(n_train * val_ratio))
@@ -106,8 +106,7 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 @register_loader(Dataset.MACKEY_GLASS)
 def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
-    import numpy as np
-    
+
     # 1. Generate (returns jnp arrays)
     X_gen, y_gen = generate_mackey_glass_data(config)
     
@@ -306,7 +305,6 @@ def load_dataset_with_validation_split(
     #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
     #             )
 
-    import numpy as np
     return SplitDataset(
         train_X=jnp.asarray(train_X),
         train_y=jnp.asarray(train_y),

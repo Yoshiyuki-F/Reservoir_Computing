@@ -49,9 +49,12 @@ class ReservoirFactory:
                 n_layers=model.n_layers,
                 seed=model.seed,
                 aggregation_mode=model.aggregation,
-                dynamics_type=model.dynamics_type,
                 input_scaling=model.input_scaling,
+                feedback_scale=model.feedback_scale,
                 measurement_basis=model.measurement_basis,
+                encoding_strategy=model.encoding_strategy,
+                noise_type=model.noise_type,
+                noise_prob=model.noise_prob,
             )
         else:
             raise TypeError(f"ReservoirFactory requires Classical or Quantum config, got {type(model)}.")

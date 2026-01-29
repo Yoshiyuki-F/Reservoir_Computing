@@ -10,7 +10,6 @@ from typing import Any, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
@@ -63,7 +62,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def _compute_teacher_targets_batched(self, inputs: jnp.ndarray, batch_size: int) -> jnp.ndarray:
         """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
-        inputs_np = np.asarray(inputs)
+        inputs_np = jnp.asarray(inputs)
         n_samples = inputs_np.shape[0]
 
         # 1. Infer output shape from a small dummy batch
@@ -82,7 +81,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         output_shape = (n_samples,) + dummy_out.shape[1:]
         # print(f"    [Teacher] Generating targets (Total: {n_samples}, Batch: {batch_size})...")
-        targets = np.empty(output_shape)
+        targets = jnp.empty(output_shape)
 
         # 2. Define JIT step
         @jax.jit
@@ -96,7 +95,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
                 batch_x = inputs_np[i:end]
                 # Move to GPU, compute, move back to CPU
                 batch_out = step(jnp.array(batch_x))
-                targets[i:end] = np.asarray(batch_out)
+                targets[i:end] = jnp.asarray(batch_out)
                 pbar.update(end - i)
 
         return jnp.array(targets)

@@ -114,5 +114,6 @@ class PipelineExecutor:
         if inputs is None:
             return None
         
-        fn = partial(model, split_name=split_name)
+        # Don't pass split_name here to avoid logging per batch (inside model/aggregator)
+        fn = partial(model, split_name=None)
         return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")

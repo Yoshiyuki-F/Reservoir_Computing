@@ -150,7 +150,6 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
     if config.seed is not None:
         np.random.seed(config.seed)
     
-    # Initial state (numpy)
     x0 = np.full(N, F)
     x0 += np.random.normal(0, 0.01, N)
     x0 = jnp.array(x0)

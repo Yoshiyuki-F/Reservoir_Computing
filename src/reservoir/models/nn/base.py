@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 import jax
 import jax.numpy as jnp
 import optax
-import numpy as np
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
 
@@ -174,7 +173,7 @@ class BaseFlaxModel(BaseModel, ABC):
                 batch_losses.append(float(loss))  # LossをCPUに戻すコストのみ
 
             if batch_losses:
-                avg_loss = float(np.mean(batch_losses))
+                avg_loss = float(jnp.mean(batch_losses))
                 loss_history.append(avg_loss)
                 pbar.set_postfix({"loss": f"{avg_loss:.6f}"})
 
