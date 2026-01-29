@@ -26,6 +26,7 @@ dependencies = [
     "torchvision",
     "jaxtyping>=0.3.6",
     "beartype>=0.22.9",
+    "pandas>=3.0.0",
 ]
 
 [project.scripts]
