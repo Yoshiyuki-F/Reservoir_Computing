@@ -26,7 +26,7 @@ TRAINING_PRESETS: Dict[str, TrainingConfig] = {
     ),
     "quantum": TrainingConfig(
         name="quantum",
-        batch_size=128,  # Smaller batch size for quantum simulation (OOM prevention)
+        batch_size=1024,  # look at the benchmarking score. its argmax.
         epochs = 300,
         learning_rate = 0.006,
         seed= 0,
