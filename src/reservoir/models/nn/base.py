@@ -38,6 +38,11 @@ class BaseModel(ABC):
         """Optional topology metadata for visualization."""
         return getattr(self, "topology_meta", {})
 
+    @property
+    def input_window_size(self) -> int:
+        """Required input history/window size. Defaults to 0 (no history)."""
+        return 0
+
 
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""

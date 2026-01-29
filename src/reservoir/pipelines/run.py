@@ -19,6 +19,7 @@ from reservoir.pipelines.components.data_manager import PipelineDataManager
 from reservoir.pipelines.components.model_builder import PipelineModelBuilder
 from reservoir.pipelines.components.executor import PipelineExecutor
 from reservoir.pipelines.components.reporter import ResultReporter
+from reservoir.pipelines.components.data_coordinator import DataCoordinator
 
 
 def run_pipeline(
@@ -52,7 +53,8 @@ def run_pipeline(
     # === Step 3: Execution ===
     # Executor handles the training loop, feature extraction (batched),
     # strategy selection (Classification vs ClosedLoop), and fitting.
-    executor = PipelineExecutor(stack, frontend_ctx, metadata)
+    coordinator = DataCoordinator(frontend_ctx, metadata)
+    executor = PipelineExecutor(stack, frontend_ctx, metadata, coordinator)
     execution_results = executor.run(config)
 
     # === Step 4: Reporting ===

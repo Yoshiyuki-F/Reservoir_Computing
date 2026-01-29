@@ -28,7 +28,7 @@ def test_pipeline_execution(model, dataset):
     
     # Construct command
     # Using 'uv run' to ensure environment consistency
-    cmd = [
+    command = [
         "uv", "run", "reservoir-cli",
         "--model", model,
         "--dataset", dataset
@@ -36,8 +36,8 @@ def test_pipeline_execution(model, dataset):
     
     try:
         # Run command, capture output, check return code (raises on non-zero)
-        result = subprocess.run(
-            cmd,
+        subprocess.run(
+            command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

@@ -8,65 +8,65 @@ import numpy as np
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.pipelines.evaluation import Evaluator
-from reservoir.pipelines.strategies import (
-    EndToEndStrategy,
-    ClassificationStrategy,
-    ClosedLoopRegressionStrategy
-)
+from reservoir.pipelines.strategies import ReadoutStrategyFactory
+from reservoir.pipelines.components.data_coordinator import DataCoordinator
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
 
 
 class PipelineExecutor:
     """
-    Executes the pipeline steps:
-    1. Model Training (Warmup)
-    2. Feature Extraction
-    3. Readout Fitting
+    Orchestrates the pipeline execution.
+    Acts as a Site Supervisor:
+    1. Asks DataCoordinator for materials (Data).
+    2. Directs Worker (Model) to process materials.
+    3. Asks StrategyFactory for specialized tooling (Readout Strategy).
+    4. Executes the finish work.
     """
 
-    def __init__(self, stack: ModelStack, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata):
+    def __init__(self, stack: ModelStack, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, coordinator: DataCoordinator):
         self.stack = stack
         self.frontend_ctx = frontend_ctx
         self.dataset_meta = dataset_meta
         self.evaluator = Evaluator()
+        # Dependency Injection (OCP/DIP)
+        self.coordinator = coordinator
 
     def run(self, config: PipelineConfig) -> Dict[str, Any]:
-        """
-        Run the execution phase.
-        """
-        processed = self.frontend_ctx.processed_split
+        """Run the execution phase."""
         
         # Step 5: Model Dynamics (Training/Warmup)
-        train_logs = self.stack.model.train(processed.train_X, processed.train_y) or {}
+        # Coordinator provides raw training data
+        train_X = self.coordinator.get_train_inputs()
+        train_logs = self.stack.model.train(train_X, self.frontend_ctx.processed_split.train_y) or {}
 
         print("\n=== Step 6: Extract Features ===")
-        # Always extract val/test features to ensure correct target alignment (Step 6.5)
-        # and to simplify logs, even if readout fitting uses Closed-Loop only.
-        train_Z, val_Z, test_Z = self._extract_states(self.stack.model, skip_val_test=False)
+        # Delegate extraction (Model does work, Coordinator provides input)
+        train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)
         
-        if train_Z is not None:
-             print_feature_stats(train_Z, "6:Z:train")
-        if val_Z is not None:
-             print_feature_stats(val_Z, "6:Z:val")
-        if test_Z is not None:
-             print_feature_stats(test_Z, "6:Z:test")
+        if train_Z is not None: print_feature_stats(train_Z, "6:Z:train")
+        if val_Z is not None: print_feature_stats(val_Z, "6:Z:val")
+        if test_Z is not None: print_feature_stats(test_Z, "6:Z:test")
 
         if train_Z is None:
              raise ValueError("train_Z is None. Execution aborted.")
-             
-        # Step 6.5: Target Alignment (Auto-Align y to Z)
+
+        # Step 6.5: Target Alignment (Delegate to Coordinator)
         print("\n=== Step 6.5: Target Alignment (Auto-Align) ===")
-        
-        train_y = self._auto_align_target(train_Z, processed.train_y, "train")
-        val_y = self._auto_align_target(val_Z, processed.val_y, "val")
-        test_y = self._auto_align_target(test_Z, processed.test_y, "test")
+        train_y = self.coordinator.align_targets(train_Z, "train")
+        val_y = self.coordinator.align_targets(val_Z, "val")
+        test_y = self.coordinator.align_targets(test_Z, "test")
 
         # Step 7: Fit Readout (Strategy Pattern)
         readout_name = type(self.stack.readout).__name__ if self.stack.readout else "None"
         print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
         
-        strategy = self._select_strategy()
+        strategy = ReadoutStrategyFactory.create_strategy(
+            self.stack.readout, 
+            self.dataset_meta, 
+            self.evaluator, 
+            self.stack.metric
+        )
 
         fit_result = strategy.fit_and_evaluate(
             self.stack.model, self.stack.readout,
@@ -81,100 +81,38 @@ class PipelineExecutor:
             "train_logs": train_logs,
         }
 
-    @staticmethod
-    def _get_model_window_size(model: Any) -> int:
-        """Helper to find adapter window size from model structure."""
-        # Case 1: DistillationModel -> student -> adapter
-        if hasattr(model, 'student') and hasattr(model.student, 'adapter'):
-             return getattr(model.student.adapter, 'window_size', 0) or 0
-        # Case 2: Model with direct adapter (e.g. FNNModel)
-        if hasattr(model, 'adapter'):
-             return getattr(model.adapter, 'window_size', 0) or 0
-        return 0
-
-    def _extract_states(self, model: Any, skip_val_test: bool = False) -> Tuple[Optional[Union[jnp.ndarray, np.ndarray]], ...]:
+    def _extract_all_features(self, model: Any) -> Tuple[Optional[Union[jnp.ndarray, np.ndarray]], ...]:
         """
-        Extract features (Z) from model using batched computation.
-        Applies Halo Padding (Context Overlap) for time series validation/test to preserve length.
+        Orchestrate feature extraction.
+        Coordinator supplies properly padded data.
+        Model performs computation.
         """
-        processed = self.frontend_ctx.processed_split
+        # Ask Model for its requirements
+        window_size = getattr(model, 'input_window_size', 0)
         batch_size = self.dataset_meta.training.batch_size
         
-        # Determine Window Size for Haloing
-        window_size = 0
-        if not self.dataset_meta.classification:
-             window_size = self._get_model_window_size(self.stack.model) # Access model from stack or arg (arg is stack.model)
-        
-        overlap = window_size - 1 if window_size > 1 else 0
-        if overlap > 0:
-            print(f"    [Executor] Applying Halo Padding (Overlap={overlap}) for Time Series Continuity...")
+        if window_size > 1:
+            print(f"    [Executor] Requesting Halo Padding (Window={window_size}) from Coordinator...")
 
-        # Train (Standard: No padding)
-        model_train = partial(model, split_name="train")
-        train_Z = batched_compute(model_train, processed.train_X, batch_size, desc="[Extracting] train")
-        
-        val_Z = None
-        test_Z = None
+        # 1. Train
+        train_in = self.coordinator.get_train_inputs()
+        train_Z = self._compute_split(model, train_in, "train", batch_size)
 
-        if not skip_val_test:
-            if processed.val_X is not None:
-                val_in = processed.val_X
-                # Apply Halo (Context)
-                if overlap > 0 and processed.train_X is not None:
-                    # Check dims to ensure safe concat (assuming (Time, Feats))
-                    if val_in.ndim == processed.train_X.ndim:
-                         context = processed.train_X[-overlap:]
-                         val_in = jnp.concatenate([context, val_in], axis=0)
+        # 2. Validation
+        val_in = self.coordinator.get_val_inputs(window_size)
+        val_Z = self._compute_split(model, val_in, "val", batch_size)
 
-                model_val = partial(model, split_name="val")
-                val_Z = batched_compute(model_val, val_in, batch_size, desc="[Extracting] val")
-            
-            # Test
-            if processed.test_X is not None:
-                test_in = processed.test_X
-                # Apply Halo (Context)
-                if overlap > 0:
-                    context_source = processed.val_X if processed.val_X is not None else processed.train_X
-                    if context_source is not None and test_in.ndim == context_source.ndim:
-                        context = context_source[-overlap:]
-                        test_in = jnp.concatenate([context, test_in], axis=0)
-
-                model_test = partial(model, split_name="test")
-                test_Z = batched_compute(model_test, test_in, batch_size, desc="[Extracting] test")
+        # 3. Test
+        test_in = self.coordinator.get_test_inputs(window_size)
+        test_Z = self._compute_split(model, test_in, "test", batch_size)
             
         return train_Z, val_Z, test_Z
 
-    def _select_strategy(self):
-        if self.stack.readout is None:
-            return EndToEndStrategy(self.evaluator, self.stack.metric)
-        elif self.dataset_meta.classification:
-            return ClassificationStrategy(self.evaluator, self.stack.metric)
-        else:
-            return ClosedLoopRegressionStrategy(self.evaluator, self.stack.metric)
-
     @staticmethod
-    def _auto_align_target(Z: Optional[Union[jnp.ndarray, np.ndarray]], y: Optional[Union[jnp.ndarray, np.ndarray]], label: str) -> Optional[Union[jnp.ndarray, np.ndarray]]:
-        """
-        Automatically trim target (y) to match feature (Z) length.
-        Assumes causal relationship (e.g. windowing removes first W-1 steps), so trims from start.
-        """
-        if Z is None or y is None:
-            return y if y is not None else None
+    def _compute_split(model: Any, inputs: Optional[Union[jnp.ndarray, np.ndarray]], split_name: str, batch_size: int):
+        """Helper to run batched computation if input exists."""
+        if inputs is None:
+            return None
         
-        len_z = Z.shape[0]
-        len_y = y.shape[0]
-        
-        if len_y > len_z:
-            diff = len_y - len_z
-            y_aligned = y[diff:]
-            print_feature_stats(y_aligned, f"6.5:Aligned:y:{label} (Trimmed {diff})")
-            return y_aligned
-        elif len_y < len_z:
-            print(f"    [Executor] WARNING: Z ({len_z}) > y ({len_y}) for {label}. No alignment performed.")
-            print_feature_stats(y, f"6.5:Aligned:y:{label} (WARNING: Mismatch)")
-            return y
-        else:
-            # Lengths match
-            print_feature_stats(y, f"6.5:Aligned:y:{label}")
-            return y
-
+        fn = partial(model, split_name=split_name)
+        return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")

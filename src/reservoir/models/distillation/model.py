@@ -30,6 +30,10 @@ class DistillationModel(ClosedLoopGenerativeModel):
     State representation: Sliding window of input features.
     """
 
+    @property
+    def input_window_size(self) -> int:
+        return self._window_size
+
     def __init__(
         self,
         teacher: ClassicalReservoir,

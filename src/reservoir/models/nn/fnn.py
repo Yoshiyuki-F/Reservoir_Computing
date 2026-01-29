@@ -27,6 +27,10 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     Also implements ClosedLoopGenerativeModel for autoregressive generation.
     """
 
+    @property
+    def input_window_size(self) -> int:
+        return self.window_size or 0
+
     def __init__(self, model_config: FNNConfig, training_config: TrainingConfig, input_dim: int, output_dim: int, classification: bool = False):
         if not isinstance(model_config, FNNConfig):
             raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")

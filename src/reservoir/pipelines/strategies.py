@@ -306,3 +306,20 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "closed_loop_truth": closed_loop_truth,
             "chaos_results": chaos_results,
         }
+
+class ReadoutStrategyFactory:
+    """Factory to create appropriate ReadoutStrategy based on config."""
+    
+    @staticmethod
+    def create_strategy(
+        readout: Optional[Any],
+        dataset_meta: DatasetMetadata,
+        evaluator: Evaluator,
+        metric_name: str
+    ) -> ReadoutStrategy:
+        if readout is None:
+            return EndToEndStrategy(evaluator, metric_name)
+        elif dataset_meta.classification:
+            return ClassificationStrategy(evaluator, metric_name)
+        else:
+            return ClosedLoopRegressionStrategy(evaluator, metric_name)
