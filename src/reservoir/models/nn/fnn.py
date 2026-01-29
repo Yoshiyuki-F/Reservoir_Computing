@@ -62,8 +62,12 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             return super().train(inputs, targets, **kwargs)
 
         # Log Step 4 (Adapter) only during training
-        x_log_label = f"{log_prefix}:TimeDelayEmbedding(k={self.window_size}):X:train" if self.window_size else None
-        y_log_label = f"{log_prefix}:TimeDelayEmbedding(k={self.window_size}):y:train" if self.window_size else None
+        adapter_name = self.adapter.__class__.__name__
+        if self.window_size:
+             adapter_name = f"TimeDelayEmbedding(k={self.window_size})"
+
+        x_log_label = f"{log_prefix}:{adapter_name}:X:train"
+        y_log_label = f"{log_prefix}:{adapter_name}:y:train"
         adapted_inputs = self.adapter(inputs, log_label=x_log_label)
         aligned_targets = self.adapter.align_targets(targets, log_label=y_log_label) if targets is not None else None
 

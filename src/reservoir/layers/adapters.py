@@ -31,8 +31,11 @@ class Flatten:
         return result
 
     @staticmethod
-    def align_targets(targets):
+    def align_targets(targets, log_label: Optional[str] = None):
         """No alignment needed for Flatten adapter."""
+        if log_label is not None:
+            from reservoir.utils.reporting import print_feature_stats
+            print_feature_stats(targets, log_label)
         return targets
 
     def __call__(self, X, log_label: Optional[str] = None):

@@ -67,6 +67,15 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Force JIT compilation for shape inference
         dummy_out = self.teacher(dummy_in)
 
+        # --- LOGGING STEP 5A (Raw Dynamics) ---
+        # Capture raw states for the first batch to visualize reservoir dynamics
+        # Use return_sequences=True to get (Batch, Time, Features)
+        first_batch_size = min(batch_size, n_samples)
+        first_batch_in = jnp.array(inputs_np[:first_batch_size])
+        raw_states = self.teacher(first_batch_in, return_sequences=True, split_name="teacher_raw")
+        print_feature_stats(raw_states, "5A:teacher_raw (First Batch)")
+        # --------------------------------------
+
         output_shape = (n_samples,) + dummy_out.shape[1:]
         # print(f"    [Teacher] Generating targets (Total: {n_samples}, Batch: {batch_size})...")
         targets = np.empty(output_shape, dtype=np.float32)
@@ -102,7 +111,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Use batched computation for teacher targets (safe for large datasets)
         teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
-        print_feature_stats(teacher_targets, "5A:teacher")
+        print_feature_stats(teacher_targets, "6A:teacher")
 
         # --- Phase B: Student Model Training ---
         print("\n    [Distillation] ==========================================")
