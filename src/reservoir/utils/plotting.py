@@ -247,6 +247,20 @@ def plot_timeseries_comparison(
     t_end = t_start + (end_step - start_step)
     t_axis = np.arange(t_start, t_end)
 
+    # --- DEBUG: Inspect Plot Data ---
+    print(f"\n[DEBUG Plot] Time Axis: len={len(t_axis)}, start={t_start}, end={t_end}")
+    print(f"[DEBUG Plot] Actual Slice: shape={target_slice.shape}")
+    if target_slice.size > 0:
+        flat_t = target_slice.flatten()
+        print(f"  Actual Stats: min={np.nanmin(flat_t):.4f}, max={np.nanmax(flat_t):.4f}, mean={np.nanmean(flat_t):.4f}")
+        print(f"  Actual First 5: {flat_t[:5]}")
+    print(f"[DEBUG Plot] Predicted Slice: shape={pred_slice.shape}")
+    if pred_slice.size > 0:
+        flat_p = pred_slice.flatten()
+        print(f"  Pred Stats: min={np.nanmin(flat_p):.4f}, max={np.nanmax(flat_p):.4f}, mean={np.nanmean(flat_p):.4f}")
+        print(f"  Pred First 5: {flat_p[:5]}")
+    # --------------------------------
+
     fig, axes = plt.subplots(plot_feats, 1, figsize=(12, 3 * plot_feats), sharex=True)
     if plot_feats == 1:
         axes = [axes]

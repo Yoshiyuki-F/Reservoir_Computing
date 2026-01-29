@@ -154,6 +154,11 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
+TIME_PREPROCESS = PreprocessingConfig(
+    method=Preprocessing.STANDARD_SCALER,
+    poly_degree=1,
+)
+
 
 TIME_PROJECTION = ProjectionConfig(
     n_units=100,
@@ -178,10 +183,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.STANDARD_SCALER,
-        poly_degree=1,
-    ),
+    preprocess=TIME_PREPROCESS,
     projection=TIME_PROJECTION,
     model=TIME_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
@@ -191,7 +193,7 @@ TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=DEFAULT_PREPROCESS,
+    preprocess=TIME_PREPROCESS,
     projection=TIME_PROJECTION,
     model=DistillationConfig(
         teacher=TIME_RESERVOIR_DYNAMICS,
@@ -208,10 +210,7 @@ TIME_PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.STANDARD_SCALER,
-        poly_degree=1,
-    ),
+    preprocess=TIME_PREPROCESS,
     projection=TIME_PROJECTION,
     model=PassthroughConfig(
         aggregation=AggregationMode.SEQUENCE,
@@ -225,10 +224,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
     name="windowed_fnn",
     model_type=Model.FNN,  # Same model type, different config
     description="FNN with sliding window embedding for time series regression",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.STANDARD_SCALER,
-        poly_degree=1,
-    ),
+    preprocess=TIME_PREPROCESS,
     projection=None,  # No projection needed
     model=FNNConfig(
         hidden_layers=(100, 100),
