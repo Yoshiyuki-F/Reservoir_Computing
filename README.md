@@ -106,4 +106,4 @@ uv run poe cli-gpu -- --model classical_reservoir --dataset sine_wave
 
 - Jaeger, H. (2001). The "echo state" approach to analysing and training recurrent neural networks.
 - [JAX Documentation](https://jax.readthedocs.io/)
-- [PennyLane Documentation](https://pennylane.ai/) (for Quantum Reservoir Computing)
+- TensorCircuit (https://github.com/tensorcircuit/tensorcircuit-ng) (for Quantum Reservoir Computing)
