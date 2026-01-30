@@ -249,7 +249,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         readout.fit(tf_reshaped, ty_reshaped)
 
         # Test Generation
-        print("\n=== Step 8: Final Predictions (Inverse Transformed):===")
+        print("\n=== Step 8: Final Predictions:===")
         closed_loop_pred = None
         closed_loop_truth = None
         chaos_results = None
@@ -277,7 +277,18 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              closed_loop_truth = test_y
              print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
 
-             global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
+             # Calculate global_start based on dimensions
+             def get_time_steps(arr):
+                 if arr is None: return 0
+                 # If 3D (Batch, Time, Feat), return Time (shape[1])
+                 if arr.ndim == 3: return arr.shape[1]
+                 # If 2D (Time, Feat) or (Batch, Feat) - assuming Time for Series
+                 # For Reservoir time-series Time is usually axis 0 in 2D
+                 return arr.shape[0]
+
+             train_steps = get_time_steps(processed.train_X)
+             val_steps_count = get_time_steps(processed.val_X)
+             global_start = train_steps + val_steps_count
              global_end = global_start + generation_steps
              
              if closed_loop_truth is not None:

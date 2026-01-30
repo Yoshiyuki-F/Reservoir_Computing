@@ -34,7 +34,7 @@ class ResultReporter:
         aligned_test_y = fit_result.get("aligned_test_y", test_y)
 
         if fit_result["closed_loop_pred"] is not None:
-            print("\n    [Runner] Overwriting Test Output with Closed-Loop result.")
+
             test_pred = fit_result["closed_loop_pred"]
             test_y_final = fit_result["closed_loop_truth"]
             results["is_closed_loop"] = True
@@ -42,21 +42,10 @@ class ResultReporter:
             test_pred = fit_result["test_pred"]
             test_y_final = aligned_test_y
 
-        # Debug Logging for User
-        print("\n[DEBUG] Inspecting Test Predictions (First 20 steps):")
-        if test_pred is not None:
-            tp_flat = test_pred.flatten()[:20]
-            print(f"  Pred: {tp_flat}")
-            print(f"  Pred Stats: min={test_pred.min():.4f}, max={test_pred.max():.4f}, mean={test_pred.mean():.4f}, std={test_pred.std():.4f}")
-        if test_y_final is not None:
-            ty_flat = test_y_final.flatten()[:20]
-            print(f"  True: {ty_flat}")
-
         test_score = 0.0
         if test_pred is not None and test_y_final is not None:
             test_score = compute_score(test_pred, test_y_final, metric_name)
-            if results.get("is_closed_loop"):
-                print(f"    [Runner] Closed-Loop {metric_name.upper()}: {test_score:.5f}")
+
 
         results["train"] = {
             "search_history": fit_result["search_history"],

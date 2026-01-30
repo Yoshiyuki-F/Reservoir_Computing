@@ -74,21 +74,7 @@ def main() -> None:
     print("=" * 21 + "\n")
 
     # Run Pipeline
-    results = run_pipeline(pipeline_config, dataset, training_config)
-
-    # Output Results
-    print("[Unified] Results:")
-    if isinstance(results, dict):
-        for split, metrics in results.items():
-            if split in ("outputs", "training_logs", "readout"):
-                continue
-            if isinstance(metrics, dict):
-                pretty = ", ".join(
-                    f"{k}={v:.4f}" if isinstance(v, (int, float)) else f"{k}={v}" for k, v in metrics.items()
-                )
-                print(f"  {split}: {pretty}")
-            else:
-                print(f"  {split}: {metrics}")
+    run_pipeline(pipeline_config, dataset, training_config)
 
     sys.exit(0)
 
