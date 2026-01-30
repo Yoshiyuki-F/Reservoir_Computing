@@ -1,6 +1,6 @@
 # Reservoir Computing with JAX
 
-A JAX-based Reservoir Computing implementation designed for high-performance numerical computation and flexibility. This project supports various reservoir architectures, including classical Reservoirs and Quantum Reservoirs (Gate-based and Analog), and is capable of handling both Regression and Classification tasks.
+A JAX-based Reservoir Computing implementation designed for high-performance numerical computation and flexibility. This project supports various reservoir architectures, including classical Reservoirs and Quantum Reservoirs (Gate-based), and is capable of handling both Regression and Classification tasks.
 
 ## Features
 
