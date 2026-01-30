@@ -5,7 +5,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
-from reservoir.utils.reporting import print_ridge_search_results, compute_score
+from reservoir.utils.reporting import print_ridge_search_results, compute_score, print_feature_stats
 from reservoir.pipelines.evaluation import Evaluator
 
 class ReadoutStrategy(ABC):
@@ -94,6 +94,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 # For E2E, readout is None or implicit, pass explicit None if needed, but signature says readout
                 # EndToEnd typically has readout=None.
                 closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout)
+                print_feature_stats(closed_loop_pred, "8:fnn_closed_loop_prediction")
 
                 global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
                 global_end = global_start + generation_steps
@@ -278,7 +279,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              closed_loop_pred = model.generate_closed_loop(
                  full_seed_data, steps=generation_steps, readout=readout, projection_fn=proj_fn
              )
+             print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
              closed_loop_truth = test_y
+             print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
 
              global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
              global_end = global_start + generation_steps
