@@ -133,7 +133,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=1,
+    feedback_scale=1.1,
     measurement_basis="Z+ZZ",
     encoding_strategy="Rx",
     noise_type="clean",
@@ -148,7 +148,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
 
 # Time-series Quantum Reservoir (SEQUENCE aggregation)
 TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
-    n_layers=3,
+    n_layers=3, #4 with feedback 1.7
     seed=41,
     aggregation=AggregationMode.SEQUENCE,
     feedback_scale=1.2,
