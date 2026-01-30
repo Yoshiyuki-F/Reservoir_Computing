@@ -1383,7 +1383,7 @@ requires-dist = [
     { name = "poethepoet" },
     { name = "pydantic" },
     { name = "pytest" },
-    { name = "tensorcircuit-ng", extras = ["jax"] },
+    { name = "tensorcircuit-ng", extras = ["jax"], git = "https://github.com/tensorcircuit/tensorcircuit-ng.git" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
@@ -1511,16 +1511,12 @@ wheels = [
 [[package]]
 name = "tensorcircuit-ng"
 version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/tensorcircuit/tensorcircuit-ng.git#4f73ec259f21d5d8280a556660caffc5ec46eec5" }
 dependencies = [
     { name = "networkx" },
     { name = "numpy" },
     { name = "scipy" },
     { name = "tensornetwork-ng" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c8/fc/d5f5bbb8ceb9b9e9597d51287bab1231b249c218306dbc2a70281e9076cf/tensorcircuit_ng-1.4.0.tar.gz", hash = "sha256:8d9c5ecf10e3f432665dfba3ff08fc446ef361be952bb6e93f3157851aff584e", size = 344726, upload-time = "2025-09-11T09:33:00.399Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/b7/dc8f06b9b7aa78c33a45cba0d7f2ff9499ab17fe8a1a66a7e872bc790406/tensorcircuit_ng-1.4.0-py3-none-any.whl", hash = "sha256:29b1ed71e37ac9425b66f6eda67fe1491d927840e2ada4dbb9cd937c05512f79", size = 352320, upload-time = "2025-09-11T09:32:58.186Z" },
 ]
 
 [package.optional-dependencies]

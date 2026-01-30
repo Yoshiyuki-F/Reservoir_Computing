@@ -31,6 +31,8 @@ def _ensure_tensorcircuit_initialized(precision: str = "complex64") -> None:
     tc.set_backend("jax")
     tc.set_dtype(precision)
 
+    #TODO check if it was actually fixed from tensorcircuit side
+
     # --- Numpy 2.x Compatibility Patch ---
     # TensorCircuit usage of 'newshape' argument is incompatible with some Numpy versions/wrappers.
     # We patch it globally ONLY when this class is instantiated.

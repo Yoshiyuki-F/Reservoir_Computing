@@ -61,3 +61,6 @@ include = ["src"]
 [[tool.uv.index]]
 name = "jax_cuda_releases"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+
+[tool.uv.sources]
+tensorcircuit-ng = { git = "https://github.com/tensorcircuit/tensorcircuit-ng.git" }
