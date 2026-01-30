@@ -161,7 +161,7 @@ class ClassificationStrategy(ReadoutStrategy):
                 "search_history": search_history,
                 "best_lambda": best_lambda,
                 "weight_norms": weight_norms
-            }, is_classification=True)
+            }, metric_name="Accuracy")
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
              readout.fit(tf_reshaped, ty_reshaped)
@@ -190,7 +190,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         
         lambda_candidates = getattr(readout, 'lambda_candidates', None) or \
             ([readout.ridge_lambda] if hasattr(readout, 'ridge_lambda') else [1e-3])
-        print(f"    [Runner] Starting Closed-Loop Hyperparameter Search over {len(lambda_candidates)} candidates...")
+        print(f"    [Runner] Starting OpenLoop Parameter Search (Open-Loop MSE) over {len(lambda_candidates)} candidates...")
 
         proj_fn = None
         # Check pipeline_config for projection, not dataset_meta
@@ -200,7 +200,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         ty_reshaped = train_y
         
-        # Prepare Validation Seeds
+        # Open-Loop Validation Prep
+        vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
+        vy_reshaped = val_y
+
+        # Prepare Validation Seeds (Only for final check if needed, but not used in search now)
         val_steps = processed.val_X.shape[0] if processed.val_X is not None else 0
         seed_len = min(processed.train_X.shape[0], val_steps) if val_steps > 0 else processed.train_X.shape[0]
         seed_data = processed.train_X[-seed_len:]
@@ -220,34 +224,24 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             if hasattr(readout, "coef_") and readout.coef_ is not None:
                 weight_norms[lam_val] = float(jnp.linalg.norm(readout.coef_))
             
-            # Validation Generation
-            # Note: seed_data is jnp.array already from processed or casting
-            val_gen = model.generate_closed_loop(
-                jnp.asarray(seed_data, dtype=jnp.float32), steps=val_steps, readout=readout, projection_fn=proj_fn, verbose=False
-            )
+            # Open-Loop Validation
+            val_pred = readout.predict(vf_reshaped)
             
-            # Metrics
-            if val_y is not None:
-                current_metrics = self.evaluator.compute_chaos_metrics(
-                    jnp.array(val_y), jnp.array(val_gen), frontend_ctx.scaler, dataset_meta.preset.config, verbose=False
-                )
-            else:
-                current_metrics = None
-            
-            # Score (minimize -VPT)
-            score = -current_metrics.get("vpt_lt", 0.0) if current_metrics else 0.0
+            # Score (minimize MSE)
+            # compute_score returns MSE for regression
+            score = compute_score(val_pred, vy_reshaped, "mse")
             search_history[lam_val] = float(score)
 
             if score <= best_score:
                 best_score = score
                 best_lambda = lam_val
 
-        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val VPT: {-best_score:.5f} LT)")
+        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val MSE: {best_score:.5f})")
         print_ridge_search_results({
             "search_history": search_history,
             "best_lambda": best_lambda,
             "weight_norms": weight_norms
-        }, is_classification=False)
+        }, metric_name="MSE")
 
         print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
         if hasattr(readout, "ridge_lambda"):

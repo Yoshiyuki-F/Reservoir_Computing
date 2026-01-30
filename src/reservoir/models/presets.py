@@ -121,7 +121,7 @@ FNN_PRESET = PipelineConfig(
 
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = ProjectionConfig(
-    n_units=5,  # This becomes n_qubits for quantum reservoir
+    n_units=16,  # This becomes n_qubits for quantum reservoir
     input_scale=1.0471975511965978,  # π/3
     input_connectivity=1.0,
     bias_scale=0.0,

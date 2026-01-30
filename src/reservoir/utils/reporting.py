@@ -158,7 +158,7 @@ def print_feature_stats(features: Any, stage: str) -> None:
             _print_feature_stats_impl(np.asarray(f), stage, backend=original_backend)
         jax.debug.callback(_cb, features)
 
-def print_ridge_search_results(train_res: Dict[str, Any], is_classification: bool) -> None:
+def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MSE") -> None:
     if not isinstance(train_res, dict):
         return
     history = train_res.get("search_history")
@@ -167,8 +167,7 @@ def print_ridge_search_results(train_res: Dict[str, Any], is_classification: boo
     best_lam = train_res.get("best_lambda")
     weight_norms = train_res.get("weight_norms", {}) or {}
     
-    # Determine Metric Label based on Task Type
-    metric_label = "MSE" if is_classification else "VPT (Lyapunov Time)"
+    metric_label = metric_name
 
     # Decide best logic for marking
     # Both minimize score internally (MSE is min, -VPT is min)
@@ -186,8 +185,12 @@ def print_ridge_search_results(train_res: Dict[str, Any], is_classification: boo
         # Format score for display
         score_disp = score
         label = "Val Score"
-        if not is_classification:
-            score_disp = -score  # flip back to positive VPT
+        score_disp = score
+        label = f"Val {metric_name}"
+        
+        # Legacy VPT handling: if metric is exactly "VPT", we assume stored as negative
+        if metric_name == "VPT":
+            score_disp = -score
             label = "Val VPT"
             
         norm = weight_norms.get(lam)
