@@ -76,11 +76,11 @@ class PipelineExecutor:
             config
         )
         
-        # Step 7.5: Capture Quantum Trace (for Visualization)
+        # Step 8.5: Capture Quantum Trace (for Visualization)
         quantum_trace = None
         # Check if it's a QuantumReservoir (duck typing or class check)
         if hasattr(self.stack.model, "n_qubits") and hasattr(self.stack.model, "measurement_basis"):
-             print("\n=== Step 7.5: Capturing Quantum Dynamics Trace ===")
+             print("\n=== Step 8.5: Capturing Quantum Dynamics Trace ===")
              try:
                  # Take first test sample or train sample
                  test_data = self.frontend_ctx.processed_split.test_X
