@@ -285,7 +285,7 @@ class QuantumReservoirConfig:
     n_layers: int                    # Number of variational layers
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
-    input_scaling: float             # Scaling factor for input encoding (typically 2π)
+    aggregation: AggregationMode     # How to aggregate time steps
     feedback_scale: float            # Scaling factor for state feedback (e.g. 0.1)
     measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
     encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
@@ -301,8 +301,6 @@ class QuantumReservoirConfig:
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
-        if float(self.input_scaling) <= 0:
-            raise ValueError(f"{prefix}input_scaling must be positive.")
         if float(self.feedback_scale) < 0:
             raise ValueError(f"{prefix}feedback_scale must be non-negative.")
         if not isinstance(self.aggregation, AggregationMode):
@@ -324,7 +322,6 @@ class QuantumReservoirConfig:
         return {
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
-            "input_scaling": float(self.input_scaling),
             "feedback_scale": float(self.feedback_scale),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),

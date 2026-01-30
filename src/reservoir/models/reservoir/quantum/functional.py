@@ -20,7 +20,7 @@ def _make_circuit_logic(
     inputs: jnp.ndarray,
     params: jnp.ndarray,
     n_qubits: int,
-    input_scaling: float,
+
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
@@ -48,10 +48,10 @@ def _make_circuit_logic(
 
     # --- 1. Encoding (Input -> State) ---
     c_enc = tc.Circuit(n_qubits)
-    scaled_inputs = inputs * input_scaling
+    # scaled_inputs = inputs * input_scaling # Removed: Projection layer handles scaling
     
     for i in range(n_qubits):
-        apply_encoding_gate(c_enc, i, scaled_inputs[i])
+        apply_encoding_gate(c_enc, i, inputs[i])
             
     # Initial State
     state = c_enc.state()
@@ -123,8 +123,9 @@ def _make_circuit_logic(
         if use_reuploading:
             # Re-apply encoding gates with scaled inputs
             # Note: inputs are captured from closure
+            # Note: inputs are captured from closure
             for idx in range(n_qubits):
-                apply_encoding_gate(c, idx, scaled_inputs[idx])
+                apply_encoding_gate(c, idx, inputs[idx])
                 apply_noise_in_layer([idx])
 
         # Apply Entanglement (CNOT Ladder)
@@ -190,7 +191,7 @@ def _step_logic(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    input_scaling: float,
+
     feedback_scale: float,
     feedback_slice: int,
     padding_size: int,
@@ -226,7 +227,6 @@ def _step_logic(
         combined_input, 
         reservoir_params, 
         n_qubits, 
-        input_scaling,
         encoding_strategy,
         noise_type,
         noise_prob,
@@ -265,7 +265,7 @@ def _step_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    input_scaling: float,
+
     feedback_scale: float,
     feedback_slice: int,
     padding_size: int,
@@ -280,7 +280,7 @@ def _step_jit(
     """
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
-        n_qubits, input_scaling, feedback_scale,
+        n_qubits, feedback_scale,
         feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
     )
 
@@ -294,7 +294,7 @@ def _forward_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    input_scaling: float,
+
     feedback_scale: float,
     feedback_slice: int,
     padding_size: int,
@@ -315,7 +315,6 @@ def _forward_jit(
         reservoir_params=reservoir_params,
         measurement_matrix=measurement_matrix,
         n_qubits=n_qubits,
-        input_scaling=input_scaling,
         feedback_scale=feedback_scale,
         feedback_slice=feedback_slice,
         padding_size=padding_size,

@@ -49,7 +49,6 @@ class ReservoirFactory:
                 n_layers=model.n_layers,
                 seed=model.seed,
                 aggregation_mode=model.aggregation,
-                input_scaling=model.input_scaling,
                 feedback_scale=model.feedback_scale,
                 measurement_basis=model.measurement_basis,
                 encoding_strategy=model.encoding_strategy,

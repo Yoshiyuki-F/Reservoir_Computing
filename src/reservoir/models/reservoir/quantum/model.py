@@ -34,7 +34,6 @@ class QuantumReservoir(Reservoir):
         n_layers: int,
         seed: int,
         aggregation_mode: AggregationMode,
-        input_scaling: float,
         feedback_scale: float,
         measurement_basis: Literal["Z", "ZZ", "Z+ZZ"],
         encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"],
@@ -89,7 +88,6 @@ class QuantumReservoir(Reservoir):
         
         self.n_qubits = n_qubits
         self.n_layers = n_layers
-        self.input_scaling = float(input_scaling)
         self.feedback_scale = float(feedback_scale)
         self.measurement_basis = measurement_basis
         self.n_correlations = n_correlations
@@ -201,7 +199,6 @@ class QuantumReservoir(Reservoir):
             reservoir_params=self.reservoir_params,
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
-            input_scaling=self.input_scaling,
             feedback_scale=self.feedback_scale,
             feedback_slice=self._feedback_slice,
             padding_size=self._padding_size,
@@ -261,7 +258,6 @@ class QuantumReservoir(Reservoir):
             self.reservoir_params,
             self._measurement_matrix,
             self.n_qubits,
-            self.input_scaling,
             self.feedback_scale,
             self._feedback_slice,
             self._padding_size,
@@ -341,7 +337,6 @@ class QuantumReservoir(Reservoir):
             "n_qubits": self.n_qubits,
             "n_layers": self.n_layers,
             "seed": self.seed,
-            "input_scaling": self.input_scaling,
             "feedback_scale": self.feedback_scale,
             "aggregation": self.aggregator.mode.value,
             "measurement_basis": self.measurement_basis,
@@ -363,7 +358,6 @@ class QuantumReservoir(Reservoir):
                 n_qubits=int(data["n_qubits"]),
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                input_scaling=float(data.get("input_scaling", 2 * jnp.pi)),
                 feedback_scale=float(data.get("feedback_scale", 0.1)),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
