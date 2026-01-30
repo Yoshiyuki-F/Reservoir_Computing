@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/reservoir/quantum/functional.py
 Pure functional implementation of Quantum Reservoir logic.
 Optimized for JAX JIT compilation.
 """
@@ -265,7 +265,6 @@ def _step_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-
     feedback_scale: float,
     feedback_slice: int,
     padding_size: int,

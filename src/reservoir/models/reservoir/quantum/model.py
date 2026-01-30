@@ -1,4 +1,4 @@
-"""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/reservoir/quantum/model.py
 Quantum Reservoir Model.
 Wrapper class that manages state and configuration, delegating computation to functional module.
 """
@@ -358,17 +358,17 @@ class QuantumReservoir(Reservoir):
                 n_qubits=int(data["n_qubits"]),
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                feedback_scale=float(data.get("feedback_scale", 0.1)),
+                feedback_scale=float(data.get("feedback_scale")),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
-                encoding_strategy=data.get("encoding_strategy", "Rx"),
+                encoding_strategy=data.get("encoding_strategy"),
                 noise_type=data.get("noise_type", "clean"),
-                noise_prob=float(data.get("noise_prob", 0.0)),
-                readout_error=float(data.get("readout_error", 0.0)),
-                n_trajectories=int(data.get("n_trajectories", 0)),
-                use_remat=bool(data.get("use_remat", False)),
-                use_reuploading=bool(data.get("use_reuploading", False)),
-                precision=data.get("precision", "complex64"),
+                noise_prob=float(data.get("noise_prob",)),
+                readout_error=float(data.get("readout_error")),
+                n_trajectories=int(data.get("n_trajectories")),
+                use_remat=bool(data.get("use_remat")),
+                use_reuploading=bool(data.get("use_reuploading")),
+                precision=data.get("precision"),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc

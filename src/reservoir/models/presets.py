@@ -121,8 +121,8 @@ FNN_PRESET = PipelineConfig(
 
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = ProjectionConfig(
-    n_units=5,  # This becomes n_qubits for quantum reservoir
-    input_scale=1.0471975511965978,  # π/3
+    n_units=16,  # This becomes n_qubits for quantum reservoir
+    input_scale=1.4,  # π/3
     input_connectivity=1.0,
     bias_scale=0.0,
     seed=1,
@@ -133,7 +133,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=0.1,
+    feedback_scale=1,
     measurement_basis="Z+ZZ",
     encoding_strategy="Rx",
     noise_type="clean",
