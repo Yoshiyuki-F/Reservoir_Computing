@@ -184,8 +184,6 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
         
         # Format score for display
         score_disp = score
-        label = "Val Score"
-        score_disp = score
         label = f"Val {metric_name}"
         
         # Legacy VPT handling: if metric is exactly "VPT", we assume stored as negative
@@ -194,9 +192,9 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
             label = "Val VPT"
             
         norm = weight_norms.get(lam)
-        norm_str = f"(Norm: {norm:.2e})" if norm is not None else "(Norm: n/a)"
+        norm_str = f"(Norm: {norm:.5e})" if norm is not None else "(Norm: n/a)"
         marker = " <= best" if (best_marker is not None and abs(float(lam) - float(best_marker)) < 1e-12) else ""
-        print(f"   λ = {float(lam):.2e} : {label} = {score_disp:.4f} {norm_str}{marker}")
+        print(f"   λ = {float(lam):.2e} : {label} = {score_disp:.10f} {norm_str}{marker}")
     print("=" * 40 + "\n")
 
 

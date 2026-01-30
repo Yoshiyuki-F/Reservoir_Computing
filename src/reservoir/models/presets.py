@@ -122,7 +122,7 @@ FNN_PRESET = PipelineConfig(
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = ProjectionConfig(
     n_units=16,  # This becomes n_qubits for quantum reservoir
-    input_scale=1.4,  # π/3
+    input_scale=1.6,
     input_connectivity=1.0,
     bias_scale=0.0,
     seed=1,
@@ -133,7 +133,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=5,
+    feedback_scale=1,
     measurement_basis="Z+ZZ",
     encoding_strategy="Rx",
     noise_type="clean",
@@ -141,7 +141,25 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     readout_error=0.0,
     n_trajectories=0,
     use_remat=False,
-    use_reuploading=False,
+    use_reuploading=True,
+    precision="complex64",
+)
+
+
+# Time-series Quantum Reservoir (SEQUENCE aggregation)
+TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
+    n_layers=3,
+    seed=41,
+    aggregation=AggregationMode.SEQUENCE,
+    feedback_scale=1.2,
+    measurement_basis="Z+ZZ",
+    encoding_strategy="Rx",
+    noise_type="clean",
+    noise_prob=0.0,
+    readout_error=0.0,
+    n_trajectories=0,
+    use_remat=False,
+    use_reuploading=True,
     precision="complex64",
 )
 
@@ -239,22 +257,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
     readout=None,  # FNN is end-to-end
 )
 
-# Time-series Quantum Reservoir (SEQUENCE aggregation)
-TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
-    n_layers=3,
-    seed=41,
-    aggregation=AggregationMode.SEQUENCE,
-    feedback_scale=0.1,
-    measurement_basis="Z+ZZ",
-    encoding_strategy="Rx",
-    noise_type="clean",
-    noise_prob=0.0,
-    readout_error=0.0,
-    n_trajectories=0,
-    use_remat=False,
-    use_reuploading=False,
-    precision="complex64",
-)
+
 
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",

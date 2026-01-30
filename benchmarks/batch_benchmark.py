@@ -26,7 +26,6 @@ def run_benchmark():
         n_layers=3,
         seed=42,
         aggregation_mode=AggregationMode.MEAN,
-        input_scaling=1.0,
         feedback_scale=0.1,
         measurement_basis="Z+ZZ",
         encoding_strategy="Rx",
