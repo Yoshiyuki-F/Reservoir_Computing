@@ -242,7 +242,7 @@ def _step_logic(
     sliced = output[:feedback_slice]
     
     if padding_size > 0:
-        padding = jnp.zeros((padding_size,))
+        padding = jnp.zeros((padding_size,), dtype=jnp.float32)
         next_state_vec = jnp.concatenate([sliced, padding], axis=0)
     else:
         next_state_vec = sliced

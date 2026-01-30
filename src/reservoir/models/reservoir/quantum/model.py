@@ -4,7 +4,7 @@ Wrapper class that manages state and configuration, delegating computation to fu
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple, Literal, Union, Optional
+from typing import Dict, Any, Tuple, Literal, Union, Optional, List
 from functools import partial
 
 import jax
@@ -118,7 +118,7 @@ class QuantumReservoir(Reservoir):
             maxval=2 * jnp.pi,
             shape=(self.n_layers, self.n_qubits, 3)
         )
-        self.initial_state_vector = jnp.zeros(self.n_qubits)
+        self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float32)
 
     def _compute_measurement_matrix_vectorized(self) -> jnp.ndarray:
         """Vectorized Precomputation of Parity/Measurement Matrix."""
@@ -180,13 +180,17 @@ class QuantumReservoir(Reservoir):
         return arr, input_was_2d
 
     def initialize_state(self, batch_size: int = 1) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
-        state = jnp.zeros((batch_size, self.n_qubits))
+        state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float32)
         if self.n_trajectories > 0:
             # Monte Carlo Mode: Return (state, key) tuple
             # Update internal RNG state to ensure fresh noise per batch
             key, self._rng = jax.random.split(self._rng)
             return state, jax.random.split(key, batch_size)
         return state
+
+    def reset_state(self, batch_size: int) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Alias for initialize_state. Resets the reservoir to the initial ground state."""
+        return self.initialize_state(batch_size)
 
     @jaxtyped(typechecker=beartype)
     def step(self, state: Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], input_data: Float[Array, "batch features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], Float[Array, "batch output_dim"]]:
@@ -374,6 +378,19 @@ class QuantumReservoir(Reservoir):
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc
+
+    def get_observable_names(self) -> List[str]:
+        """Generate human-readable names for the measured observables."""
+        names = []
+        if self.measurement_basis in ("Z", "Z+ZZ"):
+            names.extend([f"Z{i}" for i in range(self.n_qubits)])
+        
+        if self.measurement_basis in ("ZZ", "Z+ZZ"):
+            # Same order as _compute_measurement_matrix_vectorized: triu indices
+            for i in range(self.n_qubits):
+                for j in range(i + 1, self.n_qubits):
+                    names.append(f"Z{i}Z{j}")
+        return names
 
     def __repr__(self) -> str:
         return (

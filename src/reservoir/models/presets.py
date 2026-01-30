@@ -121,7 +121,7 @@ FNN_PRESET = PipelineConfig(
 
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = ProjectionConfig(
-    n_units=10,  # This becomes n_qubits for quantum reservoir
+    n_units=16,  # This becomes n_qubits for quantum reservoir
     input_scale=0.6,
     input_connectivity=1.0,
     bias_scale=0.0,
@@ -131,7 +131,7 @@ QUANTUM_PROJECTION = ProjectionConfig(
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
 QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
-    seed=42,
+    seed=41,
     aggregation=AggregationMode.MEAN,
     input_scaling=6.283185307179586,  # 2π
     feedback_scale=0.1,
@@ -243,7 +243,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 # Time-series Quantum Reservoir (SEQUENCE aggregation)
 TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
-    seed=42,
+    seed=41,
     aggregation=AggregationMode.SEQUENCE,
     input_scaling=6.283185307179586,  # 2π
     feedback_scale=0.1,

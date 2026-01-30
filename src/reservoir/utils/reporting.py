@@ -3,7 +3,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional
 import numpy as np
 import jax.numpy as jnp
 
@@ -436,6 +436,7 @@ def generate_report(
     classification: bool = False,
     preprocessors: Optional[list[Any]] = None,
     dataset_preset: Optional[Any] = None,  # DatasetPreset for dt/lyapunov_time_unit
+    model_obj: Optional[Any] = None, # New Argument
 ) -> None:
     # Loss plotting (distillation)
     training_logs = _safe_get(results, "training_logs", {})
@@ -537,6 +538,30 @@ def generate_report(
          )
          
 
+    # Quantum Dynamics Plotting
+    quantum_trace = _safe_get(results, "quantum_trace")
+    if quantum_trace is not None:
+        try:
+            from reservoir.utils.quantum_plotting import plot_qubit_dynamics
+
+            filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+            dynamics_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_quantum_dynamics.png"
+
+            # Convert to numpy and plot
+            trace_np = np.asarray(quantum_trace)
+            feature_names = None
+            if model_obj is not None and hasattr(model_obj, "get_observable_names"):
+                 feature_names = model_obj.get_observable_names()
+            elif hasattr(training_obj, "get_observable_names"):
+                 # Fallback but unlikely
+                 feature_names = training_obj.get_observable_names()
+            
+            plot_qubit_dynamics(trace_np, dynamics_filename, title=f"{model_type_str.upper()} Dynamics ({dataset_name})", feature_names=feature_names)
+
+        except ImportError:
+            pass # Skipping quantum plotting (ImportError)
+        except Exception as e:
+            print(f"Skipping quantum plotting (Error: {e})")
 
 
 def plot_regression_report(

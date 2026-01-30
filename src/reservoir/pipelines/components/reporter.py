@@ -23,6 +23,7 @@ class ResultReporter:
         """
         fit_result = execution_results["fit_result"]
         train_logs = execution_results["train_logs"]
+        quantum_trace = execution_results.get("quantum_trace") # New
         processed = self.frontend_ctx.processed_split
         
         results: Dict[str, Any] = {}
@@ -83,6 +84,7 @@ class ResultReporter:
         results["readout"] = self.stack.readout
         results["scaler"] = self.frontend_ctx.scaler
         results["training_logs"] = train_logs
+        results["quantum_trace"] = quantum_trace # New
         results["meta"] = {
             "metric": metric_name,
             "elapsed_sec": time.time() - self.start_time,
@@ -115,4 +117,5 @@ class ResultReporter:
             **report_payload,
             classification=self.dataset_meta.classification,
             dataset_preset=self.dataset_meta.preset,
+            model_obj=self.stack.model,
         )

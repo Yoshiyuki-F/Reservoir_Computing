@@ -76,9 +76,42 @@ class PipelineExecutor:
             config
         )
         
+        # Step 7.5: Capture Quantum Trace (for Visualization)
+        quantum_trace = None
+        # Check if it's a QuantumReservoir (duck typing or class check)
+        if hasattr(self.stack.model, "n_qubits") and hasattr(self.stack.model, "measurement_basis"):
+             print("\n=== Step 7.5: Capturing Quantum Dynamics Trace ===")
+             try:
+                 # Take first test sample or train sample
+                 test_data = self.frontend_ctx.processed_split.test_X
+                 if test_data is None:
+                     test_data = self.frontend_ctx.processed_split.train_X
+                     
+                 sample_input = None
+                 if test_data is not None and len(test_data) > 0:
+                      # Heuristic: If 2D (Batch, Feat), treat as sequence of length min(100, N)
+                      if test_data.ndim == 2:
+                           # Use full sequence for visualization as requested
+                           sample_input = test_data[None, :, :]
+                      # If 3D (Batch, Time, Feat), take first sample -> (1, T, F)
+                      elif test_data.ndim == 3:
+                           sample_input = test_data[0:1]
+                 
+                 if sample_input is not None:
+                     # Force return_sequences=True to get time evolution
+                     # Use batch_size=1
+                     # Convert to JAX array to satisfy strictly typed model
+                     sample_input_jax = jnp.asarray(sample_input)
+                     trace = self.stack.model(sample_input_jax, return_sequences=True)
+                     quantum_trace = trace
+                     print(f"    [Executor] Captured trace shape: {trace.shape}")
+             except Exception as e:
+                 print(f"    [Executor] Failed to capture quantum trace: {e}")
+
         return {
             "fit_result": fit_result,
             "train_logs": train_logs,
+            "quantum_trace": quantum_trace,
         }
 
     def _extract_all_features(self, model: Any) -> Tuple[Optional[Union[jnp.ndarray, np.ndarray]], ...]:
