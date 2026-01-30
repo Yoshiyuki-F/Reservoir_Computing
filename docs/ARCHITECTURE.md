@@ -1,9 +1,10 @@
-Revised Architecture Blueprint (V2.1)
+Revised Architecture Blueprint (V2.2)
 1-8 Process Flow (Tensor Flow Style)
 データの流れと各ステップの役割定義です。
 
 STEP
-1. Input Data - [N, Time, Features]Role: Raw time-series input.
+1. Input Data - [N, Time, Features]
+Role: Raw time-series input.
 Examples: MNIST [54000, 28, 28], MackeyGlass [1, 16600, 1]
 
 2. Preprocessing - [N, Time, Features] => [N, Time, Features]
@@ -12,14 +13,15 @@ Examples: StandardScaler, MaxScaler.
 
 3. Input Projection - [N, Time, Features] => [N, Time, Hidden]
 Role: Mapping input space to a high-dimensional hidden space using a Matrix (e.g., $28 * 100$). 
-This happens before the branching into Reservoir or FNN paths.Examples: Random Projection (W_in), Learned Linear Layer.
+This happens before the branching into Reservoir or FNN paths.
+Examples: Random Projection (W_in), Learned Linear Layer.
 
 ### 4-6. Branching Processes: Teacher vs. Student
 
 Projected Data `[N, Time, Hidden]` の生成後（Step 3）、プロセスは2つのパスに分岐します。
 
 #### Path A: Reservoir Process (The Teacher)
-**役割:** リカレントな力学系を用いて時間的な特徴を抽出し、教師信号となる特徴量（Aggregated Features）を生成します。
+**役割:** リカレントな力学系（古典または量子）を用いて時間的な特徴を抽出し、教師信号となる特徴量（Aggregated Features）を生成します。
 
 * **4A. Adapter (Identity/Passthrough)**
     * **Input:** `[N, Time, Hidden]`
@@ -27,12 +29,14 @@ Projected Data `[N, Time, Hidden]` の生成後（Step 3）、プロセスは2�
 
 * **5A. Model (Reservoir Loop)**
     * **Input:** `[N, Time, Hidden]`
-    * **Action:** 固定された（学習しない）リカレント結合 $W_{res}$ を用いて、入力を高次元の状態空間へ展開します。
-    * **Output:** **Reservoir States** `[N, Time, Hidden]`
+    * **Action:** 固定された（学習しない）リカレント結合を用いて、入力を高次元の状態空間へ展開します。
+        * **Classical Reservoir:** $x_t = \tanh(W_{in}u_t + W_{res}x_{t-1})$ (ESN)
+        * **Quantum Reservoir:** Quantum Circuit Evolution via TensorCircuit (JAX). Qubit states evolve via unitary gates + noise.
+    * **Output:** **Reservoir States** `[N, Time, Hidden]` (Classical) or `[N, Time, Observables]` (Quantum)
 
 * **6A. Aggregation (Creating Teacher Features)**
     * **Input:** `[N, Time, Hidden]` (Reservoir States)
-    * **Action:** 時間次元を集約または整形し、最終的な特徴ベクトルを生成します。これが **FNNの学習目標（正解ラベルのような役割）** となります。
+    * **Action:** 時間次元を集約または整形し、最終的な特徴ベクトルを生成します。
         * **Classification (MNIST):** **Mean Pooling**. 時間方向に平均化します。
             * Shape: `[N, 28, 100]` $\rightarrow$ `[N, 100]`
         * **Regression (MackeyGlass):** **Sequence/Identity**. バッチ次元の除去やシーケンスの整列を行います。
@@ -62,7 +66,9 @@ Projected Data `[N, Time, Hidden]` の生成後（Step 3）、プロセスは2�
 
 
 7. Readout - [N', Hidden] => [N', Output]
-Role: Final decoding/classification using linear models. Both paths use their own Readout.7A (Reservoir): Ridge Regression trained on Aggregated Features.7B (FNN): Ridge Regression trained on FNN Features.
+Role: Final decoding/classification using linear models. Both paths use their own Readout.
+7A (Reservoir): Ridge Regression trained on Aggregated Features.
+7B (FNN): Ridge Regression trained on FNN Features.
 Targets Y: One-hot encoding [N, 10] or continuous values.
 
 
@@ -72,8 +78,15 @@ layers/preprocessing.py (Preprocessing) 2
 layers/projection.py (Input Projection) 3
 layers/adapters.py (Structural Glues: Flatten, Reshape) 4
 models/ (Model Engine & Assemblers) 5
-    reservoir/, nn/, distillation/
-layers/aggregation.py (Aggregation) 6 a part of 5 actually
+    reservoir/
+        classical.py (ESN)
+        quantum/ (Quantum Reservoir: TensorCircuit + JAX)
+            backend.py (Circuit Execution)
+            functional.py (Gate Logic, Noise, JIT Scan)
+            model.py (State Management)
+    nn/ (FNN)
+    distillation/ (Distillation Logic)
+layers/aggregation.py (Aggregation) 6
 readout/ridge.py (Readout) 7
 
 
@@ -82,9 +95,9 @@ models/factory.py (Manufacturer)
 責務: 4-6 (Engine Stack) の製造。
 特徴: 状態を持たない。作って渡すだけ。
 
-pipelines/generic_runner.py (Driver)
+pipelines/components/executor.py (Driver)
 責務: 1-7 の実行（実験ロジックの正本）。
-特徴: 何のモデルか（FNNかReservoirか）を知らない。「学習して、特徴とって、Readoutする」という抽象的な手順だけを知っている。
+特徴: 何のモデルか（FNN/Classical/Quantum）を知らない。「学習して、特徴とって、Readoutする」という抽象的な手順だけを知っている。
 
 pipelines/run.py (Manager/Frontend)
 責務: 1-3 (Frontend) の準備 と、ドライバーへの指示。
