@@ -124,7 +124,7 @@ FNN_PRESET = PipelineConfig(
 
 # Quantum projection: n_units defines the number of qubits
 QUANTUM_PROJECTION = CenterCropProjectionConfig(
-    n_units=16,  # This becomes n_qubits for quantum reservoir
+    n_units=10,  # This becomes n_qubits for quantum reservoir
 )
 
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
