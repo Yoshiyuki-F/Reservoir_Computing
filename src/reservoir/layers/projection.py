@@ -1,18 +1,41 @@
-"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/projection.py
-Step 3 Input projection module shared across reservoir-based models.
-"""
 from __future__ import annotations
-
-from typing import Any, Dict
+import abc
+from typing import Any, Dict, Type
+from functools import singledispatch
 
 import jax
 import jax.numpy as jnp
 
+# --- 1. Interface Definition ---
 
-
-class RandomProjection:
+class Projection(abc.ABC):
     """
-    Fixed random input projection with sparsity and bias (separable from reservoir dynamics).
+    Abstract Base Class for Input Projections.
+    Defines the contract that all projection layers must follow.
+    """
+    
+    @property
+    @abc.abstractmethod
+    def output_dim(self) -> int:
+        """Return the output dimension size."""
+        pass
+
+    @abc.abstractmethod
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Apply the projection to the inputs."""
+        pass
+
+    @abc.abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize configuration parameters."""
+        pass
+
+
+# --- 2. Concrete Implementations ---
+
+class RandomProjection(Projection):
+    """
+    Fixed random input projection with sparsity and bias.
     """
 
     def __init__(
@@ -25,33 +48,42 @@ class RandomProjection:
         bias_scale: float,
     ) -> None:
         self.input_dim = int(input_dim)
-        self.output_dim = int(output_dim)
+        self._output_dim = int(output_dim)  # internal storage
         self.input_scale = float(input_scale)
         self.connectivity = float(input_connectivity)
         self.bias_scale = float(bias_scale)
         self.seed = int(seed)
+        
+        # Determine if bias is used based on scale
+        self.use_bias = self.bias_scale > 0.0
+
         k_w, k_b, k_mask = jax.random.split(jax.random.PRNGKey(self.seed), 3)
 
         boundary = self.input_scale
         W = jax.random.uniform(
             k_w,
-            (self.input_dim, self.output_dim),
+            (self.input_dim, self._output_dim),
             minval=-boundary,
             maxval=boundary,
         )
         if 0.0 < self.connectivity < 1.0:
             mask = jax.random.bernoulli(k_mask, p=self.connectivity, shape=W.shape)
             W = jnp.where(mask, W, 0.0)
-        bias = jnp.zeros((self.output_dim,))
+        
+        bias = jnp.zeros((self._output_dim,))
         if self.use_bias:
             bias = jax.random.uniform(
                 k_b,
-                (self.output_dim,),
+                (self._output_dim,),
                 minval=-self.bias_scale,
                 maxval=self.bias_scale,
             )
         self.W = W
         self.bias = bias
+
+    @property
+    def output_dim(self) -> int:
+        return self._output_dim
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(inputs)
@@ -63,6 +95,7 @@ class RandomProjection:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "type": "random_projection",
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
             "input_scale": self.input_scale,
@@ -72,34 +105,32 @@ class RandomProjection:
         }
 
 
-
-class CenterCropProjection:
+class CenterCropProjection(Projection):
     """
     Fixed cropping projection that selects the central part of the input feature vector.
-    Specific for image data where boundary pixels are often empty (e.g., MNIST).
     """
 
     def __init__(self, input_dim: int, output_dim: int) -> None:
         self.input_dim = int(input_dim)
-        self.output_dim = int(output_dim)
+        self._output_dim = int(output_dim)
 
-        if self.output_dim > self.input_dim:
+        if self._output_dim > self.input_dim:
             raise ValueError(
-                f"CenterCropProjection: output_dim ({self.output_dim}) cannot be larger "
+                f"CenterCropProjection: output_dim ({self._output_dim}) cannot be larger "
                 f"than input_dim ({self.input_dim})."
             )
 
-        # Calculate start index for centering
-        # e.g., input=28, output=16 -> (28-16)//2 = 6. Take indices 6 to 22 (16 items).
-        self.start_idx = (self.input_dim - self.output_dim) // 2
-        self.end_idx = self.start_idx + self.output_dim
+        self.start_idx = (self.input_dim - self._output_dim) // 2
+        self.end_idx = self.start_idx + self._output_dim
+
+    @property
+    def output_dim(self) -> int:
+        return self._output_dim
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         # inputs shape: (Batch, Time, Features)
         if inputs.ndim != 3:
-            raise ValueError(f"CenterCropProjection requires 3D input (Batch, Time, Features), got ndim={inputs.ndim}")
-            
-        # We assume the last dimension is the "Features" dimension to crop.
+             raise ValueError(f"CenterCropProjection requires 3D input (Batch, Time, Features), got ndim={inputs.ndim}")
         return inputs[..., self.start_idx : self.end_idx]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -110,5 +141,40 @@ class CenterCropProjection:
             "crop_range": (self.start_idx, self.end_idx),
         }
 
+# --- 3. The Factory Logic (Dependency Injection Helper) ---
 
-__all__ = ["RandomProjection", "CenterCropProjection"]
+@singledispatch
+def create_projection(config: Any, input_dim: int) -> Projection:
+    """
+    Factory function to create a Projection instance based on the config type.
+    Raises TypeError if the config type is not registered.
+    """
+    raise TypeError(f"Unknown projection config type: {type(config)}")
+
+def register_projections(
+    CenterCropConfigClass: Type, 
+    RandomProjectionConfigClass: Type
+):
+    """
+    Call this function once to register the handlers.
+    """
+
+    @create_projection.register(CenterCropConfigClass)
+    def _(config, input_dim: int) -> CenterCropProjection:
+        return CenterCropProjection(
+            input_dim=int(input_dim),
+            output_dim=int(config.n_units),
+        )
+
+    @create_projection.register(RandomProjectionConfigClass)
+    def _(config, input_dim: int) -> RandomProjection:
+        return RandomProjection(
+            input_dim=int(input_dim),
+            output_dim=int(config.n_units),
+            input_scale=float(config.input_scale),
+            input_connectivity=float(config.input_connectivity),
+            seed=int(config.seed),
+            bias_scale=float(config.bias_scale),
+        )
+
+__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "create_projection", "register_projections"]

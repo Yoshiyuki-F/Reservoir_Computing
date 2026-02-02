@@ -9,9 +9,16 @@ from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY
 from reservoir.data.structs import SplitDataset
 from reservoir.layers.preprocessing import create_preprocessor, apply_layers
-from reservoir.layers.projection import RandomProjection, CenterCropProjection
-from reservoir.pipelines.config import FrontendContext, DatasetMetadata
+from reservoir.layers.projection import (
+    create_projection,
+    register_projections
+)
 from reservoir.models.config import PipelineConfig, RandomProjectionConfig, CenterCropProjectionConfig
+
+# Register projection configs once (idempotent if handled safely, but here at module level is typical)
+# Or called inside __init__ if we want to ensure it happens.
+# Module level is fine since classes are imported.
+register_projections(CenterCropProjectionConfig, RandomProjectionConfig)
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
@@ -137,25 +144,16 @@ class PipelineDataManager:
                 scaler=pre_layers[0] if pre_layers else None,
             )
 
-        if isinstance(projection_config, CenterCropProjectionConfig):
-            projection = CenterCropProjection(
-                input_dim=int(preprocessed_shape[-1]),
-                output_dim=int(projection_config.n_units),
-            )
-        elif isinstance(projection_config, RandomProjectionConfig):
-            projection = RandomProjection(
-                input_dim=int(preprocessed_shape[-1]),
-                output_dim=int(projection_config.n_units),
-                input_scale=float(projection_config.input_scale),
-                input_connectivity=float(projection_config.input_connectivity),
-                seed=int(projection_config.seed),
-                bias_scale=float(projection_config.bias_scale),
-            )
-        else:
-            raise TypeError(f"Unknown projection config type: {type(projection_config)}")
-
-        desc = f"[Projection] (Batch: {batch_size})"
-        print(f"Applying Projection in batches of {batch_size}...")
+        
+        # Use Factory pattern (DI)
+        projection = create_projection(
+            projection_config, 
+            input_dim=int(preprocessed_shape[-1])
+        )
+        
+        proj_name = type(projection).__name__
+        desc = f"[{proj_name}] (Batch: {batch_size})"
+        print(f"Applying {proj_name} in batches of {batch_size}...")
         projected_train = batched_compute(projection, train_X, batch_size, desc=desc + "train")
         # del train_X  # Managed by scope
 
