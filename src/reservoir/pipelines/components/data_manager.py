@@ -1,10 +1,8 @@
-import time
 from dataclasses import replace
 from typing import Optional, Tuple, Any
 
-import numpy as np
-
 from reservoir.core.identifiers import Dataset
+from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY
 from reservoir.data.structs import SplitDataset
@@ -13,12 +11,12 @@ from reservoir.layers.projection import (
     create_projection,
     register_projections
 )
-from reservoir.models.config import PipelineConfig, RandomProjectionConfig, CenterCropProjectionConfig
+from reservoir.models.config import PipelineConfig, RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig
 
 # Register projection configs once (idempotent if handled safely, but here at module level is typical)
 # Or called inside __init__ if we want to ensure it happens.
 # Module level is fine since classes are imported.
-register_projections(CenterCropProjectionConfig, RandomProjectionConfig)
+register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig)
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats

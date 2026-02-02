@@ -372,7 +372,7 @@ def plot_classification_report(
 
 
 def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
-    from reservoir.models.config import RandomProjectionConfig, CenterCropProjectionConfig
+    from reservoir.models.config import RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig
 
     feature_shape = None
     student_layers = None
@@ -413,6 +413,8 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
             filename_parts.append(f"RP{int(proj_units)}")
         elif isinstance(proj_config, CenterCropProjectionConfig):
             filename_parts.append(f"CCP{int(proj_units)}")
+        elif isinstance(proj_config, ResizeProjectionConfig):
+            filename_parts.append(f"Res{int(proj_units)}")
         else:
             # Fallback for unknown or generic types
             filename_parts.append(f"Proj{int(proj_units)}")

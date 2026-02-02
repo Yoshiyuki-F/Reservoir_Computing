@@ -177,7 +177,25 @@ class CenterCropProjectionConfig:
         }
 
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig]
+@dataclass(frozen=True)
+class ResizeProjectionConfig:
+    """Step 3 parameters for Resize (Interpolation) Projection."""
+    n_units: int
+
+    def validate(self, context: str = "resize_projection") -> "ResizeProjectionConfig":
+        prefix = f"{context}: "
+        if int(self.n_units) <= 0:
+            raise ValueError(f"{prefix}n_units must be positive.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "resize",
+            "n_units": int(self.n_units),
+        }
+
+
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig]
 
 
 

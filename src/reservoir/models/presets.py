@@ -18,7 +18,7 @@ from reservoir.models.config import (
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig,
-    QuantumReservoirConfig,
+    QuantumReservoirConfig, ResizeProjectionConfig,
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -123,8 +123,12 @@ FNN_PRESET = PipelineConfig(
 
 
 # Quantum projection: n_units defines the number of qubits
-QUANTUM_PROJECTION = CenterCropProjectionConfig(
+CENTER_CROP_PROJECTION = CenterCropProjectionConfig(
     n_units=16,  # This becomes n_qubits for quantum reservoir
+)
+
+RESIZE_PROJECTION = ResizeProjectionConfig(
+    n_units=16,
 )
 
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
@@ -167,7 +171,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=DEFAULT_PREPROCESS,
-    projection=QUANTUM_PROJECTION,
+    projection=RESIZE_PROJECTION,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
@@ -264,7 +268,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=TIME_PREPROCESS,
-    projection=QUANTUM_PROJECTION,  # Reuse the 4-qubit projection
+    projection=RESIZE_PROJECTION,  # Reuse the 4-qubit projection
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )

@@ -12,17 +12,31 @@ class Projection(abc.ABC):
     """
     Abstract Base Class for Input Projections.
     Defines the contract that all projection layers must follow.
+    Also handles common state (input_dim, output_dim).
     """
+
+    def __init__(self, input_dim: int, output_dim: int) -> None:
+        self.input_dim = int(input_dim)
+        self._output_dim = int(output_dim)
     
     @property
-    @abc.abstractmethod
     def output_dim(self) -> int:
         """Return the output dimension size."""
-        pass
+        return self._output_dim
+
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """
+        Apply the projection to the inputs.
+        template method: validates input shape then calls _forward.
+        """
+        arr = jnp.asarray(inputs)
+        if arr.ndim not in (2, 3):
+             raise ValueError(f"{self.__class__.__name__} expects 2D or 3D input, got shape {arr.shape}")
+        return self._project(arr)
 
     @abc.abstractmethod
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        """Apply the projection to the inputs."""
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Actual projection logic to be implemented by subclasses."""
         pass
 
     @abc.abstractmethod
@@ -47,8 +61,7 @@ class RandomProjection(Projection):
         seed: int,
         bias_scale: float,
     ) -> None:
-        self.input_dim = int(input_dim)
-        self._output_dim = int(output_dim)  # internal storage
+        super().__init__(input_dim, output_dim)
         self.input_scale = float(input_scale)
         self.connectivity = float(input_connectivity)
         self.bias_scale = float(bias_scale)
@@ -81,17 +94,12 @@ class RandomProjection(Projection):
         self.W = W
         self.bias = bias
 
-    @property
-    def output_dim(self) -> int:
-        return self._output_dim
-
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(inputs)
-        if arr.ndim == 3:
-            return jnp.einsum("bti,io->bto", arr, self.W) + self.bias
-        if arr.ndim == 2:
-            return jnp.dot(arr, self.W) + self.bias
-        raise ValueError(f"RandomProjection expects 2D or 3D input, got shape {arr.shape}")
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        # Template ensures inputs is 2D or 3D ndarray
+        if inputs.ndim == 3:
+            return jnp.einsum("bti,io->bto", inputs, self.W) + self.bias
+        # inputs.ndim == 2
+        return jnp.dot(inputs, self.W) + self.bias
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -111,8 +119,7 @@ class CenterCropProjection(Projection):
     """
 
     def __init__(self, input_dim: int, output_dim: int) -> None:
-        self.input_dim = int(input_dim)
-        self._output_dim = int(output_dim)
+        super().__init__(input_dim, output_dim)
 
         if self._output_dim > self.input_dim:
             raise ValueError(
@@ -123,11 +130,7 @@ class CenterCropProjection(Projection):
         self.start_idx = (self.input_dim - self._output_dim) // 2
         self.end_idx = self.start_idx + self._output_dim
 
-    @property
-    def output_dim(self) -> int:
-        return self._output_dim
-
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
         # inputs shape: (Batch, Time, Features)
         if inputs.ndim != 3:
              raise ValueError(f"CenterCropProjection requires 3D input (Batch, Time, Features), got ndim={inputs.ndim}")
@@ -141,6 +144,42 @@ class CenterCropProjection(Projection):
             "crop_range": (self.start_idx, self.end_idx),
         }
 
+
+class ResizeProjection(Projection):
+    """
+    Projection that resizes (interpolates) the feature dimension to the target size.
+    Uses JAX's image resizing capabilities (bilinear interpolation by default).
+    """
+
+    def __init__(self, input_dim: int, output_dim: int) -> None:
+        super().__init__(input_dim, output_dim)
+        if self._output_dim > self.input_dim:
+            raise ValueError(
+                f"ResizeProjection: output_dim ({self._output_dim}) cannot be larger "
+                f"than input_dim ({self.input_dim})."
+            )
+
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        # inputs shape: (Batch, Time, Features) or (Batch, Features)
+        # We assume the last dimension is Features.
+        # jax.image.resize expects shape to resize to.
+        
+        input_shape = inputs.shape
+        # Target shape: preserve all but last dim, replace last with output_dim
+        target_shape = input_shape[:-1] + (self._output_dim,)
+        
+        # 'linear' (bilinear) is standard for resizing. 
+        # For 1D signal (Features), linear interpolation is equivalent to resizing along 1 axis.
+        return jax.image.resize(inputs, target_shape, method='linear', antialias=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "resize_projection",
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+        }
+
+
 # --- 3. The Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
@@ -153,7 +192,8 @@ def create_projection(config: Any, input_dim: int) -> Projection:
 
 def register_projections(
     CenterCropConfigClass: Type, 
-    RandomProjectionConfigClass: Type
+    RandomProjectionConfigClass: Type,
+    ResizeProjectionConfigClass: Type
 ):
     """
     Call this function once to register the handlers.
@@ -177,4 +217,11 @@ def register_projections(
             bias_scale=float(config.bias_scale),
         )
 
-__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "create_projection", "register_projections"]
+    @create_projection.register(ResizeProjectionConfigClass)
+    def _(config, input_dim: int) -> ResizeProjection:
+        return ResizeProjection(
+            input_dim=int(input_dim),
+            output_dim=int(config.n_units),
+        )
+
+__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "create_projection", "register_projections"]
