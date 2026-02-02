@@ -132,12 +132,13 @@ class StandardScalerConfig:
 @dataclass(frozen=True)
 class MaxScalerConfig:
     """Step 2 parameters for Max Scaler."""
+    centering: bool = False
 
     def validate(self, context: str = "max_scaler") -> "MaxScalerConfig":
         return self
 
     def to_dict(self) -> dict[str, Any]:
-        return {"method": "max_scaler"}
+        return {"method": "max_scaler", "centering": self.centering}
 
 PreprocessingConfig = Union[RawConfig, StandardScalerConfig, MaxScalerConfig]
 
@@ -223,7 +224,29 @@ class PolynomialProjectionConfig:
         return {"type": "polynomial", "degree": int(self.degree), "include_bias": self.include_bias}
 
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig]
+@dataclass(frozen=True)
+class PCAProjectionConfig:
+    """Step 3 parameters for PCA Projection (dimensionality reduction).
+    
+    Note: PCA assumes StandardScaler preprocessing (zero mean, unit variance).
+    
+    Args:
+        n_units: Number of principal components to keep.
+        input_scaler: Scalar to multiply output after projection.
+    """
+    n_units: int
+    input_scaler: float
+
+    def validate(self, context: str = "pca_projection") -> "PCAProjectionConfig":
+        if self.n_units is None or int(self.n_units) < 1:
+            raise ValueError(f"{context}: n_units must be >=1.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
+
+
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig]
 
 
 

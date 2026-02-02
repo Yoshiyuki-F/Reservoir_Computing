@@ -423,6 +423,9 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
             projected_shape = shapes.get("projected")
             poly_output = projected_shape[-1] if projected_shape else 0
             filename_parts.append(f"Poly{int(poly_output)}")
+        elif proj_type == "pca":
+            n_units = proj_dict.get("n_units", 0)
+            filename_parts.append(f"PCA{int(n_units)}")
         elif proj_units:
             filename_parts.append(f"Proj{int(proj_units)}")
 

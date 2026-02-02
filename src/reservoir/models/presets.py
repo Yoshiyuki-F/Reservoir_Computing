@@ -12,6 +12,7 @@ from reservoir.models.config import (
     MaxScalerConfig,
     RandomProjectionConfig,
     CenterCropProjectionConfig,
+    PCAProjectionConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
@@ -27,6 +28,10 @@ from reservoir.data.presets import get_dataset_preset
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
+#---------------------------STEP 2--------------------------------------------------
+MAX = MaxScalerConfig(
+    centering=True
+)
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=1000,
@@ -47,6 +52,11 @@ RES = ResizeProjectionConfig(
 POLY = PolynomialProjectionConfig(
     degree=4,
     include_bias=False,
+)
+
+PCA = PCAProjectionConfig(
+    n_units=16,
+    input_scaler = 1
 )
 #-----------------------------STEP 7-------------------------------------------------------
 
@@ -74,7 +84,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MaxScalerConfig(),
+    preprocess=MAX,
     projection=POLY,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
@@ -84,7 +94,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=MaxScalerConfig(),
+    preprocess=MAX,
     projection=RP,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
@@ -99,7 +109,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=MaxScalerConfig(),
+    preprocess=MAX,
     projection=RP,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
@@ -112,7 +122,7 @@ FNN_PRESET = PipelineConfig(
     name="fnn",
     model_type=Model.FNN,
     description="Feedforward Neural Network (FNN)",
-    preprocess=MaxScalerConfig(),
+    preprocess=MAX,
     projection=None,
     model=FNNConfig(
         hidden_layers=(100,),
@@ -164,8 +174,8 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=MaxScalerConfig(),
-    projection=RES,
+    preprocess=MAX,
+    projection=PCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )

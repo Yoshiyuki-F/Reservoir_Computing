@@ -13,12 +13,12 @@ from reservoir.layers.projection import (
 )
 from reservoir.models.config import (
     PipelineConfig, 
-    RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig,
+    RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig,
     RawConfig, StandardScalerConfig, MaxScalerConfig,
 )
 
 # Register projection configs once at module level
-register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig)
+register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig)
 
 # Register preprocessor configs
 register_preprocessors(RawConfig, StandardScalerConfig, MaxScalerConfig)
@@ -143,13 +143,11 @@ class PipelineDataManager:
             
             return FrontendContext(
                 processed_split=processed_split,
-                preprocess_labels=preprocess_labels,
-                preprocessors=pre_layers,
+                preprocessor=preprocessor,
                 preprocessed_shape=preprocessed_shape,
                 projected_shape=None,
                 input_shape_for_meta=input_shape_for_meta,
                 input_dim_for_factory=input_dim_for_factory,
-                scaler=pre_layers[0] if pre_layers else None,
             )
 
         
@@ -158,6 +156,11 @@ class PipelineDataManager:
             projection_config, 
             input_dim=int(preprocessed_shape[-1])
         )
+        
+        # Fit PCA if applicable
+        if hasattr(projection, 'fit'):
+            print(f"Fitting {type(projection).__name__} on training data...")
+            projection.fit(train_X)
         
         proj_name = type(projection).__name__
         desc = f"[{proj_name}] (Batch: {batch_size})"

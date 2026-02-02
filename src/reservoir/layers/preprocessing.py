@@ -51,16 +51,14 @@ class Preprocessor(abc.ABC):
 
 # --- 2. Concrete Implementations ---
 
-class FeatureScaler(Preprocessor):
+class StandardScaler(Preprocessor):
     """Standard scaler (mean removal and variance scaling)."""
 
-    def __init__(self, with_mean: bool = True, with_std: bool = True):
-        self.with_mean = with_mean
-        self.with_std = with_std
+    def __init__(self):
         self.mean_: Optional[np.ndarray] = None
         self.scale_: Optional[np.ndarray] = None
 
-    def fit(self, X: jnp.ndarray) -> "FeatureScaler":
+    def fit(self, X: jnp.ndarray) -> "StandardScaler":
         X_np = np.asarray(X)
 
         if X_np.ndim == 3:
@@ -68,12 +66,13 @@ class FeatureScaler(Preprocessor):
         else:
             reduce_axis = 0
 
-        if self.with_mean:
-            self.mean_ = np.mean(X_np, axis=reduce_axis)
-        if self.with_std:
-            self.scale_ = np.std(X_np, axis=reduce_axis)
-            if self.scale_ is not None:
-                self.scale_[self.scale_ == 0] = 1.0
+        self.mean_ = np.mean(X_np, axis=reduce_axis)
+        self.scale_ = np.std(X_np, axis=reduce_axis)
+        
+        # Avoid division by zero and extreme scaling for near-constant features
+        if self.scale_ is not None:
+            self.scale_[self.scale_ < 1e-6] = 1.0
+            
         return self
 
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
@@ -94,34 +93,64 @@ class FeatureScaler(Preprocessor):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "type": "feature_scaler",
-            "with_mean": self.with_mean,
-            "with_std": self.with_std,
+            "type": "standard_scaler",
         }
 
 
 class MaxScaler(Preprocessor):
     """Scales data by dividing by the maximum value."""
 
-    def __init__(self):
+    def __init__(self, centering: bool = False):
+        self.centering = centering
         self.max_val: Optional[float] = None
+        self.mean_: Optional[np.ndarray] = None
 
     def fit(self, X: jnp.ndarray) -> "MaxScaler":
-        self.max_val = float(jnp.max(X))
+        X_np = np.asarray(X)
+        self.max_val = float(np.max(X_np))
+        
+        if self.centering and self.max_val != 0:
+            # Centering after scaling: mean = mean(X) / max 
+            if X_np.ndim == 3:
+                reduce_axis = (0, 1)
+            else:
+                reduce_axis = 0
+            self.mean_ = np.mean(X_np, axis=reduce_axis) / self.max_val
+            
         return self
 
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(X)
+        
+        # 1. Scale
         if self.max_val is not None and self.max_val != 0:
-            return jnp.asarray(X) / self.max_val
-        return jnp.asarray(X)
+            arr = arr / self.max_val
+            
+        # 2. Center
+        if self.centering and self.mean_ is not None:
+            arr = arr - self.mean_
+            
+        return arr
 
     def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(X)
+        
+        # 1. Un-center
+        if self.centering and self.mean_ is not None:
+            arr = arr + self.mean_
+        
+        # 2. Un-scale
         if self.max_val is not None:
-            return jnp.asarray(X) * self.max_val
-        return jnp.asarray(X)
+            arr = arr * self.max_val
+            
+        return arr
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"type": "max_scaler", "max_val": self.max_val}
+        return {
+            "type": "max_scaler",
+            "max_val": self.max_val,
+            "centering": self.centering
+        }
 
 
 class IdentityPreprocessor(Preprocessor):
@@ -167,16 +196,16 @@ def register_preprocessors(
 
     @create_preprocessor.register(StandardScalerConfigClass)
     def _(config) -> Preprocessor:
-        return FeatureScaler()
+        return StandardScaler()
 
     @create_preprocessor.register(MaxScalerConfigClass)
     def _(config) -> Preprocessor:
-        return MaxScaler()
+        return MaxScaler(centering=config.centering)
 
 
 __all__ = [
     "Preprocessor",
-    "FeatureScaler",
+    "StandardScaler",
     "MaxScaler",
     "IdentityPreprocessor",
     "create_preprocessor",
