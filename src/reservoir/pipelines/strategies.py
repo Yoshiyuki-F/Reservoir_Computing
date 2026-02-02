@@ -1,8 +1,9 @@
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/strategies.py"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
 import jax.numpy as jnp
 import numpy as np
-from tqdm.auto import tqdm
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.utils.reporting import print_ridge_search_results, compute_score, print_feature_stats
@@ -131,31 +132,20 @@ class ClassificationStrategy(ReadoutStrategy):
         best_lambda = None
         best_score = -float("inf")
 
-        if hasattr(readout, 'ridge_lambda'):
-            lambda_candidates = getattr(readout, 'lambda_candidates', None) or [readout.ridge_lambda]
-            print(f"    [Runner] Running hyperparameter search over {len(lambda_candidates)} lambdas...")
-            best_lambda = lambda_candidates[0]
+        if hasattr(readout, 'fit_with_validation'):
+            # Use unified optimization
+            # Define scoring callback
+            def scoring_fn(p, t):
+                return compute_score(p, t, self.metric_name)
 
-            for lam in tqdm(lambda_candidates, desc="[Lambda Search]"):
-                lam_val = float(lam)
-                readout.ridge_lambda = lam_val
-                readout.fit(tf_reshaped, ty_reshaped)
-
-                val_pred_tmp = readout.predict(vf_reshaped)
-                # Compute score using generic utility
-                score = compute_score(np.asarray(val_pred_tmp), np.asarray(vy_reshaped), self.metric_name)
-                search_history[lam_val] = float(score)
-
-                if hasattr(readout, "coef_") and readout.coef_ is not None:
-                    weight_norms[lam_val] = float(jnp.linalg.norm(readout.coef_))
-
-                if score >= best_score:
-                    best_score = score
-                    best_lambda = lam_val
-
-            readout.ridge_lambda = best_lambda
-            readout.fit(tf_reshaped, ty_reshaped)
-            print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Accuracy: {best_score:.5f})")
+            best_lambda, best_score, search_history, weight_norms = readout.fit_with_validation(
+                train_Z=tf_reshaped, 
+                train_y=ty_reshaped, 
+                val_Z=vf_reshaped, 
+                val_y=vy_reshaped, 
+                scoring_fn=scoring_fn, 
+                maximize_score=True
+            )
             
             print_ridge_search_results({
                 "search_history": search_history,
@@ -186,11 +176,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
     def fit_and_evaluate(
         self, model, readout, train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta, pipeline_config
     ) -> Dict[str, Any]:
-        processed = frontend_ctx.processed_split
-        
-        lambda_candidates = getattr(readout, 'lambda_candidates', None) or \
-            ([readout.ridge_lambda] if hasattr(readout, 'ridge_lambda') else [1e-3])
-        print(f"    [Runner] Starting OpenLoop Parameter Search (Open-Loop MSE) over {len(lambda_candidates)} candidates...")
+
 
         proj_fn = None
         # Check pipeline_config for projection, not dataset_meta
@@ -204,49 +190,33 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         vy_reshaped = val_y
 
-        # Prepare Validation Seeds (Only for final check if needed, but not used in search now)
-        val_steps = processed.val_X.shape[0] if processed.val_X is not None else 0
-        seed_len = min(processed.train_X.shape[0], val_steps) if val_steps > 0 else processed.train_X.shape[0]
-        seed_data = processed.train_X[-seed_len:]
+        if hasattr(readout, 'fit_with_validation'):
+             # Define scoring callback
+             def scoring_fn(p, t):
+                 return compute_score(p, t, "mse")
 
-        search_history = {}
-        weight_norms = {}
-        best_score = float("inf")
-        best_lambda = lambda_candidates[0]
-
-        for lam in tqdm(lambda_candidates, desc="[Closed-Loop Search]"):
-            lam_val = float(lam)
-            if hasattr(readout, "ridge_lambda"):
-                readout.ridge_lambda = lam_val
-            
-            readout.fit(tf_reshaped, ty_reshaped)
-            
-            if hasattr(readout, "coef_") and readout.coef_ is not None:
-                weight_norms[lam_val] = float(jnp.linalg.norm(readout.coef_))
-            
-            # Open-Loop Validation
-            val_pred = readout.predict(vf_reshaped)
-            
-            # Score (minimize MSE)
-            # compute_score returns MSE for regression
-            score = compute_score(val_pred, vy_reshaped, "mse")
-            search_history[lam_val] = float(score)
-
-            if score <= best_score:
-                best_score = score
-                best_lambda = lam_val
-
-        print(f"    [Runner] Best Lambda: {best_lambda:.5e} (Val MSE: {best_score:.5f})")
-        print_ridge_search_results({
-            "search_history": search_history,
-            "best_lambda": best_lambda,
-            "weight_norms": weight_norms
-        }, metric_name="MSE")
-
-        print(f"    [Runner] Re-fitting readout with best_lambda={best_lambda:.5e}...")
-        if hasattr(readout, "ridge_lambda"):
-            readout.ridge_lambda = best_lambda
-        readout.fit(tf_reshaped, ty_reshaped)
+             # Use unified optimization (Minimize MSE)
+             best_lambda, best_score, search_history, weight_norms = readout.fit_with_validation(
+                train_Z=tf_reshaped,
+                train_y=ty_reshaped, 
+                val_Z=vf_reshaped, 
+                val_y=vy_reshaped, 
+                scoring_fn=scoring_fn, 
+                maximize_score=False
+             )
+             
+             print_ridge_search_results({
+                "search_history": search_history,
+                "best_lambda": best_lambda,
+                "weight_norms": weight_norms
+             }, metric_name="MSE")
+        else:
+             print("    [Runner] No hyperparameter search needed for this readout.")
+             readout.fit(tf_reshaped, ty_reshaped)
+             best_lambda = None
+             best_score = None
+             search_history = {}
+             weight_norms = {}
 
         # Test Generation
         print("\n=== Step 8: Final Predictions:===")

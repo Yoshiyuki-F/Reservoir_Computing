@@ -1,117 +1,234 @@
 """
 src/reservoir/components/readout/ridge.py
-Ridge regression implementation compliant with ReadoutModule protocol.
+Refactored Ridge regression designed with SOLID principles.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
-
+from typing import Dict, Any, Optional, Callable
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
+import numpy as np
+from tqdm import tqdm
 
 from reservoir.core.interfaces import ReadoutModule
 
-# Lazy x64 enablement - only when Ridge methods are called
-_X64_ENABLED = False
-
+# Robustness: Ridge Regression often requires x64 for matrix inversion stability.
+# We enable it lazily to avoid unnecessary overhead if not used, 
+# though JAX config is global.
 def _ensure_x64():
-    """Enable x64 precision on first Ridge computation."""
-    global _X64_ENABLED
-    if not _X64_ENABLED:
+    if not jax.config.jax_enable_x64:
         jax.config.update("jax_enable_x64", True)
-        _X64_ENABLED = True
 
+# --- Helper Types ---
+ScoringFn = Callable[[np.ndarray, np.ndarray], float]
 
 class RidgeRegression(ReadoutModule):
-    """Ridge regression readout solved with JAX linear algebra."""
+    """
+    Single Ridge Regression model.
+    Responsible ONLY for fitting parameters given a fixed lambda (SRP).
+    """
 
-    def __init__(
-        self,
-        ridge_lambda: float,
-        use_intercept: bool,
-        lambda_candidates: Optional[tuple] = None,
-    ) -> None:
-        lambda_val = float(ridge_lambda)
-        self.ridge_lambda = lambda_val
+    def __init__(self, ridge_lambda: float, use_intercept: bool = True) -> None:
+        self.ridge_lambda = float(ridge_lambda)
         self.use_intercept = bool(use_intercept)
-        self.lambda_candidates = lambda_candidates
         self.coef_: Optional[jnp.ndarray] = None
         self.intercept_: Optional[jnp.ndarray] = None
-        self.input_dim_: Optional[int] = None
+        self._input_dim: Optional[int] = None
 
-    def _prepare_xy(self, states: jnp.ndarray, targets: jnp.ndarray, *, update_dim: bool) \
-            -> tuple[jnp.ndarray, jnp.ndarray, bool]:
-        X = jnp.asarray(states)
-        if X.ndim != 2:
-            raise ValueError(f"States must be 2D, got {X.shape}")
-        y_arr = jnp.asarray(targets)
-        y_is_1d = y_arr.ndim == 1
-        if y_is_1d:
-            y_arr = y_arr[:, None]
-        if y_arr.shape[0] != X.shape[0]:
-            raise ValueError(f"Mismatched samples: states have {X.shape[0]}, targets have {y_arr.shape[0]}.")
-
-        n_samples, n_features = X.shape
-        if update_dim:
-            self.input_dim_ = n_features
-        elif self.input_dim_ is not None and n_features != self.input_dim_:
-            raise ValueError(f"Expected states with {self.input_dim_} features, got {n_features}.")
-
-        if self.use_intercept:
-            ones = jnp.ones((n_samples, 1))
-            X = jnp.concatenate([ones, X], axis=1)
-        return X, y_arr, y_is_1d
+    def _add_intercept(self, X: jnp.ndarray) -> jnp.ndarray:
+        if not self.use_intercept:
+            return X
+        n_samples = X.shape[0]
+        ones = jnp.ones((n_samples, 1))
+        return jnp.concatenate([ones, X], axis=1)
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
-        """Fit a single ridge model without validation search."""
-        _ensure_x64()  # Enable float64 for numerical stability
-        X, y_arr, y_is_1d = self._prepare_xy(states, targets, update_dim=True)
-        n_features = X.shape[1]
+        _ensure_x64()
+        # Ensure input formats
+        X = jnp.asarray(states)
+        y = jnp.asarray(targets)
+        
+        if y.ndim == 1:
+            y = y[:, None]
+        
+        self._input_dim = X.shape[1]
+        
+        # Prepare Data
+        X_design = self._add_intercept(X)
+        n_features = X_design.shape[1]
+
+        # Solve Normal Equations: (X^T X + lambda I) w = X^T y
+        XtX = X_design.T @ X_design
+        Xty = X_design.T @ y
+        
+        # Regularization matrix
         eye = jnp.eye(n_features)
-        XtX = X.T @ X
-        Xty = X.T @ y_arr
-        lam_val = float(self.ridge_lambda)
-        solve_mat = XtX + lam_val * eye
-        if lam_val < 1e-7:
-            w = jax.scipy.linalg.solve(solve_mat, Xty)  # safer general solver for near-singular cases
+        reg_matrix = eye * self.ridge_lambda
+        
+        # JAX Solver (assuming x64 enabled externally if needed)
+        solve_mat = XtX + reg_matrix
+        
+        # Robust solver
+        if self.ridge_lambda < 1e-7:
+             w = jax.scipy.linalg.solve(solve_mat, Xty)
         else:
-            w = jax.scipy.linalg.solve(solve_mat, Xty, assume_a="pos")
-        if not jnp.all(jnp.isfinite(w)):
-            w = jnp.zeros_like(w)
+             w = jax.scipy.linalg.solve(solve_mat, Xty, assume_a="pos")
+
+        # Handle NaNs
+        w = jnp.where(jnp.isfinite(w), w, jnp.zeros_like(w))
+
+        # Extract weights
         if self.use_intercept:
-            intercept = jnp.asarray(w[0])
-            coef = jnp.asarray(w[1:])
+            self.intercept_ = w[0].ravel()
+            self.coef_ = w[1:]
         else:
-            intercept = jnp.zeros(w.shape[1])
-            coef = jnp.asarray(w)
-        if y_is_1d:
-            coef = coef.ravel()
-            intercept = intercept.ravel()
-        self.coef_ = coef
-        self.intercept_ = intercept
+            self.intercept_ = jnp.zeros(w.shape[1])
+            self.coef_ = w
+
+        # Flatten if original target was 1D
+        if targets.ndim == 1:
+            self.coef_ = self.coef_.ravel()
+        
         return self
 
     def predict(self, states: jnp.ndarray) -> jnp.ndarray:
         if self.coef_ is None:
-            raise RuntimeError("RidgeRegression is not fitted yet.")
+            raise RuntimeError("Model is not fitted.")
+        
         X = jnp.asarray(states)
-        return X @ self.coef_ + self.intercept_ if self.use_intercept else X @ self.coef_
+        pred = X @ self.coef_
+        if self.intercept_ is not None:
+             pred = pred + self.intercept_
+        return pred
 
     def to_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"ridge_lambda": self.ridge_lambda, "use_intercept": self.use_intercept}
-        if self.coef_ is not None:
-            data["coef"] = jnp.asarray(self.coef_).tolist()
-        if self.intercept_ is not None:
-            data["intercept"] = jnp.asarray(self.intercept_).tolist()
-        return data
+        return {
+            "ridge_lambda": self.ridge_lambda,
+            "use_intercept": self.use_intercept,
+            "coef": jnp.asarray(self.coef_).tolist() if self.coef_ is not None else None,
+            "intercept": jnp.asarray(self.intercept_).tolist() if self.intercept_ is not None else None
+        }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RidgeRegression":
-        if "ridge_lambda" not in data:
-            raise ValueError("Serialized RidgeRegression is missing required 'ridge_lambda'.")
-        model = cls(ridge_lambda=float(data["ridge_lambda"]), use_intercept=bool(data.get("use_intercept", True)))
-        if "coef" in data:
+        model = cls(
+            ridge_lambda=float(data["ridge_lambda"]),
+            use_intercept=bool(data["use_intercept"])
+        )
+        if data.get("coef") is not None:
             model.coef_ = jnp.asarray(data["coef"])
             model.intercept_ = jnp.asarray(data.get("intercept", 0.0))
         return model
+
+
+class RidgeCV(ReadoutModule):
+    """
+    Orchestrates validation search (OCP/DIP).
+    Acts as the primary ReadoutModule that wraps RidgeRegression.
+    """
+    def __init__(
+        self, 
+        lambda_candidates: tuple[float, ...],
+        use_intercept: bool = True
+    ):
+        if not lambda_candidates:
+            raise ValueError("lambda_candidates must not be empty.")
+
+        self.lambda_candidates = lambda_candidates
+        self.use_intercept = use_intercept
+        self.best_model: Optional[RidgeRegression] = None
+
+        # Initialize default model with first candidate (state consistency)
+        if self.lambda_candidates:
+            self.best_model = RidgeRegression(self.lambda_candidates[0], use_intercept)
+
+    @property
+    def ridge_lambda(self) -> float:
+        return self.best_model.ridge_lambda if self.best_model else float(self.lambda_candidates[0])
+
+    @property
+    def coef_(self):
+        return self.best_model.coef_ if self.best_model else None
+
+    @property
+    def intercept_(self):
+        return self.best_model.intercept_ if self.best_model else None
+
+    def fit_with_validation(
+        self, 
+        train_Z: jnp.ndarray, 
+        train_y: jnp.ndarray, 
+        val_Z: jnp.ndarray, 
+        val_y: jnp.ndarray, 
+        scoring_fn: ScoringFn, 
+        maximize_score: bool = True
+    ) -> tuple[float, float, Dict[float, float], Dict[float, float]]:
+        
+        best_score = float('-inf') if maximize_score else float('inf')
+        best_lambda = self.lambda_candidates[0]
+        search_history = {}
+        weight_norms = {}
+
+        print(f"    [RidgeCV] Optimizing over {len(self.lambda_candidates)} candidates...")
+
+        for lam in tqdm(self.lambda_candidates, desc="[RidgeCV Search]"):
+            lam_val = float(lam)
+            model = RidgeRegression(ridge_lambda=lam_val, use_intercept=self.use_intercept)
+            model.fit(train_Z, train_y)
+            
+            # Predict & Score
+            val_pred = model.predict(val_Z)
+            score = scoring_fn(np.asarray(val_pred), np.asarray(val_y))
+            search_history[lam_val] = score
+            
+            if model.coef_ is not None:
+                weight_norms[lam_val] = float(jnp.linalg.norm(model.coef_))
+
+            # Compare
+            is_better = (score > best_score) if maximize_score else (score < best_score)
+            if is_better:
+                best_score = score
+                best_lambda = lam_val
+
+        print(f"    [RidgeCV] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+        
+        # Final Fit
+        self.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=self.use_intercept)
+        self.best_model.fit(train_Z, train_y)
+        
+        return best_lambda, best_score, search_history, weight_norms
+
+    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeCV":
+        """Fallback fit without validation (uses current best/default lambda)."""
+        if self.best_model is None:
+             self.best_model = RidgeRegression(self.lambda_candidates[0], self.use_intercept)
+        self.best_model.fit(states, targets)
+        return self
+
+    def predict(self, states: jnp.ndarray) -> jnp.ndarray:
+        if self.best_model is None:
+            raise RuntimeError("RidgeCV model is not fitted.")
+        return self.best_model.predict(states)
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = self.best_model.to_dict() if self.best_model else {}
+        # Decorate with candidates for full restoration
+        data["lambda_candidates"] = list(self.lambda_candidates)
+        # Ensure ridge_lambda is set (RidgeRegression.to_dict does it, but purely for safety)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RidgeCV":
+        candidates_list = data.get("lambda_candidates")
+        # Legacy handling
+        if candidates_list is None:
+             candidates = (float(data["ridge_lambda"]),)
+        else:
+             candidates = tuple(candidates_list)
+             
+        instance = cls(lambda_candidates=candidates, use_intercept=bool(data.get("use_intercept", True)))
+        
+        # Restore inner best model
+        instance.best_model = RidgeRegression.from_dict(data)
+        return instance

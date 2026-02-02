@@ -1,10 +1,11 @@
-"""Factory for creating readout instances from configuration."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/readout/factory.py
+Factory for creating readout instances from configuration."""
 from __future__ import annotations
 
 from typing import Optional
 
 from reservoir.models.config import RidgeReadoutConfig, FNNReadoutConfig, ReadoutConfig
-from reservoir.readout.ridge import RidgeRegression
+from reservoir.readout.ridge import RidgeCV
 from reservoir.readout.fnn_readout import FNNReadout
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.training.config import TrainingConfig
@@ -24,10 +25,13 @@ class ReadoutFactory:
 
         # Ridgeの場合
         if isinstance(config, RidgeReadoutConfig):
-            return RidgeRegression(
-                ridge_lambda=config.init_lambda,
+            candidates = config.lambda_candidates
+            if candidates is None:
+                candidates = (config.init_lambda,)
+            
+            return RidgeCV(
                 use_intercept=config.use_intercept,
-                lambda_candidates=config.lambda_candidates
+                lambda_candidates=candidates
             )
 
         # FNNの場合
