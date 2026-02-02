@@ -31,25 +31,6 @@ def _ensure_tensorcircuit_initialized(precision: str = "complex64") -> None:
     tc.set_backend("jax")
     tc.set_dtype(precision)
 
-    #TODO check if it was actually fixed from tensorcircuit side
-
-    # --- Numpy 2.x Compatibility Patch ---
-    # TensorCircuit usage of 'newshape' argument is incompatible with some Numpy versions/wrappers.
-    # We patch it globally ONLY when this class is instantiated.
-    if not hasattr(jnp, "ComplexWarning"):
-        jnp.ComplexWarning = UserWarning
-
-    # Check if already patched to prevent recursion
-    if getattr(jnp.reshape, "__name__", "") != "_patched_reshape":
-        _orig_reshape = jnp.reshape
-        
-        def _patched_reshape(a, *args, **kwargs):
-            if 'newshape' in kwargs:
-                args = args + (kwargs.pop('newshape'),)
-            return _orig_reshape(a, *args, **kwargs)
-            
-        jnp.reshape = _patched_reshape
-
     _TC_INITIALIZED = True
 
 # Pauli Constants for Monte Carlo Simulation (Manual Noise)
