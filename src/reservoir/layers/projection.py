@@ -1,3 +1,6 @@
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/projection.py
+STEP3 Projection which changes the dimension of feature vectors.
+"""
 from __future__ import annotations
 import abc
 from typing import Any, Dict, Type

@@ -4,10 +4,8 @@ SSOT: all default hyperparameters live in these dataclasses.
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
 import numpy as np
 
-from reservoir.core.presets import StrictRegistry
 from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset
 from reservoir.models.config import (
     PreprocessingConfig,
@@ -24,25 +22,41 @@ from reservoir.data.presets import get_dataset_preset
 
 
 
-"=============================================Classification Presets============================================"
 
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
+#---------------------------STEP 2--------------------------------------------------
 
 DEFAULT_PREPROCESS = PreprocessingConfig(
     method=Preprocessing.MAX_SCALER,
     poly_degree=1,
 )
 
+TIME_PREPROCESS = PreprocessingConfig(
+    method=Preprocessing.STANDARD_SCALER,
+    poly_degree=1,
+)
 
-DEFAULT_PROJECTION = RandomProjectionConfig(
+#---------------------------STEP 3--------------------------------------------------
+RP = RandomProjectionConfig(
     n_units=1000,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
     seed=1,
 )
+
+CCP = CenterCropProjectionConfig(
+    n_units=16,  # This becomes n_qubits for quantum reservoir
+)
+
+RES = ResizeProjectionConfig(
+    n_units=16,
+)
+
+#-----------------------------STEP 7-------------------------------------------------------
+
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     init_lambda=1e-3,
@@ -52,6 +66,9 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
 
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 
+
+"=============================================Classification Presets============================================"
+
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
@@ -60,15 +77,13 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     aggregation=AggregationMode.MEAN,
 )
 
-# ------------------------------------------------------------------------------------
-
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=DEFAULT_PREPROCESS,
-    projection=DEFAULT_PROJECTION,
+    projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -78,7 +93,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=DEFAULT_PREPROCESS,
-    projection=DEFAULT_PROJECTION,
+    projection=RP,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
@@ -93,7 +108,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
     preprocess=DEFAULT_PREPROCESS,
-    projection=DEFAULT_PROJECTION,
+    projection=RP,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
@@ -120,16 +135,6 @@ FNN_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 # Quantum Reservoir Definitions
 # -----------------------------------------------------------------------------
-
-
-# Quantum projection: n_units defines the number of qubits
-CENTER_CROP_PROJECTION = CenterCropProjectionConfig(
-    n_units=16,  # This becomes n_qubits for quantum reservoir
-)
-
-RESIZE_PROJECTION = ResizeProjectionConfig(
-    n_units=16,
-)
 
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
 QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
@@ -171,8 +176,18 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=DEFAULT_PREPROCESS,
-    projection=RESIZE_PROJECTION,
+    projection=RES,
     model=QUANTUM_RESERVOIR_DYNAMICS,
+    readout=DEFAULT_RIDGE_READOUT,
+)
+
+TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
+    name="quantum_reservoir",
+    model_type=Model.QUANTUM_RESERVOIR,
+    description="Quantum Gate-Based Reservoir Computing (Time Series)",
+    preprocess=TIME_PREPROCESS,
+    projection=RES,  # Reuse the 4-qubit projection
+    model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
 
@@ -181,11 +196,6 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
-TIME_PREPROCESS = PreprocessingConfig(
-    method=Preprocessing.STANDARD_SCALER,
-    poly_degree=1,
-)
-
 
 
 TIME_PROJECTION = RandomProjectionConfig(
@@ -263,15 +273,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 
 
-TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
-    name="quantum_reservoir",
-    model_type=Model.QUANTUM_RESERVOIR,
-    description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=TIME_PREPROCESS,
-    projection=RESIZE_PROJECTION,  # Reuse the 4-qubit projection
-    model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT,
-)
+
 
 "============================================================================================"
 

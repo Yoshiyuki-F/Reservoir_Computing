@@ -1,4 +1,7 @@
-"""Step 2 Preprocessing layers."""
+"""/home/yoshi/PycharmProjects/Reservoir/src/reservoir/layers/preprocessing.py
+Step 2 Preprocessing layers.
+Here we define preprocessing which doesnt change any dimensions, such as scaling.
+"""
 import numpy as np
 import jax.numpy as jnp
 from typing import Optional, Union, List, Any
