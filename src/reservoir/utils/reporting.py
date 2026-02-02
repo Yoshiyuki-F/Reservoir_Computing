@@ -1,5 +1,5 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/utils/reporting.py
-Reporting utilities for post-run analysis: metrics, logging, and file outputs.
+Reporting utilities for post-run analysis: metrics, logging, and file outputs Draw and save no recalculation.
 """
 from __future__ import annotations
 
@@ -453,7 +453,32 @@ def generate_report(
     dataset_preset: Optional[Any] = None,  # DatasetPreset for dt/lyapunov_time_unit
     model_obj: Optional[Any] = None, # New Argument
 ) -> None:
-    # Loss plotting (distillation)
+    """
+    Coordinator for generating all report elements (plots, logs).
+    Delegates specific plotting tasks to specialized functions.
+    """
+    # 1. Common: Distillation Loss (if available)
+    _plot_distillation_section(results, topo_meta, training_obj, model_type_str, readout, config, dataset_name)
+
+    # 2. Main Task Plots (Classification vs Regression using MSE)
+    metric = "accuracy" if classification else "mse"
+    
+    if classification:
+        _plot_classification_section(
+            results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+            runner, train_X, train_y, test_X, test_y, val_X, val_y, preprocessors, metric
+        )
+    elif metric == "mse":
+        _plot_regression_section(
+            results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+            runner, train_y, val_y, test_X, test_y, preprocessors, dataset_preset, metric
+        )
+
+    # 3. Quantum Dynamics (if available)
+    _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj)
+
+
+def _plot_distillation_section(results, topo_meta, training_obj, model_type_str, readout, config, dataset_name):
     training_logs = _safe_get(results, "training_logs", {})
     if training_logs:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
@@ -461,99 +486,97 @@ def generate_report(
         lr = getattr(training_obj, 'learning_rate', None)
         plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss", learning_rate=lr)
 
-    # Ridge search reporting
-    train_res = _safe_get(results, "train", {})
-    metric = "accuracy" if classification else "mse"
-    # print_ridge_search_results(train_res, metric)
 
-    # ---------------------------------------------------------
-    # Retrieve Pre-calculated Predictions (Optimization)
-    # ---------------------------------------------------------
-    # 前のステップで計算された予測値があれば取得する
+def _plot_classification_section(
+    results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+    runner, train_X, train_y, test_X, test_y, val_X, val_y, preprocessors, metric
+):
+    filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+    confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
+    
+    train_res = _safe_get(results, "train", {})
+    selected_lambda = None
+    lambda_norm = None
+    if isinstance(train_res, dict):
+        selected_lambda = train_res.get("best_lambda")
+        weight_norms = train_res.get("weight_norms") or {}
+        if selected_lambda is not None:
+             lambda_norm = weight_norms.get(selected_lambda) or weight_norms.get(float(selected_lambda))
+
     precalc_preds = _safe_get(results, "outputs", {})
 
-    # Classification plots
-    if classification:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
-        confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
-        selected_lambda = None
-        lambda_norm = None
-        if isinstance(train_res, dict):
-            selected_lambda = train_res.get("best_lambda")
-            weight_norms = train_res.get("weight_norms") or {}
-            if selected_lambda is not None:
-                lambda_norm = weight_norms.get(selected_lambda) or weight_norms.get(float(selected_lambda))
+    plot_classification_report(
+        runner=runner,
+        readout=readout,
+        train_X=train_X,
+        train_y=train_y,
+        test_X=test_X,
+        test_y=test_y,
+        val_X=val_X,
+        val_y=val_y,
+        filename=confusion_filename,
+        model_type_str=model_type_str,
+        dataset_name=dataset_name,
+        metric=metric,
+        selected_lambda=selected_lambda,
+        lambda_norm=lambda_norm,
+        results=results,
+        training_obj=training_obj,
+        precalc_preds=precalc_preds,
+        preprocessors=preprocessors,
+    )
+    
+    # FNN Readout Loss Plot
+    if readout is not None and hasattr(readout, 'training_logs') and readout.training_logs:
+        fnn_loss_history = readout.training_logs.get("loss_history")
+        if fnn_loss_history:
+            loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
+            lr = getattr(training_obj, 'learning_rate', None)
+            plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss", learning_rate=lr)
 
-        plot_classification_report(
+
+def _plot_regression_section(
+    results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+    runner, train_y, val_y, test_X, test_y, preprocessors, dataset_preset, metric
+):
+    filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+    prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
+    
+    test_mse = _safe_get(results, "test", {}).get("mse")
+    scaler = results.get("scaler")
+    precalc_preds = _safe_get(results, "outputs", {})
+    test_pred_cached = precalc_preds.get("test_pred")
+    is_closed_loop = results.get("is_closed_loop", False)
+
+    # Get dt and lyapunov_time_unit for VPT calculation
+    dt = None
+    ltu = None
+    if dataset_preset is not None:
+        ds_config = getattr(dataset_preset, 'config', None)
+        if ds_config is not None:
+            dt = getattr(ds_config, 'dt', None)
+            ltu = getattr(ds_config, 'lyapunov_time_unit', None)
+
+    plot_regression_report(
             runner=runner,
             readout=readout,
-            train_X=train_X,
             train_y=train_y,
+            val_y=val_y,
             test_X=test_X,
             test_y=test_y,
-            val_X=val_X,
-            val_y=val_y,
-            filename=confusion_filename,
+            filename=prediction_filename,
             model_type_str=model_type_str,
-            dataset_name=dataset_name,
-            metric=metric,
-            selected_lambda=selected_lambda,
-            lambda_norm=lambda_norm,
-            results=results,
-            training_obj=training_obj,
-            precalc_preds=precalc_preds,  # <--- ここで渡す
+            mse=test_mse,
+            precalc_test_pred=test_pred_cached, 
             preprocessors=preprocessors,
+            scaler=scaler,
+            is_closed_loop=is_closed_loop,
+            dt=dt,
+            lyapunov_time_unit=ltu,
         )
-        
-        # FNN Readout Loss Plot
-        if readout is not None and hasattr(readout, 'training_logs') and readout.training_logs:
-            fnn_loss_history = readout.training_logs.get("loss_history")
-            if fnn_loss_history:
-                loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
-                lr = getattr(training_obj, 'learning_rate', None)
-                plot_distillation_loss(readout.training_logs, loss_filename, title=f"{model_type_str.upper()} FNN Readout Loss", learning_rate=lr)
-    elif metric == "mse":
-        # Regression Plots
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
-        prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
-        test_mse = _safe_get(results, "test", {}).get("mse")
-        scaler = results.get("scaler")
 
-        # Regressionの方も同様に最適化（必要な場合）
-        # 現状は簡易的に予測値を渡すだけにしていますが、
-        # plot_regression_report も同様に修正すれば高速化できます
-        test_pred_cached = precalc_preds.get("test_pred")
-        is_closed_loop = results.get("is_closed_loop", False)
 
-        # Get dt and lyapunov_time_unit for VPT calculation
-        dt = None
-        ltu = None
-        if dataset_preset is not None:
-            ds_config = getattr(dataset_preset, 'config', None)
-            if ds_config is not None:
-                dt = getattr(ds_config, 'dt', None)
-                ltu = getattr(ds_config, 'lyapunov_time_unit', None)
-
-        plot_regression_report(
-             runner=runner,
-             readout=readout,
-             train_y=train_y,
-             val_y=val_y, # Pass val_y for correct offset
-             test_X=test_X,
-             test_y=test_y,
-             filename=prediction_filename,
-             model_type_str=model_type_str,
-             mse=test_mse,
-             precalc_test_pred=test_pred_cached, 
-             preprocessors=preprocessors,
-             scaler=scaler,
-             is_closed_loop=is_closed_loop,
-             dt=dt,
-             lyapunov_time_unit=ltu,
-         )
-         
-
-    # Quantum Dynamics Plotting
+def _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj):
     quantum_trace = _safe_get(results, "quantum_trace")
     if quantum_trace is not None:
         try:
@@ -566,10 +589,10 @@ def generate_report(
             trace_np = np.asarray(quantum_trace)
             feature_names = None
             if model_obj is not None and hasattr(model_obj, "get_observable_names"):
-                 feature_names = model_obj.get_observable_names()
+                    feature_names = model_obj.get_observable_names()
             elif hasattr(training_obj, "get_observable_names"):
-                 # Fallback but unlikely
-                 feature_names = training_obj.get_observable_names()
+                    # Fallback but unlikely
+                    feature_names = training_obj.get_observable_names()
             
             plot_qubit_dynamics(trace_np, dynamics_filename, title=f"{model_type_str.upper()} Dynamics ({dataset_name})", feature_names=feature_names)
 

@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
-from reservoir.utils.reporting import compute_score, generate_report
+from reservoir.utils.reporting import generate_report
 
 
 class ResultReporter:
@@ -51,14 +51,13 @@ class ResultReporter:
         test_metrics = metrics.get("test", {})
         if metric_name in test_metrics:
              test_score = test_metrics[metric_name]
-        elif test_pred is not None and test_y_final is not None:
-             # Fallback
-             test_score = compute_score(test_pred, test_y_final, metric_name)
-
+        
+        # Train Score 
+        # (Assuming strategy populates metrics["train"], merging it)
         results["train"] = {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
-            **metrics.get("train", {})  # Merge train score
+            **metrics.get("train", {}) 
         }
         if fit_result["best_lambda"] is not None:
             results["train"]["best_lambda"] = fit_result["best_lambda"]
@@ -76,7 +75,8 @@ class ResultReporter:
         if metric_name in val_metrics:
             val_score = val_metrics[metric_name]
         elif fit_result["best_score"] is not None:
-            val_score = fit_result["best_score"]
+             # Keep this fallback as best_score corresponds to validation during fit
+             val_score = fit_result["best_score"]
             
         results["validation"] = {metric_name: val_score, **val_metrics}
 
