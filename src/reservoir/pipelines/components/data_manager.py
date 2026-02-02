@@ -9,9 +9,9 @@ from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY
 from reservoir.data.structs import SplitDataset
 from reservoir.layers.preprocessing import create_preprocessor, apply_layers
-from reservoir.layers.projection import InputProjection
+from reservoir.layers.projection import RandomProjection, CenterCropProjection
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
-from reservoir.models.presets import PipelineConfig
+from reservoir.models.config import PipelineConfig, RandomProjectionConfig, CenterCropProjectionConfig
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
@@ -137,14 +137,22 @@ class PipelineDataManager:
                 scaler=pre_layers[0] if pre_layers else None,
             )
 
-        projection = InputProjection(
-            input_dim=int(preprocessed_shape[-1]),
-            output_dim=int(projection_config.n_units),
-            input_scale=float(projection_config.input_scale),
-            input_connectivity=float(projection_config.input_connectivity),
-            seed=int(projection_config.seed),
-            bias_scale=float(projection_config.bias_scale),
-        )
+        if isinstance(projection_config, CenterCropProjectionConfig):
+            projection = CenterCropProjection(
+                input_dim=int(preprocessed_shape[-1]),
+                output_dim=int(projection_config.n_units),
+            )
+        elif isinstance(projection_config, RandomProjectionConfig):
+            projection = RandomProjection(
+                input_dim=int(preprocessed_shape[-1]),
+                output_dim=int(projection_config.n_units),
+                input_scale=float(projection_config.input_scale),
+                input_connectivity=float(projection_config.input_connectivity),
+                seed=int(projection_config.seed),
+                bias_scale=float(projection_config.bias_scale),
+            )
+        else:
+            raise TypeError(f"Unknown projection config type: {type(projection_config)}")
 
         desc = f"[Projection] (Batch: {batch_size})"
         print(f"Applying Projection in batches of {batch_size}...")

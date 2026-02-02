@@ -11,7 +11,8 @@ from reservoir.core.presets import StrictRegistry
 from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset
 from reservoir.models.config import (
     PreprocessingConfig,
-    ProjectionConfig,
+    RandomProjectionConfig,
+    CenterCropProjectionConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
@@ -34,7 +35,8 @@ DEFAULT_PREPROCESS = PreprocessingConfig(
     poly_degree=1,
 )
 
-DEFAULT_PROJECTION = ProjectionConfig(
+
+DEFAULT_PROJECTION = RandomProjectionConfig(
     n_units=1000,
     input_scale=0.6,
     input_connectivity=0.1,
@@ -119,13 +121,10 @@ FNN_PRESET = PipelineConfig(
 # Quantum Reservoir Definitions
 # -----------------------------------------------------------------------------
 
+
 # Quantum projection: n_units defines the number of qubits
-QUANTUM_PROJECTION = ProjectionConfig(
+QUANTUM_PROJECTION = CenterCropProjectionConfig(
     n_units=16,  # This becomes n_qubits for quantum reservoir
-    input_scale=1.6,
-    input_connectivity=1.0,
-    bias_scale=0.0,
-    seed=1,
 )
 
 # Quantum reservoir dynamics (Classification - MEAN aggregation)
@@ -184,7 +183,8 @@ TIME_PREPROCESS = PreprocessingConfig(
 )
 
 
-TIME_PROJECTION = ProjectionConfig(
+
+TIME_PROJECTION = RandomProjectionConfig(
     n_units=100,
     input_scale=0.2,
     input_connectivity=1.0,

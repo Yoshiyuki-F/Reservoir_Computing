@@ -11,7 +11,7 @@ Examples: MNIST [54000, 28, 28], MackeyGlass [1, 16600, 1]
 Role: Stateless data scaling or polynomial features.
 Examples: StandardScaler, MaxScaler.
 
-3. Input Projection - [N, Time, Features] => [N, Time, Hidden]
+3. Input Projection(Feature Control) - [N, Time, Features] => [N, Time, Hidden]
 Role: Mapping input space to a high-dimensional hidden space using a Matrix (e.g., $28 * 100$). 
 This happens before the branching into Reservoir or FNN paths.
 Examples: Random Projection (W_in), Learned Linear Layer.

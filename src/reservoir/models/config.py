@@ -129,16 +129,15 @@ class PreprocessingConfig:
 
 
 @dataclass(frozen=True)
-class ProjectionConfig:
-    """Step 3 projection parameters."""
-
+class RandomProjectionConfig:
+    """Step 3 parameters for Random Projection."""
     n_units: int
     input_scale: float
     input_connectivity: float
     bias_scale: float
     seed: int
-
-    def validate(self, context: str = "projection") -> "ProjectionConfig":
+    
+    def validate(self, context: str = "random_projection") -> "RandomProjectionConfig":
         prefix = f"{context}: "
         if int(self.n_units) <= 0:
             raise ValueError(f"{prefix}n_units must be positive.")
@@ -152,12 +151,33 @@ class ProjectionConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "type": "random",
             "n_units": int(self.n_units),
             "input_scale": float(self.input_scale),
             "input_connectivity": float(self.input_connectivity),
             "bias_scale": float(self.bias_scale),
             "seed": int(self.seed),
         }
+
+@dataclass(frozen=True)
+class CenterCropProjectionConfig:
+    """Step 3 parameters for Center Crop Projection (3D input only)."""
+    n_units: int
+    
+    def validate(self, context: str = "center_crop") -> "CenterCropProjectionConfig":
+        prefix = f"{context}: "
+        if int(self.n_units) <= 0:
+            raise ValueError(f"{prefix}n_units must be positive.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "center_crop",
+            "n_units": int(self.n_units),
+        }
+
+
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig]
 
 
 
