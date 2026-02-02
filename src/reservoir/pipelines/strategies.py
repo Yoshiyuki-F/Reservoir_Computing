@@ -79,6 +79,7 @@ class EndToEndStrategy(ReadoutStrategy):
             "closed_loop_pred": None,
             "closed_loop_truth": None,
             "chaos_results": None,
+            "metrics": {},
         }
 
         # FNN Closed-Loop for regression check
@@ -156,10 +157,36 @@ class ClassificationStrategy(ReadoutStrategy):
              print("    [Runner] No hyperparameter search needed for this readout.")
              readout.fit(tf_reshaped, ty_reshaped)
 
+        print("\n=== Step 8: Final Predictions:===")
+
+        # Calculate Predictions
+        train_pred = readout.predict(train_Z)
+        val_pred = readout.predict(val_Z) if val_Z is not None else None
+        test_pred = readout.predict(test_Z) if test_Z is not None else None
+
+        # Train
+        metrics = {"train": {
+            self.metric_name: compute_score(train_pred, train_y, self.metric_name)
+        }}
+        
+
+        # Val
+        if val_pred is not None and val_y is not None:
+             metrics["val"] = {
+                 self.metric_name: compute_score(val_pred, val_y, self.metric_name)
+             }
+             
+        # Test
+        if test_pred is not None and test_y is not None:
+             metrics["test"] = {
+                 self.metric_name: compute_score(test_pred, test_y, self.metric_name)
+             }
+
         return {
-            "train_pred": readout.predict(train_Z),
-            "val_pred": readout.predict(val_Z) if val_Z is not None else None,
-            "test_pred": readout.predict(test_Z),
+            "train_pred": train_pred,
+            "val_pred": val_pred,
+            "test_pred": test_pred,
+            "metrics": metrics,
             "best_lambda": best_lambda,
             "best_score": best_score,
             "search_history": search_history,
@@ -272,10 +299,40 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             import traceback
             traceback.print_exc()
 
+        # Calculate Predictions (Open Loop)
+        train_pred = readout.predict(train_Z)
+        
+        # Calculate Metrics (Strategy limits responsibility to computing, not formatting)
+        metrics = {}
+        
+        # Train
+        metrics["train"] = {
+            self.metric_name: compute_score(train_pred, train_y, self.metric_name)
+        }
+        
+        # Val (if needed, though Strategy optimized on it)
+        # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
+        # Using separate predict calls ensures consistency.
+        val_pred = None
+        if val_Z is not None:
+             val_pred = readout.predict(val_Z)
+             metrics["val"] = {
+                 self.metric_name: compute_score(val_pred, val_y, self.metric_name)
+             }
+
+        # Test
+        test_pred = None
+        if test_Z is not None:
+             test_pred = readout.predict(test_Z)
+             metrics["test"] = {
+                 self.metric_name: compute_score(test_pred, test_y, self.metric_name)
+             }
+
         return {
-            "train_pred": readout.predict(train_Z),
-            "val_pred": None,
-            "test_pred": None,
+            "train_pred": train_pred,
+            "val_pred": val_pred,
+            "test_pred": test_pred,
+            "metrics": metrics,
             "best_lambda": best_lambda,
             "best_score": best_score,
             "search_history": search_history,

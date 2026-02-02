@@ -332,9 +332,23 @@ def plot_classification_report(
         y_p = np.asarray(y_pred).ravel()
         return float(np.mean(y_t == y_p))
 
-    acc_train = _calc_acc(train_labels_np, train_pred_np)
-    acc_test = _calc_acc(test_labels_np, test_pred_np)
-    acc_val = _calc_acc(val_labels_np, val_pred_np) if val_labels_np is not None else 0.0
+    acc_train = None
+    acc_test = None
+    acc_val = None
+
+    if results is not None:
+         acc_train = _safe_get(results, "train", {}).get("accuracy")
+         acc_val = _safe_get(results, "validation", {}).get("accuracy")
+         acc_test = _safe_get(results, "test", {}).get("accuracy")
+
+    if acc_train is None:
+        acc_train = _calc_acc(train_labels_np, train_pred_np)
+    
+    if acc_test is None:
+        acc_test = _calc_acc(test_labels_np, test_pred_np)
+    
+    if acc_val is None:
+        acc_val = _calc_acc(val_labels_np, val_pred_np) if val_labels_np is not None else 0.0
     
     print(f"\n[Report] Accuracy Check (Pre-Plot):")
     print(f"  Train: {acc_train:.4%}")

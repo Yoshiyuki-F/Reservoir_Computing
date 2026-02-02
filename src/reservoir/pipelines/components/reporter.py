@@ -42,27 +42,42 @@ class ResultReporter:
             test_pred = fit_result["test_pred"]
             test_y_final = aligned_test_y
 
+        # Try to use pre-calculated metrics from Strategy
+        metrics = fit_result.get("metrics", {})
+        
+        # Test Score
         test_score = 0.0
-        if test_pred is not None and test_y_final is not None:
-            test_score = compute_score(test_pred, test_y_final, metric_name)
-
+        test_metrics = metrics.get("test", {})
+        if metric_name in test_metrics:
+             test_score = test_metrics[metric_name]
+        elif test_pred is not None and test_y_final is not None:
+             # Fallback
+             test_score = compute_score(test_pred, test_y_final, metric_name)
 
         results["train"] = {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
+            **metrics.get("train", {})  # Merge train score
         }
         if fit_result["best_lambda"] is not None:
             results["train"]["best_lambda"] = fit_result["best_lambda"]
 
-        results["test"] = {metric_name: test_score}
+        results["test"] = {metric_name: test_score, **test_metrics}
         if fit_result["chaos_results"] is not None:
             chaos = fit_result["chaos_results"]
             results["test"]["chaos_metrics"] = chaos
             results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
             results["test"]["ndei"] = chaos.get("ndei", float("inf"))
 
-        val_score = fit_result["best_score"] if fit_result["best_score"] is not None else 0.0
-        results["validation"] = {metric_name: val_score}
+        # Val Score
+        val_score = 0.0
+        val_metrics = metrics.get("val", {})
+        if metric_name in val_metrics:
+            val_score = val_metrics[metric_name]
+        elif fit_result["best_score"] is not None:
+            val_score = fit_result["best_score"]
+            
+        results["validation"] = {metric_name: val_score, **val_metrics}
 
         results["outputs"] = {
             "train_pred": fit_result["train_pred"],
