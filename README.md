@@ -1,6 +1,6 @@
 # Reservoir Computing with JAX
 
-A JAX-based Reservoir Computing implementation designed for high-performance numerical computation and flexibility. This project supports various reservoir architectures, including classical Reservoirs and Quantum Reservoirs (Gate-based and Analog), and is capable of handling both Regression and Classification tasks.
+A JAX-based Reservoir Computing implementation designed for high-performance numerical computation and flexibility. This project supports various reservoir architectures, including classical Reservoirs and Quantum Reservoirs (Gate-based), and is capable of handling both Regression and Classification tasks.
 
 ## Features
 
@@ -10,8 +10,9 @@ A JAX-based Reservoir Computing implementation designed for high-performance num
     - Classical Reservoir
     - Feedforward Neural Network (FNN)
     - Distillation Models (FNN/RNN from Reservoir)
-    - Quantum Reservoirs (Gate-based, Analog)
-- **Flexible Data Handling**: Built-in support for synthetic datasets (Sine Wave, Lorenz, Mackey-Glass) and MNIST.
+    - PassThrough Models (no train. just read out)
+    - Quantum Reservoirs (Gate-based)
+- **Flexible Data Handling**: Built-in support for synthetic datasets (Lorenz, Mackey-Glass) and MNIST.
 - **GPU Support**: Built-in GPU detection and optimization.
 
 ## Installation
@@ -46,12 +47,12 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
     - `fnn`
     - `fnn_distillation`
     - `quantum_reservoir`
+    - `passthrough`
 - `--dataset`: **(Required)** The dataset to use.
-    - `sine_wave` (Regression)
     - `lorenz` (Regression)
     - `mackey_glass` (Regression)
     - `mnist` (Classification)
-- `--force-cpu`: Force execution on CPU
+- `--force-cpu`: Force execution on CPU (not tried)
 
 ### Examples
 
@@ -106,4 +107,4 @@ uv run poe cli-gpu -- --model classical_reservoir --dataset sine_wave
 
 - Jaeger, H. (2001). The "echo state" approach to analysing and training recurrent neural networks.
 - [JAX Documentation](https://jax.readthedocs.io/)
-- TensorCircuit (https://github.com/tensorcircuit/tensorcircuit-ng) (for Quantum Reservoir Computing)
+- [TensorCircuit](https://github.com/tensorcircuit/tensorcircuit-ng/) (for Quantum Reservoir Computing)
