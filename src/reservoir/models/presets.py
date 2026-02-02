@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from reservoir.core.identifiers import AggregationMode, Preprocessing, Model, Dataset
+from reservoir.core.identifiers import AggregationMode, Model, Dataset
 from reservoir.models.config import (
-    PreprocessingConfig,
+    StandardScalerConfig,
+    MaxScalerConfig,
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     ClassicalReservoirConfig,
@@ -16,7 +17,7 @@ from reservoir.models.config import (
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig,
-    QuantumReservoirConfig, ResizeProjectionConfig,
+    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig,
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -26,18 +27,6 @@ from reservoir.data.presets import get_dataset_preset
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
-#---------------------------STEP 2--------------------------------------------------
-
-DEFAULT_PREPROCESS = PreprocessingConfig(
-    method=Preprocessing.MAX_SCALER,
-    poly_degree=1,
-)
-
-TIME_PREPROCESS = PreprocessingConfig(
-    method=Preprocessing.STANDARD_SCALER,
-    poly_degree=1,
-)
-
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=1000,
@@ -55,11 +44,14 @@ RES = ResizeProjectionConfig(
     n_units=16,
 )
 
+POLY = PolynomialProjectionConfig(
+    degree=4,
+    include_bias=False,
+)
 #-----------------------------STEP 7-------------------------------------------------------
 
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
-    init_lambda=1e-3,
     use_intercept=True,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
@@ -82,8 +74,8 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=DEFAULT_PREPROCESS,
-    projection=RP,
+    preprocess=MaxScalerConfig(),
+    projection=POLY,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -92,7 +84,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=DEFAULT_PREPROCESS,
+    preprocess=MaxScalerConfig(),
     projection=RP,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
@@ -107,7 +99,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=DEFAULT_PREPROCESS,
+    preprocess=MaxScalerConfig(),
     projection=RP,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
@@ -120,10 +112,7 @@ FNN_PRESET = PipelineConfig(
     name="fnn",
     model_type=Model.FNN,
     description="Feedforward Neural Network (FNN)",
-    preprocess=PreprocessingConfig(
-        method=Preprocessing.MAX_SCALER,
-        poly_degree=1,
-    ),
+    preprocess=MaxScalerConfig(),
     projection=None,
     model=FNNConfig(
         hidden_layers=(100,),
@@ -175,7 +164,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=DEFAULT_PREPROCESS,
+    preprocess=MaxScalerConfig(),
     projection=RES,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
@@ -185,7 +174,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=TIME_PREPROCESS,
+    preprocess=StandardScalerConfig(),
     projection=RES,  # Reuse the 4-qubit projection
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
@@ -221,7 +210,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=TIME_PREPROCESS,
+    preprocess=StandardScalerConfig(),
     projection=TIME_PROJECTION,
     model=TIME_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
@@ -231,7 +220,7 @@ TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=TIME_PREPROCESS,
+    preprocess=StandardScalerConfig(),
     projection=TIME_PROJECTION,
     model=DistillationConfig(
         teacher=TIME_RESERVOIR_DYNAMICS,
@@ -248,7 +237,7 @@ TIME_PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=TIME_PREPROCESS,
+    preprocess=StandardScalerConfig(),
     projection=TIME_PROJECTION,
     model=PassthroughConfig(
         aggregation=AggregationMode.SEQUENCE,
@@ -262,7 +251,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
     name="windowed_fnn",
     model_type=Model.FNN,  # Same model type, different config
     description="FNN with sliding window embedding for time series regression",
-    preprocess=TIME_PREPROCESS,
+    preprocess=StandardScalerConfig(),
     projection=None,  # No projection needed
     model=FNNConfig(
         hidden_layers=(100, 100),

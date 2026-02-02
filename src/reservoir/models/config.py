@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Tuple, Union, Optional
 
-from reservoir.core.identifiers import AggregationMode, Preprocessing, Model
+from reservoir.core.identifiers import AggregationMode, Model
 
 
 
@@ -108,24 +108,38 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
-class PreprocessingConfig:
-    """Step 2 preprocessing parameters."""
+class RawConfig:
+    """Step 2 parameters for Raw (no preprocessing)."""
 
-    method: Preprocessing
-    poly_degree: int
-
-    def validate(self, context: str = "preprocess") -> "PreprocessingConfig":
-        if self.method is None:
-            raise ValueError(f"{context}: method is required.")
-        if self.poly_degree is None or int(self.poly_degree) < 1:
-            raise ValueError(f"{context}: poly_degree must be >=1.")
+    def validate(self, context: str = "raw") -> "RawConfig":
         return self
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "method": self.method.value if isinstance(self.method, Preprocessing) else str(self.method),
-            "poly_degree": int(self.poly_degree),
-        }
+        return {"method": "raw"}
+
+
+@dataclass(frozen=True)
+class StandardScalerConfig:
+    """Step 2 parameters for Standard Scaler (mean removal and variance scaling)."""
+
+    def validate(self, context: str = "standard_scaler") -> "StandardScalerConfig":
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"method": "standard_scaler"}
+
+
+@dataclass(frozen=True)
+class MaxScalerConfig:
+    """Step 2 parameters for Max Scaler."""
+
+    def validate(self, context: str = "max_scaler") -> "MaxScalerConfig":
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"method": "max_scaler"}
+
+PreprocessingConfig = Union[RawConfig, StandardScalerConfig, MaxScalerConfig]
 
 
 @dataclass(frozen=True)
@@ -194,8 +208,22 @@ class ResizeProjectionConfig:
             "n_units": int(self.n_units),
         }
 
+@dataclass(frozen=True)
+class PolynomialProjectionConfig:
+    """Step 3 parameters for Polynomial Projection (feature expansion)."""
+    degree: int
+    include_bias: bool
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig]
+    def validate(self, context: str = "polynomial_projection") -> "PolynomialProjectionConfig":
+        if self.degree is None or int(self.degree) < 1:
+            raise ValueError(f"{context}: degree must be >=1.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": "polynomial", "degree": int(self.degree), "include_bias": self.include_bias}
+
+
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig]
 
 
 
@@ -377,20 +405,17 @@ class QuantumReservoirConfig:
 @dataclass(frozen=True)
 class RidgeReadoutConfig:
     """Step 7 readout configuration (structure/defaults)."""
-    init_lambda: float
     use_intercept: bool
     lambda_candidates: Optional[Tuple[float, ...]] = None
 
     def validate(self, context: str = "ridgereadout") -> "RidgeReadoutConfig":
-        if float(self.init_lambda) <= 0:
-            raise ValueError(f"{context}: init_lambda must be positive.")
         if self.lambda_candidates is not None:
             if any(float(lam) <= 0.0 for lam in self.lambda_candidates):
                 raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"init_lambda": float(self.init_lambda), "use_intercept": bool(self.use_intercept)}
+        result = {"use_intercept": bool(self.use_intercept)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result

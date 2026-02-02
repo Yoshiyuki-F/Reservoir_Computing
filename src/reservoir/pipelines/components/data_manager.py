@@ -6,17 +6,23 @@ from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY
 from reservoir.data.structs import SplitDataset
-from reservoir.layers.preprocessing import create_preprocessor, apply_layers
+from reservoir.layers.preprocessing import create_preprocessor, register_preprocessors
 from reservoir.layers.projection import (
     create_projection,
     register_projections
 )
-from reservoir.models.config import PipelineConfig, RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig
+from reservoir.models.config import (
+    PipelineConfig, 
+    RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig,
+    RawConfig, StandardScalerConfig, MaxScalerConfig,
+)
 
-# Register projection configs once (idempotent if handled safely, but here at module level is typical)
-# Or called inside __init__ if we want to ensure it happens.
-# Module level is fine since classes are imported.
-register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig)
+# Register projection configs once at module level
+register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig)
+
+# Register preprocessor configs
+register_preprocessors(RawConfig, StandardScalerConfig, MaxScalerConfig)
+
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
@@ -83,30 +89,34 @@ class PipelineDataManager:
         batch_size = self.metadata.training.batch_size
         print(f"\n=== Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
-        pre_layers, preprocess_labels = create_preprocessor(preprocessing_config.method, poly_degree=preprocessing_config.poly_degree)
+        
+        # Factory dispatch on config type
+        preprocessor = create_preprocessor(preprocessing_config)
 
         data_split = raw_split
         train_X = data_split.train_X
         val_X = data_split.val_X
         test_X = data_split.test_X
 
-        if pre_layers:
-            train_X = apply_layers(pre_layers, train_X, fit=True)
+        # Apply preprocessing pipeline
+        from reservoir.layers.preprocessing import IdentityPreprocessor
+        if not isinstance(preprocessor, IdentityPreprocessor):
+            train_X = preprocessor.fit_transform(train_X)
             if val_X is not None:
-                val_X = apply_layers(pre_layers, val_X, fit=False)
+                val_X = preprocessor.transform(val_X)
             if test_X is not None:
-                test_X = apply_layers(pre_layers, test_X, fit=False)
+                test_X = preprocessor.transform(test_X)
                 
-            # Fix: For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
+            # For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
             if not self.metadata.classification:
                  print("    [Preprocessing] Applying transforms to targets (y) for REGRESSION task.")
-                 # Note: fit=False to reuse scaler fitted on X
+                 # Note: use transform to reuse fitted parameters
                  if data_split.train_y is not None:
-                     data_split = replace(data_split, train_y=apply_layers(pre_layers, data_split.train_y, fit=False))
+                     data_split = replace(data_split, train_y=preprocessor.transform(data_split.train_y))
                  if data_split.val_y is not None:
-                     data_split = replace(data_split, val_y=apply_layers(pre_layers, data_split.val_y, fit=False))
+                     data_split = replace(data_split, val_y=preprocessor.transform(data_split.val_y))
                  if data_split.test_y is not None:
-                     data_split = replace(data_split, test_y=apply_layers(pre_layers, data_split.test_y, fit=False))
+                     data_split = replace(data_split, test_y=preprocessor.transform(data_split.test_y))
 
         # Re-package for stats logging
         preprocessed_split = replace(data_split, train_X=train_X, val_X=val_X, test_X=test_X)
@@ -179,13 +189,11 @@ class PipelineDataManager:
 
         return FrontendContext(
             processed_split=processed_split,
-            preprocess_labels=preprocess_labels,
-            preprocessors=pre_layers,
+            preprocessor=preprocessor,
             preprocessed_shape=preprocessed_shape,
             projected_shape=projected_shape,
             input_shape_for_meta=projected_shape,
             input_dim_for_factory=input_dim_for_factory,
-            scaler=pre_layers[0] if pre_layers else None,
             projection_layer=projection,
         )
 

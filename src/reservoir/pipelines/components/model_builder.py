@@ -54,7 +54,7 @@ class PipelineModelBuilder:
         topo_meta["shapes"] = shapes_meta
 
         details_meta = topo_meta.get("details", {}) or {}
-        details_meta["preprocess"] = "-".join(frontend_ctx.preprocess_labels) if frontend_ctx.preprocess_labels else None
+        details_meta["preprocess"] = type(frontend_ctx.preprocessor).__name__ if frontend_ctx.preprocessor else None
         topo_meta["details"] = details_meta
         
         # 5. Create Readout

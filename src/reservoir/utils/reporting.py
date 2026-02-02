@@ -407,16 +407,23 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
     # Projection marker (Proj) only if config.projection is defined
     if config is not None and hasattr(config, 'projection') and config.projection is not None:
         proj_config = config.projection
-        proj_units = getattr(proj_config, 'n_units', 0)
+        proj_dict = proj_config.to_dict() if hasattr(proj_config, 'to_dict') else {}
+        proj_type = proj_dict.get("type", "").lower()
+        proj_units = proj_dict.get("n_units", 0)
         
-        if isinstance(proj_config, RandomProjectionConfig):
+        if proj_type == "random":
             filename_parts.append(f"RP{int(proj_units)}")
-        elif isinstance(proj_config, CenterCropProjectionConfig):
+        elif proj_type == "center_crop":
             filename_parts.append(f"CCP{int(proj_units)}")
-        elif isinstance(proj_config, ResizeProjectionConfig):
+        elif proj_type == "resize":
             filename_parts.append(f"Res{int(proj_units)}")
-        else:
-            # Fallback for unknown or generic types
+        elif proj_type == "polynomial":
+            # Get output_dim from projected_shape in topo_meta (already computed)
+            shapes = topo_meta.get("shapes", {}) if isinstance(topo_meta, dict) else {}
+            projected_shape = shapes.get("projected")
+            poly_output = projected_shape[-1] if projected_shape else 0
+            filename_parts.append(f"Poly{int(poly_output)}")
+        elif proj_units:
             filename_parts.append(f"Proj{int(proj_units)}")
 
     # Readout type suffix

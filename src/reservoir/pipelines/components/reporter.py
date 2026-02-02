@@ -87,7 +87,7 @@ class ResultReporter:
         }
 
         results["readout"] = self.stack.readout
-        results["scaler"] = self.frontend_ctx.scaler
+        results["preprocessor"] = self.frontend_ctx.preprocessor
         results["training_logs"] = train_logs
         results["quantum_trace"] = quantum_trace # New
         results["meta"] = {
@@ -113,7 +113,7 @@ class ResultReporter:
             training_obj=self.dataset_meta.training,
             dataset_name=self.dataset_meta.dataset_name,
             model_type_str=self.stack.model_label,
-            preprocessors=self.frontend_ctx.preprocessors,
+            preprocessors=[self.frontend_ctx.preprocessor] if self.frontend_ctx.preprocessor else None,
         )
         generate_report(
             results,

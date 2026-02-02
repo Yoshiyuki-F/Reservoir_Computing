@@ -102,7 +102,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 global_end = global_start + generation_steps
 
                 chaos_results = self.evaluator.compute_chaos_metrics(
-                    jnp.array(processed.test_y), jnp.array(closed_loop_pred), frontend_ctx.scaler,
+                    jnp.array(processed.test_y), jnp.array(closed_loop_pred), frontend_ctx.preprocessor,
                     dataset_meta.preset.config, global_start, global_end)
 
                 result["closed_loop_pred"] = closed_loop_pred
@@ -290,7 +290,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              
              if closed_loop_truth is not None:
                  chaos_results = self.evaluator.compute_chaos_metrics(
-                     jnp.array(closed_loop_truth), jnp.array(closed_loop_pred), frontend_ctx.scaler,
+                     jnp.array(closed_loop_truth), jnp.array(closed_loop_pred), frontend_ctx.preprocessor,
                      dataset_meta.preset.config, global_start, global_end
                  )
 

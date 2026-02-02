@@ -183,6 +183,45 @@ class ResizeProjection(Projection):
         }
 
 
+class PolynomialProjection(Projection):
+    """
+    Polynomial feature expansion projection.
+    Expands input features by adding polynomial terms up to specified degree.
+    Output dimension = input_dim * degree (+ 1 if include_bias).
+    """
+
+    def __init__(self, input_dim: int, degree: int, include_bias: bool) -> None:
+        # Output dim = input_dim * degree (linear, squared, cubed, etc.) + optional bias
+        output_dim = input_dim * degree + (1 if include_bias else 0)
+        super().__init__(input_dim, output_dim)
+        self.degree = degree
+        self.include_bias = include_bias
+
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        # inputs shape: (Batch, Time, Features) or (Batch, Features)
+        features = [inputs]
+        if self.degree > 1:
+            for d in range(2, self.degree + 1):
+                features.append(jnp.power(inputs, d))
+
+        out = jnp.concatenate(features, axis=-1)
+
+        if self.include_bias:
+            shape = out.shape[:-1] + (1,)
+            bias = jnp.ones(shape)
+            out = jnp.concatenate([out, bias], axis=-1)
+
+        return out
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "polynomial_projection",
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+            "degree": self.degree,
+            "include_bias": self.include_bias,
+        }
+
 # --- 3. The Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
@@ -196,7 +235,8 @@ def create_projection(config: Any, input_dim: int) -> Projection:
 def register_projections(
     CenterCropConfigClass: Type, 
     RandomProjectionConfigClass: Type,
-    ResizeProjectionConfigClass: Type
+    ResizeProjectionConfigClass: Type,
+    PolynomialProjectionConfigClass: Type = None,
 ):
     """
     Call this function once to register the handlers.
@@ -227,4 +267,13 @@ def register_projections(
             output_dim=int(config.n_units),
         )
 
-__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "create_projection", "register_projections"]
+    if PolynomialProjectionConfigClass is not None:
+        @create_projection.register(PolynomialProjectionConfigClass)
+        def _(config, input_dim: int) -> PolynomialProjection:
+            return PolynomialProjection(
+                input_dim=int(input_dim),
+                degree=int(config.degree),
+                include_bias=bool(config.include_bias),
+            )
+
+__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "create_projection", "register_projections"]

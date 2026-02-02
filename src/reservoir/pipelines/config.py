@@ -14,13 +14,11 @@ from reservoir.training import TrainingConfig
 @dataclass(frozen=True)
 class FrontendContext:
     processed_split: SplitDataset
-    preprocess_labels: list[str]
-    preprocessors: list[Any]
+    preprocessor: Optional[Any]  # Single Preprocessor instance
     preprocessed_shape: tuple[int, ...]
     projected_shape: Optional[tuple[int, ...]]
     input_shape_for_meta: tuple[int, ...]
     input_dim_for_factory: int
-    scaler: Optional[Any]
     projection_layer: Optional[Any] = None
 
 
