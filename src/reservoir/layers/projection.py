@@ -22,14 +22,12 @@ class RandomProjection:
         input_scale: float,
         input_connectivity: float,
         seed: int,
-        use_bias: bool,
         bias_scale: float,
     ) -> None:
         self.input_dim = int(input_dim)
         self.output_dim = int(output_dim)
         self.input_scale = float(input_scale)
         self.connectivity = float(input_connectivity)
-        self.use_bias = bool(use_bias)
         self.bias_scale = float(bias_scale)
         self.seed = int(seed)
         k_w, k_b, k_mask = jax.random.split(jax.random.PRNGKey(self.seed), 3)
