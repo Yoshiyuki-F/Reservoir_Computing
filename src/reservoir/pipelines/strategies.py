@@ -301,15 +301,13 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Calculate Predictions (Open Loop)
         train_pred = readout.predict(train_Z)
-        
-        # Calculate Metrics (Strategy limits responsibility to computing, not formatting)
-        metrics = {}
-        
+
         # Train
-        metrics["train"] = {
+        metrics = {"train": {
             self.metric_name: compute_score(train_pred, train_y, self.metric_name)
-        }
+        }}
         
+
         # Val (if needed, though Strategy optimized on it)
         # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
         # Using separate predict calls ensures consistency.
