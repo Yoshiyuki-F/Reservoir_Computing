@@ -22,8 +22,8 @@ class RandomProjection:
         input_scale: float,
         input_connectivity: float,
         seed: int,
-        use_bias: bool = True,
-        bias_scale: float = 0.0,
+        use_bias: bool,
+        bias_scale: float,
     ) -> None:
         self.input_dim = int(input_dim)
         self.output_dim = int(output_dim)

@@ -372,6 +372,8 @@ def plot_classification_report(
 
 
 def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
+    from reservoir.models.config import RandomProjectionConfig, CenterCropProjectionConfig
+
     feature_shape = None
     student_layers = None
     readout_label = None
@@ -404,8 +406,16 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
     # Projection marker (Proj) only if config.projection is defined
     if config is not None and hasattr(config, 'projection') and config.projection is not None:
-        proj_units = getattr(config.projection, 'n_units', 0)
-        filename_parts.append(f"Proj{int(proj_units)}")
+        proj_config = config.projection
+        proj_units = getattr(proj_config, 'n_units', 0)
+        
+        if isinstance(proj_config, RandomProjectionConfig):
+            filename_parts.append(f"RP{int(proj_units)}")
+        elif isinstance(proj_config, CenterCropProjectionConfig):
+            filename_parts.append(f"CCP{int(proj_units)}")
+        else:
+            # Fallback for unknown or generic types
+            filename_parts.append(f"Proj{int(proj_units)}")
 
     # Readout type suffix
     if readout is not None:
