@@ -12,7 +12,6 @@ dependencies = [
     "matplotlib",
     "pytest",
     "pydantic",
-    "poethepoet",
     "tqdm",
     #ML
     "jax[cuda12]>=0.9.0",
@@ -27,7 +26,6 @@ dependencies = [
     "jaxtyping",
     "beartype",
     "pandas",
-
     # CUDA GPU is not recognized with the latest cusparse(12.5.9.5, 12.5.10.65)
     # RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found. so 12.5.8.93
     "nvidia-cusparse-cu12==12.5.8.93",
@@ -38,19 +36,6 @@ reservoir-cli = "reservoir.cli.main:main"
 
 [tool.uv]
 dev-dependencies = []
-
-
-[tool.poe.tasks]
-test = { shell = "uv run pytest -q" }
-
-# GPU smoke test (skips if no GPU)
-test-gpu = { shell = "unset LD_LIBRARY_PATH && export JAX_PLATFORMS=cuda && uv run pytest -q -k gpu_smoke" }
-
-# GPU-enabled CLI runner
-[tool.poe.tasks.cli-gpu]
-# Use bash so we can unset LD_LIBRARY_PATH and forward all args with "$@"
-cmd = "bash -c 'unset LD_LIBRARY_PATH && export XLA_PYTHON_CLIENT_PREALLOCATE=false && export XLA_PYTHON_CLIENT_ALLOCATOR=platform && JAX_PLATFORMS=cuda uv run reservoir-cli \"$@\"' --"
-args = [{ name = "extra", help = "Arguments forwarded to reservoir-cli (e.g. 'sine cr 600' or '--dataset mnist --model fnn ...')", positional = true, multiple = true }]
 
 [build-system]
 requires = ["hatchling"]
