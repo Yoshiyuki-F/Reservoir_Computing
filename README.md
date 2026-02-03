@@ -24,9 +24,9 @@ This project uses `uv` for dependency management.
 cd /path/to/reservoir
 
 # Install dependencies
-uv sync
+uv sync --upgrade
 
-# Activate virtual environment (optional)
+# Activate virtual environment
 source .venv/bin/activate
 ```
 
@@ -73,7 +73,7 @@ uv run reservoir-cli --model fnn --dataset mnist
 
 ### GPU & Testing with Poe
 
-GPU execution is recommended for performance. The project uses `poethepoet` for task management.
+GPU execution is recommended for performance.
 
 ```bash
 # Run tests (CPU)

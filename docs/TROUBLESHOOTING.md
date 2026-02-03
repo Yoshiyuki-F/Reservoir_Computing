@@ -33,71 +33,11 @@ RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(
 
 **解決策:**
 
-```bash
-# Poe the Poet使用（推奨）
-uv run poe demo-sine-gpu
-
-# または手動実行の場合
-unset LD_LIBRARY_PATH && uv run python your_script.py
+```dash
+uv add nvidia-cusparse-cu12==12.5.8.93 not the latest
 ```
 
-**原因:** JAX 0.7.0+ はbundled CUDA librariesを使用するため、システムのLD_LIBRARY_PATH設定が競合を引き起こします。
+**原因:** JAX 0.7.0+ はbundled CUDA librariesを使用するため
 
-**解決法:** Poe the Poetタスクを使用すれば、pyproject.tomlの設定により`unset LD_LIBRARY_PATH`
-とJAX_PLATFORMS=cudaが自動的に適用されます。
-
-### 推奨する実行方法（Poe the Poet）
-
-**デモ実行:**
-
-```bash
-# サイン波予測デモ
-uv run poe demo-sine-gpu
-
-# Lorenzアトラクター予測デモ  
-uv run poe demo-lorenz-gpu
-```
-
-**テスト実行:**
-
-```bash
-# GPU基本動作確認
-uv run poe test-gpu
-
-# Reservoir Computing動作テスト
-uv run poe test-simple-gpu
-
-# GPU性能比較テスト
-uv run poe test-gpu-comparison
-```
-
-**手動実行が必要な場合のみ:**
-
-```bash
-# カスタム設定での実行例
-unset LD_LIBRARY_PATH && JAX_PLATFORMS=cuda uv run reservoir-cli --dataset sine_wave --model classical_reservoir --n-hidden_layer 600
-```
-
-### Linux Mint 特有の注意点
-
-- **NVIDIA ドライバー:** Linux Mint では Driver Manager を使用してNVIDIA ドライバーをインストールすることを推奨
-- **CUDA 互換性:** RTX 3060 では CUDA 12.x and driver 550.xx+ が必要
-- **uv 環境:** システムの Python 環境との競合を避けるため uv の使用を強く推奨
-
-### PyCharm IDE での設定
-
-PyCharmでPoe the Poetタスクを実行する簡単な方法：
-
-#### 方法1: uv Run Configuration （PyCharm 2025.2推奨）
-
-1. **Run** → **Edit Configurations...** を開く
-2. **+** → **uv** を選択
-3. 以下のように設定：
-
-**Poeタスク実行の場合:**
-- **Name:** `Demo Main GPU`
-- **Module name:** `poethepoet`
-- **Parameters:** `demo-main-gpu`
-- **Working directory:** `PROJECT_ROOT + /Resorvoir/reservoir`
-
-**推奨:** PyCharm 2024.3.2以降ではuv Run Configurationが利用可能です。
+CUDA GPU is not recognized with the latest cusparse(12.5.9.5, 12.5.10.65) with jax or torch
+RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found. so 12.5.8.93
