@@ -34,16 +34,22 @@ FMAX = CustomRangeScalerConfig(
     centering=False
 )
 
-MEANMAX = CustomRangeScalerConfig(
+TMAX = CustomRangeScalerConfig(
     scale=1.0,
+    centering=False
+)
+
+FCRS = CustomRangeScalerConfig(
+    scale=0.17,
+    centering=False
+)
+
+TCRS = CustomRangeScalerConfig(
+    scale=0.3,
     centering=True
 )
 
 
-CRS = CustomRangeScalerConfig(
-    scale=0.5,
-    centering=False
-)
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=1000,
@@ -66,7 +72,7 @@ CCP = CenterCropProjectionConfig(
 )
 
 RES = ResizeProjectionConfig(
-    n_units=16,
+    n_units=10,
 )
 
 POLY = PolynomialProjectionConfig(
@@ -109,7 +115,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MAX,
+    preprocess=FMAX,
     projection=POLY,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
@@ -119,7 +125,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=MAX,
+    preprocess=FMAX,
     projection=RP,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
@@ -134,7 +140,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=MAX,
+    preprocess=FMAX,
     projection=RP,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
@@ -147,7 +153,7 @@ FNN_PRESET = PipelineConfig(
     name="fnn",
     model_type=Model.FNN,
     description="Feedforward Neural Network (FNN)",
-    preprocess=MAX,
+    preprocess=FMAX,
     projection=None,
     model=FNNConfig(
         hidden_layers=(100,),
@@ -200,8 +206,8 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=CRS,
-    projection=CCP,
+    preprocess=FCRS,
+    projection=PCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
