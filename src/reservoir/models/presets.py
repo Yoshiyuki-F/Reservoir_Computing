@@ -29,7 +29,7 @@ from reservoir.data.presets import get_dataset_preset
 # Definitions
 # -----------------------------------------------------------------------------
 #---------------------------STEP 2--------------------------------------------------
-MAX = CustomRangeScalerConfig(
+FMAX = CustomRangeScalerConfig(
     scale=1.0,
     centering=False
 )
@@ -62,7 +62,7 @@ TIME_PROJECTION = RandomProjectionConfig(
 )
 
 CCP = CenterCropProjectionConfig(
-    n_units=16,  # This becomes n_qubits for quantum reservoir
+    n_units=10,  # This becomes n_qubits for quantum reservoir
 )
 
 RES = ResizeProjectionConfig(
@@ -200,8 +200,8 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=MAX,
-    projection=PCA,
+    preprocess=CRS,
+    projection=CCP,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )

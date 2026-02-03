@@ -384,9 +384,16 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         if details.get("preprocess"):
             raw_label = details["preprocess"]
             if raw_label == "CustomRangeScaler":
-                if config is not None and hasattr(config, "preprocess") and hasattr(config.preprocess, "scale"):
-                    scale = config.preprocess.scale
-                    preprocess_label = f"CRS{float(scale)}"
+                scale = 1.0
+                centering = False
+                if config is not None and hasattr(config, "preprocess"):
+                    if hasattr(config.preprocess, "scale"):
+                        scale = config.preprocess.scale
+                    if hasattr(config.preprocess, "centering"):
+                        centering = config.preprocess.centering
+                
+                prefix = "T" if centering else "F"
+                preprocess_label = f"{prefix}CRS{float(scale)}"
             else:
                 preprocess_label = raw_label
 
