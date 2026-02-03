@@ -10,8 +10,6 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy",
     "matplotlib",
-    "pytest",
-    "pydantic",
     "tqdm",
     #ML
     "jax[cuda12]>=0.9.0",
@@ -20,12 +18,14 @@ dependencies = [
     "optax",
     #Quantum
     "tensorcircuit-ng[jax]",
+    "jaxtyping",
+    "beartype",
     #mnist dataset
     "torch", #CPU version
     "torchvision", #CPU version
-    "jaxtyping",
-    "beartype",
+    #test
     "pandas",
+    "pytest",
     # CUDA GPU is not recognized with the latest cusparse(12.5.9.5, 12.5.10.65)
     # RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found. so 12.5.8.93
     "nvidia-cusparse-cu12==12.5.8.93",
