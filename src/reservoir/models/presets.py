@@ -30,7 +30,7 @@ from reservoir.data.presets import get_dataset_preset
 # -----------------------------------------------------------------------------
 #---------------------------STEP 2--------------------------------------------------
 MAX = MaxScalerConfig(
-    centering=True
+    centering=False
 )
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
@@ -38,6 +38,14 @@ RP = RandomProjectionConfig(
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
+    seed=1,
+)
+
+TIME_PROJECTION = RandomProjectionConfig(
+    n_units=100,
+    input_scale=0.2,
+    input_connectivity=1.0,
+    bias_scale=0.1,
     seed=1,
 )
 
@@ -71,6 +79,9 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 
 "=============================================Classification Presets============================================"
 
+# -----------------------------------------------------------------------------
+# Dynamics Definitions
+# -----------------------------------------------------------------------------
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1.3,
     leak_rate=0.2,
@@ -79,6 +90,8 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     aggregation=AggregationMode.MEAN,
 )
 
+
+# -----------------------------------------------------------------------------
 
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
@@ -169,13 +182,14 @@ TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     use_reuploading=True,
     precision="complex64",
 )
+# -----------------------------------------------------------------------------
 
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=MAX,
-    projection=PCA,
+    projection=RES,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
@@ -193,17 +207,10 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 "=============================================Time series Presets============================================"
 
 # -----------------------------------------------------------------------------
-# Definitions
+# Dynamics Definitions
 # -----------------------------------------------------------------------------
 
 
-TIME_PROJECTION = RandomProjectionConfig(
-    n_units=100,
-    input_scale=0.2,
-    input_connectivity=1.0,
-    bias_scale=0.1,
-    seed=1,
-)
 
 TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1,
@@ -300,7 +307,7 @@ def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     if (model, is_classification) in SPECIFIC_PRESETS:
         return SPECIFIC_PRESETS[(model, is_classification)]
     else:
-        return None
+        raise Error(f"No preset found for model {model} with classification={is_classification}")
 
 __all__ = [
     "PipelineConfig",
