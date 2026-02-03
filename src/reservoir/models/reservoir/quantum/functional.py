@@ -51,6 +51,7 @@ def _make_circuit_logic(
     # scaled_inputs = inputs * input_scaling # Removed: Projection layer handles scaling
     
     for i in range(n_qubits):
+        # jax.debug.print("Qubit {i} Input: {}", inputs[i], i=i)
         apply_encoding_gate(c_enc, i, inputs[i])
             
     # Initial State
@@ -77,7 +78,9 @@ def _make_circuit_logic(
             c = tc.DMCircuit(n_qubits, inputs=carry_state)
         else:
             c = tc.Circuit(n_qubits, inputs=carry_state)
-            
+
+        # Decoherence -  nothing with 1-3p, Px with p, Py with p, Pz with p
+        # to simulate NISQ inaccuracy
         def apply_noise_in_layer(indices):
             nonlocal current_key
             if not is_noisy: return
@@ -119,21 +122,20 @@ def _make_circuit_logic(
                     elif noise_type == "damping":
                         c.amplitude_damping(target_idx, gamma=noise_prob)
 
-        # --- Re-uploading (Optional) ---
+        # === [A] Re-uploading (Optinoal) ===
         if use_reuploading:
             # Re-apply encoding gates with scaled inputs
-            # Note: inputs are captured from closure
             # Note: inputs are captured from closure
             for idx in range(n_qubits):
                 apply_encoding_gate(c, idx, inputs[idx])
                 apply_noise_in_layer([idx])
 
-        # Apply Entanglement (CNOT Ladder)
+        # === [B] CNOT Ladder ===
         for j in range(n_qubits - 1):
             c.cnot(j, j + 1)
             apply_noise_in_layer([j, j + 1])
             
-        # Apply Rotations
+        # === [C] Random Rotations ===
         for k in range(n_qubits):
             c.rx(k, theta=layer_params[k, 0])
             apply_noise_in_layer([k])
@@ -144,7 +146,7 @@ def _make_circuit_logic(
             c.rz(k, theta=layer_params[k, 2])
             apply_noise_in_layer([k])
             
-        # Apply Entanglement (Reverse Ladder)
+        # === [D] Reverse Ladder ===
         for l in range(n_qubits - 2, -1, -1):
             c.cnot(l, l + 1)
             apply_noise_in_layer([l, l + 1])
