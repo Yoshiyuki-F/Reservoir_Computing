@@ -374,20 +374,21 @@ def plot_classification_report(
 def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
     from reservoir.models.config import RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig
 
-    feature_shape = None
     student_layers = None
-    readout_label = None
     preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower or "rnn" in type_lower or "nn" in type_lower
     if isinstance(topo_meta, dict):
-        shapes = topo_meta.get("shapes") or {}
-        feature_shape = shapes.get("feature")
         details = topo_meta.get("details") or {}
         student_layers = details.get("student_layers")
-        readout_label = details.get("readout")
         if details.get("preprocess"):
-            preprocess_label = details["preprocess"]
+            raw_label = details["preprocess"]
+            if raw_label == "CustomRangeScaler":
+                if config is not None and hasattr(config, "preprocess") and hasattr(config.preprocess, "scale"):
+                    scale = config.preprocess.scale
+                    preprocess_label = f"CRS{float(scale)}"
+            else:
+                preprocess_label = raw_label
 
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type

@@ -61,7 +61,7 @@ class Preprocessing(str, enum.Enum):
     PCA = "pca"
     STANDARD_SCALER = "standard_scaler"
     DESIGN_MATRIX = "design_matrix"
-    MAX_SCALER = "max_scaler"
+    CUSTOM_RANGE_SCALER = "custom_range_scaler"
 
     def __str__(self) -> str:
         return self.value

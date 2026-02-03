@@ -97,20 +97,24 @@ class StandardScaler(Preprocessor):
         }
 
 
-class MaxScaler(Preprocessor):
-    """Scales data by dividing by the maximum value."""
+class CustomRangeScaler(Preprocessor):
+    """
+    Scales data by dividing by the maximum value and multiplying by a scalar.
+    Formula: X_scaled = (X / max(X)) * scale
+    """
 
-    def __init__(self, centering: bool = False):
+    def __init__(self, scale: float, centering: bool = False):
+        self.scale = scale
         self.centering = centering
         self.max_val: Optional[float] = None
         self.mean_: Optional[np.ndarray] = None
 
-    def fit(self, X: jnp.ndarray) -> "MaxScaler":
+    def fit(self, X: jnp.ndarray) -> "CustomRangeScaler":
         X_np = np.asarray(X)
         self.max_val = float(np.max(X_np))
         
         if self.centering and self.max_val != 0:
-            # Centering after scaling: mean = mean(X) / max 
+            # Centering after unit scaling: mean = mean(X) / max 
             if X_np.ndim == 3:
                 reduce_axis = (0, 1)
             else:
@@ -122,24 +126,32 @@ class MaxScaler(Preprocessor):
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
         
-        # 1. Scale
+        # 1. Scale to Unit (X / max)
         if self.max_val is not None and self.max_val != 0:
             arr = arr / self.max_val
             
-        # 2. Center
+        # 2. Center (if enabled)
         if self.centering and self.mean_ is not None:
             arr = arr - self.mean_
+        
+        # 3. Apply Custom Range Scale
+        if self.scale != 1.0:
+            arr = arr * self.scale
             
         return arr
 
     def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
         
-        # 1. Un-center
+        # 1. Remove Custom Range Scale
+        if self.scale != 1.0 and self.scale != 0:
+            arr = arr / self.scale
+
+        # 2. Un-center
         if self.centering and self.mean_ is not None:
             arr = arr + self.mean_
         
-        # 2. Un-scale
+        # 3. Un-scale (multiply by max)
         if self.max_val is not None:
             arr = arr * self.max_val
             
@@ -147,7 +159,8 @@ class MaxScaler(Preprocessor):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "type": "max_scaler",
+            "type": "custom_range_scaler",
+            "scale": self.scale,
             "max_val": self.max_val,
             "centering": self.centering
         }
@@ -183,7 +196,7 @@ def create_preprocessor(config: Any) -> Preprocessor:
 def register_preprocessors(
     RawConfigClass: Type,
     StandardScalerConfigClass: Type,
-    MaxScalerConfigClass: Type,
+    CustomRangeScalerConfigClass: Type,
 ):
     """
     Register config classes with the factory.
@@ -198,15 +211,15 @@ def register_preprocessors(
     def _(config) -> Preprocessor:
         return StandardScaler()
 
-    @create_preprocessor.register(MaxScalerConfigClass)
+    @create_preprocessor.register(CustomRangeScalerConfigClass)
     def _(config) -> Preprocessor:
-        return MaxScaler(centering=config.centering)
+        return CustomRangeScaler(scale=config.scale, centering=config.centering)
 
 
 __all__ = [
     "Preprocessor",
     "StandardScaler",
-    "MaxScaler",
+    "CustomRangeScaler",
     "IdentityPreprocessor",
     "create_preprocessor",
     "register_preprocessors",

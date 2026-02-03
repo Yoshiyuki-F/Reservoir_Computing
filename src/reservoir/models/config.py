@@ -130,17 +130,20 @@ class StandardScalerConfig:
 
 
 @dataclass(frozen=True)
-class MaxScalerConfig:
-    """Step 2 parameters for Max Scaler."""
+class CustomRangeScalerConfig:
+    """Step 2 parameters for Custom Range Scaler."""
+    scale: float
     centering: bool = False
 
-    def validate(self, context: str = "max_scaler") -> "MaxScalerConfig":
+    def validate(self, context: str = "custom_range_scaler") -> "CustomRangeScalerConfig":
+        if float(self.scale) == 0:
+            raise ValueError(f"{context}: scale must be non-zero.")
         return self
 
     def to_dict(self) -> dict[str, Any]:
-        return {"method": "max_scaler", "centering": self.centering}
+        return {"method": "custom_range_scaler", "scale": float(self.scale), "centering": self.centering}
 
-PreprocessingConfig = Union[RawConfig, StandardScalerConfig, MaxScalerConfig]
+PreprocessingConfig = Union[RawConfig, StandardScalerConfig, CustomRangeScalerConfig]
 
 
 @dataclass(frozen=True)

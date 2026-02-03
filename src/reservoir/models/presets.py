@@ -9,7 +9,7 @@ import numpy as np
 from reservoir.core.identifiers import AggregationMode, Model, Dataset
 from reservoir.models.config import (
     StandardScalerConfig,
-    MaxScalerConfig,
+    CustomRangeScalerConfig,
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     PCAProjectionConfig,
@@ -29,8 +29,9 @@ from reservoir.data.presets import get_dataset_preset
 # Definitions
 # -----------------------------------------------------------------------------
 #---------------------------STEP 2--------------------------------------------------
-MAX = MaxScalerConfig(
-    centering=False
+MAX = CustomRangeScalerConfig(
+    scale=1.0,
+    centering=True
 )
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
@@ -64,7 +65,7 @@ POLY = PolynomialProjectionConfig(
 
 PCA = PCAProjectionConfig(
     n_units=16,
-    input_scaler = 1
+    input_scaler = 0.08, # 0.05 67 0.07 68.6 0.08 68.77 0.09 68.29 0.1 68.32 0.15 65.4 0.2 64.4 0.3 62.9% 0.4 61% 0.8 56%
 )
 #-----------------------------STEP 7-------------------------------------------------------
 
@@ -153,7 +154,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=1.2,
+    feedback_scale=1.2, #1.0 65.5 1,1 67 1.2 68.32 1.3 67.2
     measurement_basis="Z+ZZ",
     encoding_strategy="Rx",
     noise_type="clean",
@@ -189,7 +190,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=MAX,
-    projection=RES,
+    projection=PCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
