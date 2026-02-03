@@ -31,7 +31,18 @@ from reservoir.data.presets import get_dataset_preset
 #---------------------------STEP 2--------------------------------------------------
 MAX = CustomRangeScalerConfig(
     scale=1.0,
+    centering=False
+)
+
+MEANMAX = CustomRangeScalerConfig(
+    scale=1.0,
     centering=True
+)
+
+
+CRS = CustomRangeScalerConfig(
+    scale=0.5,
+    centering=False
 )
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
