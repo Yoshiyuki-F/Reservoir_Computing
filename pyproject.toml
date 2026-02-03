@@ -15,18 +15,22 @@ dependencies = [
     "poethepoet",
     "tqdm",
     #ML
-    "jax[cuda12]",
+    "jax[cuda12]>=0.9.0",
     "jaxlib",
     "flax",
     "optax",
     #Quantum
     "tensorcircuit-ng[jax]",
     #mnist dataset
-    "torch",
-    "torchvision",
-    "jaxtyping>=0.3.6",
-    "beartype>=0.22.9",
-    "pandas>=3.0.0",
+    "torch", #CPU version
+    "torchvision", #CPU version
+    "jaxtyping",
+    "beartype",
+    "pandas",
+
+    # CUDA GPU is not recognized with the latest cusparse(12.5.9.5, 12.5.10.65)
+    # RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found. so 12.5.8.93
+    "nvidia-cusparse-cu12==12.5.8.93",
 ]
 
 [project.scripts]
@@ -62,5 +66,12 @@ include = ["src"]
 name = "jax_cuda_releases"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
 tensorcircuit-ng = { git = "https://github.com/tensorcircuit/tensorcircuit-ng.git" }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
