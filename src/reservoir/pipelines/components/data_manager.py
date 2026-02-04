@@ -13,12 +13,12 @@ from reservoir.layers.projection import (
 )
 from reservoir.models.config import (
     PipelineConfig, 
-    RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig,
+    RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, AngleEmbeddingConfig,
     RawConfig, StandardScalerConfig, CustomRangeScalerConfig,
 )
 
 # Register projection configs once at module level
-register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig)
+register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, AngleEmbeddingConfig)
 
 # Register preprocessor configs
 register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig)

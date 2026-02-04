@@ -344,6 +344,7 @@ def register_projections(
     ResizeProjectionConfigClass: Type,
     PolynomialProjectionConfigClass: Type = None,
     PCAProjectionConfigClass: Type = None,
+    AngleEmbeddingConfigClass: Type = None,
 ):
     """
     Call this function once to register the handlers.
@@ -393,15 +394,15 @@ def register_projections(
             )
 
     if AngleEmbeddingConfigClass is not None:
-            @create_projection.register(AngleEmbeddingConfigClass)
-            def _(config, input_dim: int) -> AngleEmbeddingProjection:
-                # RandomProjectionを継承したクラスを返す
-                return AngleEmbeddingProjection(
-                    input_dim=int(input_dim),
-                    output_dim=int(config.n_units),
-                    scale=float(config.scale),     # 設定ファイルのscale
-                    bias_scale=float(config.bias_scale),
-                    seed=int(config.seed),
-                )
+        @create_projection.register(AngleEmbeddingConfigClass)
+        def _(config, input_dim: int) -> AngleEmbeddingProjection:
+            # RandomProjectionを継承したクラスを返す
+            return AngleEmbeddingProjection(
+                input_dim=int(input_dim),
+                output_dim=int(config.n_units),
+                frequency=float(config.frequency),
+                phase_offset=float(config.phase_offset),
+                seed=int(config.seed),
+            )
 
 __all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "PCAProjection", "create_projection", "register_projections"]

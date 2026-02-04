@@ -249,7 +249,32 @@ class PCAProjectionConfig:
         return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
 
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig]
+@dataclass(frozen=True)
+class AngleEmbeddingConfig:
+    """Step 3 parameters for Angle Embedding Projection."""
+    n_units: int
+    frequency: float   # Renamed from scale
+    phase_offset: float # Renamed from bias_scale
+    seed: int
+    
+    def validate(self, context: str = "angle_embedding") -> "AngleEmbeddingConfig":
+        if int(self.n_units) <= 0:
+            raise ValueError(f"{context}: n_units must be positive.")
+        if float(self.frequency) <= 0:
+            raise ValueError(f"{context}: frequency must be positive.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "angle_embedding",
+            "n_units": int(self.n_units),
+            "frequency": float(self.frequency),
+            "phase_offset": float(self.phase_offset),
+            "seed": int(self.seed),
+        }
+
+
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, AngleEmbeddingConfig]
 
 
 

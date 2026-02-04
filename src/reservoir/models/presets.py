@@ -18,7 +18,7 @@ from reservoir.models.config import (
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig,
-    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig,
+    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AngleEmbeddingConfig,
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -67,14 +67,6 @@ TIME_PROJECTION = RandomProjectionConfig(
     seed=1,
 )
 
-QUANTUM_RANDOM_PROJECTION = RandomProjectionConfig(
-    n_units=10,
-    input_scale=0.1,
-    input_connectivity=1.0,
-    bias_scale=0.1,
-    seed=1,
-)
-
 CCP = CenterCropProjectionConfig(
     n_units=10,  # This becomes n_qubits for quantum reservoir
 )
@@ -91,6 +83,13 @@ POLY = PolynomialProjectionConfig(
 PCA = PCAProjectionConfig(
     n_units=16,
     input_scaler = 0.08, # 0.05 67 0.07 68.6 0.08 68.77 0.09 68.29 0.1 68.32 0.15 65.4 0.2 64.4 0.3 62.9% 0.4 61% 0.8 56%
+)
+
+ANGLE_EMBEDDING = AngleEmbeddingConfig(
+    n_units=4,
+    frequency=1.57, #pi /2
+    phase_offset=3.14, #pi
+    seed=1,
 )
 
 #-----------------------------STEP 7-------------------------------------------------------
@@ -226,7 +225,12 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=StandardScalerConfig(),
-    projection=QUANTUM_RANDOM_PROJECTION,  # Reuse the 4-qubit projection
+    projection=AngleEmbeddingConfig(
+        n_units=4,
+        frequency=1.0,
+        phase_offset=0.0,
+        seed=1,
+    ),
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
