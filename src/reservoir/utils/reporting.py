@@ -372,20 +372,18 @@ def plot_classification_report(
 
 
 def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
-    from reservoir.models.config import RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig
-
     student_layers = None
     preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
-    is_fnn = "fnn" in type_lower or "rnn" in type_lower or "nn" in type_lower
+    is_fnn = "fnn" in type_lower
     if isinstance(topo_meta, dict):
         details = topo_meta.get("details") or {}
         student_layers = details.get("student_layers")
         if details.get("preprocess"):
             raw_label = details["preprocess"]
             if raw_label == "CustomRangeScaler":
-                scale = 1.0
                 centering = False
+                scale = 0
                 if config is not None and hasattr(config, "preprocess"):
                     if hasattr(config.preprocess, "scale"):
                         scale = config.preprocess.scale
@@ -399,6 +397,12 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
+
+    # Append leak_rate to model_type_str if available
+    if config is not None:
+        model_cfg = getattr(config, 'model', None)
+        if model_cfg and hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None:
+             model_type_str = f"{model_type_str}{model_cfg.leak_rate}"
 
     filename_parts = [model_type_str, preprocess_label]
 
