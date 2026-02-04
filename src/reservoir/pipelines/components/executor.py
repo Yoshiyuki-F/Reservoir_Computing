@@ -44,9 +44,21 @@ class PipelineExecutor:
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)
         
-        if train_Z is not None: print_feature_stats(train_Z, "6:Z:train")
-        if val_Z is not None: print_feature_stats(val_Z, "6:Z:val")
-        if test_Z is not None : print_feature_stats(test_Z, "6:Z:test")
+        if train_Z is not None: 
+            print_feature_stats(train_Z, "6:Z:train")
+            if jnp.std(train_Z) < 0.3:
+                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.3. "
+                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
+
+        if val_Z is not None: 
+            print_feature_stats(val_Z, "6:Z:val")
+            if jnp.std(val_Z) < 0.1:
+                 print(f"    [Warning] val_Z std ({jnp.std(val_Z):.4f}) is very low.")
+
+        if test_Z is not None : 
+            print_feature_stats(test_Z, "6:Z:test")
+            if jnp.std(test_Z) < 0.1:
+                 print(f"    [Warning] test_Z std ({jnp.std(test_Z):.4f}) is very low.")
 
         if train_Z is None:
              raise ValueError("train_Z is None. Execution aborted.")

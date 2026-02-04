@@ -85,14 +85,36 @@ class ClosedLoopGenerativeModel(ABC):
         last_output = history_outputs[:, -1, :]  # (batch, features)
         first_prediction = predict_one(last_output)
         
+        from reservoir.utils.reporting import print_feature_stats
+
         def scan_step(carry, _):
-            h_prev, x_raw = carry
+            h_prev, x_raw, step_idx = carry
+            
             x_proj = projection_fn(x_raw) if projection_fn else x_raw
             h_next, output = self.step(h_prev, x_proj)
             y_next = predict_one(output)
-            return (h_next, y_next), y_next
+            
+            # Periodic Stats Logging (Every 50 steps)
+            def log_stats(args):
+                st_idx, x, h, y = args
+                jax.debug.print("--- Step {i} ---", i=st_idx)
+                jax.debug.print("Loop:Input | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
+                jax.debug.print("Loop:State | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h), s=jnp.std(h), mn=jnp.min(h), mx=jnp.max(h))
+                jax.debug.print("Loop:Pred  | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(y), s=jnp.std(y), mn=jnp.min(y), mx=jnp.max(y))
+
+            # Conditional Execution
+            jax.lax.cond(
+                step_idx % 50 == 0,
+                log_stats,
+                lambda _: None,
+                (step_idx, x_raw, h_next, y_next)
+            )
+            
+            return (h_next, y_next, step_idx + 1), y_next
         
-        _, predictions = jax.lax.scan(scan_step, (final_state, first_prediction), None, length=steps)
+        # Initial carry: (state, prediction, step_counter)
+        init_carry = (final_state, first_prediction, 0)
+        _, predictions = jax.lax.scan(scan_step, init_carry, None, length=steps)
         
         # predictions is (steps, batch, features) -> (batch, steps, features)
         predictions = jnp.swapaxes(predictions, 0, 1)

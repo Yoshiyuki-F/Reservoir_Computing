@@ -184,23 +184,6 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     precision="complex64",
 )
 
-
-# Time-series Quantum Reservoir (SEQUENCE aggregation)
-TIME_QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
-    n_layers=3, #4 with feedback 1.7
-    seed=41,
-    aggregation=AggregationMode.SEQUENCE,
-    leak_rate=0.1,
-    measurement_basis="Z+ZZ",
-    encoding_strategy="Rx",
-    noise_type="clean",
-    noise_prob=0.0,
-    readout_error=0.0,
-    n_trajectories=0,
-    use_remat=False,
-    use_reuploading=True,
-    precision="complex64",
-)
 # -----------------------------------------------------------------------------
 
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
@@ -220,11 +203,25 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=AngleEmbeddingConfig(
         n_units=16,
-        frequency=0.52, # pi/6
-        phase_offset=0, #pi
+        frequency=1, # pi/3
+        phase_offset=0.13, #0
         seed=1,
     ),
-    model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
+    model=QuantumReservoirConfig(
+        n_layers=2, #4 with feedback 1.7
+        seed=41,
+        aggregation=AggregationMode.SEQUENCE,
+        leak_rate=0.5,
+        measurement_basis="Z+ZZ",
+        encoding_strategy="Rx",
+        noise_type="clean",
+        noise_prob=0.0,
+        readout_error=0.0,
+        n_trajectories=0,
+        use_remat=False,
+        use_reuploading=True,
+        precision="complex64",
+    ),
     readout=DEFAULT_RIDGE_READOUT,
 )
 

@@ -116,13 +116,10 @@ class RandomProjection(Projection):
         }
 
 
-class AngleEmbeddingProjection(RandomProjection):
+class AngleEmbeddingProjection(Projection):
     """
     Angle Embedding Projection.
-    Inherits from RandomProjection because the math (xW + b) is identical.
-
-    Differences:
-    - Forces connectivity = 1.0 (Dense connection).
+    Inherits from Projection.
     """
 
     def __init__(
@@ -133,24 +130,41 @@ class AngleEmbeddingProjection(RandomProjection):
             phase_offset: float,
             seed: int,
     ) -> None:
-        # 親クラス(RandomProjection)の初期化をそのまま利用
-        super().__init__(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            input_scale=frequency,  # frequency を input_scale として渡す
-            input_connectivity=1.0,  # 量子埋め込みはスパースにしないので 1.0 固定
-            seed=seed,
-            bias_scale=phase_offset,
+        super().__init__(input_dim, output_dim)
+        self.frequency = float(frequency)
+        self.phase_offset = float(phase_offset)
+        self.seed = int(seed)
+
+        key = jax.random.PRNGKey(self.seed)
+        k_w, k_b = jax.random.split(key, 2)
+
+        # Weight (Frequency): 正規分布 or 一様分布
+        # Frequencyは 1.0 付近が良い
+        self.W = jax.random.normal(k_w, (self.input_dim, self._output_dim)) * self.frequency
+
+        # Bias (Phase): ★ここが重要★
+        # ランダムではなく「π/2 (1.57)」を中心に置く
+        # phase_offset が 0.0 なら全員 1.57 (最高感度) になる
+        center_phase = jnp.pi / 2.0
+        noise = jax.random.uniform(
+            k_b,
+            (self._output_dim,),
+            minval=-self.phase_offset,
+            maxval=self.phase_offset
         )
+        self.bias = center_phase + noise
+
+    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        # xW + b
+        return jnp.dot(inputs, self.W) + self.bias
 
     def to_dict(self) -> Dict[str, Any]:
-        # 保存用に名前とパラメータ名をAngleEmbedding用に合わせる
         return {
             "type": "angle_embedding",
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
-            "scale": self.input_scale,  # 親クラスで保存された input_scale を返す
-            "bias_scale": self.bias_scale,
+            "frequency": self.frequency,
+            "phase_offset": self.phase_offset,
             "seed": self.seed,
         }
 
