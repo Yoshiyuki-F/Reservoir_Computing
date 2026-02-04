@@ -378,7 +378,7 @@ class QuantumReservoirConfig:
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
     aggregation: AggregationMode     # How to aggregate time steps
-    feedback_scale: float            # Scaling factor for state feedback (e.g. 0.1)
+    leak_rate: float                 # Leaky integrator rate (alpha) for Li-ESN dynamics
     measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
     encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
     noise_type: str        # 'clean', 'depolarizing', 'damping'
@@ -393,8 +393,8 @@ class QuantumReservoirConfig:
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
-        if float(self.feedback_scale) < 0:
-            raise ValueError(f"{prefix}feedback_scale must be non-negative.")
+        if not (0.0 < float(self.leak_rate) <= 1.0):
+             raise ValueError(f"{prefix}leak_rate must be in (0,1].")
         if not isinstance(self.aggregation, AggregationMode):
             raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         # Validate measurement_basis
@@ -414,7 +414,7 @@ class QuantumReservoirConfig:
         return {
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
-            "feedback_scale": float(self.feedback_scale),
+            "leak_rate": float(self.leak_rate),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),
             "encoding_strategy": str(self.encoding_strategy),

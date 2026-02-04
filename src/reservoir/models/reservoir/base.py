@@ -7,15 +7,26 @@ from typing import Tuple, Any, Dict
 
 import jax.numpy as jnp
 
+from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
 class Reservoir(ClosedLoopGenerativeModel, ABC):
     """Abstract base class providing common scan-based trajectory generation."""
 
-    def __init__(self, n_units: int, seed: int) -> None:
+    def __init__(self, n_units: int, seed: int, leak_rate: float, aggregation_mode: AggregationMode) -> None:
         self.n_units = n_units
         self.seed = seed
+        self.leak_rate = float(leak_rate)
+        
+        if not (0.0 < self.leak_rate <= 1.0):
+             raise ValueError(f"leak_rate must be in (0,1], got {self.leak_rate}")
+
+        if not isinstance(aggregation_mode, AggregationMode):
+            raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
+            
+        self.aggregator = StateAggregator(mode=aggregation_mode)
 
     @property
     def output_dim(self) -> int:
@@ -53,11 +64,19 @@ class Reservoir(ClosedLoopGenerativeModel, ABC):
         return states if is_sequence_batched else states[0]
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"n_units": self.n_units}
+        return {
+            "n_units": self.n_units,
+            "leak_rate": self.leak_rate,
+            "aggregation": self.aggregator.mode.value,
+        }
 
     def get_topology_meta(self) -> Dict[str, Any]:
         """Optional topology metadata set by factories."""
         return getattr(self, "topology_meta", {}) or {}
+
+    def get_feature_dim(self, time_steps: int) -> int:
+        """Return aggregated feature dimension without running the model."""
+        return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """

@@ -34,7 +34,7 @@ class QuantumReservoir(Reservoir):
         n_layers: int,
         seed: int,
         aggregation_mode: AggregationMode,
-        feedback_scale: float,
+        leak_rate: float,
         measurement_basis: Literal["Z", "ZZ", "Z+ZZ"],
         encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"],
         noise_type: Literal["clean", "depolarizing", "damping"],
@@ -84,15 +84,13 @@ class QuantumReservoir(Reservoir):
             self._feedback_slice = n_qubits
             self._padding_size = 0
         
-        super().__init__(n_units=output_dim, seed=seed)
+        super().__init__(n_units=output_dim, seed=seed, leak_rate=leak_rate, aggregation_mode=aggregation_mode)
         
         self.n_qubits = n_qubits
         self.n_layers = n_layers
-        self.feedback_scale = float(feedback_scale)
         self.measurement_basis = measurement_basis
         self.n_correlations = n_correlations
         self.encoding_strategy = encoding_strategy
-        self.noise_type = noise_type
         self.noise_type = noise_type
         self.noise_prob = float(noise_prob)
         self.readout_error = float(readout_error)
@@ -101,7 +99,6 @@ class QuantumReservoir(Reservoir):
         self.use_reuploading = use_reuploading
         self.precision = precision
 
-        self.aggregator = StateAggregator(mode=aggregation_mode)
         self._rng = jax.random.key(seed)
         
         # Initialize Huge Arrays
@@ -199,7 +196,7 @@ class QuantumReservoir(Reservoir):
             reservoir_params=self.reservoir_params,
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
-            feedback_scale=self.feedback_scale,
+            leak_rate=self.leak_rate,
             feedback_slice=self._feedback_slice,
             padding_size=self._padding_size,
             encoding_strategy=self.encoding_strategy,
@@ -258,7 +255,7 @@ class QuantumReservoir(Reservoir):
             self.reservoir_params,
             self._measurement_matrix,
             self.n_qubits,
-            self.feedback_scale,
+            self.leak_rate,
             self._feedback_slice,
             self._padding_size,
             self.encoding_strategy,
@@ -323,8 +320,7 @@ class QuantumReservoir(Reservoir):
         log_label = f"6:{split_name}" if split_name else None
         return self.aggregator.transform(states, log_label=log_label)
 
-    def get_feature_dim(self, time_steps: int) -> int:
-        return self.aggregator.get_output_dim(self.n_units, int(time_steps))
+
 
     @staticmethod
     def train(_inputs: jnp.ndarray, _targets: Any = None, **__: Any) -> Dict[str, Any]:
@@ -336,9 +332,6 @@ class QuantumReservoir(Reservoir):
         data.update({
             "n_qubits": self.n_qubits,
             "n_layers": self.n_layers,
-            "seed": self.seed,
-            "feedback_scale": self.feedback_scale,
-            "aggregation": self.aggregator.mode.value,
             "measurement_basis": self.measurement_basis,
             "encoding_strategy": self.encoding_strategy,
             "noise_type": self.noise_type,
@@ -358,7 +351,7 @@ class QuantumReservoir(Reservoir):
                 n_qubits=int(data["n_qubits"]),
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                feedback_scale=float(data.get("feedback_scale")),
+                leak_rate=float(data.get("leak_rate")),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
                 encoding_strategy=data.get("encoding_strategy"),

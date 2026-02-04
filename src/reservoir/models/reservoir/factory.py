@@ -49,7 +49,7 @@ class ReservoirFactory:
                 n_layers=model.n_layers,
                 seed=model.seed,
                 aggregation_mode=model.aggregation,
-                feedback_scale=model.feedback_scale,
+                leak_rate=model.leak_rate,
                 measurement_basis=model.measurement_basis,
                 encoding_strategy=model.encoding_strategy,
                 noise_type=model.noise_type,

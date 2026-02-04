@@ -194,7 +194,7 @@ def _step_logic(
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
 
-    feedback_scale: float,
+    leak_rate: float,
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -221,12 +221,10 @@ def _step_logic(
     if rng_key is not None:
         step_key, next_key = jax.random.split(rng_key)
 
-    # Feedback logic
-    combined_input = input_slice + feedback_scale * state_vec
-    
     # Circuit Execution
+    # Li-ESN: Input is just u_t, no feedback injection here
     probs = _make_circuit_logic(
-        combined_input, 
+        input_slice, 
         reservoir_params, 
         n_qubits, 
         encoding_strategy,
@@ -241,13 +239,15 @@ def _step_logic(
     output = jnp.dot(measurement_matrix, probs)
     
     # Branchless Next State Extraction
-    sliced = output[:feedback_slice]
+    measured_state = output[:feedback_slice]
     
     if padding_size > 0:
         padding = jnp.zeros((padding_size,), dtype=jnp.float32)
-        next_state_vec = jnp.concatenate([sliced, padding], axis=0)
-    else:
-        next_state_vec = sliced
+        measured_state = jnp.concatenate([measured_state, padding], axis=0)
+
+    # Li-ESN State Update:
+    # x_t = (1 - alpha) * x_{t-1} + alpha * Measure(Circuit(u_t))
+    next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
             
     if next_key is not None:
         return (next_state_vec, cast(jnp.ndarray, next_key)), output
@@ -267,7 +267,7 @@ def _step_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    feedback_scale: float,
+    leak_rate: float,
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -281,7 +281,7 @@ def _step_jit(
     """
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
-        n_qubits, feedback_scale,
+        n_qubits, leak_rate,
         feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
     )
 
@@ -296,7 +296,7 @@ def _forward_jit(
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
 
-    feedback_scale: float,
+    leak_rate: float,
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -316,7 +316,7 @@ def _forward_jit(
         reservoir_params=reservoir_params,
         measurement_matrix=measurement_matrix,
         n_qubits=n_qubits,
-        feedback_scale=feedback_scale,
+        leak_rate=leak_rate,
         feedback_slice=feedback_slice,
         padding_size=padding_size,
         encoding_strategy=encoding_strategy,

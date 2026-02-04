@@ -29,13 +29,9 @@ class ClassicalReservoir(Reservoir):
         seed: int,
         aggregation_mode: AggregationMode,
     ) -> None:
-        super().__init__(n_units=n_units, seed=seed)
+        super().__init__(n_units=n_units, seed=seed, leak_rate=leak_rate, aggregation_mode=aggregation_mode)
         self.spectral_radius = float(spectral_radius)
-        self.leak_rate = float(leak_rate)
         self.rc_connectivity = float(rc_connectivity)
-        if not isinstance(aggregation_mode, AggregationMode):
-            raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
-        self.aggregator = StateAggregator(mode=aggregation_mode)
         self._rng = jax.random.PRNGKey(self.seed)
         self._init_weights()
 
@@ -102,9 +98,7 @@ class ClassicalReservoir(Reservoir):
         log_label = f"6:{split_name}" if split_name else None
         return self.aggregator.transform(states, log_label=log_label)
 
-    def get_feature_dim(self, time_steps: int) -> int:
-        """Return aggregated feature dimension without running the model."""
-        return self.aggregator.get_output_dim(self.n_units, int(time_steps))
+
 
     def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
         """
@@ -117,10 +111,7 @@ class ClassicalReservoir(Reservoir):
         data.update(
             {
                 "spectral_radius": self.spectral_radius,
-                "leak_rate": self.leak_rate,
                 "rc_connectivity": self.rc_connectivity,
-                "seed": self.seed,
-                "aggregation": self.aggregator.mode.value,
             }
         )
         return data
