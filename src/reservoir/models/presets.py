@@ -60,8 +60,16 @@ RP = RandomProjectionConfig(
 )
 
 TIME_PROJECTION = RandomProjectionConfig(
-    n_units=100,
-    input_scale=0.2,
+    n_units=1000,
+    input_scale=0.1,
+    input_connectivity=1.0,
+    bias_scale=0.1,
+    seed=1,
+)
+
+QUANTUM_RANDOM_PROJECTION = RandomProjectionConfig(
+    n_units=10,
+    input_scale=0.1,
     input_connectivity=1.0,
     bias_scale=0.1,
     seed=1,
@@ -84,6 +92,7 @@ PCA = PCAProjectionConfig(
     n_units=16,
     input_scaler = 0.08, # 0.05 67 0.07 68.6 0.08 68.77 0.09 68.29 0.1 68.32 0.15 65.4 0.2 64.4 0.3 62.9% 0.4 61% 0.8 56%
 )
+
 #-----------------------------STEP 7-------------------------------------------------------
 
 
@@ -217,7 +226,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=StandardScalerConfig(),
-    projection=RES,  # Reuse the 4-qubit projection
+    projection=QUANTUM_RANDOM_PROJECTION,  # Reuse the 4-qubit projection
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT,
 )
@@ -246,7 +255,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=StandardScalerConfig(),
-    projection=TIME_PROJECTION,
+    projection=RP,
     model=TIME_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -256,7 +265,7 @@ TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=StandardScalerConfig(),
-    projection=TIME_PROJECTION,
+    projection=RP,
     model=DistillationConfig(
         teacher=TIME_RESERVOIR_DYNAMICS,
         student=FNNConfig(

@@ -109,7 +109,7 @@ class PipelineDataManager:
                 
             # For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
             if not self.metadata.classification:
-                 print("    [Preprocessing] Applying transforms to targets (y) for REGRESSION task.")
+                 print(f"    [Preprocessing] {preprocessing_config} Applying transforms to targets (y) for REGRESSION task.")
                  # Note: use transform to reuse fitted parameters
                  if data_split.train_y is not None:
                      data_split = replace(data_split, train_y=preprocessor.transform(data_split.train_y))
