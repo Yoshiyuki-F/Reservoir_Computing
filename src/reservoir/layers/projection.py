@@ -116,6 +116,45 @@ class RandomProjection(Projection):
         }
 
 
+class AngleEmbeddingProjection(RandomProjection):
+    """
+    Angle Embedding Projection.
+    Inherits from RandomProjection because the math (xW + b) is identical.
+
+    Differences:
+    - Forces connectivity = 1.0 (Dense connection).
+    """
+
+    def __init__(
+            self,
+            input_dim: int,
+            output_dim: int,
+            frequency: float,
+            phase_offset: float,
+            seed: int,
+    ) -> None:
+        # 親クラス(RandomProjection)の初期化をそのまま利用
+        super().__init__(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            input_scale=frequency,  # frequency を input_scale として渡す
+            input_connectivity=1.0,  # 量子埋め込みはスパースにしないので 1.0 固定
+            seed=seed,
+            bias_scale=phase_offset,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        # 保存用に名前とパラメータ名をAngleEmbedding用に合わせる
+        return {
+            "type": "angle_embedding",
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+            "scale": self.input_scale,  # 親クラスで保存された input_scale を返す
+            "bias_scale": self.bias_scale,
+            "seed": self.seed,
+        }
+
+
 class CenterCropProjection(Projection):
     """
     Fixed cropping projection that selects the central part of the input feature vector.
@@ -352,5 +391,17 @@ def register_projections(
                 n_units=int(config.n_units),
                 input_scaler=float(config.input_scaler),
             )
+
+    if AngleEmbeddingConfigClass is not None:
+            @create_projection.register(AngleEmbeddingConfigClass)
+            def _(config, input_dim: int) -> AngleEmbeddingProjection:
+                # RandomProjectionを継承したクラスを返す
+                return AngleEmbeddingProjection(
+                    input_dim=int(input_dim),
+                    output_dim=int(config.n_units),
+                    scale=float(config.scale),     # 設定ファイルのscale
+                    bias_scale=float(config.bias_scale),
+                    seed=int(config.seed),
+                )
 
 __all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "PCAProjection", "create_projection", "register_projections"]
