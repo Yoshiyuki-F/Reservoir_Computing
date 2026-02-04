@@ -434,6 +434,10 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         elif proj_type == "pca":
             n_units = proj_dict.get("n_units", 0)
             filename_parts.append(f"PCA{int(n_units)}")
+        elif proj_type == "angle_embedding":
+            freq = proj_dict.get("frequency", 0.0)
+            phase = proj_dict.get("phase_offset", 0.0)
+            filename_parts.append(f"AEPf{freq}p{phase}")
         elif proj_units:
             filename_parts.append(f"Proj{int(proj_units)}")
 
