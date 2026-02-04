@@ -61,6 +61,10 @@ class ResultReporter:
         }
         if fit_result["best_lambda"] is not None:
             results["train"]["best_lambda"] = fit_result["best_lambda"]
+        
+        # Propagate residuals history for plotting
+        if "residuals_history" in fit_result:
+            results["residuals_history"] = fit_result["residuals_history"]
 
         results["test"] = {metric_name: test_score, **test_metrics}
         if fit_result["chaos_results"] is not None:

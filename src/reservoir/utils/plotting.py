@@ -271,3 +271,50 @@ def plot_timeseries_comparison(
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"Prediction plot saved to '{output_path}'.")
+
+
+def plot_lambda_search_boxplot(
+    residuals_history: Dict[float, np.ndarray],
+    filename: str,
+    title: str = "Lambda Search: Residuals Distribution"
+) -> None:
+    """
+    Plot boxplot of squared errors (residuals) for each lambda.
+    X-axis: Lambda (log scale or categorical)
+    Y-axis: Residuals
+    """
+    if not residuals_history:
+        return
+
+    # Sort checks by lambda value
+    sorted_lambdas = sorted(residuals_history.keys())
+    data = []
+    labels = []
+    
+    # Optional: Log scale X if range is large?
+    # For Boxplot, we treat lambdas as categories usually.
+    
+    for lam in sorted_lambdas:
+        res = residuals_history[lam]
+        # Filter NaNs or Infs if any
+        res = res[np.isfinite(res)]
+        data.append(res)
+        labels.append(f"{lam:.1e}")
+
+    output_path = _resolve_output_path(filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(10, 6))
+    plt.boxplot(data, labels=labels)
+    
+    plt.title(title)
+    plt.xlabel("Lambda (Regularization Strength)")
+    plt.ylabel("Squared Error (Residuals)")
+    plt.yscale("log") # Residuals often span orders of magnitude
+    plt.xticks(rotation=45, ha='right')
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Lambda Search BoxPlot saved to '{output_path}'.")

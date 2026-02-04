@@ -169,6 +169,7 @@ class RidgeCV(ReadoutModule):
         best_lambda = self.lambda_candidates[0]
         search_history = {}
         weight_norms = {}
+        residuals_history = {} # For BoxPlot
 
         print(f"    [RidgeCV] Optimizing over {len(self.lambda_candidates)} candidates...")
 
@@ -182,6 +183,13 @@ class RidgeCV(ReadoutModule):
             score = scoring_fn(np.asarray(val_pred), np.asarray(val_y))
             search_history[lam_val] = score
             
+            # Capture residuals (Squared Error) for potential BoxPlot
+            # Assuming regression-like scoring. If shapes mismatch, simple flatten diff.
+            vp = np.asarray(val_pred).ravel()
+            vy = np.asarray(val_y).ravel()
+            res_sq = (vp - vy) ** 2
+            residuals_history[lam_val] = res_sq
+            
             if model.coef_ is not None:
                 weight_norms[lam_val] = float(jnp.linalg.norm(model.coef_))
 
@@ -190,14 +198,14 @@ class RidgeCV(ReadoutModule):
             if is_better:
                 best_score = score
                 best_lambda = lam_val
-
+                
         print(f"    [RidgeCV] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
         
         # Final Fit
         self.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=self.use_intercept)
         self.best_model.fit(train_Z, train_y)
         
-        return best_lambda, best_score, search_history, weight_norms
+        return best_lambda, best_score, search_history, weight_norms, residuals_history
 
     def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeCV":
         """Fallback fit without validation (uses current best/default lambda)."""

@@ -139,7 +139,7 @@ class ClassificationStrategy(ReadoutStrategy):
             def scoring_fn(p, t):
                 return compute_score(p, t, self.metric_name)
 
-            best_lambda, best_score, search_history, weight_norms = readout.fit_with_validation(
+            best_lambda, best_score, search_history, weight_norms, _ = readout.fit_with_validation(
                 train_Z=tf_reshaped, 
                 train_y=ty_reshaped, 
                 val_Z=vf_reshaped, 
@@ -154,8 +154,8 @@ class ClassificationStrategy(ReadoutStrategy):
                 "weight_norms": weight_norms
             }, metric_name="Accuracy")
         else:
-             print("    [Runner] No hyperparameter search needed for this readout.")
-             readout.fit(tf_reshaped, ty_reshaped)
+            print("    [Runner] No hyperparameter search needed for this readout.")
+            readout.fit(tf_reshaped, ty_reshaped)
 
         print("\n=== Step 8: Final Predictions:===")
 
@@ -223,7 +223,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  return compute_score(p, t, "mse")
 
              # Use unified optimization (Minimize MSE)
-             best_lambda, best_score, search_history, weight_norms = readout.fit_with_validation(
+             best_lambda, best_score, search_history, weight_norms, residuals_history = readout.fit_with_validation(
                 train_Z=tf_reshaped,
                 train_y=ty_reshaped, 
                 val_Z=vf_reshaped, 
@@ -235,7 +235,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              print_ridge_search_results({
                 "search_history": search_history,
                 "best_lambda": best_lambda,
-                "weight_norms": weight_norms
+                "weight_norms": weight_norms,
+                "residuals_history": residuals_history
              }, metric_name="MSE")
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
@@ -335,6 +336,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "best_score": best_score,
             "search_history": search_history,
             "weight_norms": weight_norms,
+            "residuals_history": residuals_history if 'residuals_history' in locals() else None,
             "closed_loop_pred": closed_loop_pred,
             "closed_loop_truth": closed_loop_truth,
             "chaos_results": chaos_results,

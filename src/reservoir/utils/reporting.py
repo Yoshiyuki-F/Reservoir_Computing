@@ -608,6 +608,16 @@ def _plot_regression_section(
             lyapunov_time_unit=ltu,
         )
 
+    # New: Lambda Search BoxPlot
+    residuals_hist = _safe_get(results, "residuals_history")
+    if residuals_hist:
+        try:
+             from reservoir.utils.plotting import plot_lambda_search_boxplot
+             boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
+             plot_lambda_search_boxplot(residuals_hist, boxplot_filename, title=f"Lambda Search Residuals ({model_type_str})")
+        except ImportError:
+             pass
+
 
 def _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj):
     quantum_trace = _safe_get(results, "quantum_trace")
