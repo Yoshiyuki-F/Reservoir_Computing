@@ -85,13 +85,6 @@ PCA = PCAProjectionConfig(
     input_scaler = 0.08, # 0.05 67 0.07 68.6 0.08 68.77 0.09 68.29 0.1 68.32 0.15 65.4 0.2 64.4 0.3 62.9% 0.4 61% 0.8 56%
 )
 
-ANGLE_EMBEDDING = AngleEmbeddingConfig(
-    n_units=4,
-    frequency=1.57, #pi /2
-    phase_offset=3.14, #pi
-    seed=1,
-)
-
 #-----------------------------STEP 7-------------------------------------------------------
 
 
@@ -226,9 +219,9 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=StandardScalerConfig(),
     projection=AngleEmbeddingConfig(
-        n_units=4,
-        frequency=1.0,
-        phase_offset=0.0,
+        n_units=16,
+        frequency=0.52, # pi/6
+        phase_offset=0, #pi
         seed=1,
     ),
     model=TIME_QUANTUM_RESERVOIR_DYNAMICS,

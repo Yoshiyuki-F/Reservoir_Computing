@@ -46,7 +46,7 @@ class PipelineExecutor:
         
         if train_Z is not None: print_feature_stats(train_Z, "6:Z:train")
         if val_Z is not None: print_feature_stats(val_Z, "6:Z:val")
-        if test_Z is not None: print_feature_stats(test_Z, "6:Z:test")
+        if test_Z is not None : print_feature_stats(test_Z, "6:Z:test")
 
         if train_Z is None:
              raise ValueError("train_Z is None. Execution aborted.")
