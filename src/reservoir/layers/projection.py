@@ -145,12 +145,7 @@ class AngleEmbeddingProjection(Projection):
             (self.input_dim, self._output_dim)
         ) * self.frequency
 
-        self.bias = jax.random.uniform(
-            k_b,
-            (self._output_dim,),
-            minval=-self.phase_offset,
-            maxval=self.phase_offset
-        )
+        self.bias = phase_offset
 
     def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
         # xW + b
