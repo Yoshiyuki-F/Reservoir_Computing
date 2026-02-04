@@ -247,8 +247,10 @@ def _step_logic(
 
     # Li-ESN State Update:
     # x_t = (1 - alpha) * x_{t-1} + alpha * Measure(Circuit(u_t))
-    next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
-            
+    # next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
+    next_state_vec = (1.0 - leak_rate) * state_vec + measured_state
+
+
     if next_key is not None:
         return (next_state_vec, cast(jnp.ndarray, next_key)), output
         

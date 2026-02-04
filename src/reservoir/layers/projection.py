@@ -140,19 +140,17 @@ class AngleEmbeddingProjection(Projection):
 
         # Weight (Frequency): 正規分布 or 一様分布
         # Frequencyは 1.0 付近が良い
-        self.W = jax.random.normal(k_w, (self.input_dim, self._output_dim)) * self.frequency
+        self.W = jax.random.normal(
+            k_w,
+            (self.input_dim, self._output_dim)
+        ) * self.frequency
 
-        # Bias (Phase): ★ここが重要★
-        # ランダムではなく「π/2 (1.57)」を中心に置く
-        # phase_offset が 0.0 なら全員 1.57 (最高感度) になる
-        center_phase = jnp.pi / 2.0
-        noise = jax.random.uniform(
+        self.bias = jax.random.uniform(
             k_b,
             (self._output_dim,),
             minval=-self.phase_offset,
             maxval=self.phase_offset
         )
-        self.bias = center_phase + noise
 
     def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
         # xW + b

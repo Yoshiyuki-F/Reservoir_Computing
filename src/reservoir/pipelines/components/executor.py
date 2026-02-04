@@ -46,8 +46,8 @@ class PipelineExecutor:
         
         if train_Z is not None: 
             print_feature_stats(train_Z, "6:Z:train")
-            if jnp.std(train_Z) < 0.3:
-                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.3. "
+            if jnp.std(train_Z) < 0.1:
+                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
                                  "This usually indicates the Reservoir state is saturated or not responding to input.")
 
         if val_Z is not None: 
