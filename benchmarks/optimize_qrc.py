@@ -90,21 +90,24 @@ def objective(trial: optuna.Trial) -> float:
         trial.set_user_attr("ndei", ndei)
         trial.set_user_attr("mse", mse)
         
-        # Guard: NaN or invalid VPT
+        # Guard: NaN or invalid VPT - return 0 so Optuna learns to avoid this region
         if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
-            print(f"Trial {trial.number}: PRUNED (VPT={vpt_lt})")
-            raise optuna.TrialPruned()
+            print(f"Trial {trial.number}: FAILED (VPT=0) "
+                  f"(in={input_scale:.3f}, leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+            trial.set_user_attr("status", "failed")
+            return 0.0  # Bad score - Optuna will learn to avoid this region
         
         print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
               f"(in={input_scale:.3f}, leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
         
+        trial.set_user_attr("status", "success")
         return vpt_lt  # Maximize VPT directly
         
-    except optuna.TrialPruned:
-        raise  # Re-raise pruned trials
     except Exception as e:
-        print(f"Trial {trial.number}: PRUNED (Exception: {e})")
-        raise optuna.TrialPruned()
+        print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
+        trial.set_user_attr("status", "exception")
+        trial.set_user_attr("error", str(e))
+        return 0.0  # Bad score - Optuna will learn to avoid this region
 
 
 def main():
