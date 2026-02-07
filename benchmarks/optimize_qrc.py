@@ -75,19 +75,25 @@ def objective(trial: optuna.Trial) -> float:
     Searches for optimal QRC parameters to maximize VPT.
     """
     # === 1. Suggest Parameters ===
+
+    #========================Projection===============================================================
+
     # input_scale: Signal strength (Amplitude)
-    input_scale = trial.suggest_float("input_scale", 0.01, 5.0, log=True)
+    input_scale = trial.suggest_float("input_scale", 0.001, 0.5, log=True)
     
     # bias_scale: Operating point variety (Quality/Non-linearity)
     bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
     
     # input_connectivity: Sparsity (Information mixing)
-    input_connectivity = trial.suggest_float("input_connectivity", 0.1, 1.0)
-    
+    input_connectivity = 0.8
+
+    #========================Reservoir===============================================================
     # Reservoir dynamics
     leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
     feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
-    
+
+
+
     # === 2. Build Config ===
     config = build_config(
         input_scale, 
