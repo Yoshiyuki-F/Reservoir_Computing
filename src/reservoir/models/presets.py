@@ -172,6 +172,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
+    feedback_scale=0.0,    # γ=0.0 means no feedback (pure feedforward mode)
     leak_rate=0.1, # Li-ESN alpha
     measurement_basis="Z+ZZ",
     encoding_strategy="Rx",
@@ -201,17 +202,20 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=StandardScalerConfig(),
-    projection=AngleEmbeddingConfig(
+    # Using RandomProjection for stable dynamics
+    projection=RandomProjectionConfig(
         n_units=16,
-        frequency=0.05,
-        phase_offset=1.57,
+        input_scale=0.1,
+        input_connectivity=1.0,
+        bias_scale=0.1,
         seed=1,
     ),
     model=QuantumReservoirConfig(
-        n_layers=2, #4 with feedback 1.7
+        n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
-        leak_rate=0.05,
+        leak_rate=1.0,         # α=1.0 means no memory blending (pure feedback mode)
+        feedback_scale=1.2,    # γ=1.2 feedback injection
         measurement_basis="Z+ZZ",
         encoding_strategy="Rx",
         noise_type="clean",

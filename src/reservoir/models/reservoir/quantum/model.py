@@ -34,6 +34,7 @@ class QuantumReservoir(Reservoir):
         seed: int,
         aggregation_mode: AggregationMode,
         leak_rate: float,
+        feedback_scale: float,  # γ for feedback injection
         measurement_basis: Literal["Z", "ZZ", "Z+ZZ"],
         encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"],
         noise_type: Literal["clean", "depolarizing", "damping"],
@@ -97,6 +98,7 @@ class QuantumReservoir(Reservoir):
         self.use_remat = use_remat
         self.use_reuploading = use_reuploading
         self.precision = precision
+        self.feedback_scale = float(feedback_scale)  # Store feedback_scale
 
         self._rng = jax.random.key(seed)
         
@@ -196,6 +198,7 @@ class QuantumReservoir(Reservoir):
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
             leak_rate=self.leak_rate,
+            feedback_scale=self.feedback_scale,
             feedback_slice=self._feedback_slice,
             padding_size=self._padding_size,
             encoding_strategy=self.encoding_strategy,
@@ -255,6 +258,7 @@ class QuantumReservoir(Reservoir):
             self._measurement_matrix,
             self.n_qubits,
             self.leak_rate,
+            self.feedback_scale,
             self._feedback_slice,
             self._padding_size,
             self.encoding_strategy,

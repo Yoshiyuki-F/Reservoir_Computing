@@ -402,9 +402,9 @@ class QuantumReservoirConfig:
     n_layers: int                    # Number of variational layers
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
-    aggregation: AggregationMode     # How to aggregate time steps
-    leak_rate: float                 # Leaky integrator rate (alpha) for Li-ESN dynamics
-    measurement_basis: str           # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
+    leak_rate: float          # Leaky integrator rate (alpha) for Li-ESN dynamics
+    feedback_scale: float     # Feedback injection scale (gamma). 0.0 = no feedback
+    measurement_basis: str  # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
     encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
     noise_type: str        # 'clean', 'depolarizing', 'damping'
     noise_prob: float          # Probability of noise (0.0 to 1.0)

@@ -195,6 +195,7 @@ def _step_logic(
     n_qubits: int,
 
     leak_rate: float,
+    feedback_scale: float,  # NEW: γ for feedback injection
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -204,9 +205,27 @@ def _step_logic(
     use_reuploading: bool
 ) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
     """
-    Core step logic (Single step).
-    NOT JIT compiled here. Used by both standalone JIT and Scan JIT functions.
-    Handles both clean state (Array) and MC state (Tuple[Array, Key]).
+    Core step logic (Single step) - UNIFIED MODEL.
+    
+    Supports both feedback_scale and leak_rate as configurable parameters.
+    
+    Universal QRC Equation:
+      1. Input Phase (Feedback Injection):
+         u'_t = u_t + γ * x_{t-1}
+         If feedback_scale (γ) = 0.0, no feedback is applied.
+         
+      2. Circuit Phase:
+         z_t = Measure(Circuit(u'_t))
+         
+      3. State Update Phase (Leak Rate):
+         x_t = (1 - α) * x_{t-1} + z_t
+         If leak_rate (α) = 1.0, past is forgotten (x_t = z_t).
+         If leak_rate (α) < 1.0, Li-ESN style integration.
+    
+    This unified design allows:
+      - Feedback only: feedback_scale=1.2, leak_rate=1.0
+      - Leak only: feedback_scale=0.0, leak_rate=0.1
+      - Hybrid: feedback_scale=0.5, leak_rate=0.3
     """
     # Polymorphic State Unpacking
     rng_key = None
@@ -221,10 +240,14 @@ def _step_logic(
     if rng_key is not None:
         step_key, next_key = jax.random.split(rng_key)
 
-    # Circuit Execution
-    # Li-ESN: Input is just u_t, no feedback injection here
+    # === Phase 1: Feedback Injection ===
+    # u'_t = u_t + γ * x_{t-1}
+    # When feedback_scale = 0.0, this is just input_slice (JAX optimizes away)
+    effective_input = input_slice + feedback_scale * state_vec
+
+    # === Phase 2: Circuit Execution ===
     probs = _make_circuit_logic(
-        input_slice, 
+        effective_input,
         reservoir_params, 
         n_qubits, 
         encoding_strategy,
@@ -235,21 +258,21 @@ def _step_logic(
         step_key
     )
     
-    # Vectorized Measurement: E = M @ p
+    # Vectorized Measurement: z_t = M @ p
     output = jnp.dot(measurement_matrix, probs)
     
-    # Branchless Next State Extraction
+    # === Phase 3: State Update with Leak Rate ===
+    # x_t = (1 - α) * x_{t-1} + z_t
     measured_state = output[:feedback_slice]
     
     if padding_size > 0:
         padding = jnp.zeros((padding_size,), dtype=jnp.float32)
         measured_state = jnp.concatenate([measured_state, padding], axis=0)
 
-    # Li-ESN State Update:
-    # x_t = (1 - alpha) * x_{t-1} + alpha * Measure(Circuit(u_t))
-    # next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
-    next_state_vec = (1.0 - leak_rate) * state_vec + 1.2 * measured_state
-
+    # Li-ESN style update: blend past state with new measurement
+    # When leak_rate = 1.0: next_state = measured_state (no memory)
+    # When leak_rate < 1.0: next_state blends past and present
+    next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
 
     if next_key is not None:
         return (next_state_vec, cast(jnp.ndarray, next_key)), output
@@ -270,6 +293,7 @@ def _step_jit(
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
     leak_rate: float,
+    feedback_scale: float,
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -283,7 +307,7 @@ def _step_jit(
     """
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
-        n_qubits, leak_rate,
+        n_qubits, leak_rate, feedback_scale,
         feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
     )
 
@@ -299,6 +323,7 @@ def _forward_jit(
     n_qubits: int,
 
     leak_rate: float,
+    feedback_scale: float,
     feedback_slice: int,
     padding_size: int,
     encoding_strategy: str,
@@ -319,6 +344,7 @@ def _forward_jit(
         measurement_matrix=measurement_matrix,
         n_qubits=n_qubits,
         leak_rate=leak_rate,
+        feedback_scale=feedback_scale,
         feedback_slice=feedback_slice,
         padding_size=padding_size,
         encoding_strategy=encoding_strategy,
