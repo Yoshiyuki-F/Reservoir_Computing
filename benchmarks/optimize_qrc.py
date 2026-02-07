@@ -23,8 +23,7 @@ from typing import Any, Dict
 
 import optuna
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import TIME_QUANTUM_RESERVOIR_PRESET
@@ -140,25 +139,34 @@ def main():
     parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search")
     parser.add_argument("--n-trials", type=int, default=50, 
                         help="Number of optimization trials (default: 50)")
-    parser.add_argument("--study-name", type=str, default="qrc_mackey_glass_vpt",
-                        help="Optuna study name")
+    parser.add_argument("--study-name", type=str, default=None,
+                        help="Optuna study name (default: derived from projection type)")
     parser.add_argument("--storage", type=str, default=None,
                         help="Optuna storage URL (default: benchmarks/optuna_qrc.db)")
     args = parser.parse_args()
     
-    # Determine DB name based on projection type
+    # Determine DB name and Study name based on projection type
     proj_config = TIME_QUANTUM_RESERVOIR_PRESET.projection
-    if isinstance(proj_config, RandomProjectionConfig):
+    config_type_name = type(proj_config).__name__
+    
+    if config_type_name == "RandomProjectionConfig":
         db_name = "optuna_qrc_random_projection.db"
-    elif isinstance(proj_config, CoherentDriveProjectionConfig):
+        default_study_name = "qrc_mackey_glass_vpt_random_projection"
+    elif config_type_name == "CoherentDriveProjectionConfig":
         db_name = "optuna_qrc_coherent_drive.db"
+        default_study_name = "qrc_mackey_glass_vpt_coherent_drive"
     else:
         db_name = "optuna_qrc.db"
-
+        default_study_name = "qrc_mackey_glass_vpt"
+    
     # Default storage in benchmarks folder
     if args.storage is None:
         db_path = Path(__file__).parent / db_name
         args.storage = f"sqlite:///{db_path}"
+    
+    # Use default study name if not provided
+    if args.study_name is None:
+        args.study_name = default_study_name
     
     # Create or load study
     study = optuna.create_study(
