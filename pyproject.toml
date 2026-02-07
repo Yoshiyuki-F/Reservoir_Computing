@@ -30,6 +30,7 @@ dependencies = [
     # RuntimeError: jaxlib/cuda/versions_helpers.cc:81: operation cusparseGetProperty(MAJOR_VERSION, &major) failed: The cuSPARSE library was not found. so 12.5.8.93
     "nvidia-cusparse-cu12==12.5.8.93",
     "optuna>=4.7.0",
+    "optuna-dashboard>=0.20.0",
 ]
 
 [project.scripts]
