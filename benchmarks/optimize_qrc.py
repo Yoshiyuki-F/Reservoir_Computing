@@ -65,11 +65,10 @@ def objective(trial: optuna.Trial) -> float:
     Optuna objective function.
     
     Searches for optimal QRC parameters to maximize VPT.
-    Returns negative VPT (since Optuna minimizes by default).
     """
     # === 1. Suggest Parameters ===
-    input_scale = trial.suggest_float("input_scale", 0.1, 5.0, log=True)
-    leak_rate = trial.suggest_float("leak_rate", 0.01, 1.0)
+    input_scale = trial.suggest_float("input_scale", 0.01, 5.0, log=True)
+    leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
     feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
     
     # === 2. Build Config ===
@@ -79,24 +78,33 @@ def objective(trial: optuna.Trial) -> float:
     try:
         results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
         
-        # === 4. Extract VPT ===
-        closed_loop_metrics = results.get("closed_loop_metrics", {})
-        vpt_lt = closed_loop_metrics.get("vpt_lt", 0.0)
+        # === 4. Extract Metrics ===
+        test_results = results.get("test", {})
+        vpt_lt = test_results.get("vpt_lt", 0.0)
+        var_ratio = test_results.get("var_ratio", 0.0)
+        ndei = test_results.get("ndei", float('inf'))
+        mse = test_results.get("mse", float('inf'))
+        
+        # Save additional metrics to DB
+        trial.set_user_attr("var_ratio", var_ratio)
+        trial.set_user_attr("ndei", ndei)
+        trial.set_user_attr("mse", mse)
         
         # Guard: NaN or invalid VPT
-        if math.isnan(vpt_lt) or vpt_lt <= 0:
-            print(f"Trial {trial.number}: FAILED (VPT={vpt_lt})")
-            return float('inf')
+        if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
+            print(f"Trial {trial.number}: PRUNED (VPT={vpt_lt})")
+            raise optuna.TrialPruned()
         
-        print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT "
+        print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
               f"(in={input_scale:.3f}, leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
         
-        # Return negative VPT (minimize → maximize VPT)
-        return -vpt_lt
+        return vpt_lt  # Maximize VPT directly
         
+    except optuna.TrialPruned:
+        raise  # Re-raise pruned trials
     except Exception as e:
-        print(f"Trial {trial.number}: EXCEPTION - {e}")
-        return float('inf')
+        print(f"Trial {trial.number}: PRUNED (Exception: {e})")
+        raise optuna.TrialPruned()
 
 
 def main():
@@ -118,7 +126,7 @@ def main():
     study = optuna.create_study(
         study_name=args.study_name,
         storage=args.storage,
-        direction="minimize",  # Minimizing -VPT = Maximizing VPT
+        direction="maximize",  # Maximize VPT directly
         load_if_exists=True
     )
     
@@ -140,7 +148,7 @@ def main():
     print(f"input_scale    : {study.best_params['input_scale']:.4f}")
     print(f"leak_rate      : {study.best_params['leak_rate']:.4f}")
     print(f"feedback_scale : {study.best_params['feedback_scale']:.4f}")
-    print(f"Best VPT       : {-study.best_value:.2f} LT")
+    print(f"Best VPT       : {study.best_value:.2f} LT")
     print("=" * 60)
 
 
