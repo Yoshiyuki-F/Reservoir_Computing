@@ -60,29 +60,15 @@ class QuantumReservoir(Reservoir):
                  ResourceWarning
              )
         
-        # --- Pre-calculate static sizes for branchless logic ---
+        # --- Calculate output dimension based on measurement basis ---
         if measurement_basis == "Z":
             output_dim = n_qubits
-            self._feedback_slice = n_qubits
-            self._padding_size = 0
-            
         elif measurement_basis == "ZZ":
             output_dim = n_correlations
-            if n_correlations >= n_qubits:
-                self._feedback_slice = n_qubits
-                self._padding_size = 0
-            else:
-                self._feedback_slice = n_correlations
-                self._padding_size = n_qubits - n_correlations
-                
         elif measurement_basis == "Z+ZZ":
             output_dim = n_qubits + n_correlations
-            self._feedback_slice = n_qubits
-            self._padding_size = 0
         else:
             output_dim = n_qubits
-            self._feedback_slice = n_qubits
-            self._padding_size = 0
         
         super().__init__(n_units=output_dim, seed=seed, leak_rate=leak_rate, aggregation_mode=aggregation_mode)
         
@@ -199,8 +185,6 @@ class QuantumReservoir(Reservoir):
             n_qubits=self.n_qubits,
             leak_rate=self.leak_rate,
             feedback_scale=self.feedback_scale,
-            feedback_slice=self._feedback_slice,
-            padding_size=self._padding_size,
             encoding_strategy=self.encoding_strategy,
             noise_type=self.noise_type,
             noise_prob=self.noise_prob,
@@ -259,8 +243,6 @@ class QuantumReservoir(Reservoir):
             self.n_qubits,
             self.leak_rate,
             self.feedback_scale,
-            self._feedback_slice,
-            self._padding_size,
             self.encoding_strategy,
             self.noise_type,
             self.noise_prob,

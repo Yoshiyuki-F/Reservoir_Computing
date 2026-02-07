@@ -193,11 +193,8 @@ def _step_logic(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-
     leak_rate: float,
-    feedback_scale: float,  # NEW: γ for feedback injection
-    feedback_slice: int,
-    padding_size: int,
+    feedback_scale: float,
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
@@ -218,8 +215,8 @@ def _step_logic(
          z_t = Measure(Circuit(u'_t))
          
       3. State Update Phase (Leak Rate):
-         x_t = (1 - α) * x_{t-1} + z_t
-         If leak_rate (α) = 1.0, past is forgotten (x_t = z_t).
+         x_t = (1 - α) * x_{t-1} + α * z_t[:n_qubits]
+         If leak_rate (α) = 1.0, past is forgotten (x_t = z_t[:n_qubits]).
          If leak_rate (α) < 1.0, Li-ESN style integration.
     
     This unified design allows:
@@ -262,12 +259,8 @@ def _step_logic(
     output = jnp.dot(measurement_matrix, probs)
     
     # === Phase 3: State Update with Leak Rate ===
-    # x_t = (1 - α) * x_{t-1} + z_t
-    measured_state = output[:feedback_slice]
-    
-    if padding_size > 0:
-        padding = jnp.zeros((padding_size,), dtype=jnp.float32)
-        measured_state = jnp.concatenate([measured_state, padding], axis=0)
+    # State is always n_qubits dimension, take first n_qubits from output
+    measured_state = output[:n_qubits]
 
     # Li-ESN style update: blend past state with new measurement
     # When leak_rate = 1.0: next_state = measured_state (no memory)
@@ -283,8 +276,7 @@ def _step_logic(
 # --- JIT Compiled Wrappers ---
 
 @partial(jax.jit, static_argnames=[
-    "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
+    "n_qubits", "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
     state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
@@ -294,8 +286,6 @@ def _step_jit(
     n_qubits: int,
     leak_rate: float,
     feedback_scale: float,
-    feedback_slice: int,
-    padding_size: int,
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
@@ -308,12 +298,11 @@ def _step_jit(
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
         n_qubits, leak_rate, feedback_scale,
-        feedback_slice, padding_size, encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
+        encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
     )
 
 @partial(jax.jit, static_argnames=[
-    "n_qubits", "feedback_slice", "padding_size",
-    "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
+    "n_qubits", "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
     state_init: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
@@ -324,8 +313,6 @@ def _forward_jit(
 
     leak_rate: float,
     feedback_scale: float,
-    feedback_slice: int,
-    padding_size: int,
     encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
@@ -345,8 +332,6 @@ def _forward_jit(
         n_qubits=n_qubits,
         leak_rate=leak_rate,
         feedback_scale=feedback_scale,
-        feedback_slice=feedback_slice,
-        padding_size=padding_size,
         encoding_strategy=encoding_strategy,
         noise_type=noise_type,
         noise_prob=noise_prob,

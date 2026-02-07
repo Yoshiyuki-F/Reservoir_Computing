@@ -398,11 +398,18 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
 
-    # Append leak_rate to model_type_str if available
+    # Append leak_rate and feedback_scale to model_type_str for quantum models
     if config is not None:
         model_cfg = getattr(config, 'model', None)
-        if model_cfg and hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None:
-             model_type_str = f"{model_type_str}{model_cfg.leak_rate}"
+        if model_cfg:
+            has_leak = hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None
+            has_feedback = hasattr(model_cfg, 'feedback_scale') and model_cfg.feedback_scale is not None
+            if has_leak and has_feedback:
+                # Quantum model: use l{leak_rate}f{feedback_scale} format
+                model_type_str = f"{model_type_str}_l{model_cfg.leak_rate}f{model_cfg.feedback_scale}"
+            elif has_leak:
+                # Classical reservoir: just leak_rate
+                model_type_str = f"{model_type_str}_{model_cfg.leak_rate}"
 
     filename_parts = [model_type_str, preprocess_label]
 
