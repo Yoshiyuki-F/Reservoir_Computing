@@ -116,48 +116,86 @@ class RandomProjection(Projection):
         }
 
 
-class AngleEmbeddingProjection(Projection):
+class CoherentDriveProjection(Projection):
     """
-    Angle Embedding Projection.
-    Inherits from Projection.
+    Coherent Drive Projection for Quantum Reservoir Computing.
+    
+    Applies arcsin transformation to convert linear input values to
+    quantum rotation angles that achieve amplitude encoding.
+    
+    The transformation: θ = 2 * arcsin(clip(x, -1, 1))
+    When applied with Ry(θ): |ψ⟩ = sqrt(1-a²)|0⟩ + a|1⟩
+    
+    This is non-periodic (unlike angle embedding) and suitable for
+    trending time series like Mackey-Glass.
     """
 
     def __init__(
             self,
             input_dim: int,
             output_dim: int,
-            frequency: float,
-            phase_offset: float,
+            input_scale: float,
+            input_connectivity: float,
             seed: int,
+            bias_scale: float,
     ) -> None:
         super().__init__(input_dim, output_dim)
-        self.frequency = float(frequency)
-        self.phase_offset = float(phase_offset)
+        self.input_scale = float(input_scale)
+        self.connectivity = float(input_connectivity)
+        self.bias_scale = float(bias_scale)
         self.seed = int(seed)
+        
+        # Use RandomProjection-style linear transformation first
+        self.use_bias = self.bias_scale > 0.0
 
-        key = jax.random.PRNGKey(self.seed)
-        k_w, k_b = jax.random.split(key, 2)
+        k_w, k_b, k_mask = jax.random.split(jax.random.PRNGKey(self.seed), 3)
 
-        # Weight (Frequency): 正規分布 or 一様分布
-        # Frequencyは 1.0 付近が良い
-        self.W = jax.random.normal(
+        boundary = self.input_scale
+        W = jax.random.uniform(
             k_w,
-            (self.input_dim, self._output_dim)
-        ) * self.frequency
-
-        self.bias = phase_offset
+            (self.input_dim, self._output_dim),
+            minval=-boundary,
+            maxval=boundary,
+        )
+        if 0.0 < self.connectivity < 1.0:
+            mask = jax.random.bernoulli(k_mask, p=self.connectivity, shape=W.shape)
+            W = jnp.where(mask, W, 0.0)
+        
+        bias = jnp.zeros((self._output_dim,))
+        if self.use_bias:
+            bias = jax.random.uniform(
+                k_b,
+                (self._output_dim,),
+                minval=-self.bias_scale,
+                maxval=self.bias_scale,
+            )
+        self.W = W
+        self.bias = bias
 
     def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
-        # xW + b
-        return jnp.dot(inputs, self.W) + self.bias
+        # Step 1: Linear projection (like RandomProjection)
+        if inputs.ndim == 3:
+            linear_out = jnp.einsum("bti,io->bto", inputs, self.W) + self.bias
+        else:
+            linear_out = jnp.dot(inputs, self.W) + self.bias
+        
+        # Step 2: Coherent Drive transformation (arcsin)
+        # Use tanh for soft saturation to [-1, 1] - preserves information at peaks
+        # (Unlike clip which causes information loss for |x| > 1)
+        saturated = jnp.tanh(linear_out)
+        # θ = 2 * arcsin(a) maps amplitude a to rotation angle θ
+        theta = 2.0 * jnp.arcsin(saturated)
+        
+        return theta
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "type": "angle_embedding",
+            "type": "coherent_drive",
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
-            "frequency": self.frequency,
-            "phase_offset": self.phase_offset,
+            "input_scale": self.input_scale,
+            "connectivity": self.connectivity,
+            "bias_scale": self.bias_scale,
             "seed": self.seed,
         }
 
@@ -351,7 +389,7 @@ def register_projections(
     ResizeProjectionConfigClass: Type,
     PolynomialProjectionConfigClass: Type = None,
     PCAProjectionConfigClass: Type = None,
-    AngleEmbeddingConfigClass: Type = None,
+    CoherentDriveConfigClass: Type = None,
 ):
     """
     Call this function once to register the handlers.
@@ -400,16 +438,18 @@ def register_projections(
                 input_scaler=float(config.input_scaler),
             )
 
-    if AngleEmbeddingConfigClass is not None:
-        @create_projection.register(AngleEmbeddingConfigClass)
-        def _(config, input_dim: int) -> AngleEmbeddingProjection:
-            # RandomProjectionを継承したクラスを返す
-            return AngleEmbeddingProjection(
+
+    if CoherentDriveConfigClass is not None:
+        @create_projection.register(CoherentDriveConfigClass)
+        def _(config, input_dim: int) -> CoherentDriveProjection:
+            return CoherentDriveProjection(
                 input_dim=int(input_dim),
                 output_dim=int(config.n_units),
-                frequency=float(config.frequency),
-                phase_offset=float(config.phase_offset),
+                input_scale=float(config.input_scale),
+                input_connectivity=float(config.input_connectivity),
                 seed=int(config.seed),
+                bias_scale=float(config.bias_scale),
             )
 
-__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "PCAProjection", "create_projection", "register_projections"]
+
+__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "PCAProjection", "CoherentDriveProjection", "create_projection", "register_projections"]

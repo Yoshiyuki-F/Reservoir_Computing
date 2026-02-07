@@ -250,31 +250,44 @@ class PCAProjectionConfig:
 
 
 @dataclass(frozen=True)
-class AngleEmbeddingConfig:
-    """Step 3 parameters for Angle Embedding Projection."""
+class CoherentDriveProjectionConfig:
+    """Step 3 parameters for Coherent Drive Projection.
+    
+    Uses arcsin transformation for amplitude-based quantum encoding.
+    Non-periodic, suitable for trending time series like Mackey-Glass.
+    
+    θ = 2 * arcsin(clip(linear_proj(x), -1, 1))
+    """
     n_units: int
-    frequency: float   # Renamed from scale
-    phase_offset: float # Renamed from bias_scale
+    input_scale: float
+    input_connectivity: float
+    bias_scale: float
     seed: int
     
-    def validate(self, context: str = "angle_embedding") -> "AngleEmbeddingConfig":
+    def validate(self, context: str = "coherent_drive") -> "CoherentDriveProjectionConfig":
+        prefix = f"{context}: "
         if int(self.n_units) <= 0:
-            raise ValueError(f"{context}: n_units must be positive.")
-        if float(self.frequency) <= 0:
-            raise ValueError(f"{context}: frequency must be positive.")
+            raise ValueError(f"{prefix}n_units must be positive.")
+        if float(self.input_scale) <= 0:
+            raise ValueError(f"{prefix}input_scale must be positive.")
+        if not (0.0 < float(self.input_connectivity) <= 1.0):
+            raise ValueError(f"{prefix}input_connectivity must be in (0,1].")
+        if float(self.bias_scale) < 0:
+            raise ValueError(f"{prefix}bias_scale must be non-negative.")
         return self
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "type": "angle_embedding",
+            "type": "coherent_drive",
             "n_units": int(self.n_units),
-            "frequency": float(self.frequency),
-            "phase_offset": float(self.phase_offset),
+            "input_scale": float(self.input_scale),
+            "input_connectivity": float(self.input_connectivity),
+            "bias_scale": float(self.bias_scale),
             "seed": int(self.seed),
         }
 
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, AngleEmbeddingConfig]
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, CoherentDriveProjectionConfig]
 
 
 

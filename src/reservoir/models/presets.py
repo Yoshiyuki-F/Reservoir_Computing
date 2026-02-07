@@ -13,12 +13,13 @@ from reservoir.models.config import (
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     PCAProjectionConfig,
+    CoherentDriveProjectionConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig,
-    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AngleEmbeddingConfig,
+    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -203,7 +204,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     preprocess=StandardScalerConfig(),
     # Using RandomProjection for stable dynamics
-    projection=RandomProjectionConfig(
+    projection=CoherentDriveProjectionConfig(
         n_units=16,
         input_scale=0.1,
         input_connectivity=1.0,

@@ -28,10 +28,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import TIME_QUANTUM_RESERVOIR_PRESET
+from reservoir.models.config import RandomProjectionConfig, CoherentDriveProjectionConfig
 from reservoir.core.identifiers import Dataset
 
 
-def build_config(input_scale: float, leak_rate: float, feedback_scale: float):
+def build_config(
+        input_scale: float, 
+        leak_rate: float, 
+        feedback_scale: float,
+        bias_scale: float,
+        input_connectivity: float
+):
     """
     Build a PipelineConfig with dynamically updated parameters.
     
@@ -39,10 +46,12 @@ def build_config(input_scale: float, leak_rate: float, feedback_scale: float):
     """
     base = TIME_QUANTUM_RESERVOIR_PRESET
     
-    # Update projection (input_scale)
+    # Update projection (input_scale, bias_scale, connectivity)
     new_projection = dataclasses.replace(
         base.projection,
-        input_scale=input_scale
+        input_scale=input_scale,
+        bias_scale=bias_scale,
+        input_connectivity=input_connectivity
     )
     
     # Update model (leak_rate, feedback_scale)
@@ -67,12 +76,27 @@ def objective(trial: optuna.Trial) -> float:
     Searches for optimal QRC parameters to maximize VPT.
     """
     # === 1. Suggest Parameters ===
+    # input_scale: Signal strength (Amplitude)
     input_scale = trial.suggest_float("input_scale", 0.01, 5.0, log=True)
+    
+    # bias_scale: Operating point variety (Quality/Non-linearity)
+    bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+    
+    # input_connectivity: Sparsity (Information mixing)
+    input_connectivity = trial.suggest_float("input_connectivity", 0.1, 1.0)
+    
+    # Reservoir dynamics
     leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
     feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
     
     # === 2. Build Config ===
-    config = build_config(input_scale, leak_rate, feedback_scale)
+    config = build_config(
+        input_scale, 
+        leak_rate, 
+        feedback_scale,
+        bias_scale,
+        input_connectivity
+    )
     
     # === 3. Run Pipeline ===
     try:
@@ -93,12 +117,14 @@ def objective(trial: optuna.Trial) -> float:
         # Guard: NaN or invalid VPT - return 0 so Optuna learns to avoid this region
         if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
             print(f"Trial {trial.number}: FAILED (VPT=0) "
-                  f"(in={input_scale:.3f}, leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+                  f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
+                  f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
             trial.set_user_attr("status", "failed")
             return 0.0  # Bad score - Optuna will learn to avoid this region
         
         print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-              f"(in={input_scale:.3f}, leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+              f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
+              f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
         
         trial.set_user_attr("status", "success")
         return vpt_lt  # Maximize VPT directly
@@ -120,9 +146,18 @@ def main():
                         help="Optuna storage URL (default: benchmarks/optuna_qrc.db)")
     args = parser.parse_args()
     
+    # Determine DB name based on projection type
+    proj_config = TIME_QUANTUM_RESERVOIR_PRESET.projection
+    if isinstance(proj_config, RandomProjectionConfig):
+        db_name = "optuna_qrc_random_projection.db"
+    elif isinstance(proj_config, CoherentDriveProjectionConfig):
+        db_name = "optuna_qrc_coherent_drive.db"
+    else:
+        db_name = "optuna_qrc.db"
+
     # Default storage in benchmarks folder
     if args.storage is None:
-        db_path = Path(__file__).parent / "optuna_qrc.db"
+        db_path = Path(__file__).parent / db_name
         args.storage = f"sqlite:///{db_path}"
     
     # Create or load study
