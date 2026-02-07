@@ -72,6 +72,8 @@ class ResultReporter:
             results["test"]["chaos_metrics"] = chaos
             results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
             results["test"]["ndei"] = chaos.get("ndei", float("inf"))
+            results["test"]["var_ratio"] = chaos.get("var_ratio", 0.0)
+            results["test"]["mse"] = chaos.get("mse", float("inf"))
 
         # Val Score
         val_score = 0.0

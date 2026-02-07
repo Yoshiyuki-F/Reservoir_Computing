@@ -79,7 +79,7 @@ def objective(trial: optuna.Trial) -> float:
     #========================Projection===============================================================
 
     # input_scale: Signal strength (Amplitude)
-    input_scale = trial.suggest_float("input_scale", 0.001, 0.5, log=True)
+    input_scale = trial.suggest_float("input_scale", 0.001, 1.5, log=True)
     
     # bias_scale: Operating point variety (Quality/Non-linearity)
     bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
