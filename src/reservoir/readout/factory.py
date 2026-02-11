@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from reservoir.models.config import RidgeReadoutConfig, FNNReadoutConfig, ReadoutConfig
+from reservoir.models.config import RidgeReadoutConfig, PolyRidgeReadoutConfig, FNNReadoutConfig, ReadoutConfig
 from reservoir.readout.ridge import RidgeCV
+from reservoir.readout.poly_ridge import PolyRidgeReadout
 from reservoir.readout.fnn_readout import FNNReadout
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.training.config import TrainingConfig
@@ -22,6 +23,16 @@ class ReadoutFactory:
         # None (End-to-End) の場合
         if config is None:
             return None
+
+        # PolyRidgeの場合 (must check before RidgeReadoutConfig)
+        if isinstance(config, PolyRidgeReadoutConfig):
+            candidates = config.lambda_candidates
+            return PolyRidgeReadout(
+                use_intercept=config.use_intercept,
+                lambda_candidates=candidates,
+                degree=config.degree,
+                mode=config.mode,
+            )
 
         # Ridgeの場合
         if isinstance(config, RidgeReadoutConfig):

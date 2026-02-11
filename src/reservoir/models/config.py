@@ -484,6 +484,34 @@ class RidgeReadoutConfig:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
 
+
+
+@dataclass(frozen=True)
+class PolyRidgeReadoutConfig:
+    """Step 7 poly readout configuration (structure/defaults)."""
+
+    use_intercept: bool
+    lambda_candidates: Optional[Tuple[float, ...]]
+    degree: int
+    mode: Literal["full", "square_only"]
+
+    def validate(self, context: str = "polyridgereadout") -> "PolyRidgeReadoutConfig":
+        if self.lambda_candidates is not None:
+            if any(float(lam) <= 0.0 for lam in self.lambda_candidates):
+                raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
+        if int(self.degree) < 2:
+            raise ValueError(f"{context}: degree must be >= 2.")
+        if self.mode not in ("full", "square_only"):
+            raise ValueError(f"{context}: mode must be 'full' or 'square_only', got '{self.mode}'.")
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
+        if self.lambda_candidates is not None:
+            result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
+        return result
+
+
 @dataclass(frozen=True)
 class FNNReadoutConfig:
     """Step 7 readout configuration (structure/fnn)."""
@@ -497,4 +525,4 @@ class FNNReadoutConfig:
 
 
 ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig, QuantumReservoirConfig]
-ReadoutConfig = Union[RidgeReadoutConfig, FNNReadoutConfig, None]
+ReadoutConfig = Union[RidgeReadoutConfig, PolyRidgeReadoutConfig, FNNReadoutConfig, None]
