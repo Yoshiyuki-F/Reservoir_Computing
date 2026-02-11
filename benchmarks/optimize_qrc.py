@@ -5,9 +5,20 @@ Optuna Hyperparameter Search for Quantum Reservoir Computing.
 Optimizes input_scale, leak_rate, and feedback_scale for Mackey-Glass prediction,
 maximizing VPT (Valid Prediction Time).
 
+Supports separate studies for different measurement_basis / readout combinations:
+
 Usage:
-    uv run python benchmarks/optimize_qrc.py                # Run 50 trials
-    uv run python benchmarks/optimize_qrc.py --n-trials 10  # Run 10 trials
+    # Default (Z + Ridge)
+    uv run python benchmarks/optimize_qrc.py
+
+    # Full interaction readout
+    uv run python benchmarks/optimize_qrc.py --readout poly_ridge
+
+    # Z+ZZ measurement basis with poly readout
+    uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_ridge
+
+    # Custom trial count
+    uv run python benchmarks/optimize_qrc.py --n-trials 10
 
 Visualization:
     pip install optuna-dashboard
@@ -17,26 +28,41 @@ Visualization:
 import argparse
 import dataclasses
 import math
-import sys
 from pathlib import Path
 from typing import Any, Dict
 
 import optuna
 
-
-
 from reservoir.pipelines import run_pipeline
-from reservoir.models.presets import TIME_QUANTUM_RESERVOIR_PRESET
-from reservoir.models.config import RandomProjectionConfig, CoherentDriveProjectionConfig
+from reservoir.models.presets import (
+    TIME_QUANTUM_RESERVOIR_PRESET,
+    DEFAULT_RIDGE_READOUT,
+    DEFAULT_POLY_RIDGE_READOUT,
+)
+from reservoir.models.config import PolyRidgeReadoutConfig
 from reservoir.core.identifiers import Dataset
 
 
+# ---------------------------------------------------------------------------
+# Readout Lookup
+# ---------------------------------------------------------------------------
+READOUT_MAP = {
+    "ridge": DEFAULT_RIDGE_READOUT,
+    "poly_ridge": DEFAULT_POLY_RIDGE_READOUT,
+}
+
+VALID_BASES = ("Z", "ZZ", "Z+ZZ")
+
+
 def build_config(
-        input_scale: float, 
-        leak_rate: float, 
+        input_scale: float,
+        leak_rate: float,
         feedback_scale: float,
         bias_scale: float,
-        input_connectivity: float
+        input_connectivity: float,
+        *,
+        measurement_basis: str,
+        readout_config,
 ):
     """
     Build a PipelineConfig with dynamically updated parameters.
@@ -44,7 +70,7 @@ def build_config(
     Uses dataclasses.replace to modify the frozen preset config.
     """
     base = TIME_QUANTUM_RESERVOIR_PRESET
-    
+
     # Update projection (input_scale, bias_scale, connectivity)
     new_projection = dataclasses.replace(
         base.projection,
@@ -52,155 +78,185 @@ def build_config(
         bias_scale=bias_scale,
         input_connectivity=input_connectivity
     )
-    
-    # Update model (leak_rate, feedback_scale)
+
+    # Update model (leak_rate, feedback_scale, measurement_basis)
     new_model = dataclasses.replace(
         base.model,
         leak_rate=leak_rate,
-        feedback_scale=feedback_scale
+        feedback_scale=feedback_scale,
+        measurement_basis=measurement_basis,
     )
-    
+
     # Construct final config
     return dataclasses.replace(
         base,
         projection=new_projection,
-        model=new_model
+        model=new_model,
+        readout=readout_config,
     )
 
 
-def objective(trial: optuna.Trial) -> float:
-    """
-    Optuna objective function.
-    
-    Searches for optimal QRC parameters to maximize VPT.
-    """
-    # === 1. Suggest Parameters ===
+def make_objective(measurement_basis: str, readout_config):
+    """Factory that returns an Optuna objective closed over the study variant."""
 
-    #========================Projection===============================================================
+    def objective(trial: optuna.Trial) -> float:
+        """
+        Optuna objective function.
+        Searches for optimal QRC parameters to maximize VPT.
+        """
+        # === 1. Suggest Parameters ===
 
-    # input_scale: Signal strength (Amplitude)
-    input_scale = trial.suggest_float("input_scale", 0.001, 1.5, log=True)
-    
-    # bias_scale: Operating point variety (Quality/Non-linearity)
-    bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
-    
-    # input_connectivity: Sparsity (Information mixing)
-    input_connectivity = 0.8
+        # ======================== Projection ================================
+        input_scale = trial.suggest_float("input_scale", 0.001, 1.5, log=True)
+        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        input_connectivity = 0.8
 
-    #========================Reservoir===============================================================
-    # Reservoir dynamics
-    leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
-    feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
+        # ======================== Reservoir ==================================
+        leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
 
+        # === 2. Build Config ===
+        config = build_config(
+            input_scale,
+            leak_rate,
+            feedback_scale,
+            bias_scale,
+            input_connectivity,
+            measurement_basis=measurement_basis,
+            readout_config=readout_config,
+        )
 
+        # === 3. Run Pipeline ===
+        try:
+            results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
 
-    # === 2. Build Config ===
-    config = build_config(
-        input_scale, 
-        leak_rate, 
-        feedback_scale,
-        bias_scale,
-        input_connectivity
-    )
-    
-    # === 3. Run Pipeline ===
-    try:
-        results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
-        
-        # === 4. Extract Metrics ===
-        test_results = results.get("test", {})
-        vpt_lt = test_results.get("vpt_lt", 0.0)
-        var_ratio = test_results.get("var_ratio", 0.0)
-        ndei = test_results.get("ndei", float('inf'))
-        mse = test_results.get("mse", float('inf'))
-        
-        # Save additional metrics to DB
-        trial.set_user_attr("var_ratio", var_ratio)
-        trial.set_user_attr("ndei", ndei)
-        trial.set_user_attr("mse", mse)
-        
-        # Guard: NaN or invalid VPT - return 0 so Optuna learns to avoid this region
-        if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
-            print(f"Trial {trial.number}: FAILED (VPT=0) "
+            # === 4. Extract Metrics ===
+            test_results = results.get("test", {})
+            vpt_lt = test_results.get("vpt_lt", 0.0)
+            var_ratio = test_results.get("var_ratio", 0.0)
+            ndei = test_results.get("ndei", float('inf'))
+            mse = test_results.get("mse", float('inf'))
+
+            trial.set_user_attr("var_ratio", var_ratio)
+            trial.set_user_attr("ndei", ndei)
+            trial.set_user_attr("mse", mse)
+
+            if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
+                print(f"Trial {trial.number}: FAILED (VPT=0) "
+                      f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
+                      f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+                trial.set_user_attr("status", "failed")
+                return 0.0
+
+            print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
                   f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
                   f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
-            trial.set_user_attr("status", "failed")
-            return 0.0  # Bad score - Optuna will learn to avoid this region
-        
-        print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-              f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
-              f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
-        
-        trial.set_user_attr("status", "success")
-        return vpt_lt  # Maximize VPT directly
-        
-    except Exception as e:
-        print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
-        trial.set_user_attr("status", "exception")
-        trial.set_user_attr("error", str(e))
-        return 0.0  # Bad score - Optuna will learn to avoid this region
+
+            trial.set_user_attr("status", "success")
+            return vpt_lt
+
+        except Exception as e:
+            print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
+            trial.set_user_attr("status", "exception")
+            trial.set_user_attr("error", str(e))
+            return 0.0
+
+    return objective
+
+
+def derive_names(measurement_basis: str, readout_key: str, proj_type: str):
+    """Derive DB filename and study name from the variant combination."""
+    basis_tag = measurement_basis.replace("+", "_")  # "Z+ZZ" -> "Z_ZZ"
+    study_name = f"qrc_vpt_{proj_type}_{basis_tag}_{readout_key}"
+    db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
+    return study_name, db_name
 
 
 def main():
     parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search")
-    parser.add_argument("--n-trials", type=int, default=50, 
-                        help="Number of optimization trials (default: 50)")
+    parser.add_argument("--n-trials", type=int, default=500,
+                        help="Number of optimization trials (default: 500)")
+    parser.add_argument("--measurement-basis", type=str, default=None,
+                        choices=list(VALID_BASES),
+                        help="Measurement basis (default: from preset)")
+    parser.add_argument("--readout", type=str, default=None,
+                        choices=list(READOUT_MAP.keys()),
+                        help="Readout type (default: from preset)")
     parser.add_argument("--study-name", type=str, default=None,
-                        help="Optuna study name (default: derived from projection type)")
+                        help="Override Optuna study name")
     parser.add_argument("--storage", type=str, default=None,
-                        help="Optuna storage URL (default: benchmarks/optuna_qrc.db)")
+                        help="Override Optuna storage URL")
     args = parser.parse_args()
-    
-    # Determine DB name and Study name based on projection type
-    proj_config = TIME_QUANTUM_RESERVOIR_PRESET.projection
-    config_type_name = type(proj_config).__name__
-    
-    if config_type_name == "RandomProjectionConfig":
-        db_name = "optuna_qrc_random_projection.db"
-        default_study_name = "qrc_mackey_glass_vpt_random_projection"
-    elif config_type_name == "CoherentDriveProjectionConfig":
-        db_name = "optuna_qrc_coherent_drive.db"
-        default_study_name = "qrc_mackey_glass_vpt_coherent_drive"
+
+    # --- Resolve variant from args or preset defaults ---
+    base = TIME_QUANTUM_RESERVOIR_PRESET
+
+    # Measurement basis
+    if args.measurement_basis is not None:
+        measurement_basis = args.measurement_basis
     else:
-        db_name = "optuna_qrc.db"
-        default_study_name = "qrc_mackey_glass_vpt"
-    
-    # Default storage in benchmarks folder
+        measurement_basis = base.model.measurement_basis
+
+    # Readout
+    if args.readout is not None:
+        readout_key = args.readout
+        readout_config = READOUT_MAP[readout_key]
+    else:
+        readout_config = base.readout
+        # Reverse-lookup key
+        if isinstance(readout_config, PolyRidgeReadoutConfig):
+            readout_key = "poly_ridge"
+        else:
+            readout_key = "ridge"
+
+    # --- Derive study / DB names ---
+    proj_type_name = type(base.projection).__name__
+    if "Coherent" in proj_type_name:
+        proj_tag = "coherent_drive"
+    elif "Random" in proj_type_name:
+        proj_tag = "random_proj"
+    else:
+        proj_tag = proj_type_name.lower().replace("config", "")
+
+    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag)
+
+    if args.study_name is not None:
+        study_name = args.study_name
     if args.storage is None:
         db_path = Path(__file__).parent / db_name
-        args.storage = f"sqlite:///{db_path}"
-    
-    # Use default study name if not provided
-    if args.study_name is None:
-        args.study_name = default_study_name
-    
-    # Create or load study
+        storage = f"sqlite:///{db_path}"
+    else:
+        storage = args.storage
+
+    # --- Create or load study ---
     study = optuna.create_study(
-        study_name=args.study_name,
-        storage=args.storage,
-        direction="maximize",  # Maximize VPT directly
+        study_name=study_name,
+        storage=storage,
+        direction="maximize",
         load_if_exists=True
     )
-    
+
     print("=" * 60)
     print("Optuna QRC Hyperparameter Search")
     print("=" * 60)
-    print(f"Study: {args.study_name}")
-    print(f"Storage: {args.storage}")
-    print(f"Trials: {args.n_trials}")
+    print(f"  Study            : {study_name}")
+    print(f"  Storage          : {storage}")
+    print(f"  Trials           : {args.n_trials}")
+    print(f"  Measurement Basis: {measurement_basis}")
+    print(f"  Readout          : {readout_key}")
     print("=" * 60)
-    
-    # Run optimization
-    study.optimize(objective, n_trials=args.n_trials)
-    
-    # Report results
+
+    # --- Run ---
+    objective_fn = make_objective(measurement_basis, readout_config)
+    study.optimize(objective_fn, n_trials=args.n_trials)
+
+    # --- Report ---
     print("\n" + "=" * 60)
     print("=== BEST PARAMETERS ===")
     print("=" * 60)
-    print(f"input_scale    : {study.best_params['input_scale']:.4f}")
-    print(f"leak_rate      : {study.best_params['leak_rate']:.4f}")
-    print(f"feedback_scale : {study.best_params['feedback_scale']:.4f}")
-    print(f"Best VPT       : {study.best_value:.2f} LT")
+    for k, v in study.best_params.items():
+        print(f"  {k:20s}: {v:.4f}")
+    print(f"  {'Best VPT':20s}: {study.best_value:.2f} LT")
     print("=" * 60)
 
 

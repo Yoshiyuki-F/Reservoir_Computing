@@ -99,6 +99,8 @@ class PolyRidgeReadout(RidgeCV):
         maximize_score: bool = True,
     ):
         """Expand features for both train and val, then delegate to RidgeCV."""
+        from reservoir.utils.reporting import print_feature_stats
+
         train_expanded = self._expand_features(train_Z)
         val_expanded = self._expand_features(val_Z)
 
@@ -106,6 +108,8 @@ class PolyRidgeReadout(RidgeCV):
             f"    [PolyRidge] mode={self.mode}, degree={self.degree} | "
             f"input_dim={train_Z.shape[-1]} → expanded_dim={train_expanded.shape[-1]}"
         )
+        print_feature_stats(train_expanded, "7:poly_expanded_train")
+        print_feature_stats(val_expanded, "7:poly_expanded_val")
 
         return super().fit_with_validation(
             train_Z=train_expanded,
