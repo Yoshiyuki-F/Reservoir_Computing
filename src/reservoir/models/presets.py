@@ -94,6 +94,14 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
 
+DEFAULT_POLY_RIDGE_READOUT = PolyRidgeReadoutConfig(
+    use_intercept=True,
+    lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
+    degree=2,
+    mode="full",
+)
+
+
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 
 
@@ -217,7 +225,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         aggregation=AggregationMode.SEQUENCE,
         leak_rate=1.0,         # α=1.0 means no memory blending (pure feedback mode)
         feedback_scale=1.2,    # γ=1.2 feedback injection
-        measurement_basis="Z+ZZ",
+        measurement_basis="Z",
         encoding_strategy="Rx",
         noise_type="clean",
         noise_prob=0.0,
@@ -227,12 +235,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         use_reuploading=True,
         precision="complex64",
     ),
-    readout=PolyRidgeReadoutConfig(
-        use_intercept=True,
-        lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
-        degree=2,
-        mode="square_only",
-    ),
+    readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 
 "=============================================Time series Presets============================================"

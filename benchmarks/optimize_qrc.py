@@ -8,14 +8,15 @@ maximizing VPT (Valid Prediction Time).
 Supports separate studies for different measurement_basis / readout combinations:
 
 Usage:
-    # Default (Z + Ridge)
+    # Default (uses preset's measurement_basis + readout)
     uv run python benchmarks/optimize_qrc.py
 
-    # Full interaction readout
-    uv run python benchmarks/optimize_qrc.py --readout poly_ridge
+    # Specific readout: ridge / poly_full / poly_square
+    uv run python benchmarks/optimize_qrc.py --readout poly_full
+    uv run python benchmarks/optimize_qrc.py --readout poly_square
 
-    # Z+ZZ measurement basis with poly readout
-    uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_ridge
+    # Z+ZZ measurement basis with poly_full readout
+    uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_full
 
     # Custom trial count
     uv run python benchmarks/optimize_qrc.py --n-trials 10
@@ -31,24 +32,34 @@ import math
 from pathlib import Path
 from typing import Any, Dict
 
+import numpy as np
 import optuna
 
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import (
     TIME_QUANTUM_RESERVOIR_PRESET,
     DEFAULT_RIDGE_READOUT,
-    DEFAULT_POLY_RIDGE_READOUT,
 )
-from reservoir.models.config import PolyRidgeReadoutConfig
+from reservoir.models.config import (
+    PolyRidgeReadoutConfig,
+    RidgeReadoutConfig,
+)
 from reservoir.core.identifiers import Dataset
 
 
 # ---------------------------------------------------------------------------
-# Readout Lookup
+# Readout Lookup  (ridge / poly_full / poly_square)
 # ---------------------------------------------------------------------------
+_POLY_LAMBDAS = tuple(np.logspace(-12, 3, 30).tolist())
+
 READOUT_MAP = {
-    "ridge": DEFAULT_RIDGE_READOUT,
-    "poly_ridge": DEFAULT_POLY_RIDGE_READOUT,
+    "ridge":       DEFAULT_RIDGE_READOUT,
+    "poly_full":   PolyRidgeReadoutConfig(
+        use_intercept=True, lambda_candidates=_POLY_LAMBDAS, degree=2, mode="full",
+    ),
+    "poly_square": PolyRidgeReadoutConfig(
+        use_intercept=True, lambda_candidates=_POLY_LAMBDAS, degree=2, mode="square_only",
+    ),
 }
 
 VALID_BASES = ("Z", "ZZ", "Z+ZZ")
@@ -203,9 +214,9 @@ def main():
         readout_config = READOUT_MAP[readout_key]
     else:
         readout_config = base.readout
-        # Reverse-lookup key
+        # Reverse-lookup key from preset
         if isinstance(readout_config, PolyRidgeReadoutConfig):
-            readout_key = "poly_ridge"
+            readout_key = "poly_full" if readout_config.mode == "full" else "poly_square"
         else:
             readout_key = "ridge"
 
