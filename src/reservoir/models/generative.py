@@ -104,7 +104,7 @@ class ClosedLoopGenerativeModel(ABC):
 
             # Conditional Execution
             jax.lax.cond(
-                step_idx % 200 == 0,
+                step_idx % 800 == 0,
                 log_stats,
                 lambda _: None,
                 (step_idx, x_raw, h_next, y_next)

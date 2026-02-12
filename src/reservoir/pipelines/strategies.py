@@ -6,8 +6,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
-from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats
-from reservoir.utils.metrics import compute_score
+from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
+from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
 
 class ReadoutStrategy(ABC):
@@ -247,6 +247,34 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              search_history = {}
              weight_norms = {}
 
+        # Display Validation Metrics (Open Loop) immediately
+        val_pred_early = None
+        if val_Z is not None:
+             val_pred_early = readout.predict(val_Z)
+             if val_y is not None:
+                 print("\n=== Validation Open Loop Metrics ===")
+                 scaler = frontend_ctx.preprocessor
+                 dt = getattr(dataset_meta.preset.config, 'dt', 1.0)
+                 ltu = getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0)
+                 
+                 def _inverse(arr):
+                     if scaler is None: return arr
+                     # Ensure 2D
+                     shape = arr.shape
+                     flat_dim = shape[-1]
+                     arr_2d = arr.reshape(-1, flat_dim)
+                     try:
+                         inv = scaler.inverse_transform(arr_2d)
+                         return inv.reshape(shape)
+                     except:
+                         return arr
+                 
+                 val_y_raw = _inverse(np.asarray(val_y))
+                 val_pred_raw = _inverse(np.asarray(val_pred_early))
+                 
+                 val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
+                 print_chaos_metrics(val_metrics_chaos)
+
         # Test Generation
         print("\n=== Step 8: Final Predictions:===")
         closed_loop_pred = None
@@ -313,12 +341,14 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         # Val (if needed, though Strategy optimized on it)
         # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
         # Using separate predict calls ensures consistency.
-        val_pred = None
-        if val_Z is not None:
-             val_pred = readout.predict(val_Z)
-             metrics["val"] = {
-                 self.metric_name: compute_score(val_pred, val_y, self.metric_name)
-             }
+        val_pred = val_pred_early
+        if val_pred is None and val_Z is not None:
+            val_pred = readout.predict(val_Z)
+            
+        if val_pred is not None and val_y is not None:
+            metrics["val"] = {
+                self.metric_name: compute_score(val_pred, val_y, self.metric_name)
+            }
 
         # Test
         test_pred = None

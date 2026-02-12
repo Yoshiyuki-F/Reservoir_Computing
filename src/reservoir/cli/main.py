@@ -51,6 +51,9 @@ def main() -> None:
     print(f"Pipeline    : {pipeline_config.name}")
     print(f"Description : {pipeline_config.description}")
     print(f"Dataset     : {dataset.name}")
+    print(f"Model Class : {type(pipeline_config.model).__name__}")
+    if pipeline_config.readout:
+        print(f"Readout Class: {type(pipeline_config.readout).__name__}")
     
     import json
     def print_section(name: str, data: dict):
@@ -65,10 +68,14 @@ def main() -> None:
     if pipeline_config.projection:
         print_section("Projection", pipeline_config.projection.to_dict())
         
-    print_section("Model Dynamics", pipeline_config.model.to_dict())
+    model_dict = pipeline_config.model.to_dict()
+    model_dict["_config_type"] = type(pipeline_config.model).__name__
+    print_section("Model Dynamics", model_dict)
     
     if pipeline_config.readout:
-        print_section("Readout", pipeline_config.readout.to_dict())
+        readout_dict = pipeline_config.readout.to_dict()
+        readout_dict["_config_type"] = type(pipeline_config.readout).__name__
+        print_section("Readout", readout_dict)
 
     print_section("Training", training_config.to_dict())
     print("=" * 21 + "\n")

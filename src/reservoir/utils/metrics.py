@@ -4,33 +4,158 @@ Refactored metrics calculation logic.
 """
 from typing import Any, Dict
 import jax.numpy as jnp
-import numpy as np
+
+# --- Standard Metric Functions ---
+
+def mse(y_true: Any, y_pred: Any) -> float:
+    """Mean Squared Error."""
+    y_true_arr = jnp.asarray(y_true)
+    y_pred_arr = jnp.asarray(y_pred)
+    # Align if needed
+    if y_pred_arr.shape != y_true_arr.shape and y_pred_arr.size == y_true_arr.size:
+        y_pred_arr = y_pred_arr.reshape(y_true_arr.shape)
+    return float(jnp.mean((y_true_arr - y_pred_arr) ** 2))
+
+def rmse(y_true: Any, y_pred: Any) -> float:
+    """Root Mean Squared Error."""
+    return float(jnp.sqrt(mse(y_true, y_pred)))
+
+def nmse(y_true: Any, y_pred: Any) -> float:
+    """
+    Normalized Mean Squared Error (User Definition).
+    NMSE = sum((y - y_hat)^2) / sum(y^2)
+    Normalization by Second Moment (Energy).
+    """
+    y_true_arr = jnp.asarray(y_true)
+    y_pred_arr = jnp.asarray(y_pred)
+    
+    if y_pred_arr.shape != y_true_arr.shape and y_pred_arr.size == y_true_arr.size:
+        y_pred_arr = y_pred_arr.reshape(y_true_arr.shape)
+
+    numerator = jnp.sum((y_true_arr - y_pred_arr) ** 2)
+    denominator = jnp.sum(y_true_arr ** 2)
+    
+    return float(numerator / denominator) if denominator > 1e-9 else float('inf')
+
+def nrmse(y_true: Any, y_pred: Any) -> float:
+    """
+    Normalized Root Mean Squared Error.
+    NRMSE = RMSE / std(y)
+    """
+    rmse_val = rmse(y_true, y_pred)
+    std_true = float(jnp.std(jnp.asarray(y_true)))
+    return float(rmse_val / std_true) if std_true > 1e-9 else float('inf')
+
+def ndei(y_true: Any, y_pred: Any) -> float:
+    """
+    Non-Dimensional Error Index.
+    Defined as RMSE / std(y). Same as NRMSE within this context.
+    """
+    return nrmse(y_true, y_pred)
+
+def mase(y_true: Any, y_pred: Any) -> float:
+    """
+    Mean Absolute Scaled Error.
+    MAE / Mean Absolute Error of Naive Forecast (on true data).
+    """
+    y_true_arr = jnp.asarray(y_true).flatten()
+    y_pred_arr = jnp.asarray(y_pred).flatten()
+    
+    # Ensure same length
+    min_len = min(len(y_true_arr), len(y_pred_arr))
+    y_true_arr = y_true_arr[:min_len]
+    y_pred_arr = y_pred_arr[:min_len]
+
+    mae = jnp.mean(jnp.abs(y_true_arr - y_pred_arr))
+    
+    if len(y_true_arr) > 1:
+        naive_mae = jnp.mean(jnp.abs(jnp.diff(y_true_arr)))
+        return float(mae / naive_mae) if naive_mae > 1e-9 else float('inf')
+    return float('inf')
+
+def var_ratio(y_true: Any, y_pred: Any) -> float:
+    """Variance Ratio: std(pred) / std(true)."""
+    std_true = float(jnp.std(jnp.asarray(y_true)))
+    std_pred = float(jnp.std(jnp.asarray(y_pred)))
+    return std_pred / std_true if std_true > 1e-9 else 0.0
+
+def correlation(y_true: Any, y_pred: Any) -> float:
+    """Pearson Correlation Coefficient."""
+    y_true_arr = jnp.asarray(y_true).flatten()
+    y_pred_arr = jnp.asarray(y_pred).flatten()
+    
+    min_len = min(len(y_true_arr), len(y_pred_arr))
+    y_true_arr = y_true_arr[:min_len]
+    y_pred_arr = y_pred_arr[:min_len]
+
+    std_true = float(jnp.std(y_true_arr))
+    std_pred = float(jnp.std(y_pred_arr))
+    
+    if std_true > 1e-9 and std_pred > 1e-9:
+        # jnp.corrcoef returns 2x2 matrix
+        matrix = jnp.corrcoef(y_true_arr, y_pred_arr)
+        return float(matrix[0, 1])
+    return 0.0
+
+def accuracy(y_true: Any, y_pred: Any) -> float:
+    """Classification Accuracy."""
+    y_true_arr = jnp.asarray(y_true)
+    y_pred_arr = jnp.asarray(y_pred)
+    
+    pred_labels = y_pred_arr if y_pred_arr.ndim == 1 else jnp.argmax(y_pred_arr, axis=-1)
+    true_labels = y_true_arr if y_true_arr.ndim == 1 else jnp.argmax(y_true_arr, axis=-1)
+    
+    return float(jnp.mean(pred_labels == true_labels))
+
+def vpt_score(y_true: Any, y_pred: Any, threshold: float = 0.4) -> int:
+    """
+    Valid Prediction Time (VPT) - explicit step calculation.
+    """
+    y_true_arr = jnp.asarray(y_true).flatten()
+    y_pred_arr = jnp.asarray(y_pred).flatten()
+    
+    min_len = min(len(y_true_arr), len(y_pred_arr))
+    y_true_arr = y_true_arr[:min_len]
+    y_pred_arr = y_pred_arr[:min_len]
+    
+    std_true = float(jnp.std(y_true_arr))
+    
+    if std_true > 1e-9:
+        normalized_errors = jnp.abs(y_pred_arr - y_true_arr) / std_true
+        # Find first index where error exceeds threshold
+        # using argmax to find first true, checking if any true exists
+        is_exceeded = normalized_errors > threshold
+        if jnp.any(is_exceeded):
+            # argmax on boolean returns index of first True
+            return int(jnp.argmax(is_exceeded))
+        else:
+             return len(y_true_arr)
+    return 0
+
+# --- Dispatcher and Aggregator ---
 
 def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
     """
     Compute generic score (MSE, NMSE, or Accuracy).
+    Dispatcher to specific functions.
     """
-    preds_arr = jnp.asarray(preds)
-    targets_arr = jnp.asarray(targets)
-
-    if metric_name.lower() == "accuracy":
-        pred_labels = preds_arr if preds_arr.ndim == 1 else jnp.argmax(preds_arr, axis=-1)
-        true_labels = targets_arr if targets_arr.ndim == 1 else jnp.argmax(targets_arr, axis=-1)
-        return float(jnp.mean(pred_labels == true_labels))
-
-    # Regression
-    aligned_preds = preds_arr
-    if preds_arr.shape != targets_arr.shape and preds_arr.size == targets_arr.size:
-        aligned_preds = preds_arr.reshape(targets_arr.shape)
-
-    mse = float(jnp.mean((aligned_preds - targets_arr) ** 2))
+    name = metric_name.lower()
     
-    if metric_name.lower() == "nmse":
-        # NMSE = MSE / Variance
-        var_true = float(jnp.var(targets_arr))
-        return mse / var_true if var_true > 1e-9 else float('inf')
-
-    return mse
+    if name == "accuracy":
+        return accuracy(targets, preds)
+    elif name == "nmse":
+        return nmse(targets, preds)
+    elif name == "mse":
+        return mse(targets, preds)
+    elif name == "rmse":
+        return rmse(targets, preds)
+    elif name == "nrmse":
+        return nrmse(targets, preds)
+    elif name == "mase":
+        return mase(targets, preds)
+    
+    # Default to MSE if unknown (or raise error, but maintaining old behavior)
+    return mse(targets, preds)
 
 def calculate_chaos_metrics(
     y_true: Any, 
@@ -41,80 +166,38 @@ def calculate_chaos_metrics(
 ) -> Dict[str, float]:
     """
     Calculate Chaos prediction metrics (Mackey-Glass, etc).
-    Pure calculation, no printing.
+    Wrapper around detailed metric functions.
     """
     if y_true is None or y_pred is None:
         return {}
-
-    y_true_np = np.asarray(y_true).flatten()
-    y_pred_np = np.asarray(y_pred).flatten()
-
-    if y_true_np.size == 0 or y_pred_np.size == 0:
-        return {}
-
-    # Ensure same length
-    min_len = min(len(y_true_np), len(y_pred_np))
-    y_true_np = y_true_np[:min_len]
-    y_pred_np = y_pred_np[:min_len]
-
-    mse = np.mean((y_true_np - y_pred_np) ** 2)
-    rmse = np.sqrt(mse)
-    std_true = np.std(y_true_np)
-    std_pred = np.std(y_pred_np)
-
-    ndei = rmse / std_true if std_true > 1e-9 else float('inf')
+        
+    # We use flattened arrays for chaos metrics usually
+    # Helpers handle flattening internally if needed (MASE, Correlation, VPT)
+    # MSE/NMSE handle logic internally using jnp
     
-    # NMSE (User def): sum((y - y_hat)^2) / sum(y^2)
-    sum_sq_error = np.sum((y_true_np - y_pred_np) ** 2)
-    sum_sq_true = np.sum(y_true_np ** 2)
-    nmse = sum_sq_error / sum_sq_true if sum_sq_true > 1e-9 else float('inf')
-
-    # NRMSE (User def): RMSE / sigma(y)
-    nrmse = rmse / std_true if std_true > 1e-9 else float('inf')
-
-    # MASE: MAE / Mean Absolute Diff of True (Naive Forecast)
-    # denominator = (1/(T-1)) * sum(|y_t - y_{t-1}|)
-    mae = np.mean(np.abs(y_true_np - y_pred_np))
-    if len(y_true_np) > 1:
-        naive_mae = np.mean(np.abs(np.diff(y_true_np)))
-        mase = mae / naive_mae if naive_mae > 1e-9 else float('inf')
-    else:
-        mase = float('inf')
-
-    var_ratio = std_pred / std_true if std_true > 1e-9 else 0.0
-
-    corr = 0.0
-    if std_true > 1e-9 and std_pred > 1e-9:
-        corr = np.corrcoef(y_true_np, y_pred_np)[0, 1]
-
-    # --- VPT Calculation ---
-    # Normalized error at each time step: |y_pred - y_true| / std(y_true)
-    # VPT = first time step where error exceeds threshold
-    if std_true > 1e-9:
-        normalized_errors = np.abs(y_pred_np - y_true_np) / std_true
-        # Find first index where error exceeds threshold
-        exceed_indices = np.where(normalized_errors > vpt_threshold)[0]
-        if len(exceed_indices) > 0:
-            vpt_steps = int(exceed_indices[0])
-        else:
-            # Prediction never exceeds threshold
-            vpt_steps = len(y_true_np)
-    else:
-        vpt_steps = 0
+    # Calculate all metrics
+    val_mse = mse(y_true, y_pred)
+    val_nmse = nmse(y_true, y_pred)
+    val_nrmse = nrmse(y_true, y_pred)
+    val_mase = mase(y_true, y_pred)
+    val_ndei = ndei(y_true, y_pred)
+    val_var_ratio = var_ratio(y_true, y_pred)
+    val_corr = correlation(y_true, y_pred)
+    val_vpt_steps = vpt_score(y_true, y_pred, vpt_threshold)
     
     # Convert VPT to Lyapunov time
     steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
-    vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
+    val_vpt_lt = float(val_vpt_steps) / steps_per_lt if steps_per_lt > 0 else 0.0
 
     return {
-        "mse": float(mse),
-        "nmse": float(nmse),
-        "nrmse": float(nrmse),
-        "mase": float(mase),
-        "ndei": float(ndei),
-        "var_ratio": float(var_ratio),
-        "correlation": float(corr),
-        "vpt_steps": float(vpt_steps), # vpt_steps is int, but Dict is [str, float]. Maybe Optional[float] or convert to float. Int satisfies float in some contexts but type checker might complain if strict. Let's cast to float.
-        "vpt_lt": float(vpt_lt),
+        "mse": val_mse,
+        "nmse": val_nmse,
+        "nrmse": val_nrmse,
+        "mase": val_mase,
+        "ndei": val_ndei,
+        "var_ratio": val_var_ratio,
+        "correlation": val_corr,
+        "vpt_steps": float(val_vpt_steps),
+        "vpt_lt": val_vpt_lt,
         "vpt_threshold": float(vpt_threshold),
     }
