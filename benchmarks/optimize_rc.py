@@ -121,20 +121,23 @@ def make_objective(readout_config):
         # === 1. Suggest Parameters ===
         
         # Projection
-        # input_scale = trial.suggest_float("input_scale", 1.15, 1.25)
-        # input_connectivity = trial.suggest_float("input_connectivity", 0.14, 0.2)
-        # bias_scale = trial.suggest_float("bias_scale", 0.95, 1.05)
-        input_scale=1.2019208858978183
-        input_connectivity=0.1928267681965625
-        bias_scale=0.9568959152230178
+        input_scale = trial.suggest_float("input_scale", 1.16, 1.22)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.13, 0.20)
+        bias_scale = trial.suggest_float("bias_scale", 0.95, 1.02)
+        # input_scale = trial.suggest_float("input_scale", 1.1808661406250922, 1.1808661406250922)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.13588027912024847, 0.13588027912024847)
+        # bias_scale = trial.suggest_float("bias_scale", 1.0029669118717532, 1.0029669118717532)
 
         # Reservoir
-        spectral_radius=1.5972788236034943
-        leak_rate= 0.39768734461610455
-        rc_connectivity= 0.9244981889173147
-        # spectral_radius = trial.suggest_float("spectral_radius", 1.5, 1.8)
-        # leak_rate = trial.suggest_float("leak_rate", 0.35, 0.45)
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.6, 1)
+
+        spectral_radius = trial.suggest_float("spectral_radius", 1.5, 1.65)
+        leak_rate = trial.suggest_float("leak_rate", 0.36, 0.42)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.6, 1)
+
+        # spectral_radius = trial.suggest_float("spectral_radius", 1.616, 1.616)
+        # leak_rate = trial.suggest_float("leak_rate", 0.41848915914774804, 0.41848915914774804)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.677, 0.677)
+
 
         # === 2. Build Config ===
         config = build_config(
