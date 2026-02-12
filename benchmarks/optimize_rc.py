@@ -221,7 +221,7 @@ def derive_names(readout_key: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Optuna RC Hyperparameter Search")
-    parser.add_argument("--n-trials", type=int, default=500,
+    parser.add_argument("--n-trials", type=int, default=5000,
                         help="Number of optimization trials (default: 500)")
     parser.add_argument("--readout", type=str, default=None,
                         choices=list(READOUT_MAP.keys()),
