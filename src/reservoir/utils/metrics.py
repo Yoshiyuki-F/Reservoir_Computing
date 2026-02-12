@@ -109,21 +109,35 @@ def accuracy(y_true: Any, y_pred: Any) -> float:
 
 def vpt_score(y_true: Any, y_pred: Any, threshold: float = 0.4) -> int:
     """
-    Valid Prediction Time (VPT) - explicit step calculation.
+    Valid Prediction Time (VPT).
+    Calculated based on normalized error at each time step.
+    For multivariate data, we use the Euclidean norm of the error vector.
     """
-    y_true_arr = jnp.asarray(y_true).flatten()
-    y_pred_arr = jnp.asarray(y_pred).flatten()
-    
+    y_true_arr = jnp.asarray(y_true)
+    y_pred_arr = jnp.asarray(y_pred)
+
+    # Ensure shape (Time, Features) or (Time,)
+    if y_true_arr.ndim == 1:
+        y_true_arr = y_true_arr.reshape(-1, 1)
+        y_pred_arr = y_pred_arr.reshape(-1, 1)
+
     min_len = min(len(y_true_arr), len(y_pred_arr))
     y_true_arr = y_true_arr[:min_len]
     y_pred_arr = y_pred_arr[:min_len]
-    
-    std_true = float(jnp.std(y_true_arr))
-    
-    if std_true > 1e-9:
-        normalized_errors = jnp.abs(y_pred_arr - y_true_arr) / std_true
+
+    # Calculate error at each step (Euclidean norm over features)
+    # error[t] = || y_pred[t] - y_true[t] ||
+    errors = jnp.linalg.norm(y_pred_arr - y_true_arr, axis=-1)
+
+    # Calculate scale (Global standard deviation magnitude)
+    # std[f] = std of feature f
+    # scale = || std_vector ||
+    stds = jnp.std(y_true_arr, axis=0)
+    scale = jnp.linalg.norm(stds)
+
+    if scale > 1e-9:
+        normalized_errors = errors / scale
         # Find first index where error exceeds threshold
-        # using argmax to find first true, checking if any true exists
         is_exceeded = normalized_errors > threshold
         if jnp.any(is_exceeded):
             # argmax on boolean returns index of first True

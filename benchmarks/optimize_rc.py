@@ -99,7 +99,8 @@ def build_config(
     )
 
 
-def make_objective(readout_config):
+
+def make_objective(readout_config, dataset_enum: Dataset):
     """Factory that returns an Optuna objective."""
 
     def objective(trial: optuna.Trial) -> float:
@@ -111,22 +112,22 @@ def make_objective(readout_config):
         # === 1. Suggest Parameters ===
         
         # Projection
-        # input_scale = trial.suggest_float("input_scale", 1.16, 1.22)
-        # input_connectivity = trial.suggest_float("input_connectivity", 0.10, 0.20)
-        # bias_scale = trial.suggest_float("bias_scale", 1.0, 1.0)
+        input_scale = trial.suggest_float("input_scale", 0.5, 1.5)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.10, 1)
+        bias_scale = trial.suggest_float("bias_scale", 0, 4)
 
-        input_scale = trial.suggest_float("input_scale", 1.1884772080222152, 1.1884772080222152)
-        input_connectivity = trial.suggest_float("input_connectivity", 0.1747698900055272, 0.1747698900055272)
-        bias_scale = trial.suggest_float("bias_scale", 1.0127913899099061, 1.0127913899099061)
+        # input_scale = trial.suggest_float("input_scale", 1.1884772080222152, 1.1884772080222152)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.1747698900055272, 0.1747698900055272)
+        # bias_scale = trial.suggest_float("bias_scale", 1.0127913899099061, 1.0127913899099061)
 
         # Reservoir
 
         spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.0)
-        # leak_rate = trial.suggest_float("leak_rate", 0, 1)
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.5, 1)
+        leak_rate = trial.suggest_float("leak_rate", 0, 1)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.3, 1)
 
         # spectral_radius = trial.suggest_float("spectral_radius", 1.616, 1.616)
-        leak_rate = trial.suggest_float("leak_rate", 0.41971952528445494, 0.41971952528445494)
+        # leak_rate = trial.suggest_float("leak_rate", 0.41971952528445494, 0.41971952528445494)
         # rc_connectivity = trial.suggest_float("rc_connectivity", 0.677, 0.677)
 
 
@@ -143,7 +144,7 @@ def make_objective(readout_config):
 
         # === 3. Run Pipeline ===
         try:
-            results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
+            results: Dict[str, Any] = run_pipeline(config, dataset_enum)
 
             # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})
@@ -183,7 +184,7 @@ def make_objective(readout_config):
     return objective
 
 
-def derive_names(readout_key: str):
+def derive_names(readout_key: str, dataset_name: str):
     """Derive DB filename and study name from config components."""
     base = TIME_CLASSICAL_RESERVOIR_PRESET
     
@@ -203,8 +204,8 @@ def derive_names(readout_key: str):
     else:
         proj_tag = type(proj).__name__.replace("Config", "")
 
-    # Study Name: optimize_rc_{Preprocess}_{Projection}_{Readout}
-    study_name = f"optimize_rc_{prep_tag}_{proj_tag}_{readout_key}"
+    # Study Name: optimize_rc_{Dataset}_{Preprocess}_{Projection}_{Readout}
+    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}"
     db_name = "optimize_rc.db" # Shared DB for RC optimization
     
     return study_name, db_name
@@ -214,6 +215,9 @@ def main():
     parser = argparse.ArgumentParser(description="Optuna RC Hyperparameter Search")
     parser.add_argument("--n-trials", type=int, default=5000,
                         help="Number of optimization trials (default: 500)")
+    parser.add_argument("--dataset", type=str, default="mackey_glass",
+                        choices=["mackey_glass", "lorenz", "lorenz96"],
+                        help="Dataset to optimize on (default: mackey_glass)")
     parser.add_argument("--readout", type=str, default=None,
                         choices=list(READOUT_MAP.keys()),
                         help="Readout type (default: ridge)")
@@ -222,6 +226,17 @@ def main():
     parser.add_argument("--storage", type=str, default=None,
                         help="Override Optuna storage URL")
     args = parser.parse_args()
+
+    # --- Dataset ---
+    dataset_name = args.dataset
+    if dataset_name == "mackey_glass":
+        dataset_enum = Dataset.MACKEY_GLASS
+    elif dataset_name == "lorenz":
+        dataset_enum = Dataset.LORENZ
+    elif dataset_name == "lorenz96":
+        dataset_enum = Dataset.LORENZ96
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
     # --- Readout ---
     if args.readout is not None:
@@ -234,7 +249,7 @@ def main():
              readout_key = "poly_full" if readout_config.mode == "full" else "poly_square"
 
     # --- Derive Names ---
-    study_name, db_name = derive_names(readout_key)
+    study_name, db_name = derive_names(readout_key, dataset_name)
 
     if args.study_name is not None:
         study_name = args.study_name
@@ -258,12 +273,13 @@ def main():
     print("=" * 60)
     print(f"  Study:   {study_name}")
     print(f"  Storage: {storage}")
+    print(f"  Dataset: {dataset_name} ({dataset_enum})")
     print(f"  Trials:  {args.n_trials}")
     print(f"  Readout: {readout_key}")
     print("=" * 60)
 
     # --- Run ---
-    objective_fn = make_objective(readout_config)
+    objective_fn = make_objective(readout_config, dataset_enum)
     study.optimize(objective_fn, n_trials=args.n_trials)
 
     # --- Report ---

@@ -57,3 +57,20 @@ ndei 0.8509258620559532
 nmse 0.04126199471296318
 
 
+
+LORENZ    projection=RandomProjectionConfig(
+        n_units=40,
+        input_scale=0.5217612117812718,
+        input_connectivity=0.7947150387249079,
+        bias_scale=2.890297964258681,
+        seed=1,
+    ),
+    model=ClassicalReservoirConfig(
+        spectral_radius=0.6581547051021399,
+        leak_rate=0.14648621626111222,
+        rc_connectivity=0.6009462978658208,
+        seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+    ),
+
+

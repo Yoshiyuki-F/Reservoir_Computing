@@ -716,37 +716,19 @@ def plot_regression_report(
     if is_closed_loop:
         title_str = f"{title_str} closed-loop"
     
-    # Calculate VPT if dt and lyapunov_time_unit are provided
+    # Calculate VPT using shared metric function
     vpt_lt = None
     if dt is not None and lyapunov_time_unit is not None and test_y is not None and test_pred is not None:
-        y_true_flat = test_y.flatten()
-        y_pred_flat = test_pred.flatten()
-        
-        # Ensure same length
-        min_len = min(len(y_true_flat), len(y_pred_flat))
-        y_true_flat = y_true_flat[:min_len]
-        y_pred_flat = y_pred_flat[:min_len]
-        
-        # Avoid NaN
-        valid_mask = ~np.isnan(y_true_flat) & ~np.isnan(y_pred_flat)
-        if np.sum(valid_mask) > 0:
-            y_t = y_true_flat[valid_mask]
-            y_p = y_pred_flat[valid_mask]
+        try:
+            from reservoir.utils.metrics import vpt_score
+            # vpt_score handles multivariate logic correctly (Euclidean norm)
+            # It expects (Time, Features), which we have as test_y and test_pred (already inverse transformed)
+            vpt_steps = vpt_score(test_y, test_pred, threshold=vpt_threshold)
             
-            std_true = np.std(y_t)
-            if std_true > 1e-9:
-                # Normalized error at each step
-                normalized_errors = np.abs(y_p - y_t) / std_true
-                # Find first index where error exceeds threshold
-                exceed_indices = np.where(normalized_errors > vpt_threshold)[0]
-                if len(exceed_indices) > 0:
-                    vpt_steps = int(exceed_indices[0])
-                else:
-                    vpt_steps = len(y_t)
-                
-                # Convert to LT
-                steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
-                vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
+            steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
+            vpt_lt = float(vpt_steps) / steps_per_lt if steps_per_lt > 0 else 0.0
+        except ImportError:
+            pass
 
     # Display VPT if calculated, otherwise fallback to MSE
     if vpt_lt is not None:
