@@ -6,7 +6,7 @@ config shouldnt have initial value!
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Tuple, Union, Optional
+from typing import Any, Dict, Literal, Tuple, Union, Optional
 
 from reservoir.core.identifiers import AggregationMode, Model
 
@@ -47,7 +47,7 @@ class PipelineConfig:
 
     # Legacy-friendly aliases (SSOT remains the explicit fields above)
     @property
-    def config(self) -> Union[ClassicalReservoirConfig, DistillationConfig]:
+    def config(self) -> ModelConfig:
         return self.model
 
     @property
@@ -55,7 +55,7 @@ class PipelineConfig:
         return self.preprocess
 
     @property
-    def projection_config(self) -> ProjectionConfig:
+    def projection_config(self) -> Optional[ProjectionConfig]:
         return self.projection
 
     @property
@@ -79,7 +79,7 @@ class PipelineConfig:
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
             merged.update(model_cfg.teacher.to_dict())
-            merged["student.hidden_layers"] = tuple(int(v) for v in model_cfg.student.hidden_layers)
+            merged["student.hidden_layers"] = tuple(int(v) for v in (model_cfg.student.hidden_layers or ()))
         elif hasattr(model_cfg, "to_dict"):
             merged.update(model_cfg.to_dict())
         else:
@@ -112,9 +112,11 @@ class RawConfig:
     """Step 2 parameters for Raw (no preprocessing)."""
 
     def validate(self, context: str = "raw") -> "RawConfig":
+        _ = context
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    @staticmethod
+    def to_dict() -> dict[str, Any]:
         return {"method": "raw"}
 
 
@@ -123,9 +125,11 @@ class StandardScalerConfig:
     """Step 2 parameters for Standard Scaler (mean removal and variance scaling)."""
 
     def validate(self, context: str = "standard_scaler") -> "StandardScalerConfig":
+        _ = context
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    @staticmethod
+    def to_dict() -> dict[str, Any]:
         return {"method": "standard_scaler"}
 
 
@@ -265,45 +269,7 @@ class PCAProjectionConfig:
         return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
 
 
-@dataclass(frozen=True)
-class CoherentDriveProjectionConfig:
-    """Step 3 parameters for Coherent Drive Projection.
-    
-    Uses arcsin transformation for amplitude-based quantum encoding.
-    Non-periodic, suitable for trending time series like Mackey-Glass.
-    
-    θ = 2 * arcsin(clip(linear_proj(x), -1, 1))
-    """
-    n_units: int
-    input_scale: float
-    input_connectivity: float
-    bias_scale: float
-    seed: int
-    
-    def validate(self, context: str = "coherent_drive") -> "CoherentDriveProjectionConfig":
-        prefix = f"{context}: "
-        if int(self.n_units) <= 0:
-            raise ValueError(f"{prefix}n_units must be positive.")
-        if float(self.input_scale) <= 0:
-            raise ValueError(f"{prefix}input_scale must be positive.")
-        if not (0.0 < float(self.input_connectivity) <= 1.0):
-            raise ValueError(f"{prefix}input_connectivity must be in (0,1].")
-        if float(self.bias_scale) < 0:
-            raise ValueError(f"{prefix}bias_scale must be non-negative.")
-        return self
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "type": "coherent_drive",
-            "n_units": int(self.n_units),
-            "input_scale": float(self.input_scale),
-            "input_connectivity": float(self.input_connectivity),
-            "bias_scale": float(self.bias_scale),
-            "seed": int(self.seed),
-        }
-
-
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, CoherentDriveProjectionConfig]
+ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, None]
 
 
 
@@ -356,7 +322,7 @@ class DistillationConfig:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "teacher": self.teacher.to_dict(),
-            "student.hidden_layers": tuple(int(v) for v in self.student.hidden_layers),
+            "student.hidden_layers": tuple(int(v) for v in (self.student.hidden_layers or ())),
         }
 
     def validate(self, *, context: str = "") -> None:
@@ -378,7 +344,7 @@ class FNNConfig:
         self.validate()
 
     def to_dict(self) -> dict[str, Any]:
-        result = {
+        result: Dict[str, Any] = {
             "hidden_layers": tuple(int(v) for v in (self.hidden_layers or ())),
         }
         if self.window_size is not None:
@@ -419,7 +385,8 @@ class PassthroughConfig:
 class QuantumReservoirConfig:
     """Step 5 Quantum Reservoir dynamics parameters.
     
-    Note: n_qubits is NOT stored here - it is derived from projection.n_units at runtime.
+    n_qubits: Optional. If None, inferred from projected_input_dim (Step 3 output).
+              If specified, used directly (needed when projection=None).
     
     measurement_basis options:
         - 'Z': 1st moment only (n_qubits features)
@@ -431,23 +398,23 @@ class QuantumReservoirConfig:
     n_layers: int                    # Number of variational layers
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
-    input_scale: float        # a_in: R gate input scaling
     feedback_scale: float     # a_fb: R gate feedback scaling. 0.0 = no feedback
-    measurement_basis: str  # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
-    noise_type: str        # 'clean', 'depolarizing', 'damping'
+    measurement_basis: Literal["Z", "ZZ", "Z+ZZ"]
+    noise_type: Literal["clean", "depolarizing", "damping"]
     noise_prob: float          # Probability of noise (0.0 to 1.0)
     readout_error: float     # Readout error probability (0.0 to 1.0)
     n_trajectories: int      # Number of trajectories for Monte Carlo simulation (0 = Density Matrix)
     use_remat: bool          # Use gradient checkpointing (rematerialization)
     use_reuploading: bool    # Use data re-uploading strategy
-    precision: str           # "complex64" or "complex128"
+    precision: Literal["complex64", "complex128"]
+    n_qubits: Optional[int] = None   # Number of qubits (None = infer from Step 3)
 
     def validate(self, context: str = "quantum_reservoir") -> "QuantumReservoirConfig":
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
-        if float(self.input_scale) <= 0:
-            raise ValueError(f"{prefix}input_scale must be positive.")
+        if self.n_qubits is not None and int(self.n_qubits) <= 0:
+            raise ValueError(f"{prefix}n_qubits must be positive when specified.")
         if not isinstance(self.aggregation, AggregationMode):
             raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         # Validate measurement_basis
@@ -465,9 +432,9 @@ class QuantumReservoirConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "n_qubits": int(self.n_qubits) if self.n_qubits is not None else None,
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
-            "input_scale": float(self.input_scale),
             "feedback_scale": float(self.feedback_scale),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),
@@ -494,7 +461,7 @@ class RidgeReadoutConfig:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"use_intercept": bool(self.use_intercept)}
+        result: Dict[str, Any] = {"use_intercept": bool(self.use_intercept)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -521,7 +488,7 @@ class PolyRidgeReadoutConfig:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
+        result: Dict[str, Any] = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -533,6 +500,7 @@ class FNNReadoutConfig:
     hidden_layers: Optional[Tuple[int, ...]]
 
     def validate(self, context: str = "fnnreadout") -> "FNNReadoutConfig":
+        _ = context
         return self
 
     def to_dict(self) -> Dict[str, Any]:

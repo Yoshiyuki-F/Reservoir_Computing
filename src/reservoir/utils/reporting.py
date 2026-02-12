@@ -392,21 +392,38 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
                 
                 prefix = "T" if centering else "F"
                 preprocess_label = f"{prefix}CRS{float(scale)}"
+            elif raw_label == "MinMaxScaler":
+                input_scale = 1.0
+                if config is not None and hasattr(config, "preprocess"):
+                    if hasattr(config.preprocess, "input_scale"):
+                        input_scale = config.preprocess.input_scale
+                preprocess_label = f"MinMaxScaler_i{float(input_scale)}"
             else:
                 preprocess_label = raw_label
 
         topo_type = str(topo_meta.get("type", "")).lower()
         is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
 
-    # Append leak_rate and feedback_scale to model_type_str for quantum models
+    # Append feedback_scale to model_type_str for quantum models
     if config is not None:
         model_cfg = getattr(config, 'model', None)
         if model_cfg:
-            has_leak = hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None
             has_feedback = hasattr(model_cfg, 'feedback_scale') and model_cfg.feedback_scale is not None
-            if has_leak and has_feedback:
-                # Quantum model: use l{leak_rate}f{feedback_scale} format
-                model_type_str = f"{model_type_str}_l{model_cfg.leak_rate}f{model_cfg.feedback_scale}"
+            has_leak = hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None
+            if has_feedback:
+                # Quantum model: use q{n_qubits}f{feedback_scale} format
+                n_qubits = getattr(model_cfg, "n_qubits", None)
+                if n_qubits is None and hasattr(config, "projection") and config.projection:
+                    n_qubits = getattr(config.projection, "n_units", None)
+                
+                # If still None (and not in config), implies pure default or runtime inference.
+                # However, for filenames, we prefer explicit values.
+                # If we cannot find it, we might omit q{n} or fallback to something.
+                # But typically one of them is set.
+                q_str = f"q{n_qubits}" if n_qubits is not None else "q?"
+                basis = str(model_cfg.measurement_basis)
+                
+                model_type_str = f"{model_type_str}_{q_str}_f{model_cfg.feedback_scale}_{basis}"
             elif has_leak:
                 # Classical reservoir: just leak_rate
                 model_type_str = f"{model_type_str}_{model_cfg.leak_rate}"

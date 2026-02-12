@@ -14,14 +14,14 @@ from reservoir.layers.projection import (
 from reservoir.models.config import (
     PipelineConfig, 
     RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, CoherentDriveProjectionConfig,
-    RawConfig, StandardScalerConfig, CustomRangeScalerConfig,
+    RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig,
 )
 
 # Register projection configs once at module level
 register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, CoherentDriveProjectionConfig)
 
 # Register preprocessor configs
-register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig)
+register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig)
 
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.batched_compute import batched_compute

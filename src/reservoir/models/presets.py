@@ -14,7 +14,6 @@ from reservoir.models.config import (
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     PCAProjectionConfig,
-    CoherentDriveProjectionConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
@@ -182,7 +181,6 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    input_scale=1.0,       # a_in: R gate input scaling
     feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
     measurement_basis="Z+ZZ",
     noise_type="clean",
@@ -210,31 +208,24 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=MinMaxScalerConfig(input_scale=1.0),
-    # Using RandomProjection for stable dynamics
-    projection=CoherentDriveProjectionConfig(
-        n_units=2,
-        input_scale=0.1,
-        input_connectivity=1.0,
-        bias_scale=0.1,
-        seed=1,
-    ),
+    preprocess=MinMaxScalerConfig(input_scale=1.0), # a_in: R gate input scaling
+    projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
+        n_qubits=16,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
-        input_scale=1.0,       # a_in: R gate input scaling
         feedback_scale=1.6,    # a_fb: R gate feedback scaling (paper default)
-        measurement_basis="Z",
+        measurement_basis="Z+ZZ",
         noise_type="clean",
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
         use_remat=False,
-        use_reuploading=True,
+        use_reuploading=False,
         precision="complex64",
     ),
-    readout=DEFAULT_POLY_RIDGE_READOUT,
+    readout=DEFAULT_RIDGE_READOUT,
 )
 
 "=============================================Time series Presets============================================"
@@ -318,7 +309,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 # Dispatch table based on (Model, is_classification)
 # If entry matches, use specific preset. Else fallback to MODEL_PRESETS.
-SPECIFIC_PRESETS = {
+SPECIFIC_PRESETS: dict[tuple[Model, bool], PipelineConfig] = {
     (Model.CLASSICAL_RESERVOIR, True): CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, True): FNN_PRESET,
     (Model.FNN_DISTILLATION, True): FNN_DISTILLATION_PRESET,
