@@ -119,7 +119,7 @@ class ResultReporter:
             training_obj=self.dataset_meta.training,
             dataset_name=self.dataset_meta.dataset_name,
             model_type_str=self.stack.model_label,
-            preprocessors=[self.frontend_ctx.preprocessor] if self.frontend_ctx.preprocessor else None,
+            # preprocessors removed
         )
         generate_report(
             results,

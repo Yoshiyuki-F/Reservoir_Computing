@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 import jax.numpy as jnp
-from reservoir.utils.reporting import calculate_chaos_metrics
+from reservoir.utils.metrics import calculate_chaos_metrics
+from reservoir.utils.reporting import print_chaos_metrics
 
 class Evaluator:
     """Encapsulates evaluation logic including inverse transformation and metric calculation."""
@@ -31,7 +32,10 @@ class Evaluator:
         dt = getattr(dataset_config, 'dt', 1.0)
         ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
 
-        return calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu, verbose=verbose)
+        metrics = calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu)
+        if verbose:
+            print_chaos_metrics(metrics)
+        return metrics
 
     @staticmethod
     def align_targets(features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:

@@ -5,111 +5,41 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 import numpy as np
-import jax.numpy as jnp
 
 def _safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
     return d.get(key, default) if isinstance(d, dict) else default
 
 # --- Metrics Calculation ---
 
-def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
+
+
+def print_chaos_metrics(metrics: Dict[str, float]) -> None:
     """
-    汎用スコア計算 (MSE または Accuracy)
-    Runnerの _score メソッドを移動
+    Print chaos metrics to console.
     """
-    preds_arr = jnp.asarray(preds)
-    targets_arr = jnp.asarray(targets)
+    mse = metrics.get("mse", 0.0)
+    nmse = metrics.get("nmse", float('inf'))
+    nrmse = metrics.get("nrmse", float('inf'))
+    mase = metrics.get("mase", float('inf'))
+    ndei = metrics.get("ndei", float('inf'))
+    var_ratio = metrics.get("var_ratio", 0.0)
+    corr = metrics.get("correlation", 0.0)
+    vpt_steps = int(metrics.get("vpt_steps", 0))
+    vpt_lt = metrics.get("vpt_lt", 0.0)
+    vpt_threshold = metrics.get("vpt_threshold", 0.4)
 
-    if metric_name == "accuracy":
-        pred_labels = preds_arr if preds_arr.ndim == 1 else jnp.argmax(preds_arr, axis=-1)
-        true_labels = targets_arr if targets_arr.ndim == 1 else jnp.argmax(targets_arr, axis=-1)
-        return float(jnp.mean(pred_labels == true_labels))
+    print(f"=== Chaos Prediction Metrics ===")
+    print(f"MSE       : {mse:.5f}")
+    print(f"NMSE      : {nmse:.5f}")
+    print(f"NRMSE     : {nrmse:.5f}")
+    print(f"MASE      : {mase:.5f}")
+    print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
+    print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
+    print(f"Corr      : {corr:.5f} (Target > 0.95)")
+    print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
 
-    # Regression (MSE)
-    aligned_preds = preds_arr
-    if preds_arr.shape != targets_arr.shape and preds_arr.size == targets_arr.size:
-        aligned_preds = preds_arr.reshape(targets_arr.shape)
 
-    return float(jnp.mean((aligned_preds - targets_arr) ** 2))
 
-def calculate_chaos_metrics(
-    y_true: Any, 
-    y_pred: Any,
-    dt: float,
-    lyapunov_time_unit: float,
-    vpt_threshold: float = 0.4,
-    verbose: bool = True,
-) -> Dict[str, float]:
-    """
-    Mackey-Glassなどのカオス予測専用の評価指標
-    
-    Args:
-        y_true: Ground truth time series
-        y_pred: Predicted time series
-        dt: Simulation time step
-        lyapunov_time_unit: 1 LT in time units (e.g., 1.1 for Lorenz 63)
-        vpt_threshold: Threshold for VPT calculation (default 0.4 = sqrt(2)*0.3)
-        verbose: If True, print metrics to console
-    
-    Returns:
-        Dictionary with NDEI, var_ratio, correlation, VPT (steps), VPT (LT)
-    """
-    y_true_np = np.asarray(y_true).flatten()
-    y_pred_np = np.asarray(y_pred).flatten()
-
-    # Ensure same length
-    min_len = min(len(y_true_np), len(y_pred_np))
-    y_true_np = y_true_np[:min_len]
-    y_pred_np = y_pred_np[:min_len]
-
-    mse = np.mean((y_true_np - y_pred_np) ** 2)
-    rmse = np.sqrt(mse)
-    std_true = np.std(y_true_np)
-    std_pred = np.std(y_pred_np)
-
-    ndei = rmse / std_true if std_true > 1e-9 else float('inf')
-    var_ratio = std_pred / std_true if std_true > 1e-9 else 0.0
-
-    corr = 0.0
-    if std_true > 1e-9 and std_pred > 1e-9:
-        corr = np.corrcoef(y_true_np, y_pred_np)[0, 1]
-
-    # --- VPT Calculation ---
-    # Normalized error at each time step: |y_pred - y_true| / std(y_true)
-    # VPT = first time step where error exceeds threshold
-    if std_true > 1e-9:
-        normalized_errors = np.abs(y_pred_np - y_true_np) / std_true
-        # Find first index where error exceeds threshold
-        exceed_indices = np.where(normalized_errors > vpt_threshold)[0]
-        if len(exceed_indices) > 0:
-            vpt_steps = int(exceed_indices[0])
-        else:
-            # Prediction never exceeds threshold
-            vpt_steps = len(y_true_np)
-    else:
-        vpt_steps = 0
-    
-    # Convert VPT to Lyapunov time
-    steps_per_lt = int(lyapunov_time_unit / dt) if dt > 0 else 1
-    vpt_lt = vpt_steps / steps_per_lt if steps_per_lt > 0 else 0.0
-
-    if verbose:
-        print(f"=== Chaos Prediction Metrics ===")
-        print(f"MSE       : {mse:.5f}")
-        print(f"NDEI      : {ndei:.5f} (Target < 0.1)")
-        print(f"Var Ratio : {var_ratio:.5f} (Target ~ 1.0)")
-        print(f"Corr      : {corr:.5f} (Target > 0.95)")
-        print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
-
-    return {
-        "mse": mse,
-        "ndei": ndei,
-        "var_ratio": var_ratio,
-        "correlation": corr,
-        "vpt_steps": vpt_steps,
-        "vpt_lt": vpt_lt,
-        "vpt_threshold": vpt_threshold,
-    }
 
 # --- Logging / Printing ---
 
@@ -171,7 +101,7 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
 
     # Decide best logic for marking
     # Both minimize score internally (MSE is min, -VPT is min)
-    best_by_metric = min(history, key=history.get)
+    best_by_metric = min(history.keys(), key=lambda k: float(history[k]))
 
     best_marker = best_lam if best_lam is not None else best_by_metric
 
@@ -180,7 +110,12 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
     print("-" * 40)
     sorted_lambdas = sorted(history.keys())
     for lam in sorted_lambdas:
-        score = float(history[lam])
+        if lam is None: continue
+        try:
+             score = float(history[lam])
+             lam_val = float(lam)
+        except (ValueError, TypeError):
+             continue
         
         # Format score for display
         score_disp = score
@@ -193,8 +128,15 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
             
         norm = weight_norms.get(lam)
         norm_str = f"(Norm: {norm:.5e})" if norm is not None else "(Norm: n/a)"
-        marker = " <= best" if (best_marker is not None and abs(float(lam) - float(best_marker)) < 1e-12) else ""
-        print(f"   λ = {float(lam):.2e} : {label} = {score_disp:.10f} {norm_str}{marker}")
+        marker = ""
+        if best_marker is not None and isinstance(best_marker, (int, float, str)):
+             try:
+                 bm_val = float(best_marker)
+                 if abs(lam_val - bm_val) < 1e-12:
+                     marker = " <= best"
+             except (ValueError, TypeError):
+                 pass
+        print(f"   λ = {lam_val:.2e} : {label} = {score_disp:.10f} {norm_str}{marker}")
     print("=" * 40 + "\n")
 
 
@@ -209,7 +151,8 @@ def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title:
     except Exception as exc:  # pragma: no cover
         print(f"Skipping distillation loss plotting due to import error: {exc}")
         return
-    plot_loss_history(loss_history, save_path, title=title, learning_rate=learning_rate)
+    loss_list = list(loss_history) if isinstance(loss_history, (list, tuple, np.ndarray)) else []
+    plot_loss_history(loss_list, save_path, title=title, learning_rate=learning_rate)
 
 
 def plot_classification_report(
@@ -225,14 +168,13 @@ def plot_classification_report(
     filename: str,
     model_type_str: str,
     dataset_name: str,
-    metric: str,
+    # metric removed
     results: Dict[str, Any],
     training_obj: Any,
     # 追加: 計算済みの予測値を受け取るオプション
     precalc_preds: Optional[Dict[str, Any]] = None,
-    preprocessors: Optional[list[Any]] = None,
+    # preprocessors, metric removed
     selected_lambda: Optional[float] = None,
-    lambda_norm: Optional[float] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -246,8 +188,8 @@ def plot_classification_report(
     # ---------------------------------------------------------
     # 1. Labels Preparation
     # ---------------------------------------------------------
-    train_labels_np = np.asarray(train_y)
-    test_labels_np = np.asarray(test_y)
+    train_labels_np = np.asarray(train_y) if train_y is not None else np.array([])
+    test_labels_np = np.asarray(test_y) if test_y is not None else np.array([])
     if train_labels_np.ndim > 1:
         train_labels_np = np.argmax(train_labels_np, axis=-1)
     if test_labels_np.ndim > 1:
@@ -355,7 +297,8 @@ def plot_classification_report(
     print(f"  Val  : {acc_val:.4%}")
     print(f"  Test : {acc_test:.4%}")
 
-    metrics_payload = dict(results.get("test", {})) if isinstance(results, dict) else {}
+    metrics_test = results.get("test", {}) if isinstance(results, dict) else {}
+    metrics_payload = {k: v for k, v in metrics_test.items()}
     plot_classification_results(
         train_labels=train_labels_np,
         test_labels=test_labels_np,
@@ -484,7 +427,8 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
     # NN marker
     if is_fnn:
-        layers = tuple(int(v) for v in student_layers) if student_layers is not None else ()
+        layers_list = student_layers if isinstance(student_layers, (list, tuple)) else []
+        layers = tuple(int(v) for v in layers_list)
         if layers:
             filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
         else:
@@ -510,7 +454,7 @@ def generate_report(
     dataset_name: str,
     model_type_str: str,
     classification: bool = False,
-    preprocessors: Optional[list[Any]] = None,
+    # preprocessors removed
     dataset_preset: Optional[Any] = None,  # DatasetPreset for dt/lyapunov_time_unit
     model_obj: Optional[Any] = None, # New Argument
 ) -> None:
@@ -527,12 +471,12 @@ def generate_report(
     if classification:
         _plot_classification_section(
             results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
-            runner, train_X, train_y, test_X, test_y, val_X, val_y, preprocessors, metric
+            runner, train_X, train_y, test_X, test_y, val_X, val_y
         )
     elif metric == "mse":
         _plot_regression_section(
             results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
-            runner, train_y, val_y, test_X, test_y, preprocessors, dataset_preset, metric
+            runner, train_y, val_y, test_X, test_y, dataset_preset
         )
 
     # 3. Quantum Dynamics (if available)
@@ -550,20 +494,15 @@ def _plot_distillation_section(results, topo_meta, training_obj, model_type_str,
 
 def _plot_classification_section(
     results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
-    runner, train_X, train_y, test_X, test_y, val_X, val_y, preprocessors, metric
+    runner, train_X, train_y, test_X, test_y, val_X, val_y
 ):
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
     
     train_res = _safe_get(results, "train", {})
     selected_lambda = None
-    lambda_norm = None
     if isinstance(train_res, dict):
         selected_lambda = train_res.get("best_lambda")
-        weight_norms = train_res.get("weight_norms") or {}
-        if selected_lambda is not None:
-             lambda_norm = weight_norms.get(selected_lambda) or weight_norms.get(float(selected_lambda))
-
     precalc_preds = _safe_get(results, "outputs", {})
 
     plot_classification_report(
@@ -578,13 +517,12 @@ def _plot_classification_section(
         filename=confusion_filename,
         model_type_str=model_type_str,
         dataset_name=dataset_name,
-        metric=metric,
+        # metric removed
         selected_lambda=selected_lambda,
-        lambda_norm=lambda_norm,
         results=results,
         training_obj=training_obj,
         precalc_preds=precalc_preds,
-        preprocessors=preprocessors,
+        # preprocessors removed
     )
     
     # FNN Readout Loss Plot
@@ -598,7 +536,7 @@ def _plot_classification_section(
 
 def _plot_regression_section(
     results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
-    runner, train_y, val_y, test_X, test_y, preprocessors, dataset_preset, metric
+    runner, train_y, val_y, test_X, test_y, dataset_preset
 ):
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
@@ -629,7 +567,6 @@ def _plot_regression_section(
             model_type_str=model_type_str,
             mse=test_mse,
             precalc_test_pred=test_pred_cached, 
-            preprocessors=preprocessors,
             scaler=scaler,
             is_closed_loop=is_closed_loop,
             dt=dt,
@@ -685,7 +622,7 @@ def plot_regression_report(
     model_type_str: str,
     mse: Optional[float] = None,
     precalc_test_pred: Optional[Any] = None, 
-    preprocessors: Optional[list[Any]] = None,
+    # preprocessors removed
     scaler: Optional[Any] = None,
     is_closed_loop: bool = False,
     dt: Optional[float] = None,
@@ -706,9 +643,9 @@ def plot_regression_report(
         if hasattr(runner, 'model') and runner.model is not None:
             test_features = runner.model(np.asarray(test_X))
             if readout is None:
-                test_pred = test_features
+                test_pred = np.asarray(test_features)
             else:
-                test_pred = readout.predict(test_features)
+                test_pred = np.asarray(readout.predict(test_features))
         else:
             print("  [Report] Cannot generate test predictions: no model or precalc data")
             return
@@ -748,8 +685,8 @@ def plot_regression_report(
         if arr.ndim == 1: return arr.reshape(-1, 1)
         return arr
 
-    test_pred_plot = to_2d(test_pred)
-    test_y_plot = to_2d(test_y) if test_y is not None else None
+    test_pred_plot = to_2d(np.asarray(test_pred))
+    test_y_plot = to_2d(np.asarray(test_y)) if test_y is not None else None
 
     if scaler is not None:
         try:
@@ -758,15 +695,8 @@ def plot_regression_report(
                 test_y_plot = scaler.inverse_transform(test_y_plot)
         except Exception as e:
             print(f"  [Report] Scaler inverse transform failed: {e}")
-    elif preprocessors:
-        for p in reversed(preprocessors):
-            if hasattr(p, "inverse_transform"):
-                try:
-                    test_pred_plot = p.inverse_transform(test_pred_plot)
-                    if test_y_plot is not None:
-                        test_y_plot = p.inverse_transform(test_y_plot)
-                except Exception as e:
-                    print(f"  [Report] Inverse transform failed for {type(p).__name__}: {e}")
+            print(f"  [Report] Scaler inverse transform failed: {e}")
+    # preprocessors block removed
 
     # Update variables for plotting
     test_pred = test_pred_plot
@@ -814,10 +744,11 @@ def plot_regression_report(
     elif mse is not None:
         title_str += f" | MSE: {mse:.4f} (Scaled)"
 
-    plot_timeseries_comparison(
-        targets=test_y,
-        predictions=test_pred,
-        filename=filename,
-        title=title_str,
-        time_offset=offset,
-    )
+    if test_y is not None and test_pred is not None:
+        plot_timeseries_comparison(
+            targets=test_y,
+            predictions=test_pred,
+            filename=filename,
+            title=title_str,
+            time_offset=offset,
+        )

@@ -6,7 +6,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
-from reservoir.utils.reporting import print_ridge_search_results, compute_score, print_feature_stats
+from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats
+from reservoir.utils.metrics import compute_score
 from reservoir.pipelines.evaluation import Evaluator
 
 class ReadoutStrategy(ABC):
@@ -220,7 +221,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         if hasattr(readout, 'fit_with_validation'):
              # Define scoring callback
              def scoring_fn(p, t):
-                 return compute_score(p, t, "mse")
+                 return compute_score(p, t, "nmse")
 
              # Use unified optimization (Minimize MSE)
              best_lambda, best_score, search_history, weight_norms, residuals_history = readout.fit_with_validation(
@@ -237,7 +238,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 "best_lambda": best_lambda,
                 "weight_norms": weight_norms,
                 "residuals_history": residuals_history
-             }, metric_name="MSE")
+             }, metric_name="NMSE")
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
              readout.fit(tf_reshaped, ty_reshaped)

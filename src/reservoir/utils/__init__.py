@@ -15,15 +15,13 @@ from .gpu_utils import (  # noqa: F401
     require_gpu,
     print_gpu_info,
 )
-from .metrics import calculate_mse, calculate_mae, accuracy_score, mse_score  # noqa: F401
+from .metrics import compute_score, calculate_chaos_metrics  # noqa: F401
 
 __all__ = [
     "ensure_x64_enabled",
     "check_gpu_available",
     "require_gpu",
     "print_gpu_info",
-    "calculate_mse",
-    "accuracy_score",
-    "mse_score",
-    "calculate_mae",
+    "compute_score",
+    "calculate_chaos_metrics",
 ]
