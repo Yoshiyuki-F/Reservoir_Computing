@@ -130,21 +130,31 @@ def make_objective(readout_config):
         try:
             results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
 
-            # === 4. Extract Metrics ===
+            # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})
-            vpt_lt = test_results.get("vpt_lt", 0.0)
-            var_ratio = test_results.get("var_ratio", 0.0)
-            mse = test_results.get("mse", float('inf'))
+            train_results = results.get("train", {})
+            chaos = test_results.get("chaos_metrics", {})
 
-            trial.set_user_attr("var_ratio", var_ratio)
-            trial.set_user_attr("mse", mse)
+            vpt_lt = test_results.get("vpt_lt", 0.0)
+            best_lambda = train_results.get("best_lambda", None)
+
+            # Store best_lambda
+            if best_lambda is not None:
+                trial.set_user_attr("best_lambda", float(best_lambda))
+
+            # Store ALL chaos metrics
+            for key in ["mse", "nmse", "nrmse", "mase", "ndei",
+                        "var_ratio", "correlation", "vpt_steps", "vpt_lt", "vpt_threshold"]:
+                val = chaos.get(key, None)
+                if val is not None:
+                    trial.set_user_attr(key, float(val))
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
-                print(f"Trial {trial.number}: FAILED (VPT=0)")
+                print(f"Trial {trial.number}: FAILED (VPT=0) λ={best_lambda}")
                 trial.set_user_attr("status", "failed")
                 return 0.0
 
-            print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, MSE={mse:.5f} "
+            print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, MSE={chaos.get('mse',0):.5f}, λ={best_lambda:.2e} "
                   f"(in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
@@ -246,9 +256,16 @@ def main():
     print("=== BEST PARAMETERS ===")
     print("=" * 60)
     for k, v in study.best_params.items():
-        print(f"  {k:20s}: {v:.4f}")
+        print(f"  {k:20s}: {v:.6f}")
     if study.best_value is not None:
         print(f"  {'Best VPT':20s}: {study.best_value:.2f} LT")
+    print("-" * 60)
+    print("  [Stored Metrics]")
+    for k, v in study.best_trial.user_attrs.items():
+        if isinstance(v, float):
+            print(f"  {k:20s}: {v:.6f}")
+        else:
+            print(f"  {k:20s}: {v}")
     print("=" * 60)
 
 

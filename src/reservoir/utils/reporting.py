@@ -582,7 +582,14 @@ def _plot_regression_section(
         try:
              from reservoir.utils.plotting import plot_lambda_search_boxplot
              boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
-             plot_lambda_search_boxplot(residuals_hist, boxplot_filename, title=f"Lambda Search Residuals ({model_type_str})")
+             train_res = _safe_get(results, "train", {})
+             best_lam = train_res.get("best_lambda") if isinstance(train_res, dict) else None
+             plot_lambda_search_boxplot(
+                 residuals_hist, boxplot_filename,
+                 title=f"Lambda Search Residuals ({model_type_str})",
+                 best_lambda=best_lam,
+                 metric_name="NMSE",
+             )
         except ImportError:
              pass
 

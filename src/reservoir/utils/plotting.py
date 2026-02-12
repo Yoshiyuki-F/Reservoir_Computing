@@ -276,45 +276,69 @@ def plot_timeseries_comparison(
 def plot_lambda_search_boxplot(
     residuals_history: Dict[float, np.ndarray],
     filename: str,
-    title: str = "Lambda Search: Residuals Distribution"
+    title: str = "Lambda Search: Residuals Distribution",
+    best_lambda: Optional[float] = None,
+    metric_name: str = "NMSE",
 ) -> None:
     """
-    Plot boxplot of squared errors (residuals) for each lambda.
-    X-axis: Lambda (log scale or categorical)
-    Y-axis: Residuals
+    Plot boxplot of per-sample squared errors for each lambda.
+    Highlights the selected (best) lambda box in red.
     """
     if not residuals_history:
         return
 
-    # Sort checks by lambda value
     sorted_lambdas = sorted(residuals_history.keys())
     data = []
     labels = []
     
-    # Optional: Log scale X if range is large?
-    # For Boxplot, we treat lambdas as categories usually.
-    
-    for lam in sorted_lambdas:
+    best_idx = None  # 1-based index of best lambda box
+
+    for i, lam in enumerate(sorted_lambdas):
         res = residuals_history[lam]
-        # Filter NaNs or Infs if any
         res = res[np.isfinite(res)]
         data.append(res)
         labels.append(f"{lam:.1e}")
+        if best_lambda is not None and abs(lam - best_lambda) < 1e-15:
+            best_idx = i + 1  # boxplot uses 1-based indexing
 
     output_path = _resolve_output_path(filename)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(10, 6))
-    plt.boxplot(data, labels=labels)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    bp = ax.boxplot(data, labels=labels, patch_artist=True)
     
-    plt.title(title)
-    plt.xlabel("Lambda (Regularization Strength)")
-    plt.ylabel("Squared Error (Residuals)")
-    plt.yscale("log") # Residuals often span orders of magnitude
+    # Style all boxes light gray
+    for patch in bp['boxes']:
+        patch.set_facecolor('#E8E8E8')
+        patch.set_alpha(0.8)
+    
+    # Highlight best lambda box in red
+    if best_idx is not None and best_idx <= len(bp['boxes']):
+        bp['boxes'][best_idx - 1].set_facecolor('#FF6B6B')
+        bp['boxes'][best_idx - 1].set_edgecolor('#CC0000')
+        bp['boxes'][best_idx - 1].set_linewidth(2)
+        bp['boxes'][best_idx - 1].set_alpha(1.0)
+        # Add star marker at median of selected box
+        median_line = bp['medians'][best_idx - 1]
+        mx = np.mean(median_line.get_xdata())
+        my = np.mean(median_line.get_ydata())
+        ax.plot(mx, my, marker='*', color='#CC0000', markersize=15, zorder=10)
+        ax.annotate(
+            f"λ*={best_lambda:.2e}",
+            xy=(mx, my), xytext=(0, 20),
+            textcoords='offset points', ha='center', fontsize=9,
+            fontweight='bold', color='#CC0000',
+            arrowprops=dict(arrowstyle='->', color='#CC0000', lw=1.5),
+        )
+
+    ax.set_title(title, fontsize=13)
+    ax.set_xlabel("Lambda (Regularization Strength)")
+    ax.set_ylabel(f"Per-sample Squared Error  (scoring: {metric_name})")
+    ax.set_yscale("log")
     plt.xticks(rotation=45, ha='right')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax.grid(True, axis='y', linestyle='--', alpha=0.7)
     
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
     print(f"Lambda Search BoxPlot saved to '{output_path}'.")
