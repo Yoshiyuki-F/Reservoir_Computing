@@ -254,15 +254,15 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=RandomProjectionConfig(
         n_units=400,
-        input_scale=0.6,
-        input_connectivity=0.1,
-        bias_scale=1.0,
+        input_scale=1.1808661406250922,
+        input_connectivity=0.13588027912024847,
+        bias_scale=1.0029669118717532,
         seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=1,
-        leak_rate=0.4, #best for n ,not for n=1000
-        rc_connectivity=0.02, #best
+        spectral_radius=1.616,
+        leak_rate=0.41848915914774804,
+        rc_connectivity=0.677,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
     ),

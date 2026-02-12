@@ -106,14 +106,14 @@ def make_objective(readout_config):
         # === 1. Suggest Parameters ===
         
         # Projection
-        input_scale = trial.suggest_float("input_scale", 0.5, 4.0, log=True)
-        input_connectivity = trial.suggest_float("input_connectivity", 0.1, 1.0, log=True)
-        bias_scale = trial.suggest_float("bias_scale", 0.3, 1.8)
+        input_scale = trial.suggest_float("input_scale", 0.7, 2.0, log=True)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.1, 0.2, log=True)
+        bias_scale = trial.suggest_float("bias_scale", 0.95, 1.05)
         
         # Reservoir
-        spectral_radius = 1.616 # trial.suggest_float("spectral_radius", 0.6, 1.8)
-        leak_rate = trial.suggest_float("leak_rate", 0.0, 0.8)
-        rc_connectivity = 0.677 # trial.suggest_float("rc_connectivity", 0.01, 1, log=True)
+        spectral_radius = trial.suggest_float("spectral_radius", 1.616, 1.616) #####
+        leak_rate = trial.suggest_float("leak_rate", 0.4, 0.5)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.677, 0.677, log=True) #####
 
         # === 2. Build Config ===
         config = build_config(
