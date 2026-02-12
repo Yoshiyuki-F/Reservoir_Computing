@@ -240,7 +240,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              def scoring_fn(p, t):
                  p_raw = _inverse(np.asarray(p))
                  t_raw = _inverse(np.asarray(t))
-                 return compute_score(p_raw, t_raw, "nmse")
+                 score = compute_score(p_raw, t_raw, "nmse")
+                 # Normalize residuals so their mean is exactly the NMSE score
+                 energy = np.mean(t_raw**2)
+                 res_sq = (p_raw.ravel() - t_raw.ravel()) ** 2 / (energy + 1e-12)
+                 return score, res_sq
 
              # Use unified optimization (Minimize MSE)
              best_lambda, best_score, search_history, weight_norms, residuals_history = readout.fit_with_validation(

@@ -180,14 +180,18 @@ class RidgeCV(ReadoutModule):
             
             # Predict & Score
             val_pred = model.predict(val_Z)
-            score = scoring_fn(np.asarray(val_pred), np.asarray(val_y))
-            search_history[lam_val] = score
+            score_out = scoring_fn(np.asarray(val_pred), np.asarray(val_y))
             
-            # Capture residuals (Squared Error) for potential BoxPlot
-            # Assuming regression-like scoring. If shapes mismatch, simple flatten diff.
-            vp = np.asarray(val_pred).ravel()
-            vy = np.asarray(val_y).ravel()
-            res_sq = (vp - vy) ** 2
+            if isinstance(score_out, tuple):
+                score, res_sq = score_out
+            else:
+                score = score_out
+                # Default behavior: residuals in the space passed to fit
+                vp = np.asarray(val_pred).ravel()
+                vy = np.asarray(val_y).ravel()
+                res_sq = (vp - vy) ** 2
+            
+            search_history[lam_val] = score
             residuals_history[lam_val] = res_sq
             
             if model.coef_ is not None:

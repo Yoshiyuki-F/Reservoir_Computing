@@ -318,23 +318,18 @@ def plot_lambda_search_boxplot(
         bp['boxes'][best_idx - 1].set_edgecolor('#CC0000')
         bp['boxes'][best_idx - 1].set_linewidth(2)
         bp['boxes'][best_idx - 1].set_alpha(1.0)
-        # Add star marker at median of selected box
-        median_line = bp['medians'][best_idx - 1]
-        mx = np.mean(median_line.get_xdata())
-        my = np.mean(median_line.get_ydata())
-        ax.plot(mx, my, marker='*', color='#CC0000', markersize=15, zorder=10)
-        ax.annotate(
-            f"λ*={best_lambda:.2e}",
-            xy=(mx, my), xytext=(0, 20),
-            textcoords='offset points', ha='center', fontsize=9,
-            fontweight='bold', color='#CC0000',
-            arrowprops=dict(arrowstyle='->', color='#CC0000', lw=1.5),
-        )
 
     ax.set_title(title, fontsize=13)
     ax.set_xlabel("Lambda (Regularization Strength)")
-    ax.set_ylabel(f"Per-sample Squared Error  (scoring: {metric_name})")
+    ax.set_ylabel(f"Normalized Residuals (Individual contribution to {metric_name})")
     ax.set_yscale("log")
+    
+    # Plot line connecting means for better visibility of convexity/humps
+    means = [np.mean(d) for d in data]
+    x_pos = np.arange(1, len(data) + 1)
+    ax.plot(x_pos, means, color='#2c3e50', linestyle='--', marker='o', 
+            markersize=4, alpha=0.6, label='Mean residuals')
+    
     plt.xticks(rotation=45, ha='right')
     ax.grid(True, axis='y', linestyle='--', alpha=0.7)
     
