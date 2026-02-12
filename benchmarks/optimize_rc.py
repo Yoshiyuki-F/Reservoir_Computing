@@ -106,17 +106,7 @@ def make_objective(readout_config):
         """
         Optuna objective function.
         """
-        # === 0. Fix Random State for Determinism ===
-        # Even though config has seeds, some legacy/global state might drift.
-        # We force a global re-seed based on trial number or fixed seed to ensure
-        # that IF parameters are identical, the result is identical.
-        import random
-        # Use a seed that depends on trial.number to be deterministic per trial
-        # OR use a fixed seed if we want to debug identicalness.
-        # Here we use a fixed seed + trial.number so each trial is unique but reproducible.
-        seed = 42 + trial.number
-        random.seed(seed)
-        np.random.seed(seed)
+
         
         # === 1. Suggest Parameters ===
         

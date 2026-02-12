@@ -254,6 +254,9 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
 
     # ノイズを追加
     if config.noise_level > 0:
+        # Use config seed for deterministic noise if provided
+        if config.seed is not None:
+             np.random.seed(config.seed)
         noise = np.random.normal(0, config.noise_level, len(x)).astype(np.float64)
         x += noise
 
