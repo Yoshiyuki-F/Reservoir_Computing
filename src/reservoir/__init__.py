@@ -1,2 +1,7 @@
-# Package init - default precision is float32 for efficiency
-# Ridge regression enables x64 locally where needed for numerical stability
+# Package init
+# Enforce 64-bit precision globally for numerical stability and determinism
+import os
+os.environ["JAX_ENABLE_X64"] = "True"
+
+import jax
+jax.config.update("jax_enable_x64", True)

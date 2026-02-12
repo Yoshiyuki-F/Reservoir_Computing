@@ -32,8 +32,8 @@ class ReadoutStrategy(ABC):
         """Prepare seed for closed-loop (concat train+val)."""
         if val_X is not None:
             axis = 1 if train_X.ndim == 3 else 0
-            return jnp.concatenate([jnp.asarray(train_X, dtype=jnp.float32), jnp.asarray(val_X, dtype=jnp.float32)], axis=axis)
-        return jnp.asarray(train_X, dtype=jnp.float32)
+            return jnp.concatenate([jnp.asarray(train_X), jnp.asarray(val_X)], axis=axis)
+        return jnp.asarray(train_X)
 
     @abstractmethod
     def fit_and_evaluate(

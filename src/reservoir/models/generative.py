@@ -54,7 +54,6 @@ class ClosedLoopGenerativeModel(ABC):
             2D predictions (steps, Features)
         """
         # Convert 2D to 3D for internal processing
-        # Cast to float32 to ensure scan carry consistency (even after x64 is enabled)
         history = jnp.asarray(seed_data)
         if history.ndim == 2:
             history = history[None, :, :]  # (T, F) -> (1, T, F)

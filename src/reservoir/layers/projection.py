@@ -32,7 +32,7 @@ class Projection(abc.ABC):
         Apply the projection to the inputs.
         template method: validates input shape then calls _forward.
         """
-        arr = jnp.asarray(inputs)
+        arr = jnp.asarray(inputs, dtype=jnp.float_)
         if arr.ndim not in (2, 3):
              raise ValueError(f"{self.__class__.__name__} expects 2D or 3D input, got shape {arr.shape}")
         return self._project(arr)

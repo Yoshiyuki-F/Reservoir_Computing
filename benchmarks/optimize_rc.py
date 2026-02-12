@@ -23,6 +23,9 @@ from typing import Any, Dict
 
 import numpy as np
 import optuna
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import (
@@ -103,17 +106,35 @@ def make_objective(readout_config):
         """
         Optuna objective function.
         """
+        # === 0. Fix Random State for Determinism ===
+        # Even though config has seeds, some legacy/global state might drift.
+        # We force a global re-seed based on trial number or fixed seed to ensure
+        # that IF parameters are identical, the result is identical.
+        import random
+        # Use a seed that depends on trial.number to be deterministic per trial
+        # OR use a fixed seed if we want to debug identicalness.
+        # Here we use a fixed seed + trial.number so each trial is unique but reproducible.
+        seed = 42 + trial.number
+        random.seed(seed)
+        np.random.seed(seed)
+        
         # === 1. Suggest Parameters ===
         
         # Projection
-        input_scale = trial.suggest_float("input_scale", 1.15, 1.25)
-        input_connectivity = trial.suggest_float("input_connectivity", 0.14, 0.2)
-        bias_scale = trial.suggest_float("bias_scale", 0.95, 1.05)
-        
+        # input_scale = trial.suggest_float("input_scale", 1.15, 1.25)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.14, 0.2)
+        # bias_scale = trial.suggest_float("bias_scale", 0.95, 1.05)
+        input_scale=1.2019208858978183
+        input_connectivity=0.1928267681965625
+        bias_scale=0.9568959152230178
+
         # Reservoir
-        spectral_radius = trial.suggest_float("spectral_radius", 1.5, 1.8)
-        leak_rate = trial.suggest_float("leak_rate", 0.35, 0.45)
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.6, 1)
+        spectral_radius=1.5972788236034943
+        leak_rate= 0.39768734461610455
+        rc_connectivity= 0.9244981889173147
+        # spectral_radius = trial.suggest_float("spectral_radius", 1.5, 1.8)
+        # leak_rate = trial.suggest_float("leak_rate", 0.35, 0.45)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.6, 1)
 
         # === 2. Build Config ===
         config = build_config(

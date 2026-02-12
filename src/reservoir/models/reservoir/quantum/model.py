@@ -24,7 +24,6 @@ class QuantumReservoir(Reservoir):
     - Core Logic (`_step_logic`) is separated from JIT wrappers.
     - `_forward_jit` fuses the scan loop via XLA (no nested JIT).
     - Zero-overhead recompilation (Parameters passed as arguments).
-    - Strict Float32/Complex64 memory usage.
     """
 
     def __init__(
@@ -98,7 +97,7 @@ class QuantumReservoir(Reservoir):
             maxval=2 * jnp.pi,
             shape=(self.n_layers, self.n_qubits, 3)
         )
-        self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float32)
+        self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float_)
 
     def _compute_measurement_matrix_vectorized(self) -> jnp.ndarray:
         """Vectorized Precomputation of Parity/Measurement Matrix."""
@@ -107,7 +106,7 @@ class QuantumReservoir(Reservoir):
         
         shifts = self.n_qubits - 1 - jnp.arange(self.n_qubits)
         bits = (basis_states[:, None] >> shifts[None, :]) & 1
-        z_values = (1 - 2 * bits).astype(jnp.float32)
+        z_values = (1 - 2 * bits).astype(jnp.float_)
         
         row_blocks = []
         if self.measurement_basis in ("Z", "Z+ZZ"):
@@ -149,9 +148,9 @@ class QuantumReservoir(Reservoir):
 
     @staticmethod
     def _prepare_input(inputs: Union[jnp.ndarray, Array]) -> Tuple[jnp.ndarray, bool]:
-        """Preprocess input: cast to float32 and ensure 3D shape (Batch, Time, Feat)."""
-        # Cast to float32 to ensure consistent dtypes in scan (even if x64 is enabled)
-        arr = jnp.asarray(inputs, dtype=jnp.float32)
+        """Preprocess input: cast to float64 and ensure 3D shape (Batch, Time, Feat)."""
+        # Cast to float_ to match global JAX config (float64)
+        arr = jnp.asarray(inputs, dtype=jnp.float_)
         input_was_2d = (arr.ndim == 2)
         if input_was_2d:
             arr = arr[None, :, :]
@@ -160,7 +159,7 @@ class QuantumReservoir(Reservoir):
         return arr, input_was_2d
 
     def initialize_state(self, batch_size: int = 1) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
-        state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float32)
+        state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float_)
         if self.n_trajectories > 0:
             # Monte Carlo Mode: Return (state, key) tuple
             # Update internal RNG state to ensure fresh noise per batch
@@ -286,7 +285,6 @@ class QuantumReservoir(Reservoir):
         split_name: Optional[str] = None,
         **_: Any
     ) -> Float[Array, "batch out_features"] | Float[Array, "batch time out_features"] | Float[Array, "time out_features"]:
-        # Cast to float32 to ensure consistent dtypes in scan (even if x64 is enabled)
         arr, input_was_2d = self._prepare_input(inputs)
         
         batch_size = arr.shape[0]

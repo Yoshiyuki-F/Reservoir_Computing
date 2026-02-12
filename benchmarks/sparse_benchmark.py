@@ -24,7 +24,7 @@ def compute_measurement_matrix_dense(n_qubits, measurement_basis="Z+ZZ"):
     
     shifts = n_qubits - 1 - jnp.arange(n_qubits)
     bits = (basis_states[:, None] >> shifts[None, :]) & 1
-    z_values = (1 - 2 * bits).astype(jnp.float32)
+    z_values = (1 - 2 * bits)
     
     row_blocks = []
     if measurement_basis in ("Z", "Z+ZZ"):
@@ -64,7 +64,7 @@ def run_benchmark():
     
     for n in qubits_range:
         dim = 2**n
-        prob_vec = jax.random.normal(jax.random.key(0), (dim,)).astype(jnp.float32)
+        prob_vec = jax.random.normal(jax.random.key(0), (dim,))
         prob_vec = jnp.abs(prob_vec) / jnp.sum(jnp.abs(prob_vec))
         
         # --- Dense ---

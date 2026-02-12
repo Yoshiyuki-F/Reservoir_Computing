@@ -202,11 +202,11 @@ def _make_circuit_logic(
         # final_state is Density Matrix (2^N, 2^N)
         # Probabilities are diagonal elements.
         probs = jnp.real(jnp.diag(cast(jnp.ndarray, final_state)))
-        return probs.astype(jnp.float32)
+        return probs.astype(jnp.float_)
     else:
         # Pure State (Clean or MC)
         # final_state is Vector (2^N,)
-        return (jnp.abs(cast(jnp.ndarray, final_state)) ** 2).astype(jnp.float32)
+        return (jnp.abs(cast(jnp.ndarray, final_state)) ** 2).astype(jnp.float_)
 
 
 def _step_logic(

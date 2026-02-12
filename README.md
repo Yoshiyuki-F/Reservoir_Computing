@@ -19,6 +19,16 @@ A JAX-based Reservoir Computing implementation designed for high-performance num
 
 This project uses `uv` for dependency management.
 
+### Technical Notes: Precision & Determinism
+
+This library enforces **JAX 64-bit precision** (`jax_enable_x64=True`) globally.
+- **Why**: `RidgeRegression` (Readout) requires 64-bit precision. If not enforced globally, upstream components (like `RandomProjection`) may run in 32-bit initially, then switch to 64-bit in subsequent runs (after Ridge enables it), causing non-deterministic behavior.
+- **Benefit**: Ensures that **all pipeline stages** (Projection, Reservoir, Readout) consistently use 64-bit precision from the start.
+- **Entry Points**: x64 is automatically enabled in:
+    - `reservoir-cli` (CLI)
+    - `reservoir.pipelines.run_pipeline` (Python API)
+    - `optuna` benchmarks
+
 ```bash
 # Clone the repository and navigate to the directory
 cd /path/to/reservoir

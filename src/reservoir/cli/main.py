@@ -6,8 +6,34 @@ from __future__ import annotations
 import argparse
 import sys
 
+import jax
+
+# Ensure x64 is enabled before any other JAX ops
+if not jax.config.jax_enable_x64:
+    jax.config.update("jax_enable_x64", True)
+print(f"[DEBUG] CLI: JAX x64 is {jax.config.jax_enable_x64}")
+
+def verify_and_warmup_x64():
+    """Aggressively verify and force JAX x64 backend initialization."""
+    import jax.numpy as jnp
+    import numpy as np
+    
+    # Try 3 times to force it
+    for i in range(3):
+        try:
+            x = jnp.array([1.0], dtype=jnp.float64)
+            if x.dtype != jnp.float64:
+                raise ValueError(f"Created array dtype is {x.dtype}, expected float64")
+            return
+        except Exception:
+            # Force update again
+            jax.config.update("jax_enable_x64", True)
+            # Maybe some dummy op triggers update
+            _ = jnp.array([0.0]) 
+
+verify_and_warmup_x64()
+
 from reservoir.training import get_training_preset
-from reservoir.utils import check_gpu_available
 from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import get_model_preset

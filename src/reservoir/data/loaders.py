@@ -305,11 +305,26 @@ def load_dataset_with_validation_split(
     #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
     #             )
 
+    # Local Warmup to ensure JAX is ready for float64 (Silent)
+    import jax
+    import warnings
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            # Force a float64 creation to verify/trigger backend capability
+            dummy = jnp.array([1.0], dtype=jnp.float64)
+            if dummy.dtype != jnp.float64:
+                 jax.config.update("jax_enable_x64", True)
+    except Exception:
+        jax.config.update("jax_enable_x64", True)
+
+    # Cast to float64 (jnp.float_) to ensure precision at entry
+    # Note: jnp.asarray respects jax_enable_x64. If True, float_ is float64.
     return SplitDataset(
-        train_X=jnp.asarray(train_X),
-        train_y=jnp.asarray(train_y),
-        test_X=jnp.asarray(test_X),
-        test_y=jnp.asarray(test_y),
-        val_X=jnp.asarray(val_X),
-        val_y=jnp.asarray(val_y),
+        train_X=jnp.asarray(train_X, dtype=jnp.float_),
+        train_y=jnp.asarray(train_y, dtype=jnp.float_),
+        test_X=jnp.asarray(test_X, dtype=jnp.float_),
+        test_y=jnp.asarray(test_y, dtype=jnp.float_),
+        val_X=jnp.asarray(val_X, dtype=jnp.float_),
+        val_y=jnp.asarray(val_y, dtype=jnp.float_),
     )
