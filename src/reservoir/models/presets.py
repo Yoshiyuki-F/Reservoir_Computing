@@ -53,7 +53,7 @@ TCRS = CustomRangeScalerConfig(
 
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
-    n_units=1000,
+    n_units=400,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
@@ -61,7 +61,7 @@ RP = RandomProjectionConfig(
 )
 
 TIME_PROJECTION = RandomProjectionConfig(
-    n_units=1000,
+    n_units=400,
     input_scale=0.1,
     input_connectivity=1.0,
     bias_scale=0.1,
@@ -125,8 +125,8 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=FMAX,
-    projection=POLY,
+    preprocess=MinMaxScalerConfig(input_scale=1.0),
+    projection=TIME_PROJECTION,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -211,7 +211,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(input_scale=1.0), # a_in: R gate input scaling
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=2,
+        n_qubits=16,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
@@ -228,7 +228,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT,
 )
 
-"=============================================Time series Presets============================================"
+"=============================================Time series Presets================================================================================================================"
 
 # -----------------------------------------------------------------------------
 # Dynamics Definitions
@@ -252,8 +252,20 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=StandardScalerConfig(),
-    projection=RP,
-    model=TIME_RESERVOIR_DYNAMICS,
+    projection=RandomProjectionConfig(
+        n_units=400,
+        input_scale=0.6,
+        input_connectivity=0.1,
+        bias_scale=1.0,
+        seed=1,
+    ),
+    model=ClassicalReservoirConfig(
+        spectral_radius=1,
+        leak_rate=0.4, #best for n ,not for n=1000
+        rc_connectivity=0.02, #best
+        seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+    ),
     readout=DEFAULT_RIDGE_READOUT
 )
 

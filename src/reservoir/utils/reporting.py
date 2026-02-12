@@ -13,7 +13,7 @@ def _safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
 
 
 
-def print_chaos_metrics(metrics: Dict[str, float]) -> None:
+def print_chaos_metrics(metrics: Dict[str, float], header: Optional[str] = None) -> None:
     """
     Print chaos metrics to console.
     """
@@ -28,7 +28,10 @@ def print_chaos_metrics(metrics: Dict[str, float]) -> None:
     vpt_lt = metrics.get("vpt_lt", 0.0)
     vpt_threshold = metrics.get("vpt_threshold", 0.4)
 
-    print(f"=== Chaos Prediction Metrics ===")
+    if header:
+        print(f"{header}")
+    else:
+        print(f"=== Chaos Prediction Metrics ===")
     print(f"MSE       : {mse:.5f}")
     print(f"NMSE      : {nmse:.5f}")
     print(f"NRMSE     : {nrmse:.5f}")

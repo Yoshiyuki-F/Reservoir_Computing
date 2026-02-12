@@ -219,9 +219,28 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         vy_reshaped = val_y
 
         if hasattr(readout, 'fit_with_validation'):
-             # Define scoring callback
+             # Define helper for unscaling inputs to compute consistent metrics (Raw NMSE)
+             scaler = frontend_ctx.preprocessor
+             
+             def _inverse(arr):
+                 if scaler is None: return arr
+                 # Basic inverse logic assuming (N, features)
+                 shape = arr.shape
+                 try:
+                     # Check if 1D and needs 2D
+                     if arr.ndim == 1:
+                         arr = arr.reshape(-1, 1) # Assume single feature if 1D
+                     # Use scaler
+                     inv = scaler.inverse_transform(arr)
+                     return inv.reshape(shape)
+                 except Exception:
+                     return arr
+
+             # Define scoring callback on RAW data
              def scoring_fn(p, t):
-                 return compute_score(p, t, "nmse")
+                 p_raw = _inverse(np.asarray(p))
+                 t_raw = _inverse(np.asarray(t))
+                 return compute_score(p_raw, t_raw, "nmse")
 
              # Use unified optimization (Minimize MSE)
              best_lambda, best_score, search_history, weight_norms, residuals_history = readout.fit_with_validation(
@@ -253,21 +272,10 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              val_pred_early = readout.predict(val_Z)
              if val_y is not None:
                  print("\n=== Validation Open Loop Metrics ===")
-                 scaler = frontend_ctx.preprocessor
                  dt = getattr(dataset_meta.preset.config, 'dt', 1.0)
                  ltu = getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0)
                  
-                 def _inverse(arr):
-                     if scaler is None: return arr
-                     # Ensure 2D
-                     shape = arr.shape
-                     flat_dim = shape[-1]
-                     arr_2d = arr.reshape(-1, flat_dim)
-                     try:
-                         inv = scaler.inverse_transform(arr_2d)
-                         return inv.reshape(shape)
-                     except:
-                         return arr
+                 # _inverse is already defined above
                  
                  val_y_raw = _inverse(np.asarray(val_y))
                  val_pred_raw = _inverse(np.asarray(val_pred_early))
