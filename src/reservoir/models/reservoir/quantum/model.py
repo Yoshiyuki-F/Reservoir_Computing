@@ -33,10 +33,8 @@ class QuantumReservoir(Reservoir):
         n_layers: int,
         seed: int,
         aggregation_mode: AggregationMode,
-        leak_rate: float,
-        feedback_scale: float,  # γ for feedback injection
+        feedback_scale: float,     # a_fb: R gate feedback scaling
         measurement_basis: Literal["Z", "ZZ", "Z+ZZ"],
-        encoding_strategy: Literal["Rx", "Ry", "Rz", "IQP"],
         noise_type: Literal["clean", "depolarizing", "damping"],
         noise_prob: float,
         readout_error: float,
@@ -70,13 +68,13 @@ class QuantumReservoir(Reservoir):
         else:
             output_dim = n_qubits
         
-        super().__init__(n_units=output_dim, seed=seed, leak_rate=leak_rate, aggregation_mode=aggregation_mode)
+        # Feedback QRC: leak_rate fixed to 1.0 (no Li-ESN blending) TODO take lr from reservoir out
+        super().__init__(n_units=output_dim, seed=seed, leak_rate=1.0, aggregation_mode=aggregation_mode)
         
         self.n_qubits = n_qubits
         self.n_layers = n_layers
         self.measurement_basis = measurement_basis
         self.n_correlations = n_correlations
-        self.encoding_strategy = encoding_strategy
         self.noise_type = noise_type
         self.noise_prob = float(noise_prob)
         self.readout_error = float(readout_error)
@@ -84,7 +82,7 @@ class QuantumReservoir(Reservoir):
         self.use_remat = use_remat
         self.use_reuploading = use_reuploading
         self.precision = precision
-        self.feedback_scale = float(feedback_scale)  # Store feedback_scale
+        self.feedback_scale = float(feedback_scale)  # a_fb: R gate feedback scaling
 
         self._rng = jax.random.key(seed)
         
@@ -183,9 +181,7 @@ class QuantumReservoir(Reservoir):
             reservoir_params=self.reservoir_params,
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
-            leak_rate=self.leak_rate,
             feedback_scale=self.feedback_scale,
-            encoding_strategy=self.encoding_strategy,
             noise_type=self.noise_type,
             noise_prob=self.noise_prob,
             use_remat=self.use_remat,
@@ -241,9 +237,7 @@ class QuantumReservoir(Reservoir):
             self.reservoir_params,
             self._measurement_matrix,
             self.n_qubits,
-            self.leak_rate,
             self.feedback_scale,
-            self.encoding_strategy,
             self.noise_type,
             self.noise_prob,
             self.use_remat,
@@ -318,7 +312,6 @@ class QuantumReservoir(Reservoir):
             "n_qubits": self.n_qubits,
             "n_layers": self.n_layers,
             "measurement_basis": self.measurement_basis,
-            "encoding_strategy": self.encoding_strategy,
             "noise_type": self.noise_type,
             "noise_prob": self.noise_prob,
             "readout_error": self.readout_error,
@@ -336,10 +329,9 @@ class QuantumReservoir(Reservoir):
                 n_qubits=int(data["n_qubits"]),
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                leak_rate=float(data.get("leak_rate")),
+                feedback_scale=float(data.get("feedback_scale")),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
-                encoding_strategy=data.get("encoding_strategy"),
                 noise_type=data.get("noise_type", "clean"),
                 noise_prob=float(data.get("noise_prob",)),
                 readout_error=float(data.get("readout_error")),
@@ -367,7 +359,7 @@ class QuantumReservoir(Reservoir):
     def __repr__(self) -> str:
         return (
             f"QuantumReservoir(tc_backend, n_qubits={self.n_qubits}, n_layers={self.n_layers}, "
-            f"measurement={self.measurement_basis}, encoding={self.encoding_strategy}, "
+            f"measurement={self.measurement_basis}, "
             f"noise={self.noise_type}({self.noise_prob}), ro_err={self.readout_error}, mc={self.n_trajectories}, "
             f"remat={self.use_remat}, reup={self.use_reuploading}, {self.precision})"
         )

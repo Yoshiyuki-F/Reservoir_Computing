@@ -1,10 +1,15 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/reservoir/quantum/functional.py
 Pure functional implementation of Quantum Reservoir logic.
 Optimized for JAX JIT compilation.
+
+Feedback QRC (Murauer et al., 2025):
+  - Input and feedback are injected via separate R gates (no additive mixing)
+  - State is reset each step; memory is carried only via measurement feedback
+  - R_{i,j}(θ) = CX_{ij} RZ_j(θ) CX_{ij} RX_j(θ) RX_i(θ)
 """
 from __future__ import annotations
 
-from typing import Tuple, Union, Optional, cast
+from typing import Any, Tuple, Union, Optional, cast
 from functools import partial
 
 import jax
@@ -14,14 +19,31 @@ import tensorcircuit as tc
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
 
 
+# --- Paper R Gate (Murauer et al., 2025 Eq.1) ---
+
+def _apply_paper_R_gate(c: Any, i: int, j: int, val, scaling: float):
+    """
+    論文 Eq.(1) の R_{i,j}(theta) ゲート.
+    R_{i,j}(θ) = CX_{ij} · RZ_j(θ) · CX_{ij} · RX_j(θ) · RX_i(θ)
+    適用順序は右から左: RX_i → RX_j → CX → RZ_j → CX
+    """
+    theta = val * scaling
+    c.rx(i, theta=theta)
+    c.rx(j, theta=theta)
+    c.cnot(i, j)
+    c.rz(j, theta=theta)
+    c.cnot(i, j)
+
+
 # --- Pure Logic Functions (No JIT Decoration) ---
 
 def _make_circuit_logic(
-    inputs: jnp.ndarray,
+    input_val: jnp.ndarray,       # 現在の入力 u_t (size: n_qubits)
+    feedback_val: jnp.ndarray,    # 前回の測定値 m_{t-1} (size: n_qubits)
     params: jnp.ndarray,
     n_qubits: int,
+    feedback_scale: float,        # a_fb: R gate feedback scaling
 
-    encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
@@ -29,31 +51,37 @@ def _make_circuit_logic(
     rng_key: Optional[jax.Array] = None
 ) -> jnp.ndarray:
     """
-    Core circuit construction logic with Noise and Encoding support.
-    Refactored to use `jax.lax.scan` for the layer loop.
-    Compilation time is O(1) with respect to depth.
+    Core circuit construction logic with Feedback QRC architecture.
+
+    Architecture (Murauer et al., 2025):
+      1. Input Projection: R gate with s_k (pre-scaled by MinMaxScaler)
+      2. Feedback Projection: N R gates with a_fb * m_{k-1}^j
+      3. Reservoir Dynamics: HEA layers (CNOT ladder + random rotations)
+      4. Measurement: probability vector
+
+    Compilation time is O(1) with respect to depth via jax.lax.scan.
     """
     is_noisy = (noise_type != "clean")
 
-    def apply_encoding_gate(c_target, idx, val):
-        if encoding_strategy == "Rx":
-            c_target.rx(idx, theta=val)
-        elif encoding_strategy == "Ry":
-            c_target.ry(idx, theta=val)
-        elif encoding_strategy == "Rz":
-            c_target.rz(idx, theta=val)
-        elif encoding_strategy == "IQP":
-            c_target.h(idx)
-            c_target.rz(idx, theta=val)
-
-    # --- 1. Encoding (Input -> State) ---
+    # --- 1. Input + Feedback Projection (R gates) ---
     c_enc = tc.Circuit(n_qubits)
-    # scaled_inputs = inputs * input_scaling # Removed: Projection layer handles scaling
-    
-    for i in range(n_qubits):
-        # jax.debug.print("Qubit {i} Input: {}", inputs[i], i=i)
-        apply_encoding_gate(c_enc, i, inputs[i])
-            
+
+    # Input Projection: R gate with pre-scaled value (a_in applied by MinMaxScaler)
+    if n_qubits >= 2:
+        _apply_paper_R_gate(c_enc, 0, 1, input_val[0], 1.0)
+    else:
+        c_enc.rx(0, theta=input_val[0])
+
+    # Feedback Projection: Apply N R gates, one per qubit
+    # Each qubit's previous measurement result is injected via its own R gate
+    if n_qubits >= 2:
+        for i in range(n_qubits):
+            target = i
+            control = (i + 1) % n_qubits
+            _apply_paper_R_gate(c_enc, control, target, feedback_val[i], feedback_scale)
+    else:
+        c_enc.rx(0, theta=feedback_val[0] * feedback_scale)
+
     # Initial State
     state = c_enc.state()
 
@@ -88,26 +116,19 @@ def _make_circuit_logic(
             for target_idx in indices:
                 if is_mc:
                     # Monte Carlo Noise Injection (Depolarizing)
-                    # Use current_key to select Pauli error
-                    # Check safe key usage
                     if current_key is None:
-                         # Should not happen in MC mode, but safe guard
                          continue
                          
                     k1, current_key = jax.random.split(current_key)
                     r = jax.random.uniform(k1)
                     
-                    # Depolarizing Channel: (1-p)I, p/3 X, p/3 Y, p/3 Z
                     p = noise_prob
                     
-                    # Branchless selection of matrix index
-                    # 0:I, 1:X, 2:Y, 3:Z
                     gate_idx = jnp.zeros((), dtype=jnp.int32)
                     gate_idx = jax.lax.select(r < 3*p, jnp.array(3, dtype=jnp.int32), gate_idx) # Z
                     gate_idx = jax.lax.select(r < 2*p, jnp.array(2, dtype=jnp.int32), gate_idx) # Y
                     gate_idx = jax.lax.select(r < p, jnp.array(1, dtype=jnp.int32), gate_idx)   # X
                     
-                    # Switch mechanism to get matrix
                     def get_mat_i(_): return I_MAT
                     def get_mat_x(_): return X_MAT
                     def get_mat_y(_): return Y_MAT
@@ -122,12 +143,14 @@ def _make_circuit_logic(
                     elif noise_type == "damping":
                         c.amplitude_damping(target_idx, gamma=noise_prob)
 
-        # === [A] Re-uploading (Optinoal) ===
+        # === [A] Re-uploading (Optional) ===
         if use_reuploading:
-            # Re-apply encoding gates with scaled inputs
-            # Note: inputs are captured from closure
+            # Re-inject pre-scaled input via R gate (a_in already applied by MinMaxScaler)
+            if n_qubits >= 2:
+                _apply_paper_R_gate(c, 0, 1, input_val[0], 1.0)
+            else:
+                c.rx(0, theta=input_val[0])
             for idx in range(n_qubits):
-                apply_encoding_gate(c, idx, inputs[idx])
                 apply_noise_in_layer([idx])
 
         # === [B] CNOT Ladder ===
@@ -161,7 +184,6 @@ def _make_circuit_logic(
         layer_step = jax.checkpoint(layer_step)
 
     # Scan over layers
-    # Initial carry setup
     if rng_key is not None:
         init_carry = (state, rng_key)
     else:
@@ -193,36 +215,25 @@ def _step_logic(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    leak_rate: float,
     feedback_scale: float,
-    encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
 ) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
     """
-    Core step logic (Single step) - UNIFIED MODEL.
+    Core step logic - Feedback QRC (Murauer et al., 2025).
     
-    Supports both feedback_scale and leak_rate as configurable parameters.
-    
-    Universal QRC Equation:
-      1. Input Phase (Feedback Injection):
-         u'_t = u_t + γ * x_{t-1}
-         If feedback_scale (γ) = 0.0, no feedback is applied.
+    Feedback QRC Equation:
+      1. Circuit Phase (Input + Feedback via separate R gates):
+         p_t = |Circuit(R_in(s_k), R_fb(m_{k-1}), U_res)|²
          
-      2. Circuit Phase:
-         z_t = Measure(Circuit(u'_t))
+      2. Measurement Phase:
+         z_t = M @ p_t   (expectation values)
          
-      3. State Update Phase (Leak Rate):
-         x_t = (1 - α) * x_{t-1} + α * z_t[:n_qubits]
-         If leak_rate (α) = 1.0, past is forgotten (x_t = z_t[:n_qubits]).
-         If leak_rate (α) < 1.0, Li-ESN style integration.
-    
-    This unified design allows:
-      - Feedback only: feedback_scale=1.2, leak_rate=1.0
-      - Leak only: feedback_scale=0.0, leak_rate=0.1
-      - Hybrid: feedback_scale=0.5, leak_rate=0.3
+      3. State Update (Resetting):
+         m_t = z_t[:n_qubits]  (measurement → next feedback)
+         No leak rate blending. Memory is carried solely through R gate feedback.
     """
     # Polymorphic State Unpacking
     rng_key = None
@@ -237,35 +248,26 @@ def _step_logic(
     if rng_key is not None:
         step_key, next_key = jax.random.split(rng_key)
 
-    # === Phase 1: Feedback Injection ===
-    # u'_t = u_t + γ * x_{t-1}
-    # When feedback_scale = 0.0, this is just input_slice (JAX optimizes away)
-    effective_input = input_slice + feedback_scale * state_vec
-
-    # === Phase 2: Circuit Execution ===
+    # === Phase 1+2: Circuit Execution (Input & Feedback via separate R gates) ===
     probs = _make_circuit_logic(
-        effective_input,
-        reservoir_params, 
-        n_qubits, 
-        encoding_strategy,
-        noise_type,
-        noise_prob,
-        use_remat,
-        use_reuploading,
-        step_key
+        input_val=input_slice,
+        feedback_val=state_vec,      # 前回の測定値がフィードバック
+        params=reservoir_params,
+        n_qubits=n_qubits,
+        feedback_scale=feedback_scale,
+        noise_type=noise_type,
+        noise_prob=noise_prob,
+        use_remat=use_remat,
+        use_reuploading=use_reuploading,
+        rng_key=step_key
     )
     
     # Vectorized Measurement: z_t = M @ p
     output = jnp.dot(measurement_matrix, probs)
     
-    # === Phase 3: State Update with Leak Rate ===
-    # State is always n_qubits dimension, take first n_qubits from output
-    measured_state = output[:n_qubits]
-
-    # Li-ESN style update: blend past state with new measurement
-    # When leak_rate = 1.0: next_state = measured_state (no memory)
-    # When leak_rate < 1.0: next_state blends past and present
-    next_state_vec = (1.0 - leak_rate) * state_vec + leak_rate * measured_state
+    # === Phase 3: State Update (Resetting) ===
+    # No leak rate blending. Measurement result directly becomes next feedback.
+    next_state_vec = output[:n_qubits]
 
     if next_key is not None:
         return (next_state_vec, cast(jnp.ndarray, next_key)), output
@@ -276,7 +278,7 @@ def _step_logic(
 # --- JIT Compiled Wrappers ---
 
 @partial(jax.jit, static_argnames=[
-    "n_qubits", "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
+    "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
     state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
@@ -284,9 +286,7 @@ def _step_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-    leak_rate: float,
     feedback_scale: float,
-    encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
@@ -297,12 +297,12 @@ def _step_jit(
     """
     return _step_logic(
         state, input_slice, reservoir_params, measurement_matrix,
-        n_qubits, leak_rate, feedback_scale,
-        encoding_strategy, noise_type, noise_prob, use_remat, use_reuploading
+        n_qubits, feedback_scale,
+        noise_type, noise_prob, use_remat, use_reuploading
     )
 
 @partial(jax.jit, static_argnames=[
-    "n_qubits", "encoding_strategy", "noise_type", "use_remat", "use_reuploading"
+    "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
     state_init: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
@@ -310,10 +310,7 @@ def _forward_jit(
     reservoir_params: jnp.ndarray,
     measurement_matrix: jnp.ndarray,
     n_qubits: int,
-
-    leak_rate: float,
     feedback_scale: float,
-    encoding_strategy: str,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
@@ -330,9 +327,7 @@ def _forward_jit(
         reservoir_params=reservoir_params,
         measurement_matrix=measurement_matrix,
         n_qubits=n_qubits,
-        leak_rate=leak_rate,
         feedback_scale=feedback_scale,
-        encoding_strategy=encoding_strategy,
         noise_type=noise_type,
         noise_prob=noise_prob,
         use_remat=use_remat,
@@ -343,9 +338,6 @@ def _forward_jit(
     step_vmapped = jax.vmap(step_func, in_axes=(0, 0))
     
     # Scan returns (final_carry, stacked_y)
-    # y is (next_state, output), so stacked_y is (stacked_states, stacked_outputs) if step returns nested tuple?
-    # NO. step returns (next, out). next is new carry. out is y.
-    # So stacked_y is stacked_outputs.
     final_carry, stacked_outputs = jax.lax.scan(step_vmapped, state_init, inputs_time_major)
     
     return final_carry, stacked_outputs

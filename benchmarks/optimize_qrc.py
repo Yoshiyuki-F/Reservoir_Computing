@@ -2,7 +2,7 @@
 """
 Optuna Hyperparameter Search for Quantum Reservoir Computing.
 
-Optimizes input_scale, leak_rate, and feedback_scale for Mackey-Glass prediction,
+Optimizes input_scale (projection & R-gate) and feedback_scale for Mackey-Glass prediction,
 maximizing VPT (Valid Prediction Time).
 
 Supports separate studies for different measurement_basis / readout combinations:
@@ -67,10 +67,7 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 
 def build_config(
         input_scale: float,
-        leak_rate: float,
         feedback_scale: float,
-        bias_scale: float,
-        input_connectivity: float,
         *,
         measurement_basis: str,
         readout_config,
@@ -78,30 +75,26 @@ def build_config(
     """
     Build a PipelineConfig with dynamically updated parameters.
     
-    Uses dataclasses.replace to modify the frozen preset config.
+    input_scale is applied via MinMaxScalerConfig (preprocessing).
+    projection is None (Step 3 skipped).
     """
+    from reservoir.models.config import MinMaxScalerConfig
     base = TIME_QUANTUM_RESERVOIR_PRESET
 
-    # Update projection (input_scale, bias_scale, connectivity)
-    new_projection = dataclasses.replace(
-        base.projection,
-        input_scale=input_scale,
-        bias_scale=bias_scale,
-        input_connectivity=input_connectivity
-    )
+    # Update preprocessing (input_scale via MinMaxScaler)
+    new_preprocess = MinMaxScalerConfig(input_scale=input_scale)
 
-    # Update model (leak_rate, feedback_scale, measurement_basis)
+    # Update model (feedback_scale, measurement_basis)
     new_model = dataclasses.replace(
         base.model,
-        leak_rate=leak_rate,
         feedback_scale=feedback_scale,
         measurement_basis=measurement_basis,
     )
 
-    # Construct final config
+    # Construct final config (projection=None, no Step 3)
     return dataclasses.replace(
         base,
-        projection=new_projection,
+        preprocess=new_preprocess,
         model=new_model,
         readout=readout_config,
     )
@@ -117,22 +110,16 @@ def make_objective(measurement_basis: str, readout_config):
         """
         # === 1. Suggest Parameters ===
 
-        # ======================== Projection ================================
+        # ======================== Preprocessing =============================
         input_scale = trial.suggest_float("input_scale", 0.001, 1.5, log=True)
-        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
-        input_connectivity = 0.8
 
         # ======================== Reservoir ==================================
-        leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
         feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
 
         # === 2. Build Config ===
         config = build_config(
             input_scale,
-            leak_rate,
             feedback_scale,
-            bias_scale,
-            input_connectivity,
             measurement_basis=measurement_basis,
             readout_config=readout_config,
         )
@@ -154,14 +141,12 @@ def make_objective(measurement_basis: str, readout_config):
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
-                      f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+                      f"(in={input_scale:.3f}, fb={feedback_scale:.3f})")
                 trial.set_user_attr("status", "failed")
                 return 0.0
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(in={input_scale:.3f}, bias={bias_scale:.3f}, conn={input_connectivity:.2f}, "
-                  f"leak={leak_rate:.3f}, fb={feedback_scale:.3f})")
+                  f"(in={input_scale:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
             return vpt_lt

@@ -42,17 +42,15 @@ class ReservoirFactory:
                 aggregation_mode=model.aggregation,
             )
         elif isinstance(model, QuantumReservoirConfig):
-            # n_qubits implies the size of the projected input vector (Step 3)
-            # which is `projected_input_dim`
+            # n_qubits: use config value if specified, otherwise infer from Step 3 output
+            n_qubits = model.n_qubits if model.n_qubits is not None else projected_input_dim
             node = QuantumReservoir(
-                n_qubits=projected_input_dim,
+                n_qubits=n_qubits,
                 n_layers=model.n_layers,
                 seed=model.seed,
                 aggregation_mode=model.aggregation,
-                leak_rate=model.leak_rate,
                 feedback_scale=model.feedback_scale,
                 measurement_basis=model.measurement_basis,
-                encoding_strategy=model.encoding_strategy,
                 noise_type=model.noise_type,
                 noise_prob=model.noise_prob,
                 readout_error=model.readout_error,
