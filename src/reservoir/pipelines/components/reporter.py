@@ -94,6 +94,7 @@ class ResultReporter:
 
         results["readout"] = self.stack.readout
         results["preprocessor"] = self.frontend_ctx.preprocessor
+        results["scaler"] = self.frontend_ctx.preprocessor  # Alias for reporting.py
         results["training_logs"] = train_logs
         results["quantum_trace"] = quantum_trace # New
         results["meta"] = {

@@ -14,7 +14,20 @@
     ),
 
 100
-
+    projection=RandomProjectionConfig(
+        n_units=100,
+        input_scale=1.1900256705783303,
+        input_connectivity=0.16412483680491705,
+        bias_scale=1,
+        seed=1,
+    ),
+    model=ClassicalReservoirConfig(
+        spectral_radius=1.2275524643139968,
+        leak_rate= 0.4176226904512959,
+        rc_connectivity=0.6014914261660489,
+        seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+    ),
 Value
 
 6.620481927710843
