@@ -10,6 +10,7 @@ from reservoir.core.identifiers import AggregationMode, Model, Dataset
 from reservoir.models.config import (
     StandardScalerConfig,
     CustomRangeScalerConfig,
+    MinMaxScalerConfig,
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     PCAProjectionConfig,
@@ -181,10 +182,9 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=3,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=0.0,    # γ=0.0 means no feedback (pure feedforward mode)
-    leak_rate=0.1, # Li-ESN alpha
+    input_scale=1.0,       # a_in: R gate input scaling
+    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
     measurement_basis="Z+ZZ",
-    encoding_strategy="Rx",
     noise_type="clean",
     noise_prob=0.0,
     readout_error=0.0,
@@ -210,10 +210,10 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=StandardScalerConfig(),
+    preprocess=MinMaxScalerConfig(input_scale=1.0),
     # Using RandomProjection for stable dynamics
     projection=CoherentDriveProjectionConfig(
-        n_units=16,
+        n_units=2,
         input_scale=0.1,
         input_connectivity=1.0,
         bias_scale=0.1,
@@ -223,10 +223,9 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
-        leak_rate=1.0,         # α=1.0 means no memory blending (pure feedback mode)
-        feedback_scale=1.2,    # γ=1.2 feedback injection
+        input_scale=1.0,       # a_in: R gate input scaling
+        feedback_scale=1.6,    # a_fb: R gate feedback scaling (paper default)
         measurement_basis="Z",
-        encoding_strategy="Rx",
         noise_type="clean",
         noise_prob=0.0,
         readout_error=0.0,

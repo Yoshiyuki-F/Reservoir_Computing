@@ -143,7 +143,23 @@ class CustomRangeScalerConfig:
     def to_dict(self) -> dict[str, Any]:
         return {"method": "custom_range_scaler", "scale": float(self.scale), "centering": self.centering}
 
-PreprocessingConfig = Union[RawConfig, StandardScalerConfig, CustomRangeScalerConfig]
+
+@dataclass(frozen=True)
+class MinMaxScalerConfig:
+    """Step 2 parameters for Min-Max Scaler (Murauer et al., 2025).
+    s_k = input_scale * (P(t_k) - P_min) / (P_max - P_min)
+    """
+    input_scale: float = 1.0
+
+    def validate(self, context: str = "min_max_scaler") -> "MinMaxScalerConfig":
+        if float(self.input_scale) <= 0:
+            raise ValueError(f"{context}: input_scale must be positive.")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"method": "min_max_scaler", "input_scale": float(self.input_scale)}
+
+PreprocessingConfig = Union[RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig]
 
 
 @dataclass(frozen=True)
@@ -415,10 +431,9 @@ class QuantumReservoirConfig:
     n_layers: int                    # Number of variational layers
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
-    leak_rate: float          # Leaky integrator rate (alpha) for Li-ESN dynamics
-    feedback_scale: float     # Feedback injection scale (gamma). 0.0 = no feedback
+    input_scale: float        # a_in: R gate input scaling
+    feedback_scale: float     # a_fb: R gate feedback scaling. 0.0 = no feedback
     measurement_basis: str  # 'Z', 'ZZ', 'Z+ZZ' for correlation measurements
-    encoding_strategy: str   # 'Rx', 'Ry', 'Rz', 'IQP'
     noise_type: str        # 'clean', 'depolarizing', 'damping'
     noise_prob: float          # Probability of noise (0.0 to 1.0)
     readout_error: float     # Readout error probability (0.0 to 1.0)
@@ -431,8 +446,8 @@ class QuantumReservoirConfig:
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
-        if not (0.0 < float(self.leak_rate) <= 1.0):
-             raise ValueError(f"{prefix}leak_rate must be in (0,1].")
+        if float(self.input_scale) <= 0:
+            raise ValueError(f"{prefix}input_scale must be positive.")
         if not isinstance(self.aggregation, AggregationMode):
             raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         # Validate measurement_basis
@@ -452,10 +467,10 @@ class QuantumReservoirConfig:
         return {
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
-            "leak_rate": float(self.leak_rate),
+            "input_scale": float(self.input_scale),
+            "feedback_scale": float(self.feedback_scale),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),
-            "encoding_strategy": str(self.encoding_strategy),
             "noise_type": str(self.noise_type),
             "noise_prob": float(self.noise_prob),
             "readout_error": float(self.readout_error),

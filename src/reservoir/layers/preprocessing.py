@@ -166,6 +166,58 @@ class CustomRangeScaler(Preprocessor):
         }
 
 
+class MinMaxScaler(Preprocessor):
+    """
+    Min-Max Scaler with input scaling (Murauer et al., 2025).
+    Formula: s_k = (P(t_k) - P_min) / (P_max - P_min)
+    Maps data to [0, input_scale] range.
+    """
+
+    def __init__(self, input_scale):
+        self.input_scale = input_scale #a_in in the paper
+        self.min_: Optional[np.ndarray] = None
+        self.range_: Optional[np.ndarray] = None  # P_max - P_min
+
+    def fit(self, X: jnp.ndarray) -> "MinMaxScaler":
+        X_np = np.asarray(X)
+
+        if X_np.ndim == 3:
+            reduce_axis = (0, 1)
+        else:
+            reduce_axis = 0
+
+        self.min_ = np.min(X_np, axis=reduce_axis)
+        max_ = np.max(X_np, axis=reduce_axis)
+        self.range_ = max_ - self.min_
+
+        # Avoid division by zero for constant features
+        if self.range_ is not None:
+            self.range_[self.range_ < 1e-12] = 1.0
+
+        return self
+
+    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(X)
+        if self.min_ is not None and self.range_ is not None:
+            arr = (arr - self.min_) / self.range_
+        arr = arr * self.input_scale
+        return arr
+
+    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        arr = jnp.asarray(X)
+        if self.input_scale != 0:
+            arr = arr / self.input_scale
+        if self.min_ is not None and self.range_ is not None:
+            arr = arr * self.range_ + self.min_
+        return arr
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "min_max_scaler",
+            "input_scale": self.input_scale,
+        }
+
+
 class IdentityPreprocessor(Preprocessor):
     """No-op preprocessor for RAW mode."""
 
@@ -197,6 +249,7 @@ def register_preprocessors(
     RawConfigClass: Type,
     StandardScalerConfigClass: Type,
     CustomRangeScalerConfigClass: Type,
+    MinMaxScalerConfigClass: Type = None,
 ):
     """
     Register config classes with the factory.
@@ -215,11 +268,17 @@ def register_preprocessors(
     def _(config) -> Preprocessor:
         return CustomRangeScaler(scale=config.scale, centering=config.centering)
 
+    if MinMaxScalerConfigClass is not None:
+        @create_preprocessor.register(MinMaxScalerConfigClass)
+        def _(config) -> Preprocessor:
+            return MinMaxScaler(input_scale=config.input_scale)
+
 
 __all__ = [
     "Preprocessor",
     "StandardScaler",
     "CustomRangeScaler",
+    "MinMaxScaler",
     "IdentityPreprocessor",
     "create_preprocessor",
     "register_preprocessors",
