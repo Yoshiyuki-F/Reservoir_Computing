@@ -176,6 +176,15 @@ def make_objective(readout_config, dataset_enum: Dataset):
             trial.set_user_attr("status", "success")
             return vpt_lt
 
+        except ValueError as e:
+            if "diverged" in str(e).lower():
+                print(f"Trial {trial.number}: FAILED (Diverged) - {e}")
+                trial.set_user_attr("status", "diverged")
+                return 0.0
+            else:
+                print(f"Trial {trial.number}: EXCEPTION (ValueError) - {e}")
+                trial.set_user_attr("status", "exception")
+                return 0.0
         except Exception as e:
             print(f"Trial {trial.number}: EXCEPTION - {e}")
             trial.set_user_attr("status", "exception")

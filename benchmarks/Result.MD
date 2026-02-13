@@ -74,3 +74,19 @@ LORENZ    projection=RandomProjectionConfig(
     ),
 
 
+    projection=RandomProjectionConfig(
+        n_units=30,
+        input_scale=0.8619164475770462,
+        input_connectivity=0.24540639462743313,
+        bias_scale= 2.135532459433983,
+        seed=1,
+    ),
+    model=ClassicalReservoirConfig(
+        spectral_radius=0.8241064861665393,
+        leak_rate=0.19427508359137263,
+        rc_connectivity=0.5056686129409468,
+        seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+    ),
+
+

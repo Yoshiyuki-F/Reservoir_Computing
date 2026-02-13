@@ -97,6 +97,12 @@ class EndToEndStrategy(ReadoutStrategy):
                 # For E2E, readout is None or implicit, pass explicit None if needed, but signature says readout
                 # EndToEnd typically has readout=None.
                 closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout)
+                
+                # Check for divergence
+                pred_std = np.std(closed_loop_pred)
+                if pred_std > 50:
+                    raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 50")
+                
                 print_feature_stats(closed_loop_pred, "8:fnn_closed_loop_prediction")
 
                 global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
@@ -313,6 +319,12 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  full_seed_data, steps=generation_steps, readout=readout, projection_fn=proj_fn
              )
              print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
+
+             # Check for divergence
+             pred_std = np.std(closed_loop_pred)
+             if pred_std > 3:
+                 raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 3")
+
              closed_loop_truth = test_y
              print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
 
