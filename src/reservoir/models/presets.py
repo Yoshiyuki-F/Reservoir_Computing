@@ -98,7 +98,7 @@ DEFAULT_POLY_RIDGE_READOUT = PolyRidgeReadoutConfig(
     use_intercept=True,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
-    mode="full",
+    mode="square_only",
 )
 
 
@@ -211,7 +211,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(input_scale=2.991062773182745), # a_in: R gate input scaling
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=5,
+        n_qubits=8,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
@@ -225,7 +225,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         use_reuploading=False,
         precision="complex128",
     ),
-    readout=DEFAULT_RIDGE_READOUT,
+    readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 
 "=============================================Time series Presets================================================================================================================"
@@ -253,16 +253,16 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=StandardScalerConfig(),
     projection=RandomProjectionConfig(
-        n_units=30,
-        input_scale=0.8619164475770462,
-        input_connectivity=0.24540639462743313,
-        bias_scale= 2.135532459433983,
+        n_units=100,
+        input_scale=1.1900256705783303,
+        input_connectivity=0.16412483680491705,
+        bias_scale=1,
         seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=0.8241064861665393,
-        leak_rate=0.19427508359137263,
-        rc_connectivity=0.5056686129409468,
+        spectral_radius=1.2275524643139968,
+        leak_rate= 0.4176226904512959,
+        rc_connectivity=0.6014914261660489,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
     ),

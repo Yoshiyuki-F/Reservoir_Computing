@@ -14,6 +14,7 @@
     ),
 
 100
+
     projection=RandomProjectionConfig(
         n_units=100,
         input_scale=1.1900256705783303,
@@ -28,6 +29,9 @@
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
     ),
+
+
+
 Value
 
 6.620481927710843

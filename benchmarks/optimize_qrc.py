@@ -113,10 +113,10 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        input_scale = trial.suggest_float("input_scale", 0.5, 5)
+        input_scale = trial.suggest_float("input_scale", 3, 5)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0.0, 3.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.4, 2.5)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True, False])
 
 
@@ -177,9 +177,9 @@ def make_objective(measurement_basis: str, readout_config):
     return objective
 
 
-def derive_names(measurement_basis: str, readout_key: str, proj_type: str):
+def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{proj_type}_{measurement_basis}_{readout_key}"
+    study_name = f"qrc_vpt_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
@@ -208,6 +208,9 @@ def main():
         measurement_basis = args.measurement_basis
     else:
         measurement_basis = base.model.measurement_basis
+    
+    # Qubits
+    n_qubits = base.model.n_qubits
 
     # Readout
     if args.readout is not None:
@@ -225,7 +228,7 @@ def main():
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
 
-    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag)
+    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits)
 
     if args.study_name is not None:
         study_name = args.study_name

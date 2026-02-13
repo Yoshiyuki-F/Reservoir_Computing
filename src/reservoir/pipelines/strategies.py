@@ -292,6 +292,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  
                  val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
                  print_chaos_metrics(val_metrics_chaos)
+                 if val_metrics_chaos.get("vpt_lt") < 3:
+                     raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
         print("\n=== Step 8: Final Predictions:===")
@@ -321,7 +323,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Check for divergence
         pred_std = np.std(closed_loop_pred)
-        if pred_std > 3.0 or pred_std < 0.05:
+        if pred_std > 2.0 or pred_std < 0.3:
             # Revert to stricter check as per user request to fail fast on bad runs
             raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 3.0 or < 0.05")
 
