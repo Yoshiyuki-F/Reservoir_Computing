@@ -302,56 +302,51 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         # Check model type for compatibility (simplified check)
         # Assuming "reservoir", "distillation", "passthrough" are all capable if they are passed here.
         # But we can safeguard.
-        try:
-             processed = frontend_ctx.processed_split
-             if hasattr(processed.test_X, "shape"):
-                 if processed.test_X.ndim == 3:
-                     generation_steps = processed.test_X.shape[1]
-                 else:
-                     generation_steps = processed.test_X.shape[0]
-             else:
-                 generation_steps = 0
-             
-             full_seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
-             print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
-             
-             closed_loop_pred = model.generate_closed_loop(
-                 full_seed_data, steps=generation_steps, readout=readout, projection_fn=proj_fn
-             )
-             print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
+        processed = frontend_ctx.processed_split
+        if hasattr(processed.test_X, "shape"):
+            if processed.test_X.ndim == 3:
+                generation_steps = processed.test_X.shape[1]
+            else:
+                generation_steps = processed.test_X.shape[0]
+        else:
+            generation_steps = 0
+        
+        full_seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
+        print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
+        
+        closed_loop_pred = model.generate_closed_loop(
+            full_seed_data, steps=generation_steps, readout=readout, projection_fn=proj_fn
+        )
+        print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
 
-             # Check for divergence
-             pred_std = np.std(closed_loop_pred)
-             if pred_std > 3:
-                 raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 3")
+        # Check for divergence
+        pred_std = np.std(closed_loop_pred)
+        if pred_std > 3.0 or pred_std < 0.05:
+            # Revert to stricter check as per user request to fail fast on bad runs
+            raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 3.0 or < 0.05")
 
-             closed_loop_truth = test_y
-             print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
+        closed_loop_truth = test_y
+        print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
 
-             # Calculate global_start based on dimensions
-             def get_time_steps(arr):
-                 if arr is None: return 0
-                 # If 3D (Batch, Time, Feat), return Time (shape[1])
-                 if arr.ndim == 3: return arr.shape[1]
-                 # If 2D (Time, Feat) or (Batch, Feat) - assuming Time for Series
-                 # For Reservoir time-series Time is usually axis 0 in 2D
-                 return arr.shape[0]
+        # Calculate global_start based on dimensions
+        def get_time_steps(arr):
+            if arr is None: return 0
+            # If 3D (Batch, Time, Feat), return Time (shape[1])
+            if arr.ndim == 3: return arr.shape[1]
+            # If 2D (Time, Feat) or (Batch, Feat) - assuming Time for Series
+            # For Reservoir time-series Time is usually axis 0 in 2D
+            return arr.shape[0]
 
-             train_steps = get_time_steps(processed.train_X)
-             val_steps_count = get_time_steps(processed.val_X)
-             global_start = train_steps + val_steps_count
-             global_end = global_start + generation_steps
-             
-             if closed_loop_truth is not None:
-                 chaos_results = self.evaluator.compute_chaos_metrics(
-                     jnp.array(closed_loop_truth), jnp.array(closed_loop_pred), frontend_ctx.preprocessor,
-                     dataset_meta.preset.config, global_start, global_end
-                 )
-
-        except Exception as e:
-            print(f"[Warning] Closed-loop generation failed: {e}")
-            import traceback
-            traceback.print_exc()
+        train_steps = get_time_steps(processed.train_X)
+        val_steps_count = get_time_steps(processed.val_X)
+        global_start = train_steps + val_steps_count
+        global_end = global_start + generation_steps
+        
+        if closed_loop_truth is not None:
+            chaos_results = self.evaluator.compute_chaos_metrics(
+                jnp.array(closed_loop_truth), jnp.array(closed_loop_pred), frontend_ctx.preprocessor,
+                dataset_meta.preset.config, global_start, global_end
+            )
 
         # Calculate Predictions (Open Loop)
         train_pred = readout.predict(train_Z)

@@ -68,6 +68,7 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 def build_config(
         input_scale: float,
         feedback_scale: float,
+        use_reuploading: bool,
         *,
         measurement_basis: str,
         readout_config,
@@ -89,6 +90,7 @@ def build_config(
         base.model,
         feedback_scale=feedback_scale,
         measurement_basis=measurement_basis,
+        use_reuploading=use_reuploading,
     )
 
     # Construct final config (projection=None, no Step 3)
@@ -111,15 +113,18 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        input_scale = trial.suggest_float("input_scale", 0.001, 1.5, log=True)
+        input_scale = trial.suggest_float("input_scale", 0.5, 5)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0.0, 2.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.0, 3.0)
+        use_reuploading = trial.suggest_categorical("use_reuploading", [True, False])
+
 
         # === 2. Build Config ===
         config = build_config(
             input_scale,
             feedback_scale,
+            use_reuploading,
             measurement_basis=measurement_basis,
             readout_config=readout_config,
         )
@@ -130,23 +135,35 @@ def make_objective(measurement_basis: str, readout_config):
 
             # === 4. Extract Metrics ===
             test_results = results.get("test", {})
-            vpt_lt = test_results.get("vpt_lt", 0.0)
-            var_ratio = test_results.get("var_ratio", 0.0)
-            ndei = test_results.get("ndei", float('inf'))
-            mse = test_results.get("mse", float('inf'))
+            train_results = results.get("train", {})
+            chaos = test_results.get("chaos_metrics", {})
 
-            trial.set_user_attr("var_ratio", var_ratio)
-            trial.set_user_attr("ndei", ndei)
-            trial.set_user_attr("mse", mse)
+            vpt_lt = test_results.get("vpt_lt", 0.0)
+            best_lambda = train_results.get("best_lambda", None)
+            
+            # Store best_lambda
+            if best_lambda is not None:
+                trial.set_user_attr("best_lambda", float(best_lambda))
+
+            # Store ALL chaos metrics
+            for key in ["mse", "nmse", "nrmse", "mase", "ndei",
+                        "var_ratio", "correlation", "vpt_steps", "vpt_lt", "vpt_threshold"]:
+                val = chaos.get(key, None)
+                if val is not None:
+                    trial.set_user_attr(key, float(val))
+            
+            # For backward compatibility / printing convenience, ensure these locals exist
+            var_ratio = chaos.get("var_ratio", 0.0)
+            mse = chaos.get("mse", float('inf'))
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(in={input_scale:.3f}, fb={feedback_scale:.3f})")
+                      f"(in={input_scale:.3f}, fb={feedback_scale:.3f}, reupload={use_reuploading})")
                 trial.set_user_attr("status", "failed")
-                return 0.0
+                return -1.0  # Return a negative value to indicate failure
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(in={input_scale:.3f}, fb={feedback_scale:.3f})")
+                  f"(in={input_scale:.3f}, fb={feedback_scale:.3f}, reupload={use_reuploading})")
 
             trial.set_user_attr("status", "success")
             return vpt_lt
@@ -155,22 +172,21 @@ def make_objective(measurement_basis: str, readout_config):
             print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
             trial.set_user_attr("status", "exception")
             trial.set_user_attr("error", str(e))
-            return 0.0
+            return -1.0  # Return a negative value to indicate failure
 
     return objective
 
 
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str):
     """Derive DB filename and study name from the variant combination."""
-    basis_tag = measurement_basis.replace("+", "_")  # "Z+ZZ" -> "Z_ZZ"
-    study_name = f"qrc_vpt_{proj_type}_{basis_tag}_{readout_key}"
+    study_name = f"qrc_vpt_{proj_type}_{measurement_basis}_{readout_key}"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
 
 def main():
     parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search")
-    parser.add_argument("--n-trials", type=int, default=500,
+    parser.add_argument("--trials", type=int, default=500,
                         help="Number of optimization trials (default: 500)")
     parser.add_argument("--measurement-basis", type=str, default=None,
                         choices=list(VALID_BASES),
@@ -207,12 +223,7 @@ def main():
 
     # --- Derive study / DB names ---
     proj_type_name = type(base.projection).__name__
-    if "Coherent" in proj_type_name:
-        proj_tag = "coherent_drive"
-    elif "Random" in proj_type_name:
-        proj_tag = "random_proj"
-    else:
-        proj_tag = proj_type_name.lower().replace("config", "")
+    proj_tag = proj_type_name.lower().replace("config", "")
 
     study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag)
 
@@ -237,14 +248,14 @@ def main():
     print("=" * 60)
     print(f"  Study            : {study_name}")
     print(f"  Storage          : {storage}")
-    print(f"  Trials           : {args.n_trials}")
+    print(f"  Trials           : {args.trials}")
     print(f"  Measurement Basis: {measurement_basis}")
     print(f"  Readout          : {readout_key}")
     print("=" * 60)
 
     # --- Run ---
     objective_fn = make_objective(measurement_basis, readout_config)
-    study.optimize(objective_fn, n_trials=args.n_trials)
+    study.optimize(objective_fn, n_trials=args.trials)
 
     # --- Report ---
     print("\n" + "=" * 60)
