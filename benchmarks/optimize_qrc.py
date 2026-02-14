@@ -117,7 +117,7 @@ def make_objective(measurement_basis: str, readout_config):
 
         # ======================== Reservoir ==================================
         feedback_scale = trial.suggest_float("feedback_scale", 2, 2.3)
-        use_reuploading = trial.suggest_categorical("use_reuploading", [True])
+        use_reuploading = trial.suggest_categorical("use_reuploading", [True, False])
 
 
         # === 2. Build Config ===

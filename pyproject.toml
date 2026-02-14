@@ -9,17 +9,19 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "numpy",
+
+    #visualization
     "matplotlib",
     "tqdm",
     #ML
-    "jax[cuda12]>=0.9.0",
+    "jax[cuda12]",
     "jaxlib",
+    "beartype",
+    "jaxtyping",
     "flax",
     "optax",
     #Quantum
     "tensorcircuit-ng[jax]",
-    "jaxtyping",
-    "beartype",
     #mnist dataset
     "torch", #CPU version
     "torchvision", #CPU version
