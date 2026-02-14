@@ -113,11 +113,11 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        input_scale = trial.suggest_float("input_scale", 3, 5)
+        input_scale = trial.suggest_float("input_scale", 3.2, 3.4)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0.4, 2.5)
-        use_reuploading = trial.suggest_categorical("use_reuploading", [True, False])
+        feedback_scale = trial.suggest_float("feedback_scale", 2, 2.3)
+        use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
         # === 2. Build Config ===

@@ -452,4 +452,14 @@ def register_projections(
             )
 
 
-__all__ = ["Projection", "RandomProjection", "CenterCropProjection", "ResizeProjection", "PolynomialProjection", "PCAProjection", "CoherentDriveProjection", "create_projection", "register_projections"]
+__all__ = [
+    "Projection",
+    "RandomProjection",
+    "CenterCropProjection",
+    "ResizeProjection",
+    "PolynomialProjection",
+    "PCAProjection",
+    "CoherentDriveProjection",
+    "create_projection",
+    "register_projections"
+]

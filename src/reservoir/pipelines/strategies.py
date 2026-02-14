@@ -323,9 +323,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Check for divergence
         pred_std = np.std(closed_loop_pred)
-        if pred_std > 2.0 or pred_std < 0.3:
+        if pred_std > 2.0 or pred_std < 0.6:
             # Revert to stricter check as per user request to fail fast on bad runs
-            raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 3.0 or < 0.05")
+            raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 2.0 or < 0.6")
 
         closed_loop_truth = test_y
         print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
