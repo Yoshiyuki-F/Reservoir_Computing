@@ -31,22 +31,22 @@ from reservoir.data.presets import get_dataset_preset
 # -----------------------------------------------------------------------------
 #---------------------------STEP 2--------------------------------------------------
 FMAX = CustomRangeScalerConfig(
-    scale=1.0,
+    input_scale=1.0,
     centering=False
 )
 
 TMAX = CustomRangeScalerConfig(
-    scale=1.0,
+    input_scale=1.0,
     centering=False
 )
 
 FCRS = CustomRangeScalerConfig(
-    scale=0.17,
+    input_scale=0.17,
     centering=False
 )
 
 TCRS = CustomRangeScalerConfig(
-    scale=0.3,
+    input_scale=0.3,
     centering=True
 )
 
@@ -208,10 +208,10 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=MinMaxScalerConfig(input_scale=3.314782572029597), # a_in: R gate input scaling
+    preprocess=CustomRangeScalerConfig(input_scale=1, centering=True), # a_in: R gate input scaling
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=16,
+        n_qubits=10,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,

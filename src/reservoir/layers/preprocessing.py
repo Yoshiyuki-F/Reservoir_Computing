@@ -100,43 +100,48 @@ class StandardScaler(Preprocessor):
 class CustomRangeScaler(Preprocessor):
     """
     Scales data by dividing by the maximum value and multiplying by a scalar.
-    Formula: X_scaled = (X / max(X)) * scale
+    Formula: X_scaled = (X / max(X)) * input_scale
+    
+    When centering=True:
+    Formula: X_scaled = ((X - mean(X)) / max(|X - mean(X)|)) * input_scale
     """
 
-    def __init__(self, scale: float, centering: bool = False):
-        self.scale = scale
+    def __init__(self, input_scale: float, centering: bool):
+        self.input_scale = input_scale
         self.centering = centering
         self.max_val: Optional[float] = None
         self.mean_: Optional[np.ndarray] = None
 
     def fit(self, X: jnp.ndarray) -> "CustomRangeScaler":
         X_np = np.asarray(X)
-        self.max_val = float(np.max(X_np))
         
-        if self.centering and self.max_val != 0:
-            # Centering after unit scaling: mean = mean(X) / max 
+        if self.centering:
             if X_np.ndim == 3:
                 reduce_axis = (0, 1)
             else:
                 reduce_axis = 0
-            self.mean_ = np.mean(X_np, axis=reduce_axis) / self.max_val
+            self.mean_ = np.mean(X_np, axis=reduce_axis)
+            # Calculate max of centered data (absolute max)
+            self.max_val = float(np.max(np.abs(X_np - self.mean_)))
+        else:
+            self.max_val = float(np.max(X_np))
             
         return self
 
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
         
-        # 1. Scale to Unit (X / max)
+        # 1. Center (if enabled)
+        if self.centering and self.mean_ is not None:
+            arr = arr - self.mean_
+
+        # 2. Scale to Unit (X / max_val)
         if self.max_val is not None and self.max_val != 0:
             arr = arr / self.max_val
             
-        # 2. Center (if enabled)
-        if self.centering and self.mean_ is not None:
-            arr = arr - self.mean_
-        
         # 3. Apply Custom Range Scale
-        if self.scale != 1.0:
-            arr = arr * self.scale
+        if self.input_scale != 1.0:
+            arr = arr * self.input_scale
             
         return arr
 
@@ -144,23 +149,23 @@ class CustomRangeScaler(Preprocessor):
         arr = jnp.asarray(X)
         
         # 1. Remove Custom Range Scale
-        if self.scale != 1.0 and self.scale != 0:
-            arr = arr / self.scale
+        if self.input_scale != 1.0 and self.input_scale != 0:
+            arr = arr / self.input_scale
 
-        # 2. Un-center
-        if self.centering and self.mean_ is not None:
-            arr = arr + self.mean_
-        
-        # 3. Un-scale (multiply by max)
+        # 2. Un-scale (multiply by max)
         if self.max_val is not None:
             arr = arr * self.max_val
+
+        # 3. Un-center
+        if self.centering and self.mean_ is not None:
+            arr = arr + self.mean_
             
         return arr
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "custom_range_scaler",
-            "scale": self.scale,
+            "input_scale": self.input_scale,
             "max_val": self.max_val,
             "centering": self.centering
         }
@@ -266,7 +271,7 @@ def register_preprocessors(
 
     @create_preprocessor.register(CustomRangeScalerConfigClass)
     def _(config) -> Preprocessor:
-        return CustomRangeScaler(scale=config.scale, centering=config.centering)
+        return CustomRangeScaler(input_scale=config.input_scale, centering=config.centering)
 
     if MinMaxScalerConfigClass is not None:
         @create_preprocessor.register(MinMaxScalerConfigClass)

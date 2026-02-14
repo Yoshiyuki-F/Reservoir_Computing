@@ -79,11 +79,14 @@ def build_config(
     input_scale is applied via MinMaxScalerConfig (preprocessing).
     projection is None (Step 3 skipped).
     """
-    from reservoir.models.config import MinMaxScalerConfig
+    from reservoir.models.config import CustomRangeScalerConfig
     base = TIME_QUANTUM_RESERVOIR_PRESET
 
-    # Update preprocessing (input_scale via MinMaxScaler)
-    new_preprocess = MinMaxScalerConfig(input_scale=input_scale)
+    # Update preprocessing (input_scale via CustomRangeScaler)
+    new_preprocess = CustomRangeScalerConfig(
+        input_scale=input_scale, 
+        centering=getattr(base.preprocess, "centering")
+    )
 
     # Update model (feedback_scale, measurement_basis)
     new_model = dataclasses.replace(
@@ -113,11 +116,12 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        input_scale = trial.suggest_float("input_scale", 3.2, 3.4)
+        # input_scale = trial.suggest_float("input_scale", 3, 4.5)
+        input_scale = trial.suggest_float("input_scale", 0.5, 5)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 2, 2.3)
-        use_reuploading = trial.suggest_categorical("use_reuploading", [True, False])
+        feedback_scale = trial.suggest_float("feedback_scale", 0.5, 5)
+        use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
         # === 2. Build Config ===
@@ -177,9 +181,9 @@ def make_objective(measurement_basis: str, readout_config):
     return objective
 
 
-def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int):
+def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}"
+    study_name = f"qrc_vpt_{scaler_type}_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
@@ -227,8 +231,9 @@ def main():
     # --- Derive study / DB names ---
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
+    scaler_tag = "crs"
 
-    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits)
+    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag)
 
     if args.study_name is not None:
         study_name = args.study_name
