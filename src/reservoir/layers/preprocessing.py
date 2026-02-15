@@ -240,10 +240,11 @@ class IdentityPreprocessor(Preprocessor):
 
 
 
+
 class AffineScaler(Preprocessor):
     """
     Affine transformation scaler.
-    Formula: X_scaled = X * scale + shift
+    Formula: X_scaled = X * input_scale + shift
     """
 
     def __init__(self, input_scale: float, shift: float):
@@ -266,7 +267,7 @@ class AffineScaler(Preprocessor):
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "affine_scaler",
-            "scale": self.input_scale,
+            "input_scale": self.input_scale,
             "shift": self.shift,
         }
 
@@ -314,7 +315,7 @@ def register_preprocessors(
     if AffineScalerConfigClass is not None:
         @create_preprocessor.register(AffineScalerConfigClass)
         def _(config) -> Preprocessor:
-            return AffineScaler(scale=config.input_scale, shift=config.shift)
+            return AffineScaler(input_scale=config.input_scale, shift=config.shift)
 
 
 __all__ = [
