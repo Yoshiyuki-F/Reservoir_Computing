@@ -19,7 +19,7 @@ from reservoir.models.config import (
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig, PolyRidgeReadoutConfig,
-    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig
+    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AffineScalerConfig
 )
 from reservoir.data.presets import get_dataset_preset 
 
@@ -208,7 +208,8 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=CustomRangeScalerConfig(input_scale=1, centering=True), # a_in: R gate input scaling
+    # preprocess=CustomRangeScalerConfig(input_scale=1, centering=False), # a_in: R gate input scaling
+    preprocess=AffineScalerConfig(input_scale=1.0, shift=0.0),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
         n_qubits=10,

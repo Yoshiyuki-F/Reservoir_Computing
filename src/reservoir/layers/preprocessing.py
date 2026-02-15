@@ -246,8 +246,8 @@ class AffineScaler(Preprocessor):
     Formula: X_scaled = X * scale + shift
     """
 
-    def __init__(self, scale: float, shift: float):
-        self.scale = scale
+    def __init__(self, input_scale: float, shift: float):
+        self.input_scale = input_scale
         self.shift = shift
 
     def fit(self, X: jnp.ndarray) -> "AffineScaler":
@@ -255,18 +255,18 @@ class AffineScaler(Preprocessor):
         return self
 
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        return X * self.scale + self.shift
+        return X * self.input_scale + self.shift
 
     def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
         # Avoid division by zero
-        if self.scale == 0:
+        if self.input_scale == 0:
             return X
-        return (X - self.shift) / self.scale
+        return (X - self.shift) / self.input_scale
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "affine_scaler",
-            "scale": self.scale,
+            "scale": self.input_scale,
             "shift": self.shift,
         }
 
@@ -314,7 +314,7 @@ def register_preprocessors(
     if AffineScalerConfigClass is not None:
         @create_preprocessor.register(AffineScalerConfigClass)
         def _(config) -> Preprocessor:
-            return AffineScaler(scale=config.scale, shift=config.shift)
+            return AffineScaler(scale=config.input_scale, shift=config.shift)
 
 
 __all__ = [
