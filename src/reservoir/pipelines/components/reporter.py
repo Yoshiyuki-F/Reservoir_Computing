@@ -89,6 +89,7 @@ class ResultReporter:
         results["outputs"] = {
             "train_pred": fit_result["train_pred"],
             "test_pred": test_pred,
+            "test_truth": test_y_final, # Exposed for Optuna stats
             "val_pred": fit_result["val_pred"],
         }
 

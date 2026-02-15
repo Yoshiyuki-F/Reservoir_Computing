@@ -326,17 +326,36 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Check for divergence
         pred_std = np.std(closed_loop_pred)
-        truth_std = np.std(test_y)
-        threshold = 1.5
-        if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
-            raise ValueError(f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
-
         pred_max = np.max(closed_loop_pred)
         pred_min = np.min(closed_loop_pred)
+
+        truth_std = np.std(test_y)
         truth_max = np.max(test_y)
         truth_min = np.min(test_y)
+
+        threshold = 1.5
+
+        # Stats to return (No recalculation needed later)
+        stats_dict = {
+            "pred_mean": float(np.mean(closed_loop_pred)),
+            "pred_std": float(pred_std),
+            "pred_min": float(pred_min),
+            "pred_max": float(pred_max),
+            "truth_mean": float(np.mean(test_y)),
+            "truth_std": float(truth_std),
+            "truth_min": float(truth_min),
+            "truth_max": float(truth_max),
+        }
+
+        if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
+            err = ValueError(f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
+            err.stats = stats_dict
+            raise err
+
         if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
-            raise ValueError(f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
+             err = ValueError(f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)") 
+             err.stats = stats_dict
+             raise err
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr):
@@ -388,9 +407,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              }
 
         return {
-            "train_pred": train_pred,
-            "val_pred": val_pred,
-            "test_pred": test_pred,
+            "train_pred": None, # Not returned by this strategy
+            "val_pred": None,   # Not returned
+            "test_pred": None,  # Not returned
             "metrics": metrics,
             "best_lambda": best_lambda,
             "best_score": best_score,
@@ -399,7 +418,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "residuals_history": residuals_history if 'residuals_history' in locals() else None,
             "closed_loop_pred": closed_loop_pred,
             "closed_loop_truth": closed_loop_truth,
-            "chaos_results": chaos_results,
+            "chaos_results": {**chaos_results, **stats_dict}, # Merge stats
         }
 
 class ReadoutStrategyFactory:

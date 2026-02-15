@@ -155,13 +155,21 @@ def make_objective(measurement_basis: str, readout_config):
             if best_lambda is not None:
                 trial.set_user_attr("best_lambda", float(best_lambda))
 
-            # Store ALL chaos metrics
+            # Store ALL chaos metrics (including new stats from strategies.py)
+            success_stats = {}
             for key in ["mse", "nmse", "nrmse", "mase", "ndei",
-                        "var_ratio", "correlation", "vpt_steps", "vpt_lt", "vpt_threshold"]:
+                        "var_ratio", "correlation", "vpt_steps", "vpt_lt", "vpt_threshold",
+                        "pred_mean", "pred_std", "pred_min", "pred_max",
+                        "truth_mean", "truth_std", "truth_min", "truth_max"]:
                 val = chaos.get(key, None)
                 if val is not None:
                     trial.set_user_attr(key, float(val))
-            
+                    if "pred" in key or "truth" in key:
+                        success_stats[key] = float(val)
+
+            if success_stats:
+                print(f"    [Success Stats] {success_stats}")
+
             # For backward compatibility / printing convenience, ensure these locals exist
             var_ratio = chaos.get("var_ratio", 0.0)
 
@@ -178,13 +186,20 @@ def make_objective(measurement_basis: str, readout_config):
             return vpt_lt
 
         except Exception as e:
+            # Try to retrieve stats if attached to exception (from strategies.py)
+            if hasattr(e, "stats") and isinstance(e.stats, dict):
+                print(f"    [Divergence Stats] {e.stats}")
+                for key, val in e.stats.items():
+                    trial.set_user_attr(key, float(val))
+            
             err_msg = str(e)
-            if "pred std" in err_msg.lower():
+            err_msg_lower = str(e).lower()
+            if "pred std" in err_msg_lower:
                  print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
                  trial.set_user_attr("status", "diverged")
                  trial.set_user_attr("error", err_msg)
                  return -0.5 # Return a "close but failed" value
-            elif "pred max" in err_msg.lower():
+            elif "pred max" in err_msg_lower:
                  print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
                  trial.set_user_attr("status", "diverged")
                  trial.set_user_attr("error", err_msg)
