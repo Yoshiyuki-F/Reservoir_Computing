@@ -344,6 +344,15 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
                     if hasattr(config.preprocess, "input_scale"):
                         input_scale = config.preprocess.input_scale
                 preprocess_label = f"MinMaxScaler_i{float(input_scale)}"
+            elif raw_label == "AffineScaler":
+                input_scale = 1.0
+                shift = 0.0
+                if config is not None and hasattr(config, "preprocess"):
+                    if hasattr(config.preprocess, "input_scale"):
+                        input_scale = config.preprocess.input_scale
+                    if hasattr(config.preprocess, "shift"):
+                        shift = config.preprocess.shift
+                preprocess_label = f"Affine_a{float(input_scale):.2f}_b{float(shift):.2f}"
             else:
                 preprocess_label = raw_label
 

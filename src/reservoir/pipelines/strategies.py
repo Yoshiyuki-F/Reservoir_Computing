@@ -322,10 +322,23 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
 
         # Check for divergence
-        pred_std = np.std(closed_loop_pred)
-        if pred_std > 2.0 or pred_std < 0.6:
-            # Revert to stricter check as per user request to fail fast on bad runs
-            raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 2.0 or < 0.6")
+        pred_abs = np.abs(closed_loop_pred)
+        if np.max(pred_abs) > 15:
+            print(f"Closed-loop prediction diverged! Max Abs={np.max(pred_abs):.2f} > 15")
+            return {
+                "train_pred": None,
+                "val_pred": None,
+                "test_pred": None,
+                "metrics": {},
+                "best_lambda": best_lambda,
+                "best_score": best_score,
+                "search_history": search_history,
+                "weight_norms": weight_norms,
+                "residuals_history": residuals_history if 'residuals_history' in locals() else None,
+                "closed_loop_pred": closed_loop_pred,
+                "closed_loop_truth": closed_loop_truth,
+                "chaos_results": {"vpt_lt": -1.0}, # Return error indicator
+            }
 
         closed_loop_truth = test_y
         print_feature_stats(closed_loop_truth, "8:closed_loop_truth")

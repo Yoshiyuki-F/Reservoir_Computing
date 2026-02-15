@@ -67,6 +67,7 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 
 def build_config(
         input_scale: float,
+        input_shift: float,
         feedback_scale: float,
         use_reuploading: bool,
         *,
@@ -76,16 +77,16 @@ def build_config(
     """
     Build a PipelineConfig with dynamically updated parameters.
     
-    input_scale is applied via MinMaxScalerConfig (preprocessing).
+    input_scale/shift is applied via AffineScalerConfig (preprocessing).
     projection is None (Step 3 skipped).
     """
-    from reservoir.models.config import CustomRangeScalerConfig
+    from reservoir.models.config import AffineScalerConfig
     base = TIME_QUANTUM_RESERVOIR_PRESET
 
-    # Update preprocessing (input_scale via CustomRangeScaler)
-    new_preprocess = CustomRangeScalerConfig(
+    # Update preprocessing (AffineScaler)
+    new_preprocess = AffineScalerConfig(
         input_scale=input_scale, 
-        centering=getattr(base.preprocess, "centering")
+        shift=input_shift,
     )
 
     # Update model (feedback_scale, measurement_basis)
@@ -117,16 +118,21 @@ def make_objective(measurement_basis: str, readout_config):
 
         # ======================== Preprocessing =============================
         # input_scale = trial.suggest_float("input_scale", 3, 4.5)
-        input_scale = trial.suggest_float("input_scale", 0.5, 5)
+        # input_scale = trial.suggest_float("input_scale", 0.5, 5)
+        
+        # AffineScaler parameters
+        input_scale = trial.suggest_float("input_scale", 0, 2*np.pi/(1.3283-0.4015))
+        input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0.5, 5)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.1, 5.0)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
         # === 2. Build Config ===
         config = build_config(
             input_scale,
+            input_shift,
             feedback_scale,
             use_reuploading,
             measurement_basis=measurement_basis,
@@ -162,12 +168,12 @@ def make_objective(measurement_basis: str, readout_config):
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(in={input_scale:.3f}, fb={feedback_scale:.3f}, reupload={use_reuploading})")
+                      f"(in_s={input_scale:.3f}, in_sh={input_shift:.3f}, fb={feedback_scale:.3f})")
                 trial.set_user_attr("status", "failed")
                 return -1.0  # Return a negative value to indicate failure
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(in={input_scale:.3f}, fb={feedback_scale:.3f}, reupload={use_reuploading})")
+                  f"(in_s={input_scale:.3f}, in_sh={input_shift:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
             return vpt_lt
@@ -231,7 +237,9 @@ def main():
     # --- Derive study / DB names ---
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
-    scaler_tag = "crs"
+    
+    # Updated scaler tag for AffineScaler
+    scaler_tag = "affine"
 
     study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag)
 
