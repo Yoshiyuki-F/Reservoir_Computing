@@ -239,6 +239,38 @@ class IdentityPreprocessor(Preprocessor):
         return {"type": "identity"}
 
 
+
+class AffineScaler(Preprocessor):
+    """
+    Affine transformation scaler.
+    Formula: X_scaled = X * scale + shift
+    """
+
+    def __init__(self, scale: float, shift: float):
+        self.scale = scale
+        self.shift = shift
+
+    def fit(self, X: jnp.ndarray) -> "AffineScaler":
+        # AffineScaler is stateless (parameters are provided at init), so fit does nothing.
+        return self
+
+    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        return X * self.scale + self.shift
+
+    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+        # Avoid division by zero
+        if self.scale == 0:
+            return X
+        return (X - self.shift) / self.scale
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "affine_scaler",
+            "scale": self.scale,
+            "shift": self.shift,
+        }
+
+
 # --- 3. Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
@@ -255,6 +287,7 @@ def register_preprocessors(
     StandardScalerConfigClass: Type,
     CustomRangeScalerConfigClass: Type,
     MinMaxScalerConfigClass: Type = None,
+    AffineScalerConfigClass: Type = None,
 ):
     """
     Register config classes with the factory.
@@ -278,12 +311,18 @@ def register_preprocessors(
         def _(config) -> Preprocessor:
             return MinMaxScaler(input_scale=config.input_scale)
 
+    if AffineScalerConfigClass is not None:
+        @create_preprocessor.register(AffineScalerConfigClass)
+        def _(config) -> Preprocessor:
+            return AffineScaler(scale=config.scale, shift=config.shift)
+
 
 __all__ = [
     "Preprocessor",
     "StandardScaler",
     "CustomRangeScaler",
     "MinMaxScaler",
+    "AffineScaler",
     "IdentityPreprocessor",
     "create_preprocessor",
     "register_preprocessors",

@@ -163,7 +163,27 @@ class MinMaxScalerConfig:
     def to_dict(self) -> dict[str, Any]:
         return {"method": "min_max_scaler", "input_scale": float(self.input_scale)}
 
-PreprocessingConfig = Union[RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig]
+@dataclass(frozen=True)
+class AffineScalerConfig:
+    """Step 2 parameters for Affine Scaler (y = X * scale + shift)."""
+    scale: float
+    shift: float
+
+    def validate(self, context: str = "affine_scaler") -> "AffineScalerConfig":
+        _ = context
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"method": "affine_scaler", "scale": float(self.scale), "shift": float(self.shift)}
+
+
+PreprocessingConfig = Union[
+    RawConfig,
+    StandardScalerConfig,
+    CustomRangeScalerConfig,
+    MinMaxScalerConfig,
+    AffineScalerConfig
+]
 
 
 @dataclass(frozen=True)
