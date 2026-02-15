@@ -125,7 +125,7 @@ def make_objective(measurement_basis: str, readout_config):
         input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0.1, 5.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.1, 2.0)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
@@ -179,11 +179,16 @@ def make_objective(measurement_basis: str, readout_config):
 
         except Exception as e:
             err_msg = str(e)
-            if "diverged" in err_msg.lower():
+            if "pred std" in err_msg.lower():
                  print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
                  trial.set_user_attr("status", "diverged")
                  trial.set_user_attr("error", err_msg)
                  return -0.5 # Return a "close but failed" value
+            elif "pred max" in err_msg.lower():
+                 print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
+                 trial.set_user_attr("status", "diverged")
+                 trial.set_user_attr("error", err_msg)
+                 return -0.4 # Return a "close but failed" value WITH MAX MIN
             else:
                  print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
                  trial.set_user_attr("status", "exception")

@@ -326,11 +326,17 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Check for divergence
         pred_std = np.std(closed_loop_pred)
-        truth_std = np.std(test_y) if test_y is not None else 1.0 # Fallback
+        truth_std = np.std(test_y)
         threshold = 1.5
-
         if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
             raise ValueError(f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
+
+        pred_max = np.max(closed_loop_pred)
+        pred_min = np.min(closed_loop_pred)
+        truth_max = np.max(test_y)
+        truth_min = np.min(test_y)
+        if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
+            raise ValueError(f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr):
