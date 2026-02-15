@@ -121,7 +121,7 @@ def make_objective(measurement_basis: str, readout_config):
         # input_scale = trial.suggest_float("input_scale", 0.5, 5)
         
         # AffineScaler parameters
-        input_scale = trial.suggest_float("input_scale", 0, 2*np.pi/(1.3283-0.4015))
+        input_scale = trial.suggest_float("input_scale", 0.5, 2*np.pi/(1.3283-0.4015))
         input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
 
         # ======================== Reservoir ==================================
@@ -164,7 +164,6 @@ def make_objective(measurement_basis: str, readout_config):
             
             # For backward compatibility / printing convenience, ensure these locals exist
             var_ratio = chaos.get("var_ratio", 0.0)
-            mse = chaos.get("mse", float('inf'))
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "

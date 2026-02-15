@@ -321,27 +321,16 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         )
         print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
 
-        # Check for divergence
-        pred_abs = np.abs(closed_loop_pred)
-        if np.max(pred_abs) > 15:
-            print(f"Closed-loop prediction diverged! Max Abs={np.max(pred_abs):.2f} > 15")
-            return {
-                "train_pred": None,
-                "val_pred": None,
-                "test_pred": None,
-                "metrics": {},
-                "best_lambda": best_lambda,
-                "best_score": best_score,
-                "search_history": search_history,
-                "weight_norms": weight_norms,
-                "residuals_history": residuals_history if 'residuals_history' in locals() else None,
-                "closed_loop_pred": closed_loop_pred,
-                "closed_loop_truth": closed_loop_truth,
-                "chaos_results": {"vpt_lt": -1.0}, # Return error indicator
-            }
-
         closed_loop_truth = test_y
         print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
+
+        # Check for divergence
+        pred_std = np.std(closed_loop_pred)
+        truth_std = np.std(test_y) if test_y is not None else 1.0 # Fallback
+        threshold = 1.5
+
+        if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
+            raise ValueError(f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr):
