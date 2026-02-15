@@ -97,7 +97,7 @@ def prune_duplicate_trials(db_path, dry_run=True):
             # Need study_id to target correctly
             # study_id = summary.study_id # Attribute might be missing in some versions
             
-            # Fetch from DB safely
+            # Fetch study_id from DB safely
             cursor.execute("SELECT study_id FROM studies WHERE study_name = ?", (summary.study_name,))
             row = cursor.fetchone()
             if not row:

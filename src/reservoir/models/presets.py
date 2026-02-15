@@ -212,7 +212,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=AffineScalerConfig(input_scale=4.326809578977318/0.9268, shift=-0.4015*4.326809578977318/0.9268),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=6,
+        n_qubits=10,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
