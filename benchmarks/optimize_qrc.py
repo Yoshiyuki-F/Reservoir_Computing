@@ -178,10 +178,17 @@ def make_objective(measurement_basis: str, readout_config):
             return vpt_lt
 
         except Exception as e:
-            print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
-            trial.set_user_attr("status", "exception")
-            trial.set_user_attr("error", str(e))
-            return -1.0  # Return a negative value to indicate failure
+            err_msg = str(e)
+            if "diverged" in err_msg.lower():
+                 print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
+                 trial.set_user_attr("status", "diverged")
+                 trial.set_user_attr("error", err_msg)
+                 return -0.5 # Return a "close but failed" value
+            else:
+                 print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
+                 trial.set_user_attr("status", "exception")
+                 trial.set_user_attr("error", err_msg)
+                 return -1.0  # Return a negative value to indicate failure
 
     return objective
 
