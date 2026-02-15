@@ -22,8 +22,7 @@ Usage:
     uv run python benchmarks/optimize_qrc.py --n-trials 10
 
 Visualization:
-    pip install optuna-dashboard
-    optuna-dashboard sqlite:///benchmarks/optuna_qrc.db
+    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
 """
 
 import argparse

@@ -24,13 +24,23 @@ def prune_duplicate_trials(db_path, dry_run=True):
 
         # Group trials by parameters (using hash of sorted params)
         trials_by_params = {}
+        import json
+        
+        # Consistent normalization (same as requeue_trials.py)
+        def normalize_params(params):
+            norm = {}
+            for k, v in params.items():
+                if isinstance(v, (int, float)):
+                    norm[k] = round(float(v), 8) # Force float and round
+                else:
+                    norm[k] = str(v)
+            return json.dumps(norm, sort_keys=True)
+
         for trial in study.trials:
-            if trial.state != optuna.trial.TrialState.COMPLETE:
-                continue
+            # Check all states. Duplicates might span any state.
             
-            # Create a unique key for parameters
-            # Sort keys to ensure consistent order
-            params_key = json.dumps(trial.params, sort_keys=True)
+            # Use normalized key for grouping (fuzzy match for float precision)
+            params_key = normalize_params(trial.params)
             
             if params_key not in trials_by_params:
                 trials_by_params[params_key] = []
@@ -40,17 +50,26 @@ def prune_duplicate_trials(db_path, dry_run=True):
 
         for params_key, trials in trials_by_params.items():
             if len(trials) > 1:
-                # Sort by trial ID (latest ID is most recent)
-                trials.sort(key=lambda t: t.number)
+                # Priority:
+                # 1. State must be WAITING (keep for re-run)
+                # 2. State must be COMPLETE
+                # 3. Prefer Latest (ID)
                 
-                # Keep the last one, delete the rest
+                def trial_priority(t):
+                    is_waiting = 1 if t.state == optuna.trial.TrialState.WAITING else 0
+                    is_complete = 1 if t.state == optuna.trial.TrialState.COMPLETE else 0
+                    return (is_waiting, is_complete, t.number)
+                
+                trials.sort(key=trial_priority)
+                
+                # Keep the last one (highest priority), delete the rest
                 keep_trial = trials[-1]
                 del_trials = trials[:-1]
                 
                 print(f"  Duplicate Params found ({len(trials)} trials):")
-                print(f"    Keep: ID#{keep_trial.number} (Value: {keep_trial.value})")
+                print(f"    Keep: ID#{keep_trial.number} (State: {keep_trial.state.name}, Value: {keep_trial.value})")
                 for t in del_trials:
-                    print(f"    Delete: ID#{t.number} (Value: {t.value})")
+                    print(f"    Delete: ID#{t.number} (State: {t.state.name}, Value: {t.value})")
                     trials_to_delete.append(t.number)
 
         if not trials_to_delete:
@@ -70,12 +89,53 @@ def prune_duplicate_trials(db_path, dry_run=True):
             # Optuna's delete_study deletes the whole study. duplicated trials are hard to delete cleanly via public API.
             # However, storage.delete_trial(trial_id) exists in RDBStorage.
             
-            for trial_id in trials_to_delete:
+            # Use sqlite3 directly for reliable deletion
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Need study_id to target correctly
+            # study_id = summary.study_id # Attribute might be missing in some versions
+            
+            # Fetch from DB safely
+            cursor.execute("SELECT study_id FROM studies WHERE study_name = ?", (summary.study_name,))
+            row = cursor.fetchone()
+            if not row:
+                print(f"    [ERROR] Could not find study_id for name: {summary.study_name}")
+                continue
+            study_id = row[0]
+            
+            for trial_number in trials_to_delete:
                 try:
-                    storage.delete_trial(trial_id)
-                    print(f"    Deleted ID#{trial_id}")
+                    # Get the actual trial_id first
+                    cursor.execute("SELECT trial_id FROM trials WHERE study_id = ? AND number = ?", (study_id, trial_number))
+                    row = cursor.fetchone()
+                    if not row:
+                        print(f"    [WARNING] Could not find trial_id for study_id={study_id}, number={trial_number}")
+                        continue
+                    
+                    real_trial_id = row[0]
+                    
+                    # Delete using global trial_id (now correct)
+                    cursor.execute("DELETE FROM trial_user_attributes WHERE trial_id = ?", (real_trial_id,))
+                    cursor.execute("DELETE FROM trial_params WHERE trial_id = ?", (real_trial_id,))
+                    cursor.execute("DELETE FROM trial_values WHERE trial_id = ?", (real_trial_id,))
+                    cursor.execute("DELETE FROM trial_intermediate_values WHERE trial_id = ?", (real_trial_id,))
+                    cursor.execute("DELETE FROM trials WHERE trial_id = ?", (real_trial_id,))
+                    conn.commit()
+                    
+                    # Verify deletion
+                    cursor.execute("SELECT count(*) FROM trials WHERE trial_id = ?", (real_trial_id,))
+                    count = cursor.fetchone()[0]
+                    if count == 0:
+                        print(f"    Deleted Trial #{trial_number} (Global ID#{real_trial_id}) (Verified)")
+                    else:
+                        print(f"    [WARNING] Failed to delete Trial #{trial_number} (Global ID#{real_trial_id}) (Row still exists!)")
+                        
                 except Exception as e:
-                    print(f"    Failed to delete ID#{trial_id}: {e}")
+                    print(f"    Failed to delete Trial #{trial_number}: {e}")
+            
+            conn.close()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
