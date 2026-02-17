@@ -116,15 +116,18 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        # input_scale = trial.suggest_float("input_scale", 3, 4.5)
+        # input_scale = trial.suggest_float("input_scale", 0.5, 2 * np.pi / (1.3283 - 0.4015))
         # input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
 
         # AffineScaler parameters
-        input_scale = trial.suggest_float("input_scale", 0.5, 2*np.pi/(1.3283-0.4015))
-        input_shift = trial.suggest_float("input_shift", 0, 0)
+        input_scale = trial.suggest_float("input_scale", 3,4)
+        input_shift = trial.suggest_float("input_shift", -3, -1)
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0, 2.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 0.5, 3.0)
+
+        # feedback_scale = trial.suggest_float("feedback_scale", 2.0040817003461666, 2.0040817003461666)
+
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
