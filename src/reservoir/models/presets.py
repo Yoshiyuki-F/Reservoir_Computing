@@ -50,6 +50,9 @@ TCRS = CustomRangeScalerConfig(
     centering=True
 )
 
+ZeroToOne = MinMaxScalerConfig(
+    input_scale=1.0,
+)
 
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
@@ -119,7 +122,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=StandardScalerConfig(),
+    preprocess=ZeroToOne,
     projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
