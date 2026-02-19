@@ -118,14 +118,20 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
 
         input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
-        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.07240629795142763, 0.07240629795142763)
+
+        # bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        bias_scale = trial.suggest_float("bias_scale", 0.7862943891668603, 0.7862943891668603)
+
 
         # Reservoir
         spectral_radius = trial.suggest_float("spectral_radius", 0.1, 2.0)
+
+
         leak_rate = trial.suggest_float("leak_rate", 0.01, 1.0)
 
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.01, 1.0)
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.49023986529058033, 0.49023986529058033)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.01, 1.0)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.4402710000522045, 0.4402710000522045)
 
         # Readout Alpha (Logic to override preset lambda candidates if we want to optimize single alpha)
         # For now, we rely on RidgeReadoutConfig's list of candidates which are scanned automatically via CV/LOO.
