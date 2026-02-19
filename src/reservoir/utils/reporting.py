@@ -388,8 +388,14 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
                 
                 model_type_str = f"{model_type_str}_{q_str}_f{model_cfg.feedback_scale}_{basis}"
             elif has_leak:
-                # Classical reservoir: just leak_rate
-                model_type_str = f"{model_type_str}_{model_cfg.leak_rate}"
+                # Classical reservoir: sr, lr, rc_connectivity
+                sr = getattr(model_cfg, 'spectral_radius', None)
+                lr = model_cfg.leak_rate
+                rc_conn = getattr(model_cfg, 'rc_connectivity', None)
+                tag = f"_sr{float(sr):.2f}" if sr is not None else ""
+                tag += f"_lr{float(lr):.2f}" if lr is not None else ""
+                tag += f"_rc{float(rc_conn):.2f}" if rc_conn is not None else ""
+                model_type_str = f"{model_type_str}{tag}"
 
     filename_parts = [model_type_str, preprocess_label]
 
@@ -411,7 +417,12 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
         proj_units = proj_dict.get("n_units", 0)
         
         if proj_type == "random":
-            filename_parts.append(f"RP{int(proj_units)}")
+            input_scale = proj_dict.get("input_scale")
+            input_conn = proj_dict.get("input_connectivity")
+            bias_scale = proj_dict.get("bias_scale")
+            filename_parts.append(
+                f"RP{int(proj_units)}_is{float(input_scale):.2f}_c{float(input_conn):.2f}_bs{float(bias_scale):.2f}"
+            )
         elif proj_type == "center_crop":
             filename_parts.append(f"CCP{int(proj_units)}")
         elif proj_type == "resize":
