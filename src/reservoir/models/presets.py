@@ -60,13 +60,7 @@ RP = RandomProjectionConfig(
     seed=1,
 )
 
-TIME_PROJECTION = RandomProjectionConfig(
-    n_units=400,
-    input_scale=0.1,
-    input_connectivity=1.0,
-    bias_scale=0.1,
-    seed=1,
-)
+
 
 CCP = CenterCropProjectionConfig(
     n_units=10,  # This becomes n_qubits for quantum reservoir
@@ -125,8 +119,8 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MinMaxScalerConfig(input_scale=1.0),
-    projection=TIME_PROJECTION,
+    preprocess=StandardScalerConfig(),
+    projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -236,7 +230,13 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 # Dynamics Definitions
 # -----------------------------------------------------------------------------
 
-
+TIME_PROJECTION = RandomProjectionConfig(
+    n_units=400,
+    input_scale=0.1,
+    input_connectivity=1.0,
+    bias_scale=0.1,
+    seed=1,
+)
 
 TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     spectral_radius=1,
