@@ -33,6 +33,7 @@ from reservoir.models.presets import (
     DEFAULT_RIDGE_READOUT,
 )
 from reservoir.models.config import (
+    MinMaxScalerConfig,
     PolyRidgeReadoutConfig,
     RandomProjectionConfig,
     RidgeReadoutConfig,
@@ -70,7 +71,9 @@ def build_config(
     """
     base = CLASSICAL_RESERVOIR_PRESET
 
-    # Update Projection (input_scale)
+
+
+
     # Ensure base projection is RandomProjectionConfig
     if isinstance(base.projection, RandomProjectionConfig):
         new_proj = dataclasses.replace(
@@ -80,7 +83,7 @@ def build_config(
             bias_scale=bias_scale
         )
     else:
-        # Fallback if changed, but expected to be RP
+        # Fallback
         new_proj = base.projection
 
     # Update Reservoir (spectral_radius, leak_rate, connectivity)
@@ -111,7 +114,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         
         # === 1. Suggest Parameters ===
-        
+
         # Projection
         input_scale = trial.suggest_float("input_scale", 0.01, 5.0, log=True)
         # input_scale = trial.suggest_float("input_scale", 3.1537235606199965, 3.1537235606199965)
@@ -120,18 +123,17 @@ def make_objective(readout_config, dataset_enum: Dataset):
         input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
         # input_connectivity = trial.suggest_float("input_connectivity", 0.07240629795142763, 0.07240629795142763)
 
-        # bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
-        bias_scale = trial.suggest_float("bias_scale", 0.7862943891668603, 0.7862943891668603)
+        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        # bias_scale = trial.suggest_float("bias_scale", 0.7862943891668603, 0.7862943891668603)
 
 
         # Reservoir
         spectral_radius = trial.suggest_float("spectral_radius", 0.1, 2.0)
 
-
         leak_rate = trial.suggest_float("leak_rate", 0.01, 1.0)
 
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.01, 1.0)
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.4402710000522045, 0.4402710000522045)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.01, 1.0)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.4402710000522045, 0.4402710000522045)
 
         # Readout Alpha (Logic to override preset lambda candidates if we want to optimize single alpha)
         # For now, we rely on RidgeReadoutConfig's list of candidates which are scanned automatically via CV/LOO.
@@ -214,6 +216,10 @@ def derive_names(readout_key: str, dataset_name: str):
         prep_tag = "MinMaX"
     else:
         prep_tag = preprocess_name
+    
+    # Custom MinMax tag
+    if isinstance(base.preprocess, MinMaxScalerConfig):
+        prep_tag = f"Min{int(base.preprocess.feature_min)}Max{int(base.preprocess.feature_max)}"
 
     # Projection
     proj = base.projection

@@ -51,7 +51,8 @@ TCRS = CustomRangeScalerConfig(
 )
 
 ZeroToOne = MinMaxScalerConfig(
-    input_scale=1.0,
+    feature_min=-1.0,
+    feature_max=1.0,
 )
 
 #---------------------------STEP 3--------------------------------------------------

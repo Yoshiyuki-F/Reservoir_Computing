@@ -150,18 +150,23 @@ class CustomRangeScalerConfig:
 
 @dataclass(frozen=True)
 class MinMaxScalerConfig:
-    """Step 2 parameters for Min-Max Scaler (Murauer et al., 2025).
-    s_k = input_scale * (P(t_k) - P_min) / (P_max - P_min)
+    """Step 2 parameters for Min-Max Scaler (feature range scaling).
+    Scales data to [feature_min, feature_max].
     """
-    input_scale: float = 1.0
+    feature_min: float
+    feature_max: float
 
     def validate(self, context: str = "min_max_scaler") -> "MinMaxScalerConfig":
-        if float(self.input_scale) <= 0:
-            raise ValueError(f"{context}: input_scale must be positive.")
+        if float(self.feature_max) <= float(self.feature_min):
+            raise ValueError(f"{context}: feature_max must be greater than feature_min.")
         return self
 
     def to_dict(self) -> dict[str, Any]:
-        return {"method": "min_max_scaler", "input_scale": float(self.input_scale)}
+        return {
+            "method": "min_max_scaler",
+            "feature_min": float(self.feature_min),
+            "feature_max": float(self.feature_max),
+        }
 
 @dataclass(frozen=True)
 class AffineScalerConfig:

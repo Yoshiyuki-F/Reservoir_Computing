@@ -171,17 +171,20 @@ class CustomRangeScaler(Preprocessor):
         }
 
 
+
 class MinMaxScaler(Preprocessor):
     """
-    Min-Max Scaler with input scaling (Murauer et al., 2025).
-    Formula: s_k = (P(t_k) - P_min) / (P_max - P_min)
-    Maps data to [0, input_scale] range.
+    Min-Max Scaler with feature range scaling.
+    Scales data to [feature_min, feature_max].
+    Formula: X_std = (X - X.min) / (X.max - X.min)
+             X_scaled = X_std * (feature_max - feature_min) + feature_min
     """
 
-    def __init__(self, input_scale):
-        self.input_scale = input_scale #a_in in the paper
+    def __init__(self, feature_min: float , feature_max: float):
+        self.feature_min = feature_min
+        self.feature_max = feature_max
         self.min_: Optional[np.ndarray] = None
-        self.range_: Optional[np.ndarray] = None  # P_max - P_min
+        self.range_: Optional[np.ndarray] = None  # X_max - X_min
 
     def fit(self, X: jnp.ndarray) -> "MinMaxScaler":
         X_np = np.asarray(X)
@@ -203,23 +206,36 @@ class MinMaxScaler(Preprocessor):
 
     def transform(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
+        
+        # 1. Scale to [0, 1]
         if self.min_ is not None and self.range_ is not None:
             arr = (arr - self.min_) / self.range_
-        arr = arr * self.input_scale
+        
+        # 2. Scale to [feature_min, feature_max]
+        scale = self.feature_max - self.feature_min
+        arr = arr * scale + self.feature_min
+        
         return arr
 
     def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
         arr = jnp.asarray(X)
-        if self.input_scale != 0:
-            arr = arr / self.input_scale
+        
+        # 1. Reverse Scale to [0, 1]
+        scale = self.feature_max - self.feature_min
+        if scale != 0:
+            arr = (arr - self.feature_min) / scale
+            
+        # 2. Reverse Scale to Original
         if self.min_ is not None and self.range_ is not None:
             arr = arr * self.range_ + self.min_
+            
         return arr
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "min_max_scaler",
-            "input_scale": self.input_scale,
+            "feature_min": self.feature_min,
+            "feature_max": self.feature_max,
         }
 
 
@@ -310,7 +326,7 @@ def register_preprocessors(
     if MinMaxScalerConfigClass is not None:
         @create_preprocessor.register(MinMaxScalerConfigClass)
         def _(config) -> Preprocessor:
-            return MinMaxScaler(input_scale=config.input_scale)
+            return MinMaxScaler(feature_min=config.feature_min, feature_max=config.feature_max)
 
     if AffineScalerConfigClass is not None:
         @create_preprocessor.register(AffineScalerConfigClass)

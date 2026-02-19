@@ -347,11 +347,13 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
                 prefix = "T" if centering else "F"
                 preprocess_label = f"{prefix}CRS{float(scale)}"
             elif raw_label == "MinMaxScaler":
-                input_scale = 1.0
+                f_min, f_max = 0.0, 1.0
                 if config is not None and hasattr(config, "preprocess"):
-                    if hasattr(config.preprocess, "input_scale"):
-                        input_scale = config.preprocess.input_scale
-                preprocess_label = f"MinMaxScaler_i{float(input_scale)}"
+                    if hasattr(config.preprocess, "feature_min"):
+                        f_min = config.preprocess.feature_min
+                    if hasattr(config.preprocess, "feature_max"):
+                        f_max = config.preprocess.feature_max
+                preprocess_label = f"MinMax_n{float(f_min):.2f}_x{float(f_max):.2f}"
             elif raw_label == "AffineScaler":
                 input_scale = 1.0
                 shift = 0.0
