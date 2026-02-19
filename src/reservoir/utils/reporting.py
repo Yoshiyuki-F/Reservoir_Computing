@@ -300,6 +300,14 @@ def plot_classification_report(
     print(f"  Val  : {acc_val:.4%}")
     print(f"  Test : {acc_test:.4%}")
 
+    # Extract lambda_norm from weight_norms for the selected lambda
+    lambda_norm = None
+    if selected_lambda is not None and isinstance(results, dict):
+        train_res = _safe_get(results, "train", {})
+        if isinstance(train_res, dict):
+            weight_norms = train_res.get("weight_norms") or {}
+            lambda_norm = weight_norms.get(selected_lambda)
+
     metrics_test = results.get("test", {}) if isinstance(results, dict) else {}
     metrics_payload = {k: v for k, v in metrics_test.items()}
     plot_classification_results(
