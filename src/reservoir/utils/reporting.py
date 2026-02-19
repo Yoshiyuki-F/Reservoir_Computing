@@ -353,7 +353,7 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
                         f_min = config.preprocess.feature_min
                     if hasattr(config.preprocess, "feature_max"):
                         f_max = config.preprocess.feature_max
-                preprocess_label = f"MinMax_n{float(f_min):.2f}_x{float(f_max):.2f}"
+                preprocess_label = f"Min{float(f_min):.2f}Max{float(f_max):.2f}"
             elif raw_label == "AffineScaler":
                 input_scale = 1.0
                 shift = 0.0
