@@ -4,17 +4,15 @@ Data container structures for dataset splits."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-import numpy as np
-
+from reservoir.core.types import NpF64
 
 @dataclass
 class SplitDataset:
-    """Canonical dataset split container. Uses np.ndarray for CPU memory storage."""
+    """Canonical dataset split container. Uses NpF64 for CPU memory storage."""
 
-    train_X: np.ndarray
-    train_y: np.ndarray
-    test_X: np.ndarray
-    test_y: np.ndarray
-    val_X: np.ndarray
-    val_y: np.ndarray
+    train_X: NpF64
+    train_y: NpF64
+    test_X: NpF64
+    test_y: NpF64
+    val_X: NpF64
+    val_y: NpF64

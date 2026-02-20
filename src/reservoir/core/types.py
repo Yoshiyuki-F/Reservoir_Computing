@@ -30,6 +30,7 @@ JaxF64 = Float64[Array, "..."]
 # Domain Gateway（関所）— CPU ↔ GPU 転送
 # ==========================================
 
+#takes only NpF64 and returns JaxF64, checks for NaN/Inf, and uses jax.device_put to ensure it's on GPU
 @beartype
 def to_jax_f64(x: NpF64) -> JaxF64:
     """NumPy(CPU) → JAX(GPU) 変換の関所。
@@ -44,7 +45,7 @@ def to_jax_f64(x: NpF64) -> JaxF64:
         raise ValueError(f"Inf detected at CPU→GPU boundary! shape={x.shape}")
     return jax.device_put(jnp.asarray(x, dtype=jnp.float64))
 
-
+#takes only JaxF64 and returns NpF64, checks for NaN/Inf, and uses np.asarray to ensure it's on CPU
 @beartype
 def to_np_f64(x: JaxF64) -> NpF64:
     """JAX(GPU) → NumPy(CPU) 変換の関所。

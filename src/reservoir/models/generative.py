@@ -5,6 +5,7 @@ Base implementation for generative models providing closed-loop generation.
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Callable
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
@@ -12,6 +13,7 @@ from reservoir.core.types import JaxF64
 
 
 
+@beartype
 class ClosedLoopGenerativeModel(ABC):
     """
     Abstract base class for models that can generate autoregressive trajectories.
@@ -55,7 +57,7 @@ class ClosedLoopGenerativeModel(ABC):
             2D predictions (steps, Features)
         """
         # Convert 2D to 3D for internal processing
-        history = jnp.asarray(seed_data)
+        history = seed_data
         if history.ndim == 2:
             history = history[None, :, :]  # (T, F) -> (1, T, F)
         elif history.ndim == 1:

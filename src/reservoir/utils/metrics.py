@@ -1,11 +1,11 @@
 """
 src/reservoir/utils/metrics.py
 Refactored metrics calculation logic.
+Pure Numpy implementation for efficiency (avoids CPU->GPU transfer for metrics).
 """
 from typing import Dict
 from beartype import beartype
 from reservoir.core.types import NpF64
-import jax.numpy as jnp
 import numpy as np
 
 # --- Standard Metric Functions ---
@@ -13,17 +13,16 @@ import numpy as np
 @beartype
 def mse(y_true: NpF64, y_pred: NpF64) -> float:
     """Mean Squared Error."""
-    y_true_arr = jnp.asarray(y_true)
-    y_pred_arr = jnp.asarray(y_pred)
+    # Inputs are guaranteed to be NpF64 by beartype
     # Align if needed
-    if y_pred_arr.shape != y_true_arr.shape and y_pred_arr.size == y_true_arr.size:
-        y_pred_arr = y_pred_arr.reshape(y_true_arr.shape)
-    return float(jnp.mean((y_true_arr - y_pred_arr) ** 2))
+    if y_pred.shape != y_true.shape and y_pred.size == y_true.size:
+        y_pred = y_pred.reshape(y_true.shape)
+    return float(np.mean((y_true - y_pred) ** 2))
 
 @beartype
 def rmse(y_true: NpF64, y_pred: NpF64) -> float:
     """Root Mean Squared Error."""
-    return float(jnp.sqrt(mse(y_true, y_pred)))
+    return float(np.sqrt(mse(y_true, y_pred)))
 
 @beartype
 def nmse(y_true: NpF64, y_pred: NpF64) -> float:
@@ -32,14 +31,11 @@ def nmse(y_true: NpF64, y_pred: NpF64) -> float:
     NMSE = sum((y - y_hat)^2) / sum(y^2)
     Normalization by Second Moment (Energy).
     """
-    y_true_arr = jnp.asarray(y_true)
-    y_pred_arr = jnp.asarray(y_pred)
-    
-    if y_pred_arr.shape != y_true_arr.shape and y_pred_arr.size == y_true_arr.size:
-        y_pred_arr = y_pred_arr.reshape(y_true_arr.shape)
+    if y_pred.shape != y_true.shape and y_pred.size == y_true.size:
+        y_pred = y_pred.reshape(y_true.shape)
 
-    numerator = jnp.sum((y_true_arr - y_pred_arr) ** 2)
-    denominator = jnp.sum(y_true_arr ** 2)
+    numerator = np.sum((y_true - y_pred) ** 2)
+    denominator = np.sum(y_true ** 2)
     
     return float(numerator / denominator) if denominator > 1e-9 else float('inf')
 
@@ -50,7 +46,7 @@ def nrmse(y_true: NpF64, y_pred: NpF64) -> float:
     NRMSE = RMSE / std(y)
     """
     rmse_val = rmse(y_true, y_pred)
-    std_true = float(jnp.std(jnp.asarray(y_true)))
+    std_true = float(np.std(y_true))
     return float(rmse_val / std_true) if std_true > 1e-9 else float('inf')
 
 @beartype
@@ -67,57 +63,53 @@ def mase(y_true: NpF64, y_pred: NpF64) -> float:
     Mean Absolute Scaled Error.
     MAE / Mean Absolute Error of Naive Forecast (on true data).
     """
-    y_true_arr = jnp.asarray(y_true).flatten()
-    y_pred_arr = jnp.asarray(y_pred).flatten()
+    y_true_flat = y_true.flatten()
+    y_pred_flat = y_pred.flatten()
     
     # Ensure same length
-    min_len = min(len(y_true_arr), len(y_pred_arr))
-    y_true_arr = y_true_arr[:min_len]
-    y_pred_arr = y_pred_arr[:min_len]
+    min_len = min(len(y_true_flat), len(y_pred_flat))
+    y_true_flat = y_true_flat[:min_len]
+    y_pred_flat = y_pred_flat[:min_len]
 
-    mae = jnp.mean(jnp.abs(y_true_arr - y_pred_arr))
+    mae = np.mean(np.abs(y_true_flat - y_pred_flat))
     
-    if len(y_true_arr) > 1:
-        naive_mae = jnp.mean(jnp.abs(jnp.diff(y_true_arr)))
+    if len(y_true_flat) > 1:
+        naive_mae = np.mean(np.abs(np.diff(y_true_flat)))
         return float(mae / naive_mae) if naive_mae > 1e-9 else float('inf')
     return float('inf')
 
 @beartype
 def var_ratio(y_true: NpF64, y_pred: NpF64) -> float:
     """Variance Ratio: std(pred) / std(true)."""
-    std_true = float(jnp.std(jnp.asarray(y_true)))
-    std_pred = float(jnp.std(jnp.asarray(y_pred)))
+    std_true = float(np.std(y_true))
+    std_pred = float(np.std(y_pred))
     return std_pred / std_true if std_true > 1e-9 else 0.0
 
 @beartype
 def correlation(y_true: NpF64, y_pred: NpF64) -> float:
     """Pearson Correlation Coefficient."""
-    y_true_arr = jnp.asarray(y_true).flatten()
-    y_pred_arr = jnp.asarray(y_pred).flatten()
+    y_true_flat = y_true.flatten()
+    y_pred_flat = y_pred.flatten()
     
-    min_len = min(len(y_true_arr), len(y_pred_arr))
-    y_true_arr = y_true_arr[:min_len]
-    y_pred_arr = y_pred_arr[:min_len]
+    min_len = min(len(y_true_flat), len(y_pred_flat))
+    y_true_flat = y_true_flat[:min_len]
+    y_pred_flat = y_pred_flat[:min_len]
 
-    std_true = float(jnp.std(y_true_arr))
-    std_pred = float(jnp.std(y_pred_arr))
+    std_true = float(np.std(y_true_flat))
+    std_pred = float(np.std(y_pred_flat))
     
     if std_true > 1e-9 and std_pred > 1e-9:
-        # jnp.corrcoef returns 2x2 matrix
-        matrix = jnp.corrcoef(y_true_arr, y_pred_arr)
+        matrix = np.corrcoef(y_true_flat, y_pred_flat)
         return float(matrix[0, 1])
     return 0.0
 
 @beartype
 def accuracy(y_true: NpF64, y_pred: NpF64) -> float:
     """Classification Accuracy."""
-    y_true_arr = jnp.asarray(y_true)
-    y_pred_arr = jnp.asarray(y_pred)
+    pred_labels = y_pred if y_pred.ndim == 1 else np.argmax(y_pred, axis=-1)
+    true_labels = y_true if y_true.ndim == 1 else np.argmax(y_true, axis=-1)
     
-    pred_labels = y_pred_arr if y_pred_arr.ndim == 1 else jnp.argmax(y_pred_arr, axis=-1)
-    true_labels = y_true_arr if y_true_arr.ndim == 1 else jnp.argmax(y_true_arr, axis=-1)
-    
-    return float(jnp.mean(pred_labels == true_labels))
+    return float(np.mean(pred_labels == true_labels))
 
 @beartype
 def vpt_score(y_true: NpF64, y_pred: NpF64, threshold: float = 0.4) -> int:
@@ -126,37 +118,34 @@ def vpt_score(y_true: NpF64, y_pred: NpF64, threshold: float = 0.4) -> int:
     Calculated based on normalized error at each time step.
     For multivariate data, we use the Euclidean norm of the error vector.
     """
-    y_true_arr = jnp.asarray(y_true)
-    y_pred_arr = jnp.asarray(y_pred)
-
     # Ensure shape (Time, Features) or (Time,)
-    if y_true_arr.ndim == 1:
-        y_true_arr = y_true_arr.reshape(-1, 1)
-        y_pred_arr = y_pred_arr.reshape(-1, 1)
+    # Working with copies to avoid side effects on reshapes if referenced
+    if y_true.ndim == 1:
+        y_true_rs = y_true.reshape(-1, 1)
+        y_pred_rs = y_pred.reshape(-1, 1)
+    else:
+        y_true_rs = y_true
+        y_pred_rs = y_pred
 
-    min_len = min(len(y_true_arr), len(y_pred_arr))
-    y_true_arr = y_true_arr[:min_len]
-    y_pred_arr = y_pred_arr[:min_len]
+    min_len = min(len(y_true_rs), len(y_pred_rs))
+    y_true_rs = y_true_rs[:min_len]
+    y_pred_rs = y_pred_rs[:min_len]
 
     # Calculate error at each step (Euclidean norm over features)
-    # error[t] = || y_pred[t] - y_true[t] ||
-    errors = jnp.linalg.norm(y_pred_arr - y_true_arr, axis=-1)
+    errors = np.linalg.norm(y_pred_rs - y_true_rs, axis=-1)
 
     # Calculate scale (Global standard deviation magnitude)
-    # std[f] = std of feature f
-    # scale = || std_vector ||
-    stds = jnp.std(y_true_arr, axis=0)
-    scale = jnp.linalg.norm(stds)
+    stds = np.std(y_true_rs, axis=0)
+    scale = np.linalg.norm(stds)
 
     if scale > 1e-9:
         normalized_errors = errors / scale
         # Find first index where error exceeds threshold
         is_exceeded = normalized_errors > threshold
-        if jnp.any(is_exceeded):
-            # argmax on boolean returns index of first True
-            return int(jnp.argmax(is_exceeded))
+        if np.any(is_exceeded):
+            return int(np.argmax(is_exceeded))
         else:
-             return len(y_true_arr)
+             return len(y_true_rs)
     return 0
 
 # --- Dispatcher and Aggregator ---

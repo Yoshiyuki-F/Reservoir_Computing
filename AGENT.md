@@ -79,21 +79,19 @@ CI/pre-commitフックに組み込み可能。
 uv run python -m reservoir.cli.main --model fnn --dataset mnist
 ```
 
-### 絶対に使ってはいけないコマンド
-```bash
-# NG: reservoir-cli (pyproject.toml entry point)
-# → JAX x64が無効化され、全演算がfloat32に劣化する
-reservoir-cli --model fnn --dataset mnist
-```
+### JAX x64 Initialization Logic (The Gatekeeper Pattern)
+Investigation revealed that JAX 0.9 config locking is extremely sensitive to import order.
+Simply setting environment variables in `__init__.py` or `main.py` proved insufficient if `jax` was imported elsewhere (e.g., via `lint_imports` scanning or other utilities).
 
-### 根本原因 (JAX 0.9 Breaking Change)
-JAX 0.9 は `JAX_ENABLE_X64` をプロセス起動時に読み取り、以降ロックする。
-`pyproject.toml` の `[project.scripts]` が生成するエントリポイントスクリプトは、
-`reservoir/__init__.py` の `os.environ["JAX_ENABLE_X64"] = "True"` が実行される前に
-JAXバックエンドを初期化してしまい、x64=False でロックされる。
+**Solution:**
+The file `src/reservoir/utils/gpu_utils.py` acts as the **Gatekeeper**.
+- It is called by `main.py` *before* any heavy computation.
+- It explicitly executes `jax.config.update("jax_enable_x64", True)` **immediately before** checking devices.
+- This ensures x64 is enabled exactly when the backend is initialized, overriding any default "float32" state that might have leaked.
 
-`uv run python -m` は正しいモジュール解決順序を保証するため、
-`reservoir/__init__.py` → env var設定 → JAX import の順序で実行される。
+**Rule:**
+- **Do not remove** the `jax.config.update` call in `gpu_utils.py`. It is not redundant; it is the effective enforcement point.
+- `main.py` and `__init__.py` still set `os.environ` as a best practice, but `gpu_utils.py` guarantees it.
 
 # ==========================================
 # 1. 厳格な型エイリアスの定義（AnyやUnionは一切禁止）
@@ -103,8 +101,8 @@ JaxF64 = Float64[jax.Array, "..."]
 NpF64 = Float64[np.ndarray, "..."]
 # ArrayはデフォルトでJAX/NumPy汎用だが、JAX領域では実質JAX専用として扱う
 のようにtypes.py 定義することでFloat64という形タイプをJaxのそれだと矯正します。そうすることでJaxTypingはtypes.py以外ではImportされないはず。
-2. Ctrl+F で Any, Union, などの曖昧な型ヒントがないか全ファイルを検索して、もしあれば即修正するルールを徹底する。
-3. Asarray も禁止。Mapper層以外でjnp.asarrayを使っているファイルがあれば即to_jax_f64やto_np_f64に修正するルールを徹底する。(これらもType.pyに定義済み)
+2. Ctrl+F で Any, Union, などの曖昧な型ヒントがないか全ファイルを検索して、もしあれば即修正するルールを徹底する。Union はConfigでは許可するが、実装コードでは禁止。Anyは引数の**args, **kwargsでのみ許可する。
+3. np.asarray jnp.asarray やnp.array も禁止。Mapper層以外でjnp.asarrayを使っているファイルがあれば即to_jax_f64やto_np_f64に修正するルールを徹底する。(これらもType.pyに定義済み)
 4. Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64を徹底する。
 だからといって型ヒントを無視するのは禁止。例えば、def vpt_score(y_true, y_pred, threshold: float = 0.4) -> int: のように、型ヒントが実際の値と乖離している場合は即修正するルールを徹底する。
 5. UserWarning: Explicitly requested dtype float64 requested in asarray is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
@@ -113,3 +111,4 @@ NpF64 = Float64[np.ndarray, "..."]
      両方np とjnpimportしているファイルがないか
      上に書いてあるTypeが使われているか
 全ファイルをチェックTestを追加する。
+7. │   7 + from reservoir.core.types import NpF64, JaxF64, to_jax_f64  これはおかしい。両方importしているのはMapper層だけなので、これもMapper層以外のファイルで見つけたら即修正するルールを徹底する。

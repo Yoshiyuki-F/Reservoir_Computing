@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, List
+from reservoir.core.types import NpF64
 
 def _resolve_output_path(filename: str) -> Path:
     """Helper to resolve path relative to project root."""
@@ -24,7 +25,7 @@ def _resolve_output_path(filename: str) -> Path:
 
 
 def plot_qubit_dynamics(
-    states: np.ndarray,
+    states: NpF64,
     filename: str,
     title: str = "Quantum Reservoir Dynamics",
     feature_names: Optional[List[str]] = None,
@@ -36,7 +37,7 @@ def plot_qubit_dynamics(
     Plots a heatmap of qubit expectation values over time.
     
     Args:
-        states: Array of shape (Time, Features). If batch dim exists, take first.
+        states: NpF64 of shape (Time, Features). If batch dim exists, take first.
         filename: Output filename (saved to outputs/).
         title: Plot title.
         feature_names: Optional list of labels for Y-axis (e.g., ["Z0", "Z1", "Z0Z1"]).

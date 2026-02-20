@@ -3,20 +3,22 @@ Step 4 Adapters before the actual model layers
 """
 import jax.numpy as jnp
 from typing import Optional
+from beartype import beartype
+from reservoir.core.types import JaxF64
 from reservoir.utils.reporting import print_feature_stats
 
 
+@beartype
 class Flatten:
     """
     Structural adapter to flatten inputs between architectural steps.
     Transforms (Batch, Time, Feat) -> (Batch, Time * Feat).
     """
-    def fit(self):
+    def fit(self) -> "Flatten":
         return self
     
     @staticmethod
-    def transform(X, log_label: Optional[str] = None):
-        X = jnp.asarray(X)
+    def transform(X: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         if X.ndim == 3:
             result = X.reshape(X.shape[0], -1)
         elif X.ndim == 2:
@@ -31,17 +33,18 @@ class Flatten:
         return result
 
     @staticmethod
-    def align_targets(targets, log_label: Optional[str] = None):
+    def align_targets(targets: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         """No alignment needed for Flatten adapter."""
         if log_label is not None:
             from reservoir.utils.reporting import print_feature_stats
             print_feature_stats(targets, log_label)
         return targets
 
-    def __call__(self, X, log_label: Optional[str] = None):
+    def __call__(self, X: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         return self.transform(X, log_label=log_label)
 
 
+@beartype
 class TimeDelayEmbedding:
     """
     Sliding window embedding for time series.
@@ -52,12 +55,10 @@ class TimeDelayEmbedding:
         print(f"\n=== Step 4: Adapter ===")
         self.window_size = window_size
 
-    def fit(self):
+    def fit(self) -> "TimeDelayEmbedding":
         return self
 
-    def transform(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
-        X = jnp.asarray(X)
-
+    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: Optional[str] = None) -> JaxF64:
         # Support 2D input (T, F) - treat as single batch
         is_2d = X.ndim == 2
         if is_2d:
@@ -94,9 +95,8 @@ class TimeDelayEmbedding:
 
         return X_embedded
 
-    def align_targets(self, targets, log_label: Optional[str] = None):
+    def align_targets(self, targets: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         """Align targets by dropping first (window_size-1) timesteps to match windowed X."""
-        targets = jnp.asarray(targets)
         W = self.window_size
         # Support 2D (T, Out)
         if targets.ndim == 2:
@@ -111,6 +111,6 @@ class TimeDelayEmbedding:
             print_feature_stats(reshaped, f"{log_label} (Time-Trimmed)")
         return reshaped
 
-    def __call__(self, X, flatten_batch: bool = True, log_label: Optional[str] = None):
+    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: Optional[str] = None) -> JaxF64:
         return self.transform(X, flatten_batch=flatten_batch, log_label=log_label)
 

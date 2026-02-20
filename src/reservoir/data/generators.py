@@ -263,7 +263,7 @@ def generate_mnist_sequence_data(
     config: MNISTConfig,
     *,
     split: Optional[str] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[NpF64, int]:
     """
     Generate MNIST-based sequence data by scanning images as time series.
 
@@ -274,7 +274,7 @@ def generate_mnist_sequence_data(
             - time_steps: Number of time steps to reshape each image into.
 
     Returns:
-        Tuple (input_sequences, labels) where sequences are float64 Numpy arrays.
+        Tuple (input_sequences, labels) where sequences are NpF64 and label(int).
 
     Raises:
         ImportError: If torch/torchvision are not available.
@@ -320,5 +320,4 @@ def generate_mnist_sequence_data(
         labels.append(label)
 
     input_data = np.array(sequences)
-    target_labels = np.array(labels)
     return input_data, target_labels

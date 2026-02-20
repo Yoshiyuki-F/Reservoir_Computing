@@ -31,12 +31,12 @@ from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
 
-LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[np.ndarray, np.ndarray], SplitDataset]]] = StrictRegistry(
+LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[NpF64, NpF64], SplitDataset]]] = StrictRegistry(
     {}
 )
 
 
-def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig]]], Callable[[BaseDatasetConfig]]]:
+def register_loader(dataset: Dataset) -> (Callable)[[Callable[[BaseDatasetConfig]]], Callable[[BaseDatasetConfig]]]:
     def decorator(fn: Callable[[BaseDatasetConfig]]) -> Callable[[BaseDatasetConfig]]:
         LOADER_REGISTRY.register(dataset, fn)
         return fn
@@ -48,9 +48,7 @@ def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig]]
 @beartype
 def load_sine_wave(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
-    X, y = generate_sine_data(config)
-    X_arr = np.asarray(X)
-    y_arr = np.asarray(y)
+    X_arr, y_arr = generate_sine_data(config)
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -64,11 +62,9 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     """Load MNIST sequence dataset as canonical train/val/test splits."""
     if generate_mnist_sequence_data is None:
         raise ImportError("MNIST sequence loader requires torch/torchvision.")
-    train_seq, train_labels = generate_mnist_sequence_data(config, split=config.split)
-    test_seq, test_labels = generate_mnist_sequence_data(config, split="test")
+    train_arr, train_labels = generate_mnist_sequence_data(config, split=config.split)
+    test_arr , test_labels = generate_mnist_sequence_data(config, split="test")
 
-    train_arr = np.asarray(train_seq)
-    test_arr = np.asarray(test_seq)
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
         train_arr = train_arr[..., None]
@@ -82,10 +78,8 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     num_classes = int(config.n_output)
     
     # Numpy-based one-hot encoding
-    train_labels_int = np.asarray(train_labels).astype(int)
-    test_labels_int = np.asarray(test_labels).astype(int)
-    train_labels_arr = np.eye(num_classes)[train_labels_int]
-    test_labels_arr = np.eye(num_classes)[test_labels_int]
+    train_labels_arr = np.eye(num_classes)[train_labels]
+    test_labels_arr = np.eye(num_classes)[test_labels]
 
     # Create validation split from training data (10%)
     val_ratio = 0.1
@@ -99,12 +93,12 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_labels_arr = train_labels_arr[:n_train_new]
 
     return SplitDataset(
-        train_X=np.asarray(train_arr),
-        train_y=np.asarray(train_labels_arr),
-        test_X=np.asarray(test_arr),
-        test_y=np.asarray(test_labels_arr),
-        val_X=np.asarray(val_arr),
-        val_y=np.asarray(val_labels_arr),
+        train_X=np.array(train_arr, dtype=np.float64),
+        train_y=np.array(train_labels_arr, dtype=np.float64),
+        test_X=np.array(test_arr, dtype=np.float64),
+        test_y=np.array(test_labels_arr, dtype=np.float64),
+        val_X=np.array(val_arr, dtype=np.float64),
+        val_y=np.array(val_labels_arr, dtype=np.float64),
     )
 
 
@@ -119,7 +113,7 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
     # 2. Reconstruct full sequence (N+1)
     # X_gen: (T, 1), y_gen: (T, 1)
     # y is X shifted by 1. full = [X[0], X[1]... X[T-1], y[T-1]]
-    seq = np.append(np.asarray(X_gen).flatten(), np.asarray(y_gen)[-1])
+    seq = np.append(np.array(X_gen, dtype=np.float64).flatten(), np.array(y_gen, dtype=np.float64)[-1])
     
     # 3. Downsampling (Parameterized)
     step = getattr(config, "downsample", 1)
@@ -138,8 +132,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
     X_new = seq[:-1].reshape(-1, 1)
     y_new = seq[1:].reshape(-1, 1)
     
-    X_arr = np.asarray(X_new)
-    y_arr = np.asarray(y_new)
+    X_arr = np.array(X_new, dtype=np.float64)
+    y_arr = np.array(y_new, dtype=np.float64)
     
     return X_arr, y_arr
 
@@ -149,8 +143,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
 def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
-    X_arr = np.asarray(X)
-    y_arr = np.asarray(y)
+    X_arr = np.array(X, dtype=np.float64)
+    y_arr = np.array(y, dtype=np.float64)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     return X_arr, y_arr
@@ -161,8 +155,8 @@ def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
 def load_lorenz96(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
-    X_arr = np.asarray(X)
-    y_arr = np.asarray(y)
+    X_arr = np.array(X, dtype=np.float64)
+    y_arr = np.array(y, dtype=np.float64)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     # if X_arr.ndim == 2:
@@ -196,24 +190,21 @@ def load_dataset_with_validation_split(
     # val is needed for both tasks
     val_size = float(training_cfg.val_size)
 
-    def _split_validation(features: np.ndarray, labels: np.ndarray) -> tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray
-    ]:
+    def _split_validation(features: NpF64, labels: NpF64) -> tuple[NpF64, NpF64, NpF64, NpF64]:
         # Always create validation split (minimum 1 sample)
         val_count = max(1, int(len(features) * val_size)) if val_size > 0 else 1
         train_count = len(features) - val_count
         if train_count < 1:
             train_count = len(features) - 1
-            val_count = 1
 
         val_features = features[train_count:]
         val_labels = labels[train_count:]
         return features[:train_count], labels[:train_count], val_features, val_labels
 
-    train_X: Union[np.ndarray, None]
-    train_y: Union[np.ndarray, None]
-    test_X: Union[np.ndarray, None]
-    test_y: Union[np.ndarray, None]
+    train_X: NpF64
+    train_y: NpF64
+    test_X: NpF64
+    test_y: NpF64
 
     if isinstance(dataset, SplitDataset):
         train_X = dataset.train_X
@@ -295,34 +286,6 @@ def load_dataset_with_validation_split(
             val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
             test_X, test_y = X[train_count + val_count:], y[train_count + val_count:]
 
-    # Regression datasets (Lorenz, Lorenz96, Mackey-Glass) stay as 2D (Time, Features)
-    # No reshape to 3D - aggregation and readout expect 2D directly
+    #TODO why is Val_X has warning??
+    return SplitDataset(train_X, train_y, test_X, test_y, val_X, val_y)
 
-    # if require_3d:
-    #     targets = {
-    #         "train": train_X,
-    #         "test": test_X,
-    #         "val": val_X,
-    #     }
-    #     for split_name, arr in targets.items():
-    #         if arr is None:
-    #             continue
-    #         if arr.ndim != 3:
-    #             raise ValueError(
-    #                 f"Model type '{model_type}' requires 3D input (Batch, Time, Features). "
-    #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
-    #             )
-
-
-
-    # Cast to float64 using standard Numpy (np.float64) to allow in-place preprocessing.
-    # Casting to np.asarray too early causes immutable memory duplication (OOM).
-    # We will convert to jnp later before model execution.
-    return SplitDataset(
-        train_X=np.asarray(train_X, dtype=np.float64),
-        train_y=np.asarray(train_y, dtype=np.float64),
-        test_X=np.asarray(test_X, dtype=np.float64),
-        test_y=np.asarray(test_y, dtype=np.float64),
-        val_X=np.asarray(val_X, dtype=np.float64),
-        val_y=np.asarray(val_y, dtype=np.float64),
-    )
