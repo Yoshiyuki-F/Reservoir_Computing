@@ -49,7 +49,7 @@ class PipelineExecutor:
         train_logs = self.stack.model.train(
             train_X, self.frontend_ctx.processed_split.train_y,
             projection_layer=projection,
-        ) or {}
+        )
 
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)

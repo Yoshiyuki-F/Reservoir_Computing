@@ -4,7 +4,7 @@ Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from beartype import beartype
 import jax
@@ -126,7 +126,7 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> Dict[str, float]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> Dict[str, Any]:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
@@ -182,7 +182,8 @@ class BaseFlaxModel(BaseModel, ABC):
                 pbar.set_postfix({"loss": f"{avg_loss:.6f}"})
 
         self.trained = True
-        return {"loss_history": loss_history}
+        final_loss = loss_history[-1] if loss_history else 0.0
+        return {"loss_history": loss_history, "final_loss": final_loss}
 
     def predict(self, X: JaxF64) -> JaxF64:
         if self._state is None:

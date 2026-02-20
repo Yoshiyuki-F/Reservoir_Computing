@@ -17,14 +17,13 @@ from reservoir.models.config import (
     RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig, AffineScalerConfig,
 )
 
-# Register projection configs once at module level
+# Register projection configs once at module level #TODO there is a interface for config
 register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig)
 
-# Register preprocessor configs
+# Register preprocessor configs #TODO there is a interface for config
 register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig, AffineScalerConfig)
 
 from reservoir.training.presets import get_training_preset, TrainingConfig
-from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
 
 
@@ -84,9 +83,8 @@ class PipelineDataManager:
 
     def _process_frontend(self, raw_split: SplitDataset) -> FrontendContext:
         """
-        Step 2 & 3: Apply preprocessing and projection.
+        Step 2 Apply preprocessing.
         """
-        batch_size = self.metadata.training.batch_size
         print(f"\n=== Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
         if preprocessing_config is not None:
@@ -174,10 +172,8 @@ class PipelineDataManager:
         # inside batched_compute, so the projected tensor only exists
         # ephemerally on GPU per batch.
 
-        # Infer projected output shape from a single dummy sample
-        import jax.numpy as jnp
-        from reservoir.core.types import to_jax_f64
-        dummy_in = to_jax_f64(train_X[:1])
+        # Infer projected output shape from a single dummy sample #TODO is this really needed just to know the dimension?
+        dummy_in = train_X[:1]
         dummy_out = projection(dummy_in)
         projected_output_dim = int(dummy_out.shape[-1])
         projected_shape = train_X.shape[:-1] + (projected_output_dim,)

@@ -121,7 +121,6 @@ class ResultReporter:
             training_obj=self.dataset_meta.training,
             dataset_name=self.dataset_meta.dataset_name,
             model_type_str=self.stack.model_label,
-            # preprocessors removed
         )
         generate_report(
             results,

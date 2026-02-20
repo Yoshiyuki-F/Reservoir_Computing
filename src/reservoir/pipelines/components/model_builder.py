@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any
 
 from reservoir.models import ModelFactory
 from reservoir.models.presets import PipelineConfig
@@ -83,8 +83,6 @@ class PipelineModelBuilder:
     def get_adapter(stack: ModelStack) -> Any:
         """Helper to retrieve adapter from various model wrappers in the stack."""
         model = stack.model
-        # Only return adapter if it's a direct adapter (e.g. FNNModel)
-        # DistillationModel has 'student', but needs raw input for Teacher, so we return None.
         if hasattr(model, 'adapter') and not hasattr(model, 'student'):
             return model.adapter
         return None

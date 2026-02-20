@@ -5,7 +5,7 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Optional, Tuple
+from typing import Dict, Sequence, Optional, Tuple, Any
 
 from beartype import beartype
 import flax.linen as nn
@@ -61,7 +61,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, float]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim
