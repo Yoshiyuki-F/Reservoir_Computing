@@ -59,8 +59,10 @@ def batched_compute(
     if dummy_in_size > 0:
         expansion_factor = dummy_out_size // dummy_in_size
 
-    # 2. Collect results on CPU (numpy list)
-    results = []
+    # 2. Pre-allocate results array on CPU to prevent OOM
+    out_shape = (n_samples * expansion_factor, *dummy_out_jax.shape[1:])
+    out_dtype = dummy_out_jax.dtype
+    result_array = np.empty(out_shape, dtype=out_dtype)
 
     # 3. JITコンパイル済みの実行関数を用意
     @jax.jit
@@ -78,11 +80,12 @@ def batched_compute(
             batch_jax = jnp.asarray(batch_data)
             batch_out_jax = step(batch_jax)
             
-            # (B) Transfer to CPU immediately to free GPU memory
-            results.append(np.asarray(batch_out_jax))
+            # (B) Transfer to CPU directly into pre-allocated array
+            out_start = i * expansion_factor
+            out_end = out_start + batch_out_jax.shape[0]
+            result_array[out_start:out_end] = np.asarray(batch_out_jax)
 
             # 進捗更新
             pbar.update(current_batch_size)
 
-    # Concatenate all results on CPU
-    return np.concatenate(results, axis=0)
+    return result_array
