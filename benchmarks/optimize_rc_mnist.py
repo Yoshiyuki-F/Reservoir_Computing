@@ -30,6 +30,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from reservoir.pipelines import run_pipeline
+from reservoir.utils import check_gpu_available
 from reservoir.models.presets import (
     CLASSICAL_RESERVOIR_PRESET,
     DEFAULT_RIDGE_READOUT,
@@ -254,7 +255,14 @@ def main():
                         help="Override Optuna study name")
     parser.add_argument("--storage", type=str, default=None,
                         help="Override Optuna storage URL")
+    parser.add_argument("--force-cpu", action="store_true", help="Force CPU usage")
     args = parser.parse_args()
+
+    if not args.force_cpu:
+        try:
+            check_gpu_available()
+        except Exception as exc:
+            print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # --- Dataset ---
     dataset_name = args.dataset
