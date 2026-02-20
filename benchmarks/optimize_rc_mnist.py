@@ -14,6 +14,8 @@ Target Preset: CLASSICAL_RESERVOIR_PRESET (Classification)
 Usage:
     uv run python benchmarks/optimize_rc_mnist.py
     uv run python benchmarks/optimize_rc_mnist.py --n-trials 100
+Visualization:
+    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
 """
 
 import argparse
@@ -116,24 +118,24 @@ def make_objective(readout_config, dataset_enum: Dataset):
         # === 1. Suggest Parameters ===
 
         # Projection
-        input_scale = trial.suggest_float("input_scale", 0.01, 5.0, log=True)
+        input_scale = trial.suggest_float("input_scale", 0.05, 5.0, log=True)
         # input_scale = trial.suggest_float("input_scale", 3.1537235606199965, 3.1537235606199965)
 
 
-        # input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
-        input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
 
-        # bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
-        bias_scale = trial.suggest_float("bias_scale", 0.6664704836440828, 0.6664704836440828)
+        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        # bias_scale = trial.suggest_float("bias_scale", 0.6664704836440828, 0.6664704836440828)
 
 
         # Reservoir
         spectral_radius = trial.suggest_float("spectral_radius", 0.1, 2.0)
 
-        leak_rate = trial.suggest_float("leak_rate", 0.01, 1.0)
+        leak_rate = trial.suggest_float("leak_rate", 0.1, 1.0)
 
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.01, 1.0)
-        rc_connectivity = trial.suggest_float("rc_connectivity",  0.6213282741686085,  0.6213282741686085)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.1, 1.0)
+        # rc_connectivity = trial.suggest_float("rc_connectivity",  0.6213282741686085,  0.6213282741686085)
 
         # Readout Alpha (Logic to override preset lambda candidates if we want to optimize single alpha)
         # For now, we rely on RidgeReadoutConfig's list of candidates which are scanned automatically via CV/LOO.

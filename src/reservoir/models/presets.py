@@ -62,7 +62,7 @@ MinusOneToOne = MinMaxScalerConfig(
 
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
-    n_units=100,
+    n_units=1200,
     input_scale=0.6,
     input_connectivity=0.1,
     bias_scale=1.0,
@@ -128,7 +128,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MinusOneToOne,
+    preprocess=ZeroToOne,
     projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
