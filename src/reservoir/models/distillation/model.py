@@ -6,8 +6,9 @@ Updated with clear logging phases.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
@@ -20,6 +21,7 @@ from reservoir.training.presets import TrainingConfig
 from reservoir.utils.reporting import print_feature_stats
 
 
+@beartype
 class DistillationModel(ClosedLoopGenerativeModel):
     """
     Distills reservoir dynamics into a student FNN.
@@ -49,10 +51,10 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Get window_size from student's adapter if available
         self._window_size: int = getattr(student, 'window_size', 1) or 1
 
-    def __call__(self, inputs: JaxF64, **kwargs: Any) -> JaxF64:
+    def __call__(self, inputs: JaxF64, **kwargs) -> JaxF64:
         return self.predict(inputs)
 
-    def predict(self, X: JaxF64, **kwargs: Any) -> JaxF64:
+    def predict(self, X: JaxF64, **kwargs) -> JaxF64:
         """Delegate to student's predict (which handles adapter internally)."""
         return self.student.predict(X)
 
@@ -63,11 +65,10 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def _compute_teacher_targets_batched(self, inputs: JaxF64, batch_size: int) -> JaxF64:
         """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
-        inputs_np = jnp.asarray(inputs)
-        n_samples = inputs_np.shape[0]
+        n_samples = inputs.shape[0]
 
         # 1. Infer output shape from a small dummy batch
-        dummy_in = jnp.array(inputs_np[:1])
+        dummy_in = inputs[:1]
         # Force JIT compilation for shape inference
         dummy_out = self.teacher(dummy_in)
 
@@ -75,7 +76,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Capture raw states for the first batch to visualize reservoir dynamics
         # Use return_sequences=True to get (Batch, Time, Features)
         first_batch_size = min(batch_size, n_samples)
-        first_batch_in = jnp.array(inputs_np[:first_batch_size])
+        first_batch_in = inputs[:first_batch_size]
         raw_states = self.teacher(first_batch_in, return_sequences=True, split_name="teacher_raw")
         print_feature_stats(raw_states, "5A:teacher_raw (First Batch)")
         # --------------------------------------
@@ -93,15 +94,15 @@ class DistillationModel(ClosedLoopGenerativeModel):
         with tqdm(total=n_samples, desc="[Teacher]", unit="samples") as pbar:
             for i in range(0, n_samples, batch_size):
                 end = min(i + batch_size, n_samples)
-                batch_x = inputs_np[i:end]
+                batch_x = inputs[i:end]
                 # Move to GPU, compute, move back to CPU
-                batch_out = step(jnp.array(batch_x))
-                targets[i:end] = jnp.asarray(batch_out)
+                batch_out = step(batch_x)
+                targets = targets.at[i:end].set(batch_out)
                 pbar.update(end - i)
 
-        return jnp.array(targets)
+        return targets
 
-    def train(self, inputs: JaxF64, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **kwargs) -> Dict[str, float]:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         """
@@ -138,7 +139,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: JaxF64, y: Any = None) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: Optional[JaxF64] = None) -> Dict[str, float]:
         """
         Distillation evaluation: compare student output with teacher output.
         """
@@ -157,7 +158,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
             metrics = {}
         return metrics
 
-    def get_topology_meta(self) -> Dict[str, Any]:
+    def get_topology_meta(self) -> Dict[str, float | str | int]:
         return (
             getattr(self, "topology_meta", {})
             or getattr(self.student, "topology_meta", {})

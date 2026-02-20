@@ -5,10 +5,9 @@ GPU OOMを防ぐためのバッチ処理ユーティリティ。
 
 from typing import Callable
 from beartype import beartype
-from reservoir.core.types import NpF64, JaxF64
+from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 from tqdm.auto import tqdm
 
@@ -33,15 +32,13 @@ def batched_compute(
     Returns:
         出力データ (numpy array on CPU)
     """
-    # Do NOT force inputs to GPU/JAX immediately if it's numpy
-    # inputs_jax = jnp.asarray(inputs) 
     
     # Handle 2D input (T, F) - Regression time series
     # Check ndim on inputs (works for both np and jnp)
     if inputs.ndim == 2:
-        inputs_jax = jnp.asarray(inputs, dtype=jnp.float64)
+        inputs_jax = to_jax_f64(inputs)
         result_jax = fn(inputs_jax)
-        return np.asarray(result_jax)  # Transfer to CPU
+        return to_np_f64(result_jax)  # Transfer to CPU
     
     # 3D input (N, T, F) - Classification batching
     n_samples = inputs.shape[0]
@@ -51,7 +48,10 @@ def batched_compute(
 
     # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
     # Ensure dummy input is on GPU and is float64
-    dummy_input_jax = jnp.asarray(inputs[:1], dtype=jnp.float64)
+    if not jax.config.jax_enable_x64:
+        print("[batched_compute] WARNING: jax_enable_x64 is False! Arrays will be float32.")
+        
+    dummy_input_jax = to_jax_f64(inputs[:1])
     dummy_out_jax = fn(dummy_input_jax)
 
     # Detect Expansion Factor (e.g. 1 sample -> N samples after aggregation)
@@ -79,13 +79,13 @@ def batched_compute(
 
             # (A) GPUでスライス & 計算
             batch_data = inputs[i:batch_end]
-            batch_jax = jnp.asarray(batch_data, dtype=jnp.float64)
+            batch_jax = to_jax_f64(batch_data)
             batch_out_jax = step(batch_jax)
             
             # (B) Transfer to CPU directly into pre-allocated array
             out_start = i * expansion_factor
             out_end = out_start + batch_out_jax.shape[0]
-            result_array[out_start:out_end] = np.asarray(batch_out_jax, dtype=np.float64)
+            result_array[out_start:out_end] = to_np_f64(batch_out_jax)
 
             # 進捗更新
             pbar.update(current_batch_size)

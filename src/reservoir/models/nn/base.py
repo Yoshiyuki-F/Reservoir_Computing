@@ -4,8 +4,9 @@ Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
@@ -16,10 +17,11 @@ from tqdm import tqdm  # 進行状況表示用
 from reservoir.training.presets import TrainingConfig
 
 
+@beartype
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
 
-    def train(self, inputs: Any, targets: Optional[Any] = None) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None) -> Dict[str, float]:
         """
         Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
         Defaults to a no-op so models without a pre-training stage can conform to the interface.
@@ -34,7 +36,7 @@ class BaseModel(ABC):
     def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
         ...
 
-    def get_topology_meta(self) -> Dict[str, Any]:
+    def get_topology_meta(self) -> Dict[str, float | str | int]:
         """Optional topology metadata for visualization."""
         return getattr(self, "topology_meta", {})
 
@@ -44,10 +46,11 @@ class BaseModel(ABC):
         return 0
 
 
+@beartype
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
 
-    def __init__(self, model_config: Dict[str, Any], training_config: TrainingConfig, classification: bool = False) -> None:
+    def __init__(self, model_config: Dict[str, tuple | int], training_config: TrainingConfig, classification: bool = False) -> None:
         self.model_config = model_config
         self.training_config = training_config
         self.learning_rate: float = float(training_config.learning_rate)
@@ -60,7 +63,7 @@ class BaseFlaxModel(BaseModel, ABC):
         self.trained: bool = False
 
     @abstractmethod
-    def _create_model_def(self) -> Any:
+    def _create_model_def(self):
         """Return the flax.linen Module definition."""
         raise NotImplementedError
 
@@ -123,15 +126,15 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: Any, targets: Optional[Any] = None, **_: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> Dict[str, float]:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
         # 1. ここで一括してGPUに転送してしまう (MNIST程度なら余裕で乗ります)
         print("    [JAX] Transferring data to GPU...")
-        inputs = jax.device_put(jnp.asarray(inputs))
-        targets = jax.device_put(jnp.asarray(targets))  # 回帰ならfloat, 分類ならint注意
+        inputs = jax.device_put(inputs)
+        targets = jax.device_put(targets)  # 回帰ならfloat, 分類ならint注意
 
         num_samples = inputs.shape[0]
         num_batches = num_samples // self.batch_size
@@ -184,7 +187,6 @@ class BaseFlaxModel(BaseModel, ABC):
     def predict(self, X: JaxF64) -> JaxF64:
         if self._state is None:
             raise RuntimeError("Model not trained")
-        X = jnp.asarray(X)
         @jax.jit
         def _predict_fn(params, inputs):
             return self._model_def.apply({"params": params}, inputs)
@@ -193,7 +195,7 @@ class BaseFlaxModel(BaseModel, ABC):
 
     def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
         preds = self.predict(X)
-        y_arr = jnp.asarray(y)
+        y_arr = y
         if self.classification:
             labels = y_arr
             if labels.ndim > 1:
@@ -205,5 +207,5 @@ class BaseFlaxModel(BaseModel, ABC):
         mae = float(jnp.mean(jnp.abs(preds - y_arr)))
         return {"mse": mse, "mae": mae}
 
-    def get_topology_meta(self) -> Dict[str, Any]:
+    def get_topology_meta(self) -> Dict[str, float | str | int]:
         return getattr(self, "topology_meta", {})

@@ -5,13 +5,15 @@ State aggregation components compatible with Transformer protocol.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
+from beartype import beartype
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
 
+@beartype
 class StateAggregator(Transformer):
     """Stateless transformer that reduces the time axis using a configured mode."""
 
@@ -33,7 +35,7 @@ class StateAggregator(Transformer):
     def aggregate(states: JaxF64, mode: AggregationMode) -> JaxF64:
         """Static aggregator for reuse in functional contexts."""
         agg_mode = StateAggregator._resolve_mode(mode)
-        arr = jnp.asarray(states)
+        arr = states
         if agg_mode is AggregationMode.SEQUENCE:
             # Flatten to 2D (Batch * Time, Features) to match readout expectation and metadata
             if arr.ndim == 3:

@@ -3,7 +3,7 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Callable
+from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, Union
 
 from beartype import beartype
 import jax
@@ -13,25 +13,30 @@ from reservoir.core.types import JaxF64
 
 
 
+class Predictable(Protocol):
+    def predict(self, x: JaxF64) -> JaxF64: ...
+
+StateT = TypeVar('StateT')
+
 @beartype
-class ClosedLoopGenerativeModel(ABC):
+class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
     """
     Abstract base class for models that can generate autoregressive trajectories.
     Implements the GenerativeModel protocol methods for closed-loop generation.
     """
 
     @abstractmethod
-    def initialize_state(self, batch_size: int = 1) -> JaxF64:
+    def initialize_state(self, batch_size: int = 1) -> StateT:
         """Initialize hidden state."""
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def step(self, state: StateT, inputs: JaxF64) -> Tuple[StateT, JaxF64]:
         """Single time step execution: (state, input) -> (next_state, output)."""
         raise NotImplementedError
     
     @abstractmethod
-    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def forward(self, state: StateT, input_data: JaxF64) -> Tuple[StateT, JaxF64]:
         """Process sequence: (state, input_seq) -> (final_state, output_seq)."""
         raise NotImplementedError
 
@@ -39,7 +44,7 @@ class ClosedLoopGenerativeModel(ABC):
         self,
         seed_data: JaxF64,
         steps: int,
-        readout: Optional[Callable] = None,
+        readout: Optional[Predictable] = None,
         projection_fn: Optional[Callable[[JaxF64], JaxF64]] = None,
         verbose: bool = True
     ) -> JaxF64:

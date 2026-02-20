@@ -5,8 +5,9 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Optional, Tuple
+from typing import Dict, Sequence, Optional, Tuple
 
+from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
@@ -18,6 +19,7 @@ from reservoir.training.presets import TrainingConfig
 from reservoir.layers.adapters import Flatten, TimeDelayEmbedding
 
 
+@beartype
 class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     """
     FNN with configurable adapter (Step 4).
@@ -59,7 +61,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs) -> Dict[str, float]:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim
@@ -78,7 +80,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         return super().train(adapted_inputs, aligned_targets, **kwargs)
 
-    def predict(self, X: JaxF64, **kwargs: Any) -> JaxF64:
+    def predict(self, X: JaxF64, **kwargs) -> JaxF64:
         """Predict with adapter-transformed inputs."""
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
@@ -97,7 +99,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         aligned_targets = self.adapter.align_targets(y)
         return super().evaluate(adapted_inputs, aligned_targets)
 
-    def __call__(self, X: JaxF64, **kwargs: Any) -> JaxF64:
+    def __call__(self, X: JaxF64, **kwargs) -> JaxF64:
         """Make model callable for batched_compute compatibility."""
         return self.predict(X)
 
@@ -189,8 +191,8 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         self,
         seed_data: JaxF64,
         steps: int,
-        readout: Any = None,
-        projection_fn: Any = None,
+        readout: Optional['ReadoutStrategy'] = None,
+        projection_fn: Optional[Callable[[JaxF64], JaxF64]] = None,
         verbose: bool = True
     ) -> JaxF64:
         """
@@ -204,7 +206,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             return self.predict(seed_data)
         
         # seed_data: (time, features) - use last window_size values as initial state
-        seed = jnp.asarray(seed_data)
+        seed = seed_data
         if seed.ndim == 3:
             seed = seed[0]  # Remove batch dim if present: (1, T, F) -> (T, F)
         
@@ -246,7 +248,7 @@ class FNN(nn.Module):
 
     @nn.compact
     def __call__(self, x: JaxF64):
-        x = jnp.asarray(x)
+        # assume x is already jax array from batched_compute
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
         if len(self.layer_dims) < 2:

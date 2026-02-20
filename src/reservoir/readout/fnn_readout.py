@@ -1,9 +1,9 @@
 """FNN-based readout module implementing ReadoutModule protocol."""
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
-import jax.numpy as jnp
+from beartype import beartype
 from reservoir.core.types import JaxF64
 
 from reservoir.core.interfaces import ReadoutModule
@@ -12,6 +12,7 @@ from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.config import TrainingConfig
 
 
+@beartype
 class FNNReadout(ReadoutModule):
     """FNN-based readout using FNNModel as backend."""
 
@@ -31,8 +32,8 @@ class FNNReadout(ReadoutModule):
 
     def fit(self, states: JaxF64, targets: JaxF64) -> "FNNReadout":
         """Fit the FNN readout on states and targets."""
-        X = jnp.asarray(states)
-        y = jnp.asarray(targets)
+        X = states
+        y = targets
 
         if X.ndim != 2:
             raise ValueError(f"States must be 2D, got {X.shape}")
@@ -65,7 +66,7 @@ class FNNReadout(ReadoutModule):
         """Predict using the trained FNN."""
         if self._model is None:
             raise RuntimeError("FNNReadout is not fitted yet.")
-        X = jnp.asarray(states)
+        X = states
         return self._model.predict(X)
 
     def to_dict(self) -> Dict[str, Any]:

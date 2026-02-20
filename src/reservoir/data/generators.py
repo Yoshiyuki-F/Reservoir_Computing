@@ -54,12 +54,12 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
         signal += np.sin(2 * np.pi * freq * t)
     
     # ノイズを追加
-    noise = np.random.normal(0, config.noise_level, config.time_steps).astype(np.float64)
+    noise = np.random.normal(0, config.noise_level, config.time_steps)
     signal += noise
     
     # 入力は現在の値、ターゲットは次の値
-    input_data = np.array(signal[:-1].reshape(-1, 1))   # 形状: (time_steps-1, 1)
-    target_data = np.array(signal[1:].reshape(-1, 1))   # 形状: (time_steps-1, 1)
+    input_data = signal[:-1].reshape(-1, 1)   # 形状: (time_steps-1, 1)
+    target_data = signal[1:].reshape(-1, 1)   # 形状: (time_steps-1, 1)
     
     return input_data, target_data
 
@@ -122,8 +122,8 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
     data = data[warmup_steps:]
     
     # 入力は現在の状態、ターゲットは次の状態
-    input_data = np.array(data[:-1])
-    target_data = np.array(data[1:])
+    input_data = data[:-1]
+    target_data = data[1:]
     
     return input_data, target_data
 
@@ -169,7 +169,7 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
 
     # RK4 Integration (pure NumPy loop — runs once during data generation)
     data = np.empty((total_steps, N), dtype=np.float64)
-    x = x0.copy()
+    x = x0
     for t in range(total_steps):
         k1 = lorenz96_deriv(x)
         k2 = lorenz96_deriv(x + k1 * dt / 2)
@@ -249,12 +249,12 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]
         # Use config seed for deterministic noise if provided
         if config.seed is not None:
              np.random.seed(config.seed)
-        noise = np.random.normal(0, config.noise_level, len(x)).astype(np.float64)
+        noise = np.random.normal(0, config.noise_level, len(x))
         x += noise
 
     # 入力は現在の値、ターゲットは次の値
-    input_data = np.array(x[:-1].reshape(-1, 1))
-    target_data = np.array(x[1:].reshape(-1, 1))
+    input_data = x[:-1].reshape(-1, 1)
+    target_data = x[1:].reshape(-1, 1)
 
     return input_data, target_data
 
@@ -314,10 +314,9 @@ def generate_mnist_sequence_data(
 
     for idx in range(limit):
         img_tensor, label = dataset[idx]
-        img_np = img_tensor.numpy().astype(np.float64)
+        img_np = img_tensor.double().numpy()
         seq = image_to_sequence(img_np, n_steps=n_steps)
-        sequences.append(seq.astype(np.float64))
+        sequences.append(seq)
         labels.append(label)
 
-    input_data = np.array(sequences)
-    return input_data, target_labels
+    input_data = np.stack(sequences, axis=0)

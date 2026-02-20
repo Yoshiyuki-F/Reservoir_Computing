@@ -3,7 +3,7 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple
 from beartype import beartype
 from reservoir.core.types import NpF64
 
@@ -31,9 +31,7 @@ from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
 
-LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[NpF64, NpF64], SplitDataset]]] = StrictRegistry(
-    {}
-)
+LOADER_REGISTRY = StrictRegistry({})
 
 
 def register_loader(dataset: Dataset) -> (Callable)[[Callable[[BaseDatasetConfig]]], Callable[[BaseDatasetConfig]]]:
@@ -49,6 +47,8 @@ def register_loader(dataset: Dataset) -> (Callable)[[Callable[[BaseDatasetConfig
 def load_sine_wave(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X_arr, y_arr = generate_sine_data(config)
+    assert X_arr.dtype == np.float64, f"Sine wave X_arr must be float64, got {X_arr.dtype}"
+    assert y_arr.dtype == np.float64, f"Sine wave y_arr must be float64, got {y_arr.dtype}"
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -65,6 +65,9 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_arr, train_labels = generate_mnist_sequence_data(config, split=config.split)
     test_arr , test_labels = generate_mnist_sequence_data(config, split="test")
 
+    assert train_arr.dtype == np.float64, f"MNIST train_arr must be float64, got {train_arr.dtype}"
+    assert test_arr.dtype == np.float64, f"MNIST test_arr must be float64, got {test_arr.dtype}"
+
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
         train_arr = train_arr[..., None]
@@ -77,9 +80,12 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 
     num_classes = int(config.n_output)
     
-    # Numpy-based one-hot encoding
-    train_labels_arr = np.eye(num_classes)[train_labels]
-    test_labels_arr = np.eye(num_classes)[test_labels]
+    # Memory-efficient Numpy-based one-hot encoding (avoiding np.eye broadcasting)
+    train_labels_arr = np.zeros((len(train_labels), num_classes), dtype=np.float64)
+    train_labels_arr[np.arange(len(train_labels)), train_labels] = 1.0
+    
+    test_labels_arr = np.zeros((len(test_labels), num_classes), dtype=np.float64)
+    test_labels_arr[np.arange(len(test_labels)), test_labels] = 1.0
 
     # Create validation split from training data (10%)
     val_ratio = 0.1
@@ -93,12 +99,12 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_labels_arr = train_labels_arr[:n_train_new]
 
     return SplitDataset(
-        train_X=np.array(train_arr, dtype=np.float64),
-        train_y=np.array(train_labels_arr, dtype=np.float64),
-        test_X=np.array(test_arr, dtype=np.float64),
-        test_y=np.array(test_labels_arr, dtype=np.float64),
-        val_X=np.array(val_arr, dtype=np.float64),
-        val_y=np.array(val_labels_arr, dtype=np.float64),
+        train_X=train_arr,
+        train_y=train_labels_arr,
+        test_X=test_arr,
+        test_y=test_labels_arr,
+        val_X=val_arr,
+        val_y=val_labels_arr,
     )
 
 
@@ -109,11 +115,13 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
 
     # 1. Generate (returns jnp arrays)
     X_gen, y_gen = generate_mackey_glass_data(config)
+    assert X_gen.dtype == np.float64, f"Mackey-Glass X_gen must be float64, got {X_gen.dtype}"
+    assert y_gen.dtype == np.float64, f"Mackey-Glass y_gen must be float64, got {y_gen.dtype}"
     
     # 2. Reconstruct full sequence (N+1)
     # X_gen: (T, 1), y_gen: (T, 1)
     # y is X shifted by 1. full = [X[0], X[1]... X[T-1], y[T-1]]
-    seq = np.append(np.array(X_gen, dtype=np.float64).flatten(), np.array(y_gen, dtype=np.float64)[-1])
+    seq = np.append(X_gen.flatten(), y_gen[-1])
     
     # 3. Downsampling (Parameterized)
     step = getattr(config, "downsample", 1)
@@ -132,8 +140,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
     X_new = seq[:-1].reshape(-1, 1)
     y_new = seq[1:].reshape(-1, 1)
     
-    X_arr = np.array(X_new, dtype=np.float64)
-    y_arr = np.array(y_new, dtype=np.float64)
+    X_arr = X_new
+    y_arr = y_new
     
     return X_arr, y_arr
 
@@ -143,11 +151,11 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
 def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
-    X_arr = np.array(X, dtype=np.float64)
-    y_arr = np.array(y, dtype=np.float64)
+    assert X.dtype == np.float64, f"Lorenz X must be float64, got {X.dtype}"
+    assert y.dtype == np.float64, f"Lorenz y must be float64, got {y.dtype}"
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
-    return X_arr, y_arr
+    return X, y
 
 
 @register_loader(Dataset.LORENZ96)
@@ -155,15 +163,15 @@ def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
 def load_lorenz96(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
-    X_arr = np.array(X, dtype=np.float64)
-    y_arr = np.array(y, dtype=np.float64)
+    assert X.dtype == np.float64, f"Lorenz96 X must be float64, got {X.dtype}"
+    assert y.dtype == np.float64, f"Lorenz96 y must be float64, got {y.dtype}"
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
-    # if X_arr.ndim == 2:
-    #     X_arr = X_arr[:, None, :]
-    # if y_arr.ndim == 2:
-    #     y_arr = y_arr[:, None, :]
-    return X_arr, y_arr
+    # if X.ndim == 2:
+    #     X = X[:, None, :]
+    # if y.ndim == 2:
+    #     y = y[:, None, :]
+    return X, y
 
 
 def load_dataset_with_validation_split(

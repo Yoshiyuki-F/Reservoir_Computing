@@ -6,7 +6,7 @@ config shouldnt have initial value!
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Literal, Tuple, Union, Optional
+from typing import Dict, Literal, Tuple, Union, Optional
 
 from reservoir.core.identifiers import AggregationMode, Model
 
@@ -59,7 +59,7 @@ class PipelineConfig:
         return self.projection
 
     @property
-    def params(self) -> Dict[str, Any]:
+    def params(self) -> Dict[str, float | int | str | bool]:
         return {}
 
     @property
@@ -72,9 +72,9 @@ class PipelineConfig:
         """Expose distillation configs for consumers expecting the legacy attribute."""
         return self.model if isinstance(self.model, DistillationConfig) else None
 
-    def to_params(self) -> Dict[str, Any]:
+    def to_params(self) -> dict:
         """Flatten pipeline configuration into a serializable dictionary."""
-        merged: Dict[str, Any] = {}
+        merged: dict = {}
 
         model_cfg = self.model
         if isinstance(model_cfg, DistillationConfig):
@@ -92,7 +92,7 @@ class PipelineConfig:
 
         return merged
 
-    def __getattr__(self, item: str) -> Any:
+    def __getattr__(self, item: str):
         """
         Provide passthrough access to underlying model config for convenience
         (e.g., preset.leak_rate).
@@ -116,7 +116,7 @@ class RawConfig:
         return self
 
     @staticmethod
-    def to_dict() -> dict[str, Any]:
+    def to_dict() -> dict:
         return {"method": "raw"}
 
 
@@ -129,7 +129,7 @@ class StandardScalerConfig:
         return self
 
     @staticmethod
-    def to_dict() -> dict[str, Any]:
+    def to_dict() -> dict:
         return {"method": "standard_scaler"}
 
 
@@ -144,7 +144,7 @@ class CustomRangeScalerConfig:
             raise ValueError(f"{context}: input_scale must be non-zero.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {"method": "custom_range_scaler", "input_scale": float(self.input_scale), "centering": self.centering}
 
 
@@ -161,7 +161,7 @@ class MinMaxScalerConfig:
             raise ValueError(f"{context}: feature_max must be greater than feature_min.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "method": "min_max_scaler",
             "feature_min": float(self.feature_min),
@@ -178,17 +178,17 @@ class AffineScalerConfig:
         _ = context
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {"method": "affine_scaler", "scale": float(self.input_scale), "shift": float(self.shift)}
 
 
-PreprocessingConfig = Union[
-    RawConfig,
-    StandardScalerConfig,
-    CustomRangeScalerConfig,
-    MinMaxScalerConfig,
+PreprocessingConfig = (
+    RawConfig |
+    StandardScalerConfig |
+    CustomRangeScalerConfig |
+    MinMaxScalerConfig |
     AffineScalerConfig
-]
+)
 
 
 @dataclass(frozen=True)
@@ -212,7 +212,7 @@ class RandomProjectionConfig:
             raise ValueError(f"{prefix}bias_scale must be non-negative.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "type": "random",
             "n_units": int(self.n_units),
@@ -233,7 +233,7 @@ class CenterCropProjectionConfig:
             raise ValueError(f"{prefix}n_units must be positive.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "type": "center_crop",
             "n_units": int(self.n_units),
@@ -251,7 +251,7 @@ class ResizeProjectionConfig:
             raise ValueError(f"{prefix}n_units must be positive.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "type": "resize",
             "n_units": int(self.n_units),
@@ -268,7 +268,7 @@ class PolynomialProjectionConfig:
             raise ValueError(f"{context}: degree must be >=1.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {"type": "polynomial", "degree": int(self.degree), "include_bias": self.include_bias}
 
 
@@ -290,11 +290,18 @@ class PCAProjectionConfig:
             raise ValueError(f"{context}: n_units must be >=1.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
 
 
-ProjectionConfig = Union[RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig, None]
+ProjectionConfig = (
+    RandomProjectionConfig
+    | CenterCropProjectionConfig
+    | ResizeProjectionConfig
+    | PolynomialProjectionConfig
+    | PCAProjectionConfig
+    | None
+)
 
 
 
@@ -324,7 +331,7 @@ class ClassicalReservoirConfig:
             raise TypeError(f"{prefix}aggregation must be AggregationMode, got {type(self.aggregation)}.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "spectral_radius": float(self.spectral_radius),
             "leak_rate": float(self.leak_rate),
@@ -344,7 +351,7 @@ class DistillationConfig:
     def __post_init__(self) -> None:
         self.validate()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "teacher": self.teacher.to_dict(),
             "student.hidden_layers": tuple(int(v) for v in (self.student.hidden_layers or ())),
@@ -368,8 +375,8 @@ class FNNConfig:
     def __post_init__(self) -> None:
         self.validate()
 
-    def to_dict(self) -> dict[str, Any]:
-        result: Dict[str, Any] = {
+    def to_dict(self) -> dict:
+        result: dict = {
             "hidden_layers": tuple(int(v) for v in (self.hidden_layers or ())),
         }
         if self.window_size is not None:
@@ -400,7 +407,7 @@ class PassthroughConfig:
             raise TypeError(f"{context}: aggregation must be AggregationMode, got {type(self.aggregation)}.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "aggregation": self.aggregation.value,
         }
@@ -455,7 +462,7 @@ class QuantumReservoirConfig:
             raise ValueError(f"{prefix}precision must be one of {valid_precisions}.")
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict:
         return {
             "n_qubits": int(self.n_qubits) if self.n_qubits is not None else None,
             "n_layers": int(self.n_layers),
@@ -485,8 +492,8 @@ class RidgeReadoutConfig:
                 raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
         return self
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"use_intercept": bool(self.use_intercept)}
+    def to_dict(self) -> dict:
+        result: dict = {"use_intercept": bool(self.use_intercept)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -512,8 +519,8 @@ class PolyRidgeReadoutConfig:
             raise ValueError(f"{context}: mode must be 'full' or 'square_only', got '{self.mode}'.")
         return self
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
+    def to_dict(self) -> dict:
+        result: dict = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -528,9 +535,20 @@ class FNNReadoutConfig:
         _ = context
         return self
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
-ModelConfig = Union[ClassicalReservoirConfig, DistillationConfig, FNNConfig, PassthroughConfig, QuantumReservoirConfig]
-ReadoutConfig = Union[RidgeReadoutConfig, PolyRidgeReadoutConfig, FNNReadoutConfig, None]
+ModelConfig = (
+    ClassicalReservoirConfig
+    | DistillationConfig
+    | FNNConfig
+    | PassthroughConfig
+    | QuantumReservoirConfig
+)
+ReadoutConfig = (
+    RidgeReadoutConfig
+    | PolyRidgeReadoutConfig
+    | FNNReadoutConfig
+    | None
+)

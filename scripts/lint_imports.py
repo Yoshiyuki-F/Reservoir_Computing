@@ -5,8 +5,9 @@ Import Boundary & Type Enforcement — 物理的制約
 
 Hexagonal Architecture for ML:
 1. NumPy/JAX import境界を自動監視。
-2. 厳格な型エイリアス (JaxF64, NpF64) の使用を強制。
-3. Any, Union, float32, 生のndarray/Array型ヒントを禁止。
+2. 厳格な型エイリアス (JaxF64, NpF64) の使用を強制 (`Any`, `Union`, 生の `Float64` 禁止)
+3. `np.asarray`, `jnp.asarray` は Mapper 外で禁止 (`to_jax_f64`, `to_np_f64`を使用)
+4. Callable の曖昧な型指定 (`...`, `Any`) を禁止
 
 Usage:
     uv run python scripts/lint_imports.py
@@ -18,85 +19,133 @@ from pathlib import Path
 # ===== Domain Registry =====
 # Mapper files: BOTH np and jax imports explicitly allowed (boundary converters)
 MAPPERS = {
-    "core/types.py",                # Type alias bridge: NpF64, JaxF64
-    "utils/batched_compute.py",     # The Gateway: np → jax → np
-    "utils/metrics.py",             # np inputs → jax computation → float output
-    "utils/reporting.py",           # np stats formatting
-    "pipelines/strategies.py",      # Orchestrates np frontend ↔ jax readout
-    "pipelines/components/executor.py",  # Delegates between domains
-    "readout/ridge.py",             # Ridge solve uses both domains
-    "models/nn/base.py",            # Training loop handles data transfer
-    "models/nn/fnn.py",             # Training loop handles data transfer
-    "models/distillation/model.py", # Training loop handles data transfer
-    "models/passthrough/passthrough.py", # Training loop handles data transfer
-    "models/reservoir/base.py", # Abstract Base Class
-    "models/reservoir/classical/classical.py", # Classical Reservoir
+    "core/types.py",
+    "utils/batched_compute.py",
+    "utils/metrics.py",
+    "utils/reporting.py",
+    "pipelines/strategies.py",
+    "pipelines/components/executor.py",
+    "readout/ridge.py",
 }
 
-# Files where jax import inside conditional/function is acceptable
 CONDITIONAL_JAX_OK = {
-    "data/generators.py",           # Legacy: conditional jax import in function body
+    "data/generators.py",
 }
+
+FORBIDDEN_TYPES = {"Any", "object", "Union"}
 
 SRC_ROOT = Path(__file__).parent.parent / "src" / "reservoir"
 
+# 1. Imports
 _import_np  = re.compile(r"^\s*(import numpy|from numpy|import numpy\.)")
 _import_jax = re.compile(r"^\s*(import jax\b|from jax\b|import jaxlib)")
+_import_types = re.compile(r"from reservoir\.core\.types import (.*)")
 
-# Forbidden patterns
-_forbidden_union = re.compile(r"Union\[")
-_forbidden_any = re.compile(r":\s*Any\b|->\s*Any\b")
-_allowed_any_kwargs = re.compile(r"\*\*kwargs:\s*Any")
-_allowed_any_default = re.compile(r"Any\s*=\s*None") # e.g. target: Any = None
-_forbidden_float32 = re.compile(r"\bfloat32\b")
-_forbidden_raw_hints = re.compile(r":\s*(?:jnp\.|np\.|jax\.|numpy\.)?(?:ndarray|Array)\b")
-_forbidden_asarray = re.compile(r"jnp\.asarray")
-_forbidden_np_asarray = re.compile(r"np\.asarray")
+# 2. Types
+_forbidden_union = re.compile(r"\bUnion\[")
+_forbidden_bitwise_or_union = re.compile(r"\|")
+_forbidden_any = re.compile(r"\bAny\b")
+_forbidden_object = re.compile(r"\bobject\b")
+_forbidden_raw_float = re.compile(r"\b(?:Float64|Float32|Float)\[|\b(?:Float64|Float32|Float)\b(?!\w|\[)") # matches Float64 or Float64[...
+_forbidden_raw_ndarray = re.compile(r"\b(?:jnp\.ndarray|np\.ndarray|jax\.Array|np\.array)\b")
+
+# 3. Array creation and modifications
+_forbidden_asarray = re.compile(r"\b(?:np|jnp)\.asarray\b|\bnp\.array\b")
+_forbidden_astype = re.compile(r"\.astype\(")
+_forbidden_copy = re.compile(r"\.copy\(")
+
+# 4. Callable
+_forbidden_callable_ellipsis = re.compile(r"\bCallable\[\s*\.\.\.")
+_forbidden_callable_any = re.compile(r"\bCallable\[.*,\s*(?:Any|object)\s*\]")
+
+# 5. Bare Collections (Rule 10)
+_forbidden_bare_dict = re.compile(r"(?::|->)\s*dict\b(?!\s*\[)")
+_forbidden_bare_list = re.compile(r"(?::|->)\s*list\b(?!\s*\[)")
+
+
 
 def check_file(path: Path) -> list[str]:
     """Return list of violation messages for a file."""
     rel = str(path.relative_to(SRC_ROOT))
-    
-    # Skip __init__.py and __pycache__
     if path.name == "__init__.py" or "__pycache__" in str(path):
         return []
-    
-    text = path.read_text()
-    lines = text.splitlines()
-    violations = []
 
+    lines = path.read_text().splitlines()
+    violations = []
     has_np = False
     has_jax = False
 
     for i, line in enumerate(lines, 1):
-        # 1. Boundary Check
+        if line.strip().startswith("#"):
+            continue
+
+        # Rule 1: Import Boundaries
         if _import_np.match(line): has_np = True
         if _import_jax.match(line): has_jax = True
 
-        # 2. Type Hints Check (Any, Union)
-        if _forbidden_union.search(line):
-            violations.append(f"L{i}: ❌ Forbidden 'Union' detected. Use specific types or NpF64/JaxF64.")
-        
-        if _forbidden_any.search(line):
-            # Allow **kwargs: Any and Any = None (default value)
-            if not _allowed_any_kwargs.search(line) and not _allowed_any_default.search(line):
-                 violations.append(f"L{i}: ❌ Forbidden 'Any' detected. Use specific types.")
+        # Rule 7: Don't import both NpF64 and JaxF64 outside of Mappers
+        types_match = _import_types.search(line)
+        if types_match and rel not in MAPPERS:
+            imported = types_match.group(1)
+            has_jaxf64 = "JaxF64" in imported or "to_jax_f64" in imported
+            has_npf64 = "NpF64" in imported or "to_np_f64" in imported
+            
+            # We don't strictly ban `to_np_f64` and `to_jax_f64` being imported together, but importing JaxF64 + NpF64 signifies domain bleeding.
+            if has_jaxf64 and has_npf64:
+                 violations.append(f"L{i}: ❌ Rule 7: Cannot import both JaxF64/to_jax_f64 and NpF64/to_np_f64 outside Mapper.")
 
-        # 3. Float32 Check
-        if _forbidden_float32.search(line):
-             violations.append(f"L{i}: ❌ Forbidden 'float32' detected. Use float64 (JaxF64/NpF64).")
-
-        # 4. Raw Array Hint Check
-        if _forbidden_raw_hints.search(line):
-             violations.append(f"L{i}: ❌ Forbidden raw array hint (ndarray/Array). Use NpF64 or JaxF64.")
-        
-        # 5. jnp.asarray Check (Only allowed in Mappers)
+        # Rule 3: np.asarray / jnp.asarray not allowed outside Mappers
         if _forbidden_asarray.search(line) and rel not in MAPPERS:
-             violations.append(f"L{i}: ❌ Forbidden 'jnp.asarray' outside Mapper. Use 'to_jax_f64' from core.types.")
+            violations.append(f"L{i}: ❌ Rule 3: 'np.asarray', 'jnp.asarray', 'np.array' forbidden outside Mappers. Use 'to_jax_f64' / 'to_np_f64'.")
 
-        # 6. np.asarray Check (Only allowed in Mappers)
-        if _forbidden_np_asarray.search(line) and rel not in MAPPERS:
-             violations.append(f"L{i}: ❌ Forbidden 'np.asarray' outside Mapper. Use 'to_np_f64' from core.types or ensure input is NpF64.")
+        if _forbidden_astype.search(line) and rel not in CONDITIONAL_JAX_OK:
+            violations.append(f"L{i}: ❌ Rule 9: '.astype()' forbidden (Fail Fast). Data must be np.float64 inherently.")
+
+        if _forbidden_copy.search(line):
+            violations.append(f"L{i}: ❌ Rule 10: '.copy()' forbidden (Memory Safety). Operations must be in-place.")
+
+        # Rule 2: Any / Union / object / |
+        if _forbidden_union.search(line):
+            violations.append(f"L{i}: ❌ Rule 1: 'Union' is strictly prohibited.")
+        # Only trigger pipe | for union if it looks like a type hint (e.g., `a: X | Y` or `-> X | Y`)
+        if re.search(r":\s*[^=]*\||->\s*[^=]*\|", line) and not "import" in line and not "==" in line:
+            violations.append(f"L{i}: ❌ Rule 1: '|' (Union type hint) is strictly prohibited.")
+
+        if _forbidden_any.search(line):
+            # Only kwargs / args can use Any
+            # Strip comments to avoid matching in them
+            line_no_comment = line.split('#')[0]
+            # If "Any" is in the line, it MUST be strictly mapped to args or kwargs.
+            # We look for "kwargs" or "args" near the colon and "Any" near the end
+            if not re.search(r"(?:\*args|\*\*kwargs|\bargs|\bkwargs)\s*:\s*(?:Optional\[)?Any(?:\])?", line_no_comment):
+                violations.append(f"L{i}: ❌ Rule 2: 'Any' is strictly prohibited except for **kwargs and *args.")
+        
+        if _forbidden_object.search(line):
+            if not re.search(r"class\s+\w+\s*\(object\):", line) and not "logger" in line and not isinstance(eval("object"), object): # naive filters
+                # We want to catch object entirely if used as type hint
+                if re.search(r":\s*object|->\s*object|\[object\]", line):
+                    violations.append(f"L{i}: ❌ Rule 2: 'object' type hint is a prohibited escape hatch.")
+
+        # Rule 1: Raw Float64 / Float32 
+        if rel != "core/types.py" and _forbidden_raw_float.search(line):
+            violations.append(f"L{i}: ❌ Rule 1: Raw 'Float64', 'Float32', 'Float' forbidden. Use 'JaxF64' or 'NpF64'.")
+
+        # Rule 1 (implied): Raw jnp.ndarray / np.ndarray
+        if rel != "core/types.py" and _forbidden_raw_ndarray.search(line):
+            if re.search(r":\s*(?:jnp\.ndarray|np\.ndarray|jax\.Array)|->\s*(?:jnp\.ndarray|np\.ndarray|jax\.Array)", line):
+                violations.append(f"L{i}: ❌ Rule 1/3: Raw array usage in type hint. Use 'JaxF64' or 'NpF64'.")
+
+        # Rule 8: Callable strictness
+        if _forbidden_callable_ellipsis.search(line):
+            violations.append(f"L{i}: ❌ Rule 8: 'Callable[...,]' with ellipsis is forbidden.")
+        if _forbidden_callable_any.search(line):
+            violations.append(f"L{i}: ❌ Rule 8: 'Callable[..., Any|object]' is forbidden. Specify exact return type.")
+
+        # Rule 10: Bare dict and list
+        if _forbidden_bare_dict.search(line):
+            violations.append(f"L{i}: ❌ Rule 10: Bare 'dict' type hint is forbidden. Use 'Dict[K, V]' or 'dict[K, V]'.")
+        if _forbidden_bare_list.search(line):
+            violations.append(f"L{i}: ❌ Rule 10: Bare 'list' type hint is forbidden. Use 'List[T]' or 'list[T]'.")
 
     # Boundary Violation
     if has_np and has_jax and rel not in MAPPERS and rel not in CONDITIONAL_JAX_OK:
@@ -107,25 +156,23 @@ def check_file(path: Path) -> list[str]:
     
     return []
 
-
 def main():
     violations = []
     for py_file in sorted(SRC_ROOT.rglob("*.py")):
         violations.extend(check_file(py_file))
     
     if violations:
-        print("=" * 60)
-        print("Import & Type Violations Detected")
-        print("=" * 60)
+        print("=" * 80)
+        print("🚨 IMPORT & TYPE BOUNDARY VIOLATIONS DETECTED 🚨")
+        print("=" * 80)
         for v in violations:
             print(v)
         print(f"\nTotal Files with Violations: {len([v for v in violations if v.startswith('📄')])}")
-        print("\nACTION REQUIRED: Fix strict type violations.")
+        print("\nACTION REQUIRED: Fix strict type violations as defined in AGENT.md")
         sys.exit(1)
     else:
         print("✅ All import boundaries and types are clean.")
         sys.exit(0)
-
 
 if __name__ == "__main__":
     main()

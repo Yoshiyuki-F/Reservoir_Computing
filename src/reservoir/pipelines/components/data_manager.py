@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Callable
 
 from reservoir.core.identifiers import Dataset
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
@@ -200,7 +200,7 @@ class PipelineDataManager:
             projection_layer=projection,
         )
 
-    def apply_adapter(self, frontend_ctx: FrontendContext, adapter: Any) -> FrontendContext:
+    def apply_adapter(self, frontend_ctx: FrontendContext, adapter: Callable) -> FrontendContext:
         """
         Step 4: Apply adapter (e.g., TimeDelayEmbedding) to all splits.
         This is called by the model builder after creating the model with adapter.

@@ -9,7 +9,7 @@ Feedback QRC (Murauer et al., 2025):
 """
 from __future__ import annotations
 
-from typing import Tuple, Union, Optional, cast
+from typing import Tuple, Optional, cast
 from functools import partial
 
 import jax
@@ -63,6 +63,7 @@ def _make_circuit_logic(
     Compilation time is O(1) with respect to depth via jax.lax.scan.
     """
     is_noisy = (noise_type != "clean")
+    is_mc = rng_key is not None
 
     # --- 1. Input + Feedback Projection (R gates) ---
     c_enc = tc.Circuit(n_qubits)
@@ -97,7 +98,6 @@ def _make_circuit_logic(
     def layer_step(carry_state, layer_params):
         # Context for MC
         current_key = None
-        is_mc = rng_key is not None
         
         if is_mc:
             state_vec, current_key = carry_state
@@ -203,15 +203,15 @@ def _make_circuit_logic(
         # final_state is Density Matrix (2^N, 2^N)
         # Probabilities are diagonal elements.
         probs = jnp.real(jnp.diag(cast(JaxF64, final_state)))
-        return probs.astype(jnp.float_)
+        return probs
     else:
         # Pure State (Clean or MC)
         # final_state is Vector (2^N,)
-        return (jnp.abs(cast(JaxF64, final_state)) ** 2).astype(jnp.float_)
+        return jnp.abs(cast(JaxF64, final_state)) ** 2
 
 
 def _step_logic(
-    state: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    state: Tuple[JaxF64, Optional[JaxF64]],
     input_slice: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -221,7 +221,7 @@ def _step_logic(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
+) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
     """
     Core step logic - Feedback QRC (Murauer et al., 2025).
     
@@ -273,7 +273,7 @@ def _step_logic(
     if next_key is not None:
         return (next_state_vec, cast(JaxF64, next_key)), output
         
-    return next_state_vec, output
+    return (next_state_vec, None), output
 
 
 # --- JIT Compiled Wrappers ---
@@ -282,7 +282,7 @@ def _step_logic(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
-    state: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    state: Tuple[JaxF64, Optional[JaxF64]],
     input_slice: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -292,7 +292,7 @@ def _step_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
+) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
     """
     Standalone JIT wrapper for single step execution.
     """
@@ -306,7 +306,7 @@ def _step_jit(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
-    state_init: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    state_init: Tuple[JaxF64, Optional[JaxF64]],
     inputs_time_major: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -316,7 +316,7 @@ def _forward_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
+) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
     """
     Forward pass (scan) execution (JIT Compiled).
     Uses uncompiled `_step_logic` inside to ensure proper XLA fusion.

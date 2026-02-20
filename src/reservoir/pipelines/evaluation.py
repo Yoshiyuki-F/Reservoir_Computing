@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
 from reservoir.utils.metrics import calculate_chaos_metrics
@@ -11,12 +11,12 @@ class Evaluator:
     def compute_chaos_metrics(
         truth: JaxF64,
         pred: JaxF64,
-        scaler: Any,
-        dataset_config: Any,
+        scaler: object,
+        dataset_config: object,
         global_start: int = 0,
         global_end: int = 0,
         verbose: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Dict[str, float]]:
         """Compute VPT, NDEI, and other chaos metrics with inverse transform."""
         if scaler is None:
             return None

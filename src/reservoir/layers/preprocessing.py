@@ -62,7 +62,7 @@ class StandardScaler(Preprocessor):
         self.scale_: Optional[np.ndarray] = None
 
     def fit(self, X: NpF64) -> "StandardScaler":
-        X_np = np.asarray(X)
+        X_np = X
 
         if X_np.ndim == 3:
             reduce_axis = (0, 1)
@@ -123,7 +123,7 @@ class CustomRangeScaler(Preprocessor):
         self.mean_: Optional[np.ndarray] = None
 
     def fit(self, X: NpF64) -> "CustomRangeScaler":
-        X_np = np.asarray(X)
+        X_np = X
         
         if self.centering:
             if X_np.ndim == 3:
@@ -202,7 +202,7 @@ class MinMaxScaler(Preprocessor):
         self.range_: Optional[np.ndarray] = None  # X_max - X_min
 
     def fit(self, X: NpF64) -> "MinMaxScaler":
-        X_np = np.asarray(X)
+        X_np = X
 
         if X_np.ndim == 3:
             reduce_axis = (0, 1)
@@ -270,10 +270,10 @@ class IdentityPreprocessor(Preprocessor):
         return self
 
     def transform(self, X: NpF64) -> NpF64:
-        return np.asarray(X)
+        return X
 
     def inverse_transform(self, X: NpF64) -> NpF64:
-        return np.asarray(X)
+        return X
 
     def to_dict(self) -> Dict[str, Any]:
         return {"type": "identity"}
@@ -326,10 +326,12 @@ class AffineScaler(Preprocessor):
         }
 
 
+from reservoir.models.config import PreprocessingConfig
+
 # --- 3. Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
-def create_preprocessor(config: Any) -> Preprocessor:
+def create_preprocessor(config: PreprocessingConfig) -> Preprocessor:
     """
     Factory function to create a Preprocessor instance based on the config type.
     Raises TypeError if the config type is not registered.

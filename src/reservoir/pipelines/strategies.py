@@ -23,7 +23,7 @@ class ReadoutStrategy(ABC):
         self.metric_name = metric_name
 
     @staticmethod
-    def _flatten_3d_to_2d(arr: Optional[np.ndarray], label: str = "array") -> Optional[np.ndarray]:
+    def _flatten_3d_to_2d(arr: Optional[NpF64], label: str = "array") -> Optional[NpF64]:
         """Flatten 3D states (Batch, Time, Features) -> 2D (Batch, Features)."""
         if arr is None:
             return None
@@ -33,7 +33,7 @@ class ReadoutStrategy(ABC):
         return arr
 
     @staticmethod
-    def _get_seed_sequence(train_X: np.ndarray, val_X: Optional[np.ndarray]):
+    def _get_seed_sequence(train_X: NpF64, val_X: Optional[NpF64]):
         """Prepare seed for closed-loop (concat train+val)."""
         if val_X is not None:
             axis = 1 if train_X.ndim == 3 else 0
@@ -45,12 +45,12 @@ class ReadoutStrategy(ABC):
         self,
         model: Callable,
         readout: Optional[Callable],
-        train_Z: np.ndarray,
-        val_Z: Optional[np.ndarray],
-        test_Z: Optional[np.ndarray],
-        train_y: Optional[np.ndarray],
-        val_y: Optional[np.ndarray],
-        test_y: Optional[np.ndarray],
+        train_Z: NpF64,
+        val_Z: Optional[NpF64],
+        test_Z: Optional[NpF64],
+        train_y: Optional[NpF64],
+        val_y: Optional[NpF64],
+        test_y: Optional[NpF64],
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
         pipeline_config: PipelineConfig
@@ -65,12 +65,12 @@ class EndToEndStrategy(ReadoutStrategy):
     def fit_and_evaluate(
         self, model: Callable, 
         readout: Optional[Callable], 
-        train_Z: np.ndarray, 
-        val_Z: Optional[np.ndarray], 
-        test_Z: Optional[np.ndarray], 
-        train_y: Optional[np.ndarray], 
-        val_y: Optional[np.ndarray], 
-        test_y: Optional[np.ndarray],
+        train_Z: NpF64, 
+        val_Z: Optional[NpF64], 
+        test_Z: Optional[NpF64], 
+        train_y: Optional[NpF64], 
+        val_y: Optional[NpF64], 
+        test_y: Optional[NpF64],
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
         pipeline_config: PipelineConfig
@@ -141,7 +141,7 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: Optional[Callable], train_Z: np.ndarray, val_Z: Optional[np.ndarray], test_Z: Optional[np.ndarray], train_y: Optional[np.ndarray], val_y: Optional[np.ndarray], test_y: Optional[np.ndarray], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self, model: Callable, readout: Optional[Callable], train_Z: NpF64, val_Z: Optional[NpF64], test_Z: Optional[NpF64], train_y: Optional[NpF64], val_y: Optional[NpF64], test_y: Optional[NpF64], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
     ) -> Dict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         
@@ -223,7 +223,18 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
     """Closed-Loop regression strategy (VPT optimization)."""
 
     def fit_and_evaluate(
-        self, model: Callable, readout: Optional[Callable], train_Z: np.ndarray, val_Z: Optional[np.ndarray], test_Z: Optional[np.ndarray], train_y: Optional[np.ndarray], val_y: Optional[np.ndarray], test_y: Optional[np.ndarray], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self,
+            model: Callable,
+            readout: Optional[Callable],
+            train_Z: NpF64,
+            val_Z: Optional[NpF64],
+            test_Z: Optional[NpF64],
+            train_y: Optional[NpF64],
+            val_y: Optional[NpF64],
+            test_y: Optional[NpF64],
+            frontend_ctx: FrontendContext,
+            dataset_meta: DatasetMetadata,
+            pipeline_config: PipelineConfig
     ) -> Dict:
 
 

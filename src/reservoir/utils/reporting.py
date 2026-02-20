@@ -3,10 +3,11 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 import numpy as np
+from reservoir.core.types import NpF64
 
-def _safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
+def _safe_get(d: Dict[str, object], key: str, default: object = None) -> object:
     return d.get(key, default) if isinstance(d, dict) else default
 
 # --- Metrics Calculation ---
@@ -48,7 +49,7 @@ def print_chaos_metrics(metrics: Dict[str, float], header: Optional[str] = None)
 
 import jax
 
-def _print_feature_stats_impl(features: np.ndarray, stage: str, backend: str = "numpy") -> None:
+def _print_feature_stats_impl(features: NpF64, stage: str, backend: str = "numpy") -> None:
     """Internal implementation handling concrete numpy arrays."""
     # 基本統計量
     stats = {
@@ -69,7 +70,7 @@ def _print_feature_stats_impl(features: np.ndarray, stage: str, backend: str = "
     if stats["std"] < 1e-6:
         print("Feature matrix has near-zero variance. Model output may be inactive.")
 
-def print_feature_stats(features: Any, stage: str) -> None:
+def print_feature_stats(features: object, stage: str) -> None:
     """
     特徴量の統計情報を表示する
     Runnerの _feature_stats メソッドを移動
@@ -91,7 +92,7 @@ def print_feature_stats(features: Any, stage: str) -> None:
             _print_feature_stats_impl(np.asarray(f), stage, backend=original_backend)
         jax.debug.callback(_cb, features)
 
-def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MSE") -> None:
+def print_ridge_search_results(train_res: Dict[str, object], metric_name: str = "MSE") -> None:
     if not isinstance(train_res, dict):
         return
     history = train_res.get("search_history")
@@ -143,7 +144,7 @@ def print_ridge_search_results(train_res: Dict[str, Any], metric_name: str = "MS
     print("=" * 40 + "\n")
 
 
-def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title: str, learning_rate: Optional[float] = None) -> None:
+def plot_distillation_loss(training_logs: Dict[str, object], save_path: str, title: str, learning_rate: Optional[float] = None) -> None:
     if not isinstance(training_logs, dict):
         return
     loss_history = training_logs.get("loss_history")
@@ -160,22 +161,22 @@ def plot_distillation_loss(training_logs: Dict[str, Any], save_path: str, title:
 
 def plot_classification_report(
     *,
-    runner: Optional[Any] = None,
-    readout: Any,
-    train_X: Any,
-    train_y: Any,
-    test_X: Any,
-    test_y: Any,
-    val_X: Optional[Any],
-    val_y: Optional[Any],
+    runner: Optional[object] = None,
+    readout: object,
+    train_X: object,
+    train_y: object,
+    test_X: object,
+    test_y: object,
+    val_X: Optional[object],
+    val_y: Optional[object],
     filename: str,
     model_type_str: str,
     dataset_name: str,
     # metric removed
-    results: Dict[str, Any],
-    training_obj: Any,
+    results: Dict[str, object],
+    training_obj: object,
     # 追加: 計算済みの予測値を受け取るオプション
-    precalc_preds: Optional[Dict[str, Any]] = None,
+    precalc_preds: Optional[Dict[str, object]] = None,
     # preprocessors, metric removed
     selected_lambda: Optional[float] = None,
 ) -> None:
@@ -325,7 +326,7 @@ def plot_classification_report(
     )
 
 
-def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_type_str: str, readout: Any = None, config: Any = None) -> list[str]:
+def _infer_filename_parts(topo_meta: Dict[str, object], training_obj: object, model_type_str: str, readout: object = None, config: object = None) -> list[str]:
     student_layers = None
     preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
@@ -471,25 +472,25 @@ def _infer_filename_parts(topo_meta: Dict[str, Any], training_obj: Any, model_ty
 
 
 def generate_report(
-    results: Dict[str, Any],
-    config: Any,
-    topo_meta: Dict[str, Any],
+    results: Dict[str, object],
+    config: object,
+    topo_meta: Dict[str, object],
     *,
-    runner: Optional[Any] = None,
-    readout: Any,
-    train_X: Any,
-    train_y: Any,
-    test_X: Any,
-    test_y: Any,
-    val_X: Optional[Any],
-    val_y: Optional[Any],
-    training_obj: Any,
+    runner: Optional[object] = None,
+    readout: object,
+    train_X: object,
+    train_y: object,
+    test_X: object,
+    test_y: object,
+    val_X: Optional[object],
+    val_y: Optional[object],
+    training_obj: object,
     dataset_name: str,
     model_type_str: str,
     classification: bool = False,
     # preprocessors removed
-    dataset_preset: Optional[Any] = None,  # DatasetPreset for dt/lyapunov_time_unit
-    model_obj: Optional[Any] = None, # New Argument
+    dataset_preset: Optional[object] = None,  # DatasetPreset for dt/lyapunov_time_unit
+    model_obj: Optional[object] = None, # New Argument
 ) -> None:
     """
     Coordinator for generating all report elements (plots, logs).
@@ -652,18 +653,18 @@ def _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_
 
 def plot_regression_report(
     *,
-    runner: Optional[Any] = None,
-    readout: Any,
-    train_y: Any,
-    val_y: Optional[Any] = None, # New Argument
-    test_X: Any,
-    test_y: Any,
+    runner: Optional[object] = None,
+    readout: object,
+    train_y: object,
+    val_y: Optional[object] = None, # New Argument
+    test_X: object,
+    test_y: object,
     filename: str,
     model_type_str: str,
     mse: Optional[float] = None,
-    precalc_test_pred: Optional[Any] = None, 
+    precalc_test_pred: Optional[object] = None, 
     # preprocessors removed
-    scaler: Optional[Any] = None,
+    scaler: Optional[object] = None,
     is_closed_loop: bool = False,
     dt: Optional[float] = None,
     lyapunov_time_unit: Optional[float] = None,

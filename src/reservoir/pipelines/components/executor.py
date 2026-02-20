@@ -1,11 +1,12 @@
 
 from functools import partial
-from typing import Dict, Any, Tuple, Optional, Union
+from typing import Dict, Tuple, Optional, Union
 
 import jax.numpy as jnp
 from reservoir.core.types import NpF64, JaxF64
 import numpy as np
 
+from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.pipelines.evaluation import Evaluator
@@ -33,7 +34,7 @@ class PipelineExecutor:
         # Dependency Injection (OCP/DIP)
         self.coordinator = coordinator
 
-    def run(self, config: PipelineConfig) -> Dict[str, Any]:
+    def run(self, config: PipelineConfig) -> Dict[str, Union[Dict, JaxF64, None]]:
         """Run the execution phase."""
         
         # Step 5: Model Dynamics (Training/Warmup)
@@ -127,7 +128,7 @@ class PipelineExecutor:
             "quantum_trace": quantum_trace,
         }
 
-    def _extract_all_features(self, model: Any) -> Tuple[Optional[Union[JaxF64, np.ndarray]], ...]:
+    def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> Tuple[Optional[NpF64], ...]:
         """
         Orchestrate feature extraction.
         Coordinator supplies properly padded data.
@@ -155,7 +156,7 @@ class PipelineExecutor:
         return train_Z, val_Z, test_Z
 
     @staticmethod
-    def _compute_split(model: Any, inputs: Optional[Union[JaxF64, np.ndarray]], split_name: str, batch_size: int):
+    def _compute_split(model: ClosedLoopGenerativeModel, inputs: Optional[NpF64], split_name: str, batch_size: int):
         """Helper to run batched computation if input exists."""
         if inputs is None:
             return None

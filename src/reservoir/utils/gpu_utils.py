@@ -1,9 +1,11 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/utils/gpu_utils.py
 Reservoir Computing用のGPUユーティリティ関数。
 """
-from typing import Callable
+from typing import Callable, TypeVar
 import re
 import shutil
+
+T = TypeVar('T')
 
 def check_gpu_available() -> bool:
     """JAXがGPUを認識し、利用可能かを確認。
@@ -24,6 +26,17 @@ def check_gpu_available() -> bool:
     print("=== GPU認識確認 ===")
 
     try:
+        # Check x64 status
+        
+        # Enforce x64 explicitly before checking/initializing backend
+        jax.config.update("jax_enable_x64", True)
+        
+        if not jax.config.jax_enable_x64:
+             raise ValueError("CRITICAL: JAX x64 mode is NOT enabled. Double-check import order and environment variables.")
+            
+        x64_enabled = jax.config.jax_enable_x64
+        print(f"JAX x64 Enabled: {x64_enabled}")
+        
         devices = jax.devices()
         print(f"JAXバージョン: {jax.__version__}")
 
@@ -46,7 +59,13 @@ def check_gpu_available() -> bool:
 
         # 簡単なGPU計算テスト
         try:
-            x = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+            # Force float64 creation to test if it's respected
+            x = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=jnp.float64)
+            print(f"Test Array Dtype: {x.dtype}")
+            
+            if x.dtype != jnp.float64:
+                 print("WARNING: JAX did not create float64 array despite request. x64 mode might be failed.")
+            
             result = jnp.sum(x ** 2)
 
             # GPU名を取得（利用可能な場合）
@@ -128,8 +147,8 @@ def require_gpu() -> Callable:
     """
     import sys
     
-    def decorator(test_func: Callable[...]) -> Callable[...]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def decorator(test_func: Callable) -> Callable:
+        def wrapper(*args: T, **kwargs: T) -> T:
             try:
                 check_gpu_available()
                 return test_func(*args, **kwargs)

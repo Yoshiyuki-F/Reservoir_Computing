@@ -6,12 +6,14 @@ import abc
 from typing import Any, Dict, Type
 from functools import singledispatch
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
 
 # --- 1. Interface Definition ---
 
+@beartype
 class Projection(abc.ABC):
     """
     Abstract Base Class for Input Projections.
@@ -33,7 +35,7 @@ class Projection(abc.ABC):
         Apply the projection to the inputs.
         template method: validates input shape then calls _forward.
         """
-        arr = jnp.asarray(inputs, dtype=jnp.float_)
+        arr = inputs
         if arr.ndim not in (2, 3):
              raise ValueError(f"{self.__class__.__name__} expects 2D or 3D input, got shape {arr.shape}")
         return self._project(arr)
@@ -51,6 +53,7 @@ class Projection(abc.ABC):
 
 # --- 2. Concrete Implementations ---
 
+@beartype
 class RandomProjection(Projection):
     """
     Fixed random input projection with sparsity and bias.
@@ -117,6 +120,7 @@ class RandomProjection(Projection):
         }
 
 
+@beartype
 class CoherentDriveProjection(Projection):
     """
     Coherent Drive Projection for Quantum Reservoir Computing.
@@ -201,6 +205,7 @@ class CoherentDriveProjection(Projection):
         }
 
 
+@beartype
 class CenterCropProjection(Projection):
     """
     Fixed cropping projection that selects the central part of the input feature vector.
@@ -233,6 +238,7 @@ class CenterCropProjection(Projection):
         }
 
 
+@beartype
 class ResizeProjection(Projection):
     """
     Projection that resizes (interpolates) the feature dimension to the target size.
@@ -268,6 +274,7 @@ class ResizeProjection(Projection):
         }
 
 
+@beartype
 class PolynomialProjection(Projection):
     """
     Polynomial feature expansion projection.
@@ -308,6 +315,7 @@ class PolynomialProjection(Projection):
         }
 
 
+@beartype
 class PCAProjection(Projection):
     """
     PCA (Principal Component Analysis) projection.
@@ -341,7 +349,6 @@ class PCAProjection(Projection):
         
         Note: Assumes input is already zero-mean (from StandardScaler).
         """
-        X = jnp.asarray(X)
         # Flatten to 2D if 3D
         if X.ndim == 3:
             X = X.reshape(-1, X.shape[-1])  # (Batch*Time, Features)
@@ -374,10 +381,12 @@ class PCAProjection(Projection):
             "input_scaler": self.input_scaler,
         }
 
+from reservoir.models.config import ProjectionConfig
+
 # --- 3. The Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
-def create_projection(config: Any, input_dim: int) -> Projection:
+def create_projection(config: ProjectionConfig, input_dim: int) -> Projection:
     """
     Factory function to create a Projection instance based on the config type.
     Raises TypeError if the config type is not registered.

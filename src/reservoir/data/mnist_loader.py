@@ -38,7 +38,9 @@ def image_to_sequence(image: NpF64, *, n_steps: int) -> NpF64:
         raise ValueError(f"n_steps must be positive and divide {total_pixels}, got {n_steps}")
     features_per_step = total_pixels // n_steps
     flat = image.reshape(total_pixels)
-    return flat.reshape(n_steps, features_per_step).astype(np.float64)
+    result = flat.reshape(n_steps, features_per_step)
+    assert result.dtype == np.float64, f"MNIST sequence must be float64, got {result.dtype}"
+    return result
 
 
 def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num_workers: int = 0) -> Tuple[DataLoader, DataLoader]:

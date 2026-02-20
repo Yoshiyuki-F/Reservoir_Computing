@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple, Optional
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
@@ -16,6 +17,7 @@ from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.aggregation import StateAggregator
 
 
+@beartype
 class PassthroughModel(ClosedLoopGenerativeModel):
     """
     Model that skips dynamics (Step 5) and directly aggregates projected features.
@@ -46,7 +48,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     def step(self, state: JaxF64, projected_input: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Passthrough step: ignore state, return input as next state."""
         # projected_input: [batch, features] - ensure dtype matches state
-        next_state = jnp.asarray(projected_input)
+        next_state = projected_input
         return next_state, next_state
 
     def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
@@ -69,7 +71,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     def __call__(self, inputs: JaxF64, split_name: str = None, **_: Any) -> JaxF64:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
-        arr = jnp.asarray(inputs)
+        arr = inputs
         
         # Convert 2D to 3D for internal processing
         if arr.ndim == 2:

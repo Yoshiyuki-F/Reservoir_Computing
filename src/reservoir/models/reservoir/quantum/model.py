@@ -4,21 +4,37 @@ Wrapper class that manages state and configuration, delegating computation to fu
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple, Literal, Union, Optional, List
+from typing import Dict, Tuple, Literal, Optional, List
 from functools import partial
 
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
-from jaxtyping import Float, Array, jaxtyped
+from jaxtyping import jaxtyped
+from typing import Dict, Tuple, Literal, Optional, List
 from beartype import beartype
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
+from reservoir.models.reservoir.base import Reservoir, ReservoirConfig
 from .backend import _ensure_tensorcircuit_initialized
 from .functional import _step_jit, _forward_jit
 
-class QuantumReservoir(Reservoir):
+class QuantumReservoirConfig(ReservoirConfig):
+    n_qubits: int
+    n_layers: int
+    seed: int
+    feedback_scale: float
+    measurement_basis: Literal["Z", "ZZ", "Z+ZZ"]
+    noise_type: Literal["clean", "depolarizing", "damping"]
+    noise_prob: float
+    readout_error: float
+    n_trajectories: int
+    use_remat: bool
+    use_reuploading: bool
+    precision: Literal["complex64", "complex128"]
+
+class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
     """
     Quantum Reservoir Computing using TensorCircuit.
     
@@ -107,7 +123,7 @@ class QuantumReservoir(Reservoir):
         
         shifts = self.n_qubits - 1 - jnp.arange(self.n_qubits)
         bits = (basis_states[:, None] >> shifts[None, :]) & 1
-        z_values = (1 - 2 * bits).astype(jnp.float_)
+        z_values = 1.0 - 2.0 * bits
         
         row_blocks = []
         if self.measurement_basis in ("Z", "Z+ZZ"):
@@ -147,11 +163,9 @@ class QuantumReservoir(Reservoir):
     def _broadcast_scalar(val, count):
         return jnp.full((count,), val)
 
-    @staticmethod
-    def _prepare_input(inputs: Union[JaxF64, Array]) -> Tuple[JaxF64, bool]:
-        """Preprocess input: cast to float64 and ensure 3D shape (Batch, Time, Feat)."""
-        # Cast to float_ to match global JAX config (float64)
-        arr = jnp.asarray(inputs, dtype=jnp.float_)
+    def _prepare_input(self, inputs: JaxF64) -> Tuple[JaxF64, bool]:
+        """Preprocess input: ensure 3D shape (Batch, Time, Feat)."""
+        arr = inputs
         input_was_2d = (arr.ndim == 2)
         if input_was_2d:
             arr = arr[None, :, :]
@@ -159,21 +173,21 @@ class QuantumReservoir(Reservoir):
             raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
         return arr, input_was_2d
 
-    def initialize_state(self, batch_size: int = 1) -> Union[JaxF64, Tuple[JaxF64, JaxF64]]:
+    def initialize_state(self, batch_size: int = 1) -> Tuple[JaxF64, Optional[JaxF64]]:
         state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float_)
         if self.n_trajectories > 0:
             # Monte Carlo Mode: Return (state, key) tuple
             # Update internal RNG state to ensure fresh noise per batch
             key, self._rng = jax.random.split(self._rng)
             return state, jax.random.split(key, batch_size)
-        return state
+        return state, None
 
-    def reset_state(self, batch_size: int) -> Union[JaxF64, Tuple[JaxF64, JaxF64]]:
+    def reset_state(self, batch_size: int) -> Tuple[JaxF64, Optional[JaxF64]]:
         """Alias for initialize_state. Resets the reservoir to the initial ground state."""
         return self.initialize_state(batch_size)
 
     @jaxtyped(typechecker=beartype)
-    def step(self, state: Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], input_data: Float[Array, "batch features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], Float[Array, "batch output_dim"]]:
+    def step(self, state: Tuple[JaxF64, Optional[JaxF64]], inputs: JaxF64) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
         """Batched step function for debugging/stepping."""
         # Use vmapped step logic wrapper
         step_func = partial(
@@ -187,10 +201,10 @@ class QuantumReservoir(Reservoir):
             use_remat=self.use_remat,
             use_reuploading=self.use_reuploading
         )
-        return jax.vmap(step_func, in_axes=(0, 0))(state, input_data)
+        return jax.vmap(step_func, in_axes=(0, 0))(state, inputs)
 
     @jaxtyped(typechecker=beartype)
-    def forward(self, state: Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], input_data: Float[Array, "batch time features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], Float[Array, "batch time output_dim"]]:
+    def forward(self, state: Tuple[JaxF64, Optional[JaxF64]], input_data: JaxF64) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
         """Forward pass using optimized scan."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
@@ -204,9 +218,9 @@ class QuantumReservoir(Reservoir):
         run_inputs = input_data
         
         if is_ensemble:
-            # Polymorphic State Check
-            if isinstance(state, (tuple, list)):
-                state_vec, rng_keys = state
+            # Polymorphic State Check via Tuple components
+            state_vec, rng_keys = state
+            if rng_keys is not None:
                 # keys shape: (Batch, 2) -> Broaden to (Batch * K, 2)
                 
                 # Split each key into traj_count keys
@@ -222,9 +236,8 @@ class QuantumReservoir(Reservoir):
             else:
                 # If state is array but n_trajectories > 1 (Maybe density matrix mode overridden?)
                 # Just repeat state
-                run_state = jnp.repeat(state, traj_count, axis=0)
+                run_state = (jnp.repeat(state_vec, traj_count, axis=0), None)
                 
-            # Expand Inputs: (Batch, T, F) -> (Batch*K, T, F)
             run_inputs = jnp.repeat(input_data, traj_count, axis=0)
         
         # --- Execution ---
@@ -258,7 +271,7 @@ class QuantumReservoir(Reservoir):
             
             # Reduce final_state (Optional implementation)
             # Just take the first trajectory's key/state to maintain shape for next steps if needed
-            if isinstance(final_state, (tuple, list)):
+            if final_state[1] is not None:
                  f_vec, f_keys = final_state
                  # f_vec: (B*K, N) -> (B, K, N) -> Mean
                  f_vec_mean = f_vec.reshape(original_batch_size, traj_count, -1).mean(axis=1)
@@ -269,7 +282,8 @@ class QuantumReservoir(Reservoir):
                  
                  final_state = (f_vec_mean, f_keys_reduced)
             else:
-                 final_state = final_state.reshape(original_batch_size, traj_count, -1).mean(axis=1)
+                 f_vec_mean = final_state[0].reshape(original_batch_size, traj_count, -1).mean(axis=1)
+                 final_state = (f_vec_mean, None)
             
         else:
             # Standard single trajectory / density matrix
@@ -281,11 +295,11 @@ class QuantumReservoir(Reservoir):
     @jaxtyped(typechecker=beartype)
     def __call__(
         self,
-        inputs: Float[Array, "batch time features"] | Float[Array, "time features"],
+        inputs: JaxF64,
         return_sequences: bool = False,
         split_name: Optional[str] = None,
-        **_: Any
-    ) -> Float[Array, "batch out_features"] | Float[Array, "batch time out_features"] | Float[Array, "time out_features"]:
+        **_
+    ) -> JaxF64:
         arr, input_was_2d = self._prepare_input(inputs)
         
         batch_size = arr.shape[0]
@@ -301,28 +315,32 @@ class QuantumReservoir(Reservoir):
 
 
     @staticmethod
-    def train(_inputs: JaxF64, _targets: Any = None, **__: Any) -> Dict[str, Any]:
+    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__) -> Dict[str, float]:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 
-    def to_dict(self) -> Dict[str, Any]:
-        data = super().to_dict()
-        data.update({
-            "n_qubits": self.n_qubits,
-            "n_layers": self.n_layers,
-            "measurement_basis": self.measurement_basis,
-            "noise_type": self.noise_type,
-            "noise_prob": self.noise_prob,
-            "readout_error": self.readout_error,
-            "n_trajectories": self.n_trajectories,
-            "use_remat": self.use_remat,
-            "use_reuploading": self.use_reuploading,
-            "precision": self.precision,
-        })
-        return data
+    def to_dict(self) -> QuantumReservoirConfig:
+        base_data = super().to_dict()
+        return QuantumReservoirConfig(
+            n_units=base_data["n_units"],
+            leak_rate=base_data["leak_rate"],
+            aggregation=base_data["aggregation"],
+            n_qubits=self.n_qubits,
+            n_layers=self.n_layers,
+            measurement_basis=self.measurement_basis,
+            noise_type=self.noise_type,
+            noise_prob=self.noise_prob,
+            readout_error=self.readout_error,
+            n_trajectories=self.n_trajectories,
+            use_remat=self.use_remat,
+            use_reuploading=self.use_reuploading,
+            precision=self.precision,
+            seed=0, # Optional: save seed if needed, or pass dummy to satisfy
+            feedback_scale=self.feedback_scale
+        )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "QuantumReservoir":
+    def from_dict(cls, data: QuantumReservoirConfig) -> "QuantumReservoir":
         try:
             return cls(
                 n_qubits=int(data["n_qubits"]),
@@ -331,13 +349,13 @@ class QuantumReservoir(Reservoir):
                 feedback_scale=float(data.get("feedback_scale")),
                 aggregation_mode=AggregationMode(data["aggregation"]),
                 measurement_basis=data["measurement_basis"],
-                noise_type=data.get("noise_type", "clean"),
-                noise_prob=float(data.get("noise_prob",)),
-                readout_error=float(data.get("readout_error")),
-                n_trajectories=int(data.get("n_trajectories")),
-                use_remat=bool(data.get("use_remat")),
-                use_reuploading=bool(data.get("use_reuploading")),
-                precision=data.get("precision"),
+                noise_type=data.get("noise_type", "clean"), # type: ignore
+                noise_prob=float(data.get("noise_prob") or 0.0),
+                readout_error=float(data.get("readout_error", 0.0)),
+                n_trajectories=int(data.get("n_trajectories", 0)),
+                use_remat=bool(data.get("use_remat", False)),
+                use_reuploading=bool(data.get("use_reuploading", False)),
+                precision=data.get("precision", "complex64"), # type: ignore
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc

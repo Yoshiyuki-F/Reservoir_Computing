@@ -5,10 +5,11 @@ Classification visualization utilities with validation support.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
+from reservoir.core.types import NpF64
 
 
 def _find_project_root() -> Path:
@@ -32,16 +33,15 @@ def _resolve_output_path(filename: str) -> Path:
 
 
 def plot_classification_results(
-    train_labels: np.ndarray,
-    test_labels: np.ndarray,
-    train_predictions: np.ndarray,
-    test_predictions: np.ndarray,
+    train_labels: NpF64,
+    test_labels: NpF64,
+    train_predictions: NpF64,
+    test_predictions: NpF64,
     title: str,
     filename: str,
-    metrics_info: Optional[Dict[str, Any]] = None,
-    class_names: Optional[Sequence[str]] = None,
-    val_labels: Optional[np.ndarray] = None,
-    val_predictions: Optional[np.ndarray] = None,
+    metrics_info: Optional[Dict[str]] = None,
+    val_labels: Optional[NpF64] = None,
+    val_predictions: Optional[NpF64] = None,
     best_lambda: Optional[float] = None,
     lambda_norm: Optional[float] = None,
 ) -> None:
@@ -50,20 +50,15 @@ def plot_classification_results(
     Annotates the selected ridge lambda and weight norm when provided.
     """
 
-    def _to_numpy(array: np.ndarray, dtype: Optional[np.dtype] = None) -> np.ndarray:
-        if dtype is None:
-            return np.asarray(array)
-        return np.asarray(array)
+    train_labels_np = train_labels
+    test_labels_np = test_labels
+    train_predictions_np = train_predictions
+    test_predictions_np = test_predictions
 
-    train_labels_np = _to_numpy(train_labels)
-    test_labels_np = _to_numpy(test_labels)
-    train_predictions_np = _to_numpy(train_predictions)
-    test_predictions_np = _to_numpy(test_predictions)
+    val_labels_np = val_labels
+    val_predictions_np = val_predictions
 
-    val_labels_np = _to_numpy(val_labels) if val_labels is not None else None
-    val_predictions_np = _to_numpy(val_predictions) if val_predictions is not None else None
-
-    def _safe_max(array: np.ndarray) -> int:
+    def _safe_max(array: NpF64) -> int:
         return int(array.max()) if array.size > 0 else -1
 
     if class_names is None:
@@ -203,8 +198,8 @@ def plot_loss_history(history: Sequence[float], filename: str, title: str = "Los
 
 
 def plot_timeseries_comparison(
-    targets: np.ndarray,
-    predictions: np.ndarray,
+    targets: NpF64,
+    predictions: NpF64,
     filename: str,
     title: str = "TimeSeries Prediction",
     max_features: int = 3,
@@ -217,8 +212,8 @@ def plot_timeseries_comparison(
     Handles 3D (Batch, Time, Feat) or 2D (Time, Feat) inputs.
     Plots the first sample (if batched) and up to `max_features` features.
     """
-    targets_np = np.asarray(targets)
-    preds_np = np.asarray(predictions)
+    targets_np = targets
+    preds_np = predictions
 
     # Standardize to (Time, Feat)
     if targets_np.ndim == 3:

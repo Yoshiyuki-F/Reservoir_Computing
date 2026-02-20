@@ -4,20 +4,18 @@ Standard Echo State Network implementation.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple
+from typing import Dict, Tuple, Union, Optional
 
+from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
 
 from reservoir.core.identifiers import AggregationMode
-from reservoir.layers.aggregation import StateAggregator
 from reservoir.models.reservoir.base import Reservoir
 
 
-
-
-
+@beartype
 class ClassicalReservoir(Reservoir):
     """Minimal ESN-style reservoir built on the Reservoir base class."""
 
@@ -76,9 +74,9 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str = None, **_: Any) -> JaxF64:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str = None, **_) -> JaxF64:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
-        arr = jnp.asarray(inputs)
+        arr = inputs
         
         # Convert 2D to 3D for internal processing (scan requires 3D)
         input_was_2d = (arr.ndim == 2)
@@ -101,13 +99,13 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: JaxF64, targets: Any = None, **__: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **__) -> Dict[str, float]:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
         return {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Union[int, float, str]]:
         data = super().to_dict()
         data.update(
             {
@@ -118,7 +116,7 @@ class ClassicalReservoir(Reservoir):
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ClassicalReservoir":
+    def from_dict(cls, data: dict) -> "ClassicalReservoir":
         try:
             return cls(
                 n_units=int(data["n_units"]),

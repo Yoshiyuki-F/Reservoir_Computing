@@ -4,8 +4,9 @@ Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Dict, Union, Tuple, Optional
 
+from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
@@ -25,7 +26,7 @@ class ModelFactory:
         input_dim: int = None,
         output_dim: int = None,
         input_shape: tuple[int, ...] = None,
-    ) -> Any:
+    ) -> ClosedLoopGenerativeModel:
 
         if input_dim is None or input_dim <= 0:
             raise ValueError("ModelFactory.create_model requires a positive input_dim.")
@@ -103,7 +104,7 @@ class ModelFactory:
                 adapter_shape = (batch_size, flattened_dim) if batch_size else (flattened_dim,)
                 structure = "Flatten -> FNN -> Output"
             
-            topo_meta: Dict[str, Any] = {
+            topo_meta: Dict[str, Union[str, Dict[str, Optional[Tuple[int, ...]]], Dict[str, Union[int, str, Optional[Tuple[int, ...]]]]]] = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,
