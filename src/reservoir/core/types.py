@@ -19,7 +19,7 @@ from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
-from typing import TypedDict, Union, TYPE_CHECKING
+from typing import TypedDict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import reservoir.core.interfaces
@@ -63,15 +63,15 @@ class EvalMetrics(TypedDict, total=False):
 # ==========================================
 
 # 値になりうる基本型
-PrimitiveValue = Union[str, float, int, bool, None]
+PrimitiveValue = str | float | int | bool | None
 
 # ネストを階層的に定義 (L1 -> L2 -> L3)
 # L1: 基本型とそのコレクション
-ConfigL1 = Union[PrimitiveValue, tuple[PrimitiveValue, ...], list[PrimitiveValue], dict[str, PrimitiveValue]]
+ConfigL1 = PrimitiveValue | tuple[PrimitiveValue, ...] | list[PrimitiveValue] | dict[str, PrimitiveValue]
 # L2: L1を含むコレクション (DistillationConfigなどで使用)
-ConfigL2 = Union[ConfigL1, tuple[ConfigL1, ...], list[ConfigL1], dict[str, ConfigL1]]
+ConfigL2 = ConfigL1 | tuple[ConfigL1, ...] | list[ConfigL1] | dict[str, ConfigL1]
 # L3: L2を含むコレクション (将来用)
-ConfigL3 = Union[ConfigL2, tuple[ConfigL2, ...], list[ConfigL2], dict[str, ConfigL2]]
+ConfigL3 = ConfigL2 | tuple[ConfigL2, ...] | list[ConfigL2] | dict[str, ConfigL2]
 
 # 全ての to_dict() の戻り値
 ConfigDict = dict[str, ConfigL3]
@@ -81,24 +81,45 @@ ConfigValue = ConfigL3
 # Result Domain Types (Execution Outputs)
 # ==========================================
 
-# 実行結果（Metrics, Predictions, Logs）を格納する型
-# インターフェースは循環参照を避けるため文字列で前方参照
-ResultL1 = Union[
-    PrimitiveValue, JaxF64, NpF64, 
-    TrainLogs, EvalMetrics,
-    "reservoir.core.interfaces.ReadoutModule", 
-    "reservoir.layers.preprocessing.Preprocessor",
-    "np.ndarray", "jax.Array"
-]
-ResultL2 = Union[ResultL1, tuple[ResultL1, ...], list[ResultL1], dict[str, ResultL1]]
-ResultL3 = Union[ResultL2, tuple[ResultL2, ...], list[ResultL2], dict[str, ResultL2]]
-ResultL4 = Union[ResultL3, tuple[ResultL3, ...], list[ResultL3], dict[str, ResultL3]]
+class FitResultMetrics(TypedDict, total=False):
+    train: EvalMetrics
+    val: EvalMetrics
+    test: EvalMetrics
 
-ResultDict = dict[str, ResultL4]
-ResultValue = ResultL4
+class FitResultDict(TypedDict, total=False):
+    train_pred: JaxF64 | None
+    val_pred: JaxF64 | None
+    test_pred: JaxF64 | None
+    metrics: FitResultMetrics
+    best_lambda: float | None
+    best_score: float | None
+    search_history: dict[float, float]
+    weight_norms: dict[float, float]
+    residuals_history: dict[float, NpF64] | None
+    closed_loop_pred: JaxF64 | None
+    closed_loop_truth: JaxF64 | None
+    chaos_results: dict[str, float] | None
+    outputs: dict[str, JaxF64 | None]
+    aligned_test_y: JaxF64 | None
+
+class ResultDict(TypedDict, total=False):
+    fit_result: FitResultDict
+    train_logs: TrainLogs
+    quantum_trace: JaxF64 | None
+    train: dict[str, float | dict[float, float]]
+    test: dict[str, float | dict[str, float]]
+    validation: dict[str, float]
+    outputs: dict[str, NpF64 | None]
+    readout: "reservoir.core.interfaces.ReadoutModule | None"
+    preprocessor: "reservoir.layers.preprocessing.Preprocessor | None"
+    scaler: "reservoir.layers.preprocessing.Preprocessor | None"
+    training_logs: TrainLogs
+    meta: dict[str, float | str]
+    is_closed_loop: bool
+    residuals_history: dict[float, NpF64] | None
 
 # **kwargs 用の厳格な型定義 (No Any)
-KwargsDict = dict[str, Union[PrimitiveValue, JaxF64, NpF64, tuple[PrimitiveValue, ...], list[PrimitiveValue], "ConfigDict", "ResultDict"]]
+KwargsDict = dict[str, PrimitiveValue | JaxF64 | NpF64 | tuple[PrimitiveValue, ...] | list[PrimitiveValue] | ConfigDict | ResultDict]
 
 
 # ==========================================
@@ -106,7 +127,7 @@ KwargsDict = dict[str, Union[PrimitiveValue, JaxF64, NpF64, tuple[PrimitiveValue
 # ==========================================
 
 #takes only NpF64 and returns JaxF64, checks for NaN/Inf, and uses jax.device_put to ensure it's on GPU
-@beartype
+@jaxtyped(typechecker=beartype)
 def to_jax_f64(x: NpF64) -> JaxF64:
     """NumPy(CPU) → JAX(GPU) 変換の関所。
 
@@ -124,7 +145,7 @@ def to_jax_f64(x: NpF64) -> JaxF64:
     return ret
 
 #takes only JaxF64 and returns NpF64, checks for NaN/Inf, and uses np.asarray to ensure it's on CPU
-@beartype
+@jaxtyped(typechecker=beartype)
 def to_np_f64(x: JaxF64) -> NpF64:
     """JAX(GPU) → NumPy(CPU) 変換の関所。
 

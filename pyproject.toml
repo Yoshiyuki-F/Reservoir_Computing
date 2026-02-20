@@ -21,6 +21,7 @@ dependencies = [
     "pyrefly",
     "beartype",
     "jaxtyping",
+    "ruff",
     #Quantum
     "tensorcircuit-ng[jax]",
     #mnist dataset
@@ -36,7 +37,6 @@ dependencies = [
     # hyper parameter optimization
     "optuna",
     "optuna-dashboard",
-    "ruff>=0.15.2",
 ]
 
 
