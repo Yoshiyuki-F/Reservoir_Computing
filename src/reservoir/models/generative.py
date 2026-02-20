@@ -3,7 +3,7 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, Union, runtime_checkable
+from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, runtime_checkable
 
 from beartype import beartype
 import jax
@@ -103,12 +103,12 @@ class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
             y_next = predict_one(output)
             
             # Periodic Stats Logging (Every 50 steps)
-            def log_stats(args):
+            def log_stats(args: Tuple[int, JaxF64, StateT, JaxF64]) -> None:
                 st_idx, x, h, y = args
                 jax.debug.print("--- Step {i} ---", i=st_idx)
-                jax.debug.print("Loop:Input | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
-                jax.debug.print("Loop:State | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h), s=jnp.std(h), mn=jnp.min(h), mx=jnp.max(h))
-                jax.debug.print("Loop:Pred  | mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(y), s=jnp.std(y), mn=jnp.min(y), mx=jnp.max(y))
+                jax.debug.print("Loop:Input - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
+                jax.debug.print("Loop:State - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h), s=jnp.std(h), mn=jnp.min(h), mx=jnp.max(h))
+                jax.debug.print("Loop:Pred  - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(y), s=jnp.std(y), mn=jnp.min(y), mx=jnp.max(y))
 
             # Conditional Execution
             jax.lax.cond(

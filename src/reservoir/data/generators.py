@@ -320,4 +320,4 @@ def generate_mnist_sequence_data(
         labels.append(label)
 
     input_data = np.stack(sequences, axis=0)
-    return input_data, np.array(labels)
+    return input_data, np.array(labels, dtype=np.float64)

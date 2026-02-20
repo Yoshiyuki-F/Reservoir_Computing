@@ -8,7 +8,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
 from jaxtyping import jaxtyped
 from typing import Tuple, Literal, Optional, List
 from beartype import beartype
@@ -296,7 +296,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
         inputs: JaxF64,
         return_sequences: bool = False,
         split_name: Optional[str] = None,
-        **_
+        **_: KwargsDict
     ) -> JaxF64:
         arr, input_was_2d = self._prepare_input(inputs)
         
@@ -313,47 +313,47 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
 
 
     @staticmethod
-    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__) -> TrainLogs:
+    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__: KwargsDict) -> TrainLogs:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 
-    def to_dict(self) -> QuantumReservoirConfig:
+    def to_dict(self) -> ConfigDict:
         base_data = super().to_dict()
-        return QuantumReservoirConfig(
-            n_units=base_data["n_units"],
-            leak_rate=base_data["leak_rate"],
-            aggregation=base_data["aggregation"],
-            n_qubits=self.n_qubits,
-            n_layers=self.n_layers,
-            measurement_basis=self.measurement_basis,
-            noise_type=self.noise_type,
-            noise_prob=self.noise_prob,
-            readout_error=self.readout_error,
-            n_trajectories=self.n_trajectories,
-            use_remat=self.use_remat,
-            use_reuploading=self.use_reuploading,
-            precision=self.precision,
-            seed=0, # Optional: save seed if needed, or pass dummy to satisfy
-            feedback_scale=self.feedback_scale
-        )
+        return {
+            "n_units": base_data["n_units"],
+            "leak_rate": base_data["leak_rate"],
+            "aggregation": base_data["aggregation"],
+            "n_qubits": int(self.n_qubits) if self.n_qubits is not None else None,
+            "n_layers": int(self.n_layers),
+            "seed": int(self.seed),
+            "feedback_scale": float(self.feedback_scale),
+            "measurement_basis": str(self.measurement_basis),
+            "noise_type": str(self.noise_type),
+            "noise_prob": float(self.noise_prob),
+            "readout_error": float(self.readout_error),
+            "n_trajectories": int(self.n_trajectories),
+            "use_remat": bool(self.use_remat),
+            "use_reuploading": bool(self.use_reuploading),
+            "precision": str(self.precision),
+        }
 
     @classmethod
-    def from_dict(cls, data: QuantumReservoirConfig) -> "QuantumReservoir":
+    def from_dict(cls, data: ConfigDict) -> "QuantumReservoir":
         try:
             return cls(
-                n_qubits=int(data["n_qubits"]),
+                n_qubits=int(data["n_qubits"]) if data.get("n_qubits") is not None else None,
                 n_layers=int(data["n_layers"]),
                 seed=int(data["seed"]),
-                feedback_scale=float(data.get("feedback_scale")),
+                feedback_scale=float(data.get("feedback_scale") or 0.0),
                 aggregation_mode=AggregationMode(data["aggregation"]),
-                measurement_basis=data["measurement_basis"],
-                noise_type=data.get("noise_type", "clean"), # type: ignore
+                measurement_basis=str(data["measurement_basis"]), # type: ignore
+                noise_type=str(data.get("noise_type", "clean")), # type: ignore
                 noise_prob=float(data.get("noise_prob") or 0.0),
                 readout_error=float(data.get("readout_error", 0.0)),
                 n_trajectories=int(data.get("n_trajectories", 0)),
                 use_remat=bool(data.get("use_remat", False)),
                 use_reuploading=bool(data.get("use_reuploading", False)),
-                precision=data.get("precision", "complex64"), # type: ignore
+                precision=str(data.get("precision", "complex64")), # type: ignore
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc

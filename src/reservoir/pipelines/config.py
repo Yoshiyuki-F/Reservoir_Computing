@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Union, Tuple
+from typing import Optional, Dict, Tuple
 
 from reservoir.core.identifiers import Dataset
 from reservoir.core.interfaces import ReadoutModule
@@ -37,12 +37,13 @@ class DatasetMetadata:
 
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
+from reservoir.core.types import ConfigDict
 
 
 @dataclass(frozen=True)
 class ModelStack:
     model: ClosedLoopGenerativeModel
     readout: Optional[ReadoutModule]
-    topo_meta: Dict[str, Union[str, Dict[str, Optional[Tuple[int, ...]]]]]
+    topo_meta: ConfigDict
     metric: str
     model_label: str

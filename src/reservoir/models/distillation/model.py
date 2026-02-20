@@ -11,14 +11,13 @@ from typing import Dict, Tuple, Optional
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, NpF64, to_jax_f64, TrainLogs, EvalMetrics
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
 from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.training.presets import TrainingConfig
-from reservoir.utils.reporting import print_feature_stats
 
 
 @beartype
@@ -51,12 +50,12 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Get window_size from student's adapter if available
         self._window_size: int = getattr(student, 'window_size', 1) or 1
 
-    def __call__(self, inputs: JaxF64, **kwargs) -> JaxF64:
-        return self.predict(inputs)
+    def __call__(self, inputs: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+        return self.predict(inputs, **kwargs)
 
-    def predict(self, X: JaxF64, **kwargs) -> JaxF64:
+    def predict(self, X: JaxF64, **kwargs: KwargsDict) -> JaxF64:
         """Delegate to student's predict (which handles adapter internally)."""
-        return self.student.predict(X)
+        return self.student.predict(X, **kwargs)
 
     def _compute_teacher_targets(self, inputs: JaxF64) -> JaxF64:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
@@ -78,7 +77,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         first_batch_size = min(batch_size, n_samples)
         first_batch_in = inputs[:first_batch_size]
         raw_states = self.teacher(first_batch_in, return_sequences=True, split_name="teacher_raw")
-        print_feature_stats(raw_states, "5A:teacher_raw (First Batch)")
+        jax.debug.print("    [Teacher] Raw Dynamics (First Batch) Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(raw_states), s=jnp.std(raw_states))
         # --------------------------------------
 
         output_shape = (n_samples,) + dummy_out.shape[1:]
@@ -102,42 +101,22 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: NpF64, targets: Optional[object] = None, **kwargs) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **kwargs: KwargsDict) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
-        With deferred projection, inputs are NpF64 (preprocessed, not projected).
-        Teacher targets: fused projection+teacher via batched_compute (OOM-safe).
-        Student: trained on preprocessed inputs (converted to JaxF64).
+        Inputs/Targets are already JaxF64 (Device Domain).
         """
-        projection_layer = kwargs.pop("projection_layer", None)
-        
-        # --- Phase A: Teacher Target Generation ---
+        # Phase A: Teacher Target Generation
         print("\n    [Distillation] ==========================================")
         print("    [Distillation] Phase A: Teacher Target Generation")
         print("    [Distillation] ==========================================")
 
-        if projection_layer is not None:
-            from reservoir.utils.batched_compute import batched_compute
-            
-            # Fused projection + teacher (OOM-safe, projected tensor only lives on GPU per batch)
-            def proj_teacher(x: JaxF64) -> JaxF64:
-                return self.teacher(projection_layer(x))
-            
-            teacher_targets = to_jax_f64(batched_compute(
-                proj_teacher, inputs, self.training_config.batch_size,
-                desc="[Teacher (Proj+Fwd)]"
-            ))
-            
-            # Capture RAW input dimension (not projected) for closed-loop generation state init
-            self._input_dim = int(inputs.shape[-1])
-        else:
-            # Standard path: inputs are already projected
-            self._input_dim = inputs.shape[-1]
-            inputs_jax = to_jax_f64(inputs)
-            teacher_targets = self._compute_teacher_targets_batched(inputs_jax, batch_size=self.training_config.batch_size)
+        # Capture input dimension for closed-loop generation state init
+        self._input_dim = int(inputs.shape[-1])
+        teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
         
-        print_feature_stats(teacher_targets, "6A:teacher")
+        jax.debug.print("    [Distillation] Teacher Target Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(teacher_targets), s=jnp.std(teacher_targets))
 
         # --- Phase B: Student Model Training ---
         print("\n    [Distillation] ==========================================")
@@ -146,16 +125,15 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         # Student training - FNNModel.train() handles adapter and alignment internally
-        student_inputs_jax = to_jax_f64(inputs)
-        student_logs = self.student.train(student_inputs_jax, teacher_targets, log_prefix="4B", **kwargs) or {}
+        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
         
         # --- Generate 5B: Student Output (Predicted State) ---
         # To verify Distillation, we show the student's output stats
-        student_outputs = self.student.predict(student_inputs_jax)
-        print_feature_stats(student_outputs, "5B:student_output")
+        student_outputs = self.student.predict(inputs)
+        jax.debug.print("    [Distillation] Student Output Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(student_outputs), s=jnp.std(student_outputs))
 
         # Optional: Compute final distillation MSE for logging
-        distill_mse = student_logs.get("final_loss", 0.0)
+        distill_mse = float(student_logs.get("final_loss", 0.0))
         logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {}
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
@@ -177,11 +155,11 @@ class DistillationModel(ClosedLoopGenerativeModel):
         metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {}
         return metrics
 
-    def get_topology_meta(self) -> Dict[str, float | str | int]:
+    def get_topology_meta(self) -> ConfigDict:
         return (
-            getattr(self, "topology_meta", {})
-            or getattr(self.student, "topology_meta", {})
-            or getattr(self.teacher, "topology_meta", {})
+            dict(getattr(self, "topology_meta", {}))
+            or dict(getattr(self.student, "topology_meta", {}))
+            or dict(getattr(self.teacher, "topology_meta", {}))
             or {}
         )
     

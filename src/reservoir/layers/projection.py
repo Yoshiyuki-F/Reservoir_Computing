@@ -3,13 +3,14 @@ STEP3 Projection which changes the dimension of feature vectors.
 """
 from __future__ import annotations
 import abc
-from typing import Any, Dict, Type
+from typing import Dict, Type
 from functools import singledispatch
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, ConfigDict
+
 
 # --- 1. Interface Definition ---
 
@@ -46,7 +47,7 @@ class Projection(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         """Serialize configuration parameters."""
         pass
 
@@ -108,7 +109,7 @@ class RandomProjection(Projection):
         # inputs.ndim == 2
         return jnp.dot(inputs, self.W) + self.bias
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "random_projection",
             "input_dim": self.input_dim,
@@ -129,7 +130,7 @@ class CoherentDriveProjection(Projection):
     quantum rotation angles that achieve amplitude encoding.
     
     The transformation: θ = 2 * arcsin(clip(x, -1, 1))
-    When applied with Ry(θ): |ψ⟩ = sqrt(1-a²)|0⟩ + a|1⟩
+    When applied with Ry(θ), the state becomes: ψ = sqrt(1-a²)0 + a1
     
     This is non-periodic (unlike angle embedding) and suitable for
     trending time series like Mackey-Glass.
@@ -193,7 +194,7 @@ class CoherentDriveProjection(Projection):
         
         return theta
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "coherent_drive",
             "input_dim": self.input_dim,
@@ -229,7 +230,7 @@ class CenterCropProjection(Projection):
              raise ValueError(f"CenterCropProjection requires 3D input (Batch, Time, Features), got ndim={inputs.ndim}")
         return inputs[..., self.start_idx : self.end_idx]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "center_crop",
             "input_dim": self.input_dim,
@@ -266,7 +267,7 @@ class ResizeProjection(Projection):
         # For 1D signal (Features), linear interpolation is equivalent to resizing along 1 axis.
         return jax.image.resize(inputs, target_shape, method='linear', antialias=True)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "resize_projection",
             "input_dim": self.input_dim,
@@ -305,7 +306,7 @@ class PolynomialProjection(Projection):
 
         return out
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "polynomial_projection",
             "input_dim": self.input_dim,
@@ -373,7 +374,7 @@ class PCAProjection(Projection):
         projected = jnp.dot(inputs, self._components.T)
         return projected * self.input_scaler
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "pca",
             "input_dim": self.input_dim,

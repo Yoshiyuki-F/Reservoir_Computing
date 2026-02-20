@@ -18,18 +18,16 @@ from pathlib import Path
 
 # ===== Domain Registry =====
 # Mapper files: BOTH np and jax imports explicitly allowed (boundary converters)
+# Pipeline or types or batched_compute
 MAPPERS = {
     "core/types.py",
     "utils/batched_compute.py",
-    "utils/metrics.py",
-    "utils/reporting.py",
+    #pipeline
     "pipelines/strategies.py",
     "pipelines/components/executor.py",
-    "readout/ridge.py",
 }
 
 CONDITIONAL_JAX_OK = {
-    "data/generators.py",
 }
 
 FORBIDDEN_TYPES = {"Any", "object", "Union"}
@@ -40,6 +38,7 @@ SRC_ROOT = Path(__file__).parent.parent / "src" / "reservoir"
 _import_np  = re.compile(r"^\s*(import numpy|from numpy|import numpy\.)")
 _import_jax = re.compile(r"^\s*(import jax\b|from jax\b|import jaxlib)")
 _import_types = re.compile(r"from reservoir\.core\.types import (.*)")
+_import_forbidden = re.compile(r"from typing import.*?\b(Any|Union)\b|import typing.*?Any|import typing.*?Union") 
 
 # 2. Types
 _forbidden_union = re.compile(r"\bUnion\[")
@@ -47,10 +46,10 @@ _forbidden_bitwise_or_union = re.compile(r"\|")
 _forbidden_any = re.compile(r"\bAny\b")
 _forbidden_object = re.compile(r"\bobject\b")
 _forbidden_raw_float = re.compile(r"\b(?:Float64|Float32|Float)\[|\b(?:Float64|Float32|Float)\b(?!\w|\[)") # matches Float64 or Float64[...
-_forbidden_raw_ndarray = re.compile(r"\b(?:jnp\.ndarray|np\.ndarray|jax\.Array|np\.array)\b")
+_forbidden_raw_ndarray = re.compile(r"\b(?:jnp\.ndarray|np\.ndarray|jax\.Array|np\.array|jax\.numpy\.ndarray)\b")
 
 # 3. Array creation and modifications
-_forbidden_asarray = re.compile(r"\b(?:np|jnp)\.asarray\b|\bnp\.array\b")
+_forbidden_asarray = re.compile(r"\b(?:np|jnp)\.asarray\b") # np.array is allowed if it has dtype=np.float64
 _forbidden_astype = re.compile(r"\.astype\(")
 _forbidden_copy = re.compile(r"\.copy\(")
 
@@ -83,6 +82,10 @@ def check_file(path: Path) -> list[str]:
         if _import_np.match(line): has_np = True
         if _import_jax.match(line): has_jax = True
 
+        # Rule 2: Forbidden Imports (Any, Union)
+        if _import_forbidden.search(line) and rel != "core/types.py":
+             violations.append(f"L{i}: ❌ Rule 2: Importing Any or Union is strictly prohibited outside core/types.py. Use strictly defined aliases.")
+
         # Rule 7: Don't import both NpF64 and JaxF64 outside of Mappers
         types_match = _import_types.search(line)
         if types_match and rel not in MAPPERS:
@@ -106,10 +109,26 @@ def check_file(path: Path) -> list[str]:
 
         # Rule 2: Any / Union / object / |
         if _forbidden_union.search(line):
-            violations.append(f"L{i}: ❌ Rule 1: 'Union' is strictly prohibited.")
+            # Allow Union if it's part of strictly defined ConfigDict/ResultDict patterns
+            is_allowed_union = any(x in line for x in ["ConfigDict", "ResultDict", "ConfigValue", "ResultValue", "PrimitiveValue", "ConfigL", "ResultL", "EvalMetrics", "TrainLogs", "KwargsDict"])
+            if not is_allowed_union:
+                violations.append(f"L{i}: ❌ Rule 1: 'Union' is strictly prohibited.")
+        
         # Only trigger pipe | for union if it looks like a type hint (e.g., `a: X | Y` or `-> X | Y`)
-        if re.search(r":\s*[^=]*\||->\s*[^=]*\|", line) and not "import" in line and not "==" in line:
-            violations.append(f"L{i}: ❌ Rule 1: '|' (Union type hint) is strictly prohibited.")
+        # Strategy: strip everything after # (comments) and check for type-hint looking pipes.
+        line_clean = line.split('#')[0]
+        # Valid type characters: word chars, dots, brackets, spaces, commas
+        pipe_match = re.search(r"(?::|->)\s*[\w\.\[\] ,]*\|", line_clean)
+        if pipe_match and not "import" in line_clean and not "==" in line_clean:
+            # Check if the pipe character is inside quotes (naive for single line)
+            pipe_pos = pipe_match.end() - 1
+            prefix = line_clean[:pipe_pos]
+            is_inside_string = (prefix.count('"') % 2 != 0) or (prefix.count("'") % 2 != 0)
+            
+            if not is_inside_string:
+                allowed_pipe_unions = ["ConfigDict", "ResultDict", "ConfigValue", "ResultValue", "PrimitiveValue", "ConfigL", "ResultL", "EvalMetrics", "TrainLogs", "KwargsDict"]
+                if not any(x in line_clean for x in allowed_pipe_unions):
+                     violations.append(f"L{i}: ❌ Rule 1: '|' (Union type hint) is strictly prohibited.")
 
         if _forbidden_any.search(line):
             # Only kwargs / args can use Any

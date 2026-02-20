@@ -1,7 +1,9 @@
-from typing import Dict, Optional
-from reservoir.core.types import JaxF64
+from typing import Optional
+from reservoir.core.types import JaxF64, EvalMetrics
 from reservoir.utils.metrics import calculate_chaos_metrics
 from reservoir.utils.reporting import print_chaos_metrics
+from reservoir.layers.preprocessing import Preprocessor
+from reservoir.data.config import BaseDatasetConfig
 
 class Evaluator:
     """Encapsulates evaluation logic including inverse transformation and metric calculation."""
@@ -10,12 +12,12 @@ class Evaluator:
     def compute_chaos_metrics(
         truth: JaxF64,
         pred: JaxF64,
-        scaler: object,
-        dataset_config: object,
+        scaler: Optional[Preprocessor],
+        dataset_config: BaseDatasetConfig,
         global_start: int,
         global_end: int,
         verbose: bool
-    ) -> Optional[Dict[str, float]]:
+    ) -> Optional[EvalMetrics]:
         """Compute VPT, NDEI, and other chaos metrics with inverse transform."""
         if scaler is None:
             return None

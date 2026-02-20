@@ -13,10 +13,9 @@ Two modes:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Literal
-
+from typing import Dict, Literal, Tuple
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, ConfigDict
 
 from reservoir.readout.ridge import RidgeCV
 
@@ -96,11 +95,12 @@ class PolyRidgeReadout(RidgeCV):
         train_y: JaxF64,
         val_Z: JaxF64,
         val_y: JaxF64,
-        scoring_fn,
+        scoring_fn: ScoringFn,
         maximize_score: bool = True,
-    ):
+    ) -> Tuple[float, float, Dict[float, float], Dict[float, float], Dict[float, np.ndarray]]:
         """Expand features for both train and val, then delegate to RidgeCV."""
         from reservoir.utils.reporting import print_feature_stats
+        from reservoir.readout.ridge import ScoringFn
 
         train_expanded = self._expand_features(train_Z)
         val_expanded = self._expand_features(val_Z)
@@ -124,8 +124,9 @@ class PolyRidgeReadout(RidgeCV):
     # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         data = super().to_dict()
-        data["degree"] = self.degree
-        data["mode"] = self.mode
-        return data
+        res: ConfigDict = dict(data)
+        res["degree"] = int(self.degree)
+        res["mode"] = str(self.mode)
+        return res

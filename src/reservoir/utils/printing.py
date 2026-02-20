@@ -2,7 +2,8 @@
 printing.py
 Utilities for pretty-printing model topology and status.
 """
-from typing import Dict, Any, Tuple, Optional, Iterable
+from typing import Tuple, Optional, Iterable
+from reservoir.core.types import ConfigDict
 
 
 def _fmt_dim(shape: Optional[Tuple[int, ...]]) -> str:
@@ -17,7 +18,7 @@ def _fmt_layers(layers: Optional[Iterable[int]]) -> str:
     return "->".join(str(int(v)) for v in layers)
 
 
-def print_topology(meta: Dict[str, Any]) -> None:
+def print_topology(meta: ConfigDict) -> None:
     """
     Render a 7-step topology report combining orchestrator (steps 1-4) and model (steps 5-7) metadata.
     Required keys in meta['shapes'] (may be None):

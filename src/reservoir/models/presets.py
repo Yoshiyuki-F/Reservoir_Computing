@@ -5,6 +5,7 @@ SSOT: all default hyperparameters live in these dataclasses.
 from __future__ import annotations
 
 import numpy as np
+from typing import Dict, Tuple
 
 from reservoir.core.identifiers import AggregationMode, Model, Dataset
 from reservoir.models.config import (
@@ -143,7 +144,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(1000, 1000),
+            hidden_layers=(10000, ),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -332,7 +333,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 # Dispatch table based on (Model, is_classification)
 # If entry matches, use specific preset. Else fallback to MODEL_PRESETS.
-SPECIFIC_PRESETS: dict[tuple[Model, bool], PipelineConfig] = {
+SPECIFIC_PRESETS: Dict[Tuple[Model, bool], PipelineConfig] = {
     (Model.CLASSICAL_RESERVOIR, True): CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, True): FNN_PRESET,
     (Model.FNN_DISTILLATION, True): FNN_DISTILLATION_PRESET,

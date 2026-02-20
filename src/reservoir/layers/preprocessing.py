@@ -5,10 +5,10 @@ Here we define preprocessing which doesn't change any dimensions, such as scalin
 from __future__ import annotations
 import abc
 from functools import singledispatch
-from typing import Any, Dict, Optional, Type
+from typing import Dict, Optional, Type
 
 from beartype import beartype
-from reservoir.core.types import NpF64
+from reservoir.core.types import NpF64, ConfigDict
 import numpy as np
 
 
@@ -38,7 +38,7 @@ class Preprocessor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         """Serialize configuration parameters."""
         pass
 
@@ -100,7 +100,7 @@ class StandardScaler(Preprocessor):
             arr += self.mean_
         return arr
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "standard_scaler",
         }
@@ -176,7 +176,7 @@ class CustomRangeScaler(Preprocessor):
             
         return arr
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "custom_range_scaler",
             "input_scale": self.input_scale,
@@ -254,7 +254,7 @@ class MinMaxScaler(Preprocessor):
             
         return arr
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "min_max_scaler",
             "feature_min": self.feature_min,
@@ -275,7 +275,7 @@ class IdentityPreprocessor(Preprocessor):
     def inverse_transform(self, X: NpF64) -> NpF64:
         return X
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {"type": "identity"}
 
 
@@ -318,7 +318,7 @@ class AffineScaler(Preprocessor):
         arr /= self.input_scale
         return arr
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {
             "type": "affine_scaler",
             "input_scale": self.input_scale,

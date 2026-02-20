@@ -1,10 +1,11 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/reporter.py"""
 import time
-from typing import Dict, Any
+from typing import Dict
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.reporting import generate_report
+from reservoir.core.types import ResultDict, to_np_f64
 
 
 class ResultReporter:
@@ -18,16 +19,16 @@ class ResultReporter:
         self.dataset_meta = dataset_meta
         self.start_time = time.time()
 
-    def compile_and_save(self, execution_results: Dict[str, Any], config: PipelineConfig) -> Dict[str, Any]:
+    def compile_and_save(self, execution_results: ResultDict, config: PipelineConfig) -> ResultDict:
         """
         Compile final results and trigger report generation.
         """
-        fit_result = execution_results["fit_result"]
+        fit_result: ResultDict = dict(execution_results["fit_result"]) # type: ignore
         train_logs = execution_results["train_logs"]
         quantum_trace = execution_results.get("quantum_trace") # New
         processed = self.frontend_ctx.processed_split
         
-        results: Dict[str, Any] = {}
+        results: ResultDict = {}
         metric_name = self.stack.metric
         test_y = processed.test_y
 
@@ -35,69 +36,83 @@ class ResultReporter:
         aligned_test_y = fit_result.get("aligned_test_y", test_y)
 
         if fit_result["closed_loop_pred"] is not None:
-
-            test_pred = fit_result["closed_loop_pred"]
-            test_y_final = fit_result["closed_loop_truth"]
+            # Predictions from strategies might be JaxF64, convert to NpF64 for reporting
+            test_pred = to_np_f64(fit_result["closed_loop_pred"]) # type: ignore
+            test_y_final = to_np_f64(fit_result["closed_loop_truth"]) # type: ignore
             results["is_closed_loop"] = True
         else:
-            test_pred = fit_result["test_pred"]
-            test_y_final = aligned_test_y
+            test_pred = to_np_f64(fit_result["test_pred"]) # type: ignore
+            test_y_final = to_np_f64(aligned_test_y) # type: ignore
 
         # Try to use pre-calculated metrics from Strategy
-        metrics = fit_result.get("metrics", {})
+        metrics: ResultDict = dict(fit_result.get("metrics", {})) # type: ignore
         
         # Test Score
         test_score = 0.0
-        test_metrics = metrics.get("test", {})
+        test_metrics: ResultDict = dict(metrics.get("test", {})) # type: ignore
         if metric_name in test_metrics:
-             test_score = test_metrics[metric_name]
+             test_score = float(test_metrics[metric_name]) # type: ignore
         
         # Train Score 
         # (Assuming strategy populates metrics["train"], merging it)
         results["train"] = {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
-            **metrics.get("train", {}) 
+            **dict(metrics.get("train", {})) # type: ignore
         }
         if fit_result["best_lambda"] is not None:
-            results["train"]["best_lambda"] = fit_result["best_lambda"]
+            results["train"]["best_lambda"] = fit_result["best_lambda"] # type: ignore
         
         # Propagate residuals history for plotting
         if "residuals_history" in fit_result:
             results["residuals_history"] = fit_result["residuals_history"]
 
-        results["test"] = {metric_name: test_score, **test_metrics}
+        results["test"] = {metric_name: test_score, **test_metrics} # type: ignore
         if fit_result["chaos_results"] is not None:
-            chaos = fit_result["chaos_results"]
-            results["test"]["chaos_metrics"] = chaos
-            results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
-            results["test"]["ndei"] = chaos.get("ndei", float("inf"))
-            results["test"]["var_ratio"] = chaos.get("var_ratio", 0.0)
-            results["test"]["mse"] = chaos.get("mse", float("inf"))
+            chaos: ResultDict = dict(fit_result["chaos_results"]) # type: ignore
+            results["test"]["chaos_metrics"] = chaos # type: ignore
+            results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0) # type: ignore
+            results["test"]["ndei"] = chaos.get("ndei", float("inf")) # type: ignore
+            results["test"]["var_ratio"] = chaos.get("var_ratio", 0.0) # type: ignore
+            results["test"]["mse"] = chaos.get("mse", float("inf")) # type: ignore
 
         # Val Score
         val_score = 0.0
-        val_metrics = metrics.get("val", {})
+        val_metrics: ResultDict = dict(metrics.get("val", {})) # type: ignore
         if metric_name in val_metrics:
-            val_score = val_metrics[metric_name]
+            val_score = float(val_metrics[metric_name]) # type: ignore
         elif fit_result["best_score"] is not None:
              # Keep this fallback as best_score corresponds to validation during fit
-             val_score = fit_result["best_score"]
+             val_score = float(fit_result["best_score"]) # type: ignore
             
-        results["validation"] = {metric_name: val_score, **val_metrics}
+        results["validation"] = {metric_name: val_score, **val_metrics} # type: ignore
 
-        results["outputs"] = {
-            "train_pred": fit_result["train_pred"],
-            "test_pred": test_pred,
-            "test_truth": test_y_final, # Exposed for Optuna stats
-            "val_pred": fit_result["val_pred"],
-        }
+        # Ensure all predictions and outputs are moved to Host Domain (NpF64)
+        def _to_np_recursive(val):
+            if isinstance(val, (jax.Array, jnp.ndarray)):
+                return to_np_f64(val)
+            if isinstance(val, dict):
+                return {k: _to_np_recursive(v) for k, v in val.items()}
+            if isinstance(val, list):
+                return [_to_np_recursive(v) for v in val]
+            return val
 
-        results["readout"] = self.stack.readout
-        results["preprocessor"] = self.frontend_ctx.preprocessor
-        results["scaler"] = self.frontend_ctx.preprocessor  # Alias for reporting.py
+        outputs_raw = dict(fit_result.get("outputs", {})) # strategy might have returned them
+        if not outputs_raw:
+             # Fallback: strategy returned them directly in fit_result keys
+             outputs_raw = {
+                 "train_pred": fit_result.get("train_pred"),
+                 "test_pred": test_pred, # already converted above
+                 "val_pred": fit_result.get("val_pred"),
+             }
+
+        results["outputs"] = _to_np_recursive(outputs_raw)
+
+        results["readout"] = self.stack.readout # type: ignore
+        results["preprocessor"] = self.frontend_ctx.preprocessor # type: ignore
+        results["scaler"] = self.frontend_ctx.preprocessor  # type: ignore # Alias for reporting.py
         results["training_logs"] = train_logs
-        results["quantum_trace"] = quantum_trace # New
+        results["quantum_trace"] = to_np_f64(quantum_trace) if quantum_trace is not None else None # New
         results["meta"] = {
             "metric": metric_name,
             "elapsed_sec": time.time() - self.start_time,
@@ -108,7 +123,7 @@ class ResultReporter:
 
         return results
 
-    def _generate_report(self, results: Dict[str, Any], config: PipelineConfig):
+    def _generate_report(self, results: ResultDict, config: PipelineConfig):
         processed = self.frontend_ctx.processed_split
         report_payload = dict(
             readout=self.stack.readout,

@@ -3,7 +3,7 @@ STEP 4 and 5 (6 is skipped)
 Factory for building distillation teacher-student pipelines."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 
 from reservoir.core.identifiers import Model
@@ -13,6 +13,7 @@ from reservoir.models.presets import DistillationConfig
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.training.presets import TrainingConfig
+from reservoir.core.types import ConfigDict
 
 
 class DistillationFactory:
@@ -89,7 +90,7 @@ class DistillationFactory:
             training_config=training,
         )
 
-        topo_meta: Dict[str, Any] = {
+        topo_meta: ConfigDict = {
             "type": Model.FNN_DISTILLATION.value.upper(),
             "shapes": {
                 "input": input_shape,

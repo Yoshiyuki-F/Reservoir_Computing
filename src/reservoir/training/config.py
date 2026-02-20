@@ -6,7 +6,8 @@ Training configurations and Hyperparameter search spaces.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+from reservoir.core.types import ConfigDict
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class TrainingConfig:
     val_size: float
     test_ratio: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         """Convert to dictionary, ensuring types are JSON-safe."""
         return {
             "name": self.name,

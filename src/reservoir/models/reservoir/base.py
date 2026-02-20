@@ -5,8 +5,8 @@ Base class for Reservoir Computing models implementing ReservoirNode protocol.
 from abc import ABC, abstractmethod
 from beartype import beartype
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
-from typing import Dict, Tuple, TypedDict, TypeVar, Generic, Optional, Any
+from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
+from typing import Dict, Tuple, TypedDict, TypeVar, Generic, Optional
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -83,14 +83,14 @@ class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
         states = outputs.states if hasattr(outputs, "states") else outputs
         return states if is_sequence_batched else states[0]
 
-    def to_dict(self) -> ReservoirConfig:
+    def to_dict(self) -> ConfigDict:
         return {
             "n_units": self.n_units,
             "leak_rate": self.leak_rate,
             "aggregation": self.aggregator.mode.value,
         }
 
-    def get_topology_meta(self) -> Dict[str, Any]:
+    def get_topology_meta(self) -> ConfigDict:
         """Optional topology metadata set by factories."""
         return getattr(self, "topology_meta", {}) or {}
 
@@ -98,7 +98,7 @@ class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def __call__(self, inputs: JaxF64) -> JaxF64:
+    def __call__(self, inputs: JaxF64, **kwargs: KwargsDict) -> JaxF64:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

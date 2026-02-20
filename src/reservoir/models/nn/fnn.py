@@ -5,12 +5,12 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Optional, Tuple, Any
+from typing import Dict, Sequence, Optional, Tuple
 
 from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, KwargsDict
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
@@ -63,7 +63,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: KwargsDict) -> TrainLogs:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim
@@ -82,7 +82,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         return super().train(adapted_inputs, aligned_targets, **kwargs)
 
-    def predict(self, X: JaxF64, **kwargs) -> JaxF64:
+    def predict(self, X: JaxF64, **kwargs: KwargsDict) -> JaxF64:
         """Predict with adapter-transformed inputs."""
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
@@ -91,7 +91,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         adapted_inputs = self.adapter(X)
         return super().predict(adapted_inputs)
 
-    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> EvalMetrics:
         """Evaluate with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:

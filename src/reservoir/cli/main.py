@@ -15,6 +15,7 @@ from reservoir.utils import check_gpu_available
 from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import get_model_preset
+from reservoir.core.types import ConfigDict
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Unified ML Framework CLI")
@@ -60,11 +61,11 @@ def main() -> None:
         print(f"Readout Class: {type(pipeline_config.readout).__name__}")
     
     import json
-    def print_section(name: str, data: dict):
+    def print_section(name: str, data: ConfigDict):
         if not data: return
         print(f"\n[{name}]")
         # filter out None values for cleaner output
-        clean_data = {k: v for k, v in data.items() if v is not None}
+        clean_data: ConfigDict = {k: v for k, v in data.items() if v is not None}
         print(json.dumps(clean_data, indent=2))
 
     print_section("Preprocessing", pipeline_config.preprocess.to_dict())

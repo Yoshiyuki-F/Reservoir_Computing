@@ -1,6 +1,6 @@
 
 from functools import partial
-from typing import Dict, Tuple, Optional, Union
+from typing import Tuple, Optional
 
 import jax.numpy as jnp
 from reservoir.core.types import NpF64, JaxF64
@@ -8,12 +8,14 @@ from reservoir.core.types import NpF64, JaxF64
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
+from reservoir.layers.projection import Projection
 from reservoir.pipelines.evaluation import Evaluator
 from reservoir.pipelines.strategies import ReadoutStrategyFactory
 from reservoir.pipelines.components.data_coordinator import DataCoordinator
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
 from reservoir.models.distillation.model import DistillationModel
+from reservoir.core.types import ResultDict
 
 
 class PipelineExecutor:
@@ -34,7 +36,7 @@ class PipelineExecutor:
         # Dependency Injection (OCP/DIP)
         self.coordinator = coordinator
 
-    def run(self, config: PipelineConfig) -> Dict[str, Union[Dict, JaxF64, None]]:
+    def run(self, config: PipelineConfig) -> ResultDict:
         """Run the execution phase."""
         
         # Step 5: Model Dynamics (Training/Warmup)
@@ -43,11 +45,11 @@ class PipelineExecutor:
         projection = self.frontend_ctx.projection_layer
         
         # Pass projection_layer to model.train() so models can compose it internally
-        # (e.g. DistillationModel fuses projection+teacher in batched_compute)
-        # NpF64 stays as-is: ClassicalReservoir.train() accepts Any,
-        # DistillationModel handles domain crossing internally.
+        # Explicit transition to Device Domain (JaxF64)
+        train_y = self.frontend_ctx.processed_split.train_y
         train_logs = self.stack.model.train(
-            train_X, self.frontend_ctx.processed_split.train_y,
+            to_jax_f64(train_X), 
+            to_jax_f64(train_y) if train_y is not None else None,
             projection_layer=projection,
         )
 
@@ -124,7 +126,7 @@ class PipelineExecutor:
                      # Force return_sequences=True to get time evolution
                      # Use batch_size=1
                      # Convert to JAX array to satisfy strictly typed model
-                     sample_input_jax = jnp.asarray(sample_input)
+                     sample_input_jax = to_jax_f64(sample_input)
                      trace = self.stack.model(sample_input_jax, return_sequences=True)
                      quantum_trace = trace
                      print(f"    [Executor] Captured trace shape: {trace.shape}")
@@ -172,7 +174,7 @@ class PipelineExecutor:
         inputs: Optional[NpF64], 
         split_name: str, 
         batch_size: int,
-        projection: Optional[object] = None,
+        projection: Optional[Projection] = None,
     ):
         """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
         if inputs is None:

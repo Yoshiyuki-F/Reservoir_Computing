@@ -44,7 +44,7 @@ class DataCoordinator:
             window_size
         )
 
-    def get_test_inputs(self, window_size: int = 0) -> Optional[np.ndarray]:
+    def get_test_inputs(self, window_size: int = 0) -> Optional[NpF64]:
         """Get test inputs with Halo Padding applied."""
         if self.processed.test_X is None:
             return None
@@ -60,7 +60,7 @@ class DataCoordinator:
 
     def align_targets(
         self, 
-        features: Optional[np.ndarray], 
+        features: Optional[NpF64], 
         split: str
     ) -> Optional[NpF64]:
         """

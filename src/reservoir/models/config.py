@@ -7,27 +7,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Dict, Literal, Tuple, Union, Optional, List
+from typing import Dict, Literal, Tuple, Optional, List
 
 from reservoir.core.identifiers import AggregationMode, Model
-
-# -----------------------------------------------------------------------------
-# Strict Type Definitions (AGENT.md Compliant)
-# -----------------------------------------------------------------------------
-
-# 値になりうる基本型 (No Any)
-PrimitiveValue = Union[str, float, int, bool, None]
-
-# 全ての to_dict() の戻り値 (Forward reference for recursion)
-ConfigDict = Dict[str, "ConfigValue"]
-
-# コレクションを含む全ての設定値 (Strict Union, Recursive)
-ConfigValue = Union[
-    PrimitiveValue, 
-    Tuple["ConfigValue", ...], 
-    List["ConfigValue"],
-    ConfigDict
-]
+from reservoir.core.types import ConfigDict
 
 # -----------------------------------------------------------------------------
 # Base Config ABCs

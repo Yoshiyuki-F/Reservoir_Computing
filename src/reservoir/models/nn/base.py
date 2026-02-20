@@ -1,15 +1,12 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/nn/base.py
 Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics
+from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics, ConfigDict
 import optax
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
@@ -36,7 +33,7 @@ class BaseModel(ABC):
     def evaluate(self, X: JaxF64, y: JaxF64) -> EvalMetrics:
         ...
 
-    def get_topology_meta(self) -> Dict[str, float | str | int]:
+    def get_topology_meta(self) -> ConfigDict:
         """Optional topology metadata for visualization."""
         return getattr(self, "topology_meta", {})
 
@@ -50,7 +47,7 @@ class BaseModel(ABC):
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
 
-    def __init__(self, model_config: Dict[str, tuple | int], training_config: TrainingConfig, classification: bool = False) -> None:
+    def __init__(self, model_config: ConfigDict, training_config: TrainingConfig, classification: bool = False) -> None:
         self.model_config = model_config
         self.training_config = training_config
         self.learning_rate: float = float(training_config.learning_rate)
@@ -131,11 +128,7 @@ class BaseFlaxModel(BaseModel, ABC):
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
         print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
-        # 1. ここで一括してGPUに転送してしまう (MNIST程度なら余裕で乗ります)
-        print("    [JAX] Transferring data to GPU...")
-        inputs = jax.device_put(inputs)
-        targets = jax.device_put(targets)  # 回帰ならfloat, 分類ならint注意
-
+        # Inputs/Targets are already JaxF64 (Device Domain)
         num_samples = inputs.shape[0]
         num_batches = num_samples // self.batch_size
         num_train_steps = self.epochs * num_batches  # Total training steps for scheduler
@@ -143,7 +136,7 @@ class BaseFlaxModel(BaseModel, ABC):
         # Initialize State
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
-        sample_input = inputs[:1]  # 既にGPUにあるデータを使う
+        sample_input = inputs[:1]
 
         if self._state is None:
             print(f"    [JAX] Initializing parameters...")
@@ -152,9 +145,6 @@ class BaseFlaxModel(BaseModel, ABC):
         # JIT function
         @jax.jit
         def train_step_jit(state, b_x, b_y):
-            # classificationフラグの扱いに注意 (self.classificationがboolならstatic引数化など検討)
-            # ここではクロージャでキャプチャしているので再コンパイルは起きないはずですが
-            # static_argnumsを使うのがベストプラクティスです。
             new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
             return new_state, loss
 
@@ -167,14 +157,12 @@ class BaseFlaxModel(BaseModel, ABC):
         for _ in pbar:
             batch_losses = []
 
-            # Pythonループだが、データは既にGPUにあるためスライシングは高速
             for i in range(0, limit, self.batch_size):
-                # GPU上の配列をスライス (データ転送は発生しない)
                 b_x = inputs[i: i + self.batch_size]
                 b_y = targets[i: i + self.batch_size]
 
                 self._state, loss = train_step_jit(self._state, b_x, b_y)
-                batch_losses.append(float(loss))  # LossをCPUに戻すコストのみ
+                batch_losses.append(float(loss))
 
             if batch_losses:
                 avg_loss = float(jnp.mean(jnp.array(batch_losses)))
@@ -184,6 +172,7 @@ class BaseFlaxModel(BaseModel, ABC):
         self.trained = True
         final_loss = loss_history[-1] if loss_history else 0.0
         return {"loss_history": loss_history, "final_loss": final_loss}
+
 
     def predict(self, X: JaxF64) -> JaxF64:
         if self._state is None:
@@ -208,5 +197,5 @@ class BaseFlaxModel(BaseModel, ABC):
         mae = float(jnp.mean(jnp.abs(preds - y_arr)))
         return {"mse": mse, "mae": mae}
 
-    def get_topology_meta(self) -> Dict[str, float | str | int]:
+    def get_topology_meta(self) -> ConfigDict:
         return getattr(self, "topology_meta", {})

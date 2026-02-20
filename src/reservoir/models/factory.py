@@ -4,7 +4,7 @@ Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
 
-from typing import Dict, Union, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.nn.fnn import FNNModel
@@ -14,6 +14,7 @@ from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
+from reservoir.core.types import ConfigDict
 
 
 class ModelFactory:
@@ -103,7 +104,7 @@ class ModelFactory:
                 adapter_shape = (batch_size, flattened_dim) if batch_size else (flattened_dim,)
                 structure = "Flatten -> FNN -> Output"
             
-            topo_meta: Dict[str, Union[str, Dict[str, Optional[Tuple[int, ...]]], Dict[str, Union[int, str, Optional[Tuple[int, ...]]]]]] = {
+            topo_meta: ConfigDict = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,

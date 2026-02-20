@@ -5,12 +5,12 @@ Flow: [Batch, Time, Hidden] -> Aggregation -> [Batch, Feature]
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, TrainLogs
+from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
@@ -28,10 +28,10 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         if not isinstance(aggregation_mode, AggregationMode):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
         self.aggregator = StateAggregator(mode=aggregation_mode)
-        self.topology_meta: Dict[str, Any] = {}
+        self.topology_meta: ConfigDict = {}
         self._n_units: Optional[int] = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_: Any) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_: KwargsDict) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 
@@ -68,7 +68,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Standard Interface                                                 #
     # ------------------------------------------------------------------ #
 
-    def __call__(self, inputs: JaxF64, split_name: str = None, **_: Any) -> JaxF64:
+    def __call__(self, inputs: JaxF64, split_name: Optional[str] = None, **_: KwargsDict) -> JaxF64:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs
@@ -90,7 +90,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         """Return aggregated feature dimension."""
         return self.aggregator.get_output_dim(n_units, int(time_steps))
 
-    def get_topology_meta(self) -> Dict[str, Any]:
+    def get_topology_meta(self) -> ConfigDict:
         return self.topology_meta
 
     def __repr__(self) -> str:

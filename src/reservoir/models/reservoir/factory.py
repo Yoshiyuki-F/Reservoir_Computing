@@ -5,13 +5,14 @@ Handles creation of Physical Nodes (Reservoir) and assembly into sequential pipe
 """
 from __future__ import annotations
 
-from typing import Dict, Optional, Union, Tuple
+from typing import Dict, Optional, Tuple
 
 from reservoir.models.config import ClassicalReservoirConfig, QuantumReservoirConfig
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.reservoir.quantum import QuantumReservoir
 from reservoir.models.reservoir.base import Reservoir
+from reservoir.core.types import ConfigDict
 
 
 class ReservoirFactory:
@@ -75,7 +76,7 @@ class ReservoirFactory:
         else:
             raise ValueError(f"input_shape must be 2D or 3D, got {input_shape}")
 
-        topo_meta: Dict[str, Union[str, Dict[str, Optional[Tuple[int, ...]]]]] = {}
+        topo_meta: ConfigDict = {}
         agg_mode_enum = model.aggregation
 
         # Determine shapes with batch dimension if present

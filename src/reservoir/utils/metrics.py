@@ -5,7 +5,7 @@ Pure Numpy implementation for efficiency (avoids CPU->GPU transfer for metrics).
 """
 from typing import Dict
 from beartype import beartype
-from reservoir.core.types import NpF64
+from reservoir.core.types import NpF64, EvalMetrics
 import numpy as np
 
 # --- Standard Metric Functions ---
@@ -112,7 +112,7 @@ def accuracy(y_true: NpF64, y_pred: NpF64) -> float:
     return float(np.mean(pred_labels == true_labels))
 
 @beartype
-def vpt_score(y_true: NpF64, y_pred: NpF64, threshold: float = 0.4) -> int:
+def vpt_score(y_true: NpF64, y_pred: NpF64, threshold: float) -> int:
     """
     Valid Prediction Time (VPT).
     Calculated based on normalized error at each time step.
@@ -181,7 +181,7 @@ def calculate_chaos_metrics(
     dt: float,
     lyapunov_time_unit: float,
     vpt_threshold: float = 0.4,
-) -> Dict[str, float]:
+) -> EvalMetrics:
     """
     Calculate Chaos prediction metrics (Mackey-Glass, etc).
     Wrapper around detailed metric functions.

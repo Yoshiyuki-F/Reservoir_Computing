@@ -9,7 +9,7 @@ from typing import Dict, Optional
 
 from beartype import beartype
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, ConfigDict
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
 
@@ -65,7 +65,7 @@ class StateAggregator(Transformer):
                 return arr.reshape(-1)
         raise ValueError(f"Unsupported shape {arr.shape} or aggregation mode: {agg_mode}")
 
-    def fit(self, features: JaxF64, y: Any = None) -> "StateAggregator":
+    def fit(self, features: JaxF64, y: Optional[JaxF64] = None) -> "StateAggregator":
         return self
 
     def transform(self, features: JaxF64, log_label: Optional[str] = None) -> JaxF64:
@@ -146,12 +146,12 @@ class StateAggregator(Transformer):
             
         raise ValueError(f"Unsupported input shape: {input_shape}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ConfigDict:
         return {"mode": self.mode.value if isinstance(self.mode, AggregationMode) else str(self.mode)}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StateAggregator":
-        return cls(mode=data.get("mode", AggregationMode.LAST))
+    def from_dict(cls, data: ConfigDict) -> "StateAggregator":
+        return cls(mode=AggregationMode(str(data.get("mode", AggregationMode.LAST.value))))
 
 
 __all__ = ["StateAggregator"]
