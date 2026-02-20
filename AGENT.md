@@ -93,22 +93,85 @@ The file `src/reservoir/utils/gpu_utils.py` acts as the **Gatekeeper**.
 - **Do not remove** the `jax.config.update` call in `gpu_utils.py`. It is not redundant; it is the effective enforcement point.
 - `main.py` and `__init__.py` still set `os.environ` as a best practice, but `gpu_utils.py` guarantees it.
 
+
+
 # ==========================================
+# 禁止ルール
+# ==========================================
+
 # 1. 厳格な型エイリアスの定義（AnyやUnionは一切禁止）
-# ==========================================
 JaxF64 = Float64[jax.Array, "..."] 
-もしくは
 NpF64 = Float64[np.ndarray, "..."]
-# ArrayはデフォルトでJAX/NumPy汎用だが、JAX領域では実質JAX専用として扱う
 のようにtypes.py 定義することでFloat64という形タイプをJaxのそれだと矯正します。そうすることでJaxTypingはtypes.py以外ではImportされないはず。
-2. Ctrl+F で Any, Union, などの曖昧な型ヒントがないか全ファイルを検索して、もしあれば即修正するルールを徹底する。Union はConfigでは許可するが、実装コードでは禁止。Anyは引数の**args, **kwargsでのみ許可する。
-3. np.asarray jnp.asarray やnp.array も禁止。Mapper層以外でjnp.asarrayを使っているファイルがあれば即to_jax_f64やto_np_f64に修正するルールを徹底する。(これらもType.pyに定義済み)
-4. Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64を徹底する。
+Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64を徹底する。
 だからといって型ヒントを無視するのは禁止。例えば、def vpt_score(y_true, y_pred, threshold: float = 0.4) -> int: のように、型ヒントが実際の値と乖離している場合は即修正するルールを徹底する。
-5. UserWarning: Explicitly requested dtype float64 requested in asarray is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+
+# 2. Ctrl+F で Any, Union, などの曖昧な型ヒントがないか全ファイルを検索して、もしあれば即修正するルールを徹底する。Anyは引数の**args, **kwargsでのみ許可する。
+🚫 厳密に禁止される「逃げ道」型:
+Any
+object（型ヒントとしての使用は一切禁止）
+Union / |（FailSafeとしての両対応は禁止）
+曖昧な Callable
+✅ 許可される型ヒント（ホワイトリスト）:
+引数や戻り値の型ヒントには、以下のいずれかしか使用してはならない。
+プリミティブ型: int, float, str, bool
+types.py で定義された厳格なエイリアス: JaxF64, NpF64
+プロジェクト内で定義された基底クラス（ABC / Protocol）: BaseConfig, ModelConfig など
+標準コレクション（内部の型も厳格に指定すること）: List[str], Tuple[int, ...] など（※ List[object] は禁止）
+# 3. np.asarray jnp.asarray やnp.array も禁止。Mapper層以外でjnp.asarrayを使っているファイルがあれば即to_jax_f64やto_np_f64に修正するルールを徹底する。(これらもType.pyに定義済み)
+
+# 4. UserWarning: Explicitly requested dtype float64 requested in asarray is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
 この警告は出るべきではない。だからといって警告を無視するようなコードを書くのは禁止。もしこの警告が出るコードがあれば、即修正するルールを徹底する。
-6. lint_imports.py もしくは同様のスクリプトを作成して、
+
+# 6. lint_imports.py もしくは同様のスクリプトを作成して、
      両方np とjnpimportしているファイルがないか
      上に書いてあるTypeが使われているか
 全ファイルをチェックTestを追加する。
-7. │   7 + from reservoir.core.types import NpF64, JaxF64, to_jax_f64  これはおかしい。両方importしているのはMapper層だけなので、これもMapper層以外のファイルで見つけたら即修正するルールを徹底する。
+
+# 7. from reservoir.core.types import NpF64, JaxF64, to_jax_f64  これはおかしい。両方importしているのはMapper層だけなので、これもMapper層以外のファイルで見つけたら即修正するルールを徹底する。
+
+# 8.  Callable の厳格化ルール
+❌ 禁止される書き方（曖昧）
+Callable (引数・戻り値の省略は即アウト)
+Callable[..., Any] (... による引数の省略や、戻り値の Any への逃げ)
+Callable[[jnp.ndarray], jnp.ndarray] (生の配列型の使用は前述のルール違反)
+
+✅ 許可される書き方（厳格）
+必ず types.py で定義したエイリアス（JaxF64, NpF64 等）を用いて、「入力の数・型」と「出力の型」を完全に明記することを強制します。
+Callable[[JaxF64], JaxF64] (JAX配列を受け取り、JAX配列を返す)
+Callable[[NpF64, int], NpF64] (Numpy配列と整数を受け取り、Numpy配列を返す)
+🚫 禁止事項
+astype() による遅延キャストの禁止: パイプラインの途中で astype() を使用して型を合わせることは、メモリの重複コピーを引き起こすため固く禁じる。
+
+np.copy() の禁止: 同様の理由で、明示的なディープコピーも原則禁止。
+
+✅ 強制される実装パターン（Fail Fast & Contract）
+Data Loaderの責任:
+データローダー（loaders.py）の時点で、必ず最初から np.float64 としてロードまたは生成しなければならない。後段のレイヤーにキャストの責任を押し付けてはならない。
+
+アサーションによる防御 (Fail Fast):
+受け取る側の関数（Preprocessingなど）では、astype() で変換してあげるのではなく、**型が違えば即座にクラッシュさせる（Fail Fast）**こと。
+
+# 9.
+🚫 Numpy Host Domain におけるメモリ操作の厳格な禁止事項 (Memory Allocation Anti-Patterns)
+エージェントはコード生成時、以下の「暗黙のメモリ倍増・肥大化」を引き起こす書き方を絶対に避けてください。
+
+astype() による遅延キャスト:
+
+❌ 禁止: X_arr = X.astype(np.float64) (RAM上のコピーが倍増する)
+
+✅ 強制: Data Loaderの段階で dtype=np.float64 として生成し、後段はアサート (assert X.dtype == np.float64) で防ぐ。
+
+np.eye()[labels] によるOne-hotエンコーディング:
+
+❌ 禁止: 中間的に巨大な単位行列をアロケーションするため、クラス数が多いとOOMで即死する。
+
+✅ 強制: np.zeros() でターゲット配列を確保し、arr[np.arange(N), labels] = 1.0 のようにインプレースでインデックス参照して書き込む。
+
+np.copy() またはスライスによる不要な複製:
+
+❌ 禁止: 計算途中の X_copy = np.copy(X) や X_new = X[:]
+
+✅ 強制: 前処理（スケーリング等）はすべてインプレース演算（X -= mean 等）で行い、参照を維持したままパイプラインを流す。
+#10. 
+「型パラメータのない素の dict や list の使用は禁止。必ず dict[K, V] のように中身を明示すること」しかしAnyは禁止

@@ -18,6 +18,7 @@ dependencies = [
     "optax",
     "flax",
     #Type scrict
+    "pyrefly",
     "beartype",
     "jaxtyping",
     #Quantum
@@ -64,3 +65,18 @@ explicit = true
 tensorcircuit-ng = { git = "https://github.com/tensorcircuit/tensorcircuit-ng.git" }
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
+
+[tool.pyrefly]
+# 解析対象のディレクトリ
+project-includes = ["**/*.py*"]
+
+# 厳格モードをON（暗黙の型解決を許さない）
+strict = true
+
+# エージェントや開発者のサボり（Any / object）を許さない設定
+report-missing-type-stubs = true
+report-any = "error"                # Any型の使用をエラーとして弾く
+report-explicit-any = "error"       # typing.Any の明示的な使用も弾く
+report-implicit-override = "error"
+untyped-def-behavior = "check-and-infer-return-type"
+report-missing-type-args = "error"
