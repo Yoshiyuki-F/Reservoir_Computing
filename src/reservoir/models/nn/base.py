@@ -4,12 +4,12 @@ Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, List
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, JaxKey
+from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics
 import optax
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
@@ -21,7 +21,7 @@ from reservoir.training.presets import TrainingConfig
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None) -> Dict[str, float]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None) -> TrainLogs:
         """
         Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
         Defaults to a no-op so models without a pre-training stage can conform to the interface.
@@ -33,7 +33,7 @@ class BaseModel(ABC):
         ...
 
     @abstractmethod
-    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> EvalMetrics:
         ...
 
     def get_topology_meta(self) -> Dict[str, float | str | int]:
@@ -126,7 +126,7 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> TrainLogs:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
@@ -158,7 +158,7 @@ class BaseFlaxModel(BaseModel, ABC):
             new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
             return new_state, loss
 
-        loss_history = []
+        loss_history: List[float] = []
         limit = num_batches * self.batch_size
 
         print(f"    [JAX] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
@@ -194,7 +194,7 @@ class BaseFlaxModel(BaseModel, ABC):
 
         return _predict_fn(self._state.params, X)
 
-    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> EvalMetrics:
         preds = self.predict(X)
         y_arr = y
         if self.classification:

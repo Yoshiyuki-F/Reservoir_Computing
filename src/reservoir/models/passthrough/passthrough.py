@@ -10,7 +10,7 @@ from typing import Any, Dict, Tuple, Optional
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, TrainLogs
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
@@ -31,7 +31,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         self.topology_meta: Dict[str, Any] = {}
         self._n_units: Optional[int] = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: Any = None, **_: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_: Any) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 

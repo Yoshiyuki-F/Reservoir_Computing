@@ -11,7 +11,7 @@ from typing import Dict, Tuple, Optional
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, NpF64, to_jax_f64
+from reservoir.core.types import JaxF64, NpF64, to_jax_f64, TrainLogs, EvalMetrics
 from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
@@ -102,7 +102,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: NpF64, targets: Optional[object] = None, **kwargs) -> Dict[str, float]:
+    def train(self, inputs: NpF64, targets: Optional[object] = None, **kwargs) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -158,12 +158,12 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = student_logs.get("final_loss", 0.0)
-        logs = dict(student_logs) if isinstance(student_logs, dict) else {}
+        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {}
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: JaxF64, y: Optional[JaxF64] = None) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: Optional[JaxF64] = None) -> EvalMetrics:
         """
         Distillation evaluation: compare student output with teacher output.
         """
@@ -176,10 +176,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Delegate to student's evaluate (handles adapter and alignment internally)
         student_metrics = self.student.evaluate(X, teacher_targets)
 
-        if isinstance(student_metrics, dict):
-            metrics: Dict[str, float] = dict(student_metrics)
-        else:
-            metrics = {}
+        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {}
         return metrics
 
     def get_topology_meta(self) -> Dict[str, float | str | int]:

@@ -19,12 +19,30 @@ from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
+from typing import TypedDict, List
+
 # ==========================================
 # 型エイリアス定義
 # ==========================================
 NpF64 = Float64[np.ndarray, "..."]
 JaxF64 = Float64[Array, "..."]
 JaxKey = UInt32[Array, "..."]  # JAX PRNG key (uint32)
+
+class TrainLogs(TypedDict, total=False):
+    """Strictly typed training logs to replace Dict[str, Any]."""
+    loss_history: List[float]
+    final_loss: float
+    distill_mse: float
+    accuracy: float
+    # Add other specific keys as they emerge, but NO Any.
+
+class EvalMetrics(TypedDict, total=False):
+    """Strictly typed evaluation metrics to replace Dict[str, float]."""
+    mse: float
+    mae: float
+    accuracy: float
+    vpt: float
+    # Add other specific keys as they emerge.
 
 
 # ==========================================

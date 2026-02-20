@@ -4,18 +4,16 @@ Wrapper class that manages state and configuration, delegating computation to fu
 """
 from __future__ import annotations
 
-from typing import Dict, Tuple, Literal, Optional, List
 from functools import partial
 
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics
 from jaxtyping import jaxtyped
-from typing import Dict, Tuple, Literal, Optional, List
+from typing import Tuple, Literal, Optional, List
 from beartype import beartype
 
 from reservoir.core.identifiers import AggregationMode
-from reservoir.models.reservoir.base import Reservoir
 from reservoir.models.reservoir.base import Reservoir, ReservoirConfig
 from .backend import _ensure_tensorcircuit_initialized
 from .functional import _step_jit, _forward_jit
@@ -315,7 +313,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
 
 
     @staticmethod
-    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__) -> Dict[str, float]:
+    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__) -> TrainLogs:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 

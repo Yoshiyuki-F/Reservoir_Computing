@@ -2,6 +2,7 @@ from dataclasses import replace
 from typing import Optional, Tuple, Callable
 
 from reservoir.core.identifiers import Dataset
+from reservoir.core.types import to_jax_f64
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.data.loaders import load_dataset_with_validation_split
 from reservoir.data.presets import DATASET_REGISTRY
@@ -160,7 +161,7 @@ class PipelineDataManager:
         # Fit PCA if applicable
         if hasattr(projection, 'fit'):
             print(f"Fitting {type(projection).__name__} on training data...")
-            projection.fit(train_X)
+            projection.fit(to_jax_f64(train_X))
         
         # ==========================================
         # DEFERRED PROJECTION (OOM Prevention)
@@ -172,12 +173,8 @@ class PipelineDataManager:
         # inside batched_compute, so the projected tensor only exists
         # ephemerally on GPU per batch.
 
-        # Infer projected output shape from a single dummy sample #TODO is this really needed just to know the dimension?
-        dummy_in = train_X[:1]
-        dummy_out = projection(dummy_in)
-        projected_output_dim = int(dummy_out.shape[-1])
+        projected_output_dim = int(projection.output_dim)
         projected_shape = train_X.shape[:-1] + (projected_output_dim,)
-        del dummy_in, dummy_out
 
         print(f"    [Deferred] Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
 

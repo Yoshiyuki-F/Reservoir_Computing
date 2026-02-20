@@ -4,12 +4,12 @@ Standard Echo State Network implementation.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Optional, Any
+from typing import Dict, Tuple, Union, Optional
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, TrainLogs
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
@@ -99,7 +99,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: Any, targets: Optional[Any] = None, **__) -> Dict[str, float]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **__) -> TrainLogs:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
