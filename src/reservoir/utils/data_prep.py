@@ -3,7 +3,6 @@
 src/reservoir/utils/data_prep.py
 Data preparation utilities for Reservoir Computing pipelines.
 """
-from typing import Optional
 from beartype import beartype
 from reservoir.core.types import NpF64
 
@@ -12,7 +11,7 @@ import numpy as np
 @beartype
 def apply_halo_padding(
     current_data: NpF64,
-    context_data: Optional[NpF64],
+    context_data: NpF64 | None,
     window_size: int
 ) -> NpF64:
     """

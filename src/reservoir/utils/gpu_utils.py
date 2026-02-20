@@ -1,7 +1,8 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/utils/gpu_utils.py
 Reservoir Computing用のGPUユーティリティ関数。
 """
-from typing import Callable, TypeVar
+from typing import TypeVar
+from collections.abc import Callable
 import re
 import shutil
 

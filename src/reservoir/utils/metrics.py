@@ -3,7 +3,6 @@ src/reservoir/utils/metrics.py
 Refactored metrics calculation logic.
 Pure Numpy implementation for efficiency (avoids CPU->GPU transfer for metrics).
 """
-from typing import Dict
 from beartype import beartype
 from reservoir.core.types import NpF64, EvalMetrics
 import numpy as np

@@ -3,7 +3,6 @@ STEP 4 and 5 (6 is skipped)
 Factory for building distillation teacher-student pipelines."""
 from __future__ import annotations
 
-from typing import Dict, Optional
 
 
 from reservoir.core.identifiers import Model
@@ -22,10 +21,10 @@ class DistillationFactory:
     @staticmethod
     def create_model(
         distillation_config: DistillationConfig,
-        training: TrainingConfig,
         input_dim: int,
         output_dim: int,
-        input_shape: Optional[tuple[int, ...]],
+        input_shape: tuple[int, ...] | None,
+        training: TrainingConfig | None = None,
     ) -> DistillationModel:
         teacher_cfg = distillation_config.teacher
         if not isinstance(teacher_cfg, ClassicalReservoirConfig):
@@ -108,5 +107,5 @@ class DistillationFactory:
                 "student_structure": f"TDE(w={window_size}) -> FNN",
             },
         }
-        model.topology_meta = topo_meta
+        model.topology_meta = topo_meta # type: ignore
         return model

@@ -2,7 +2,6 @@
 Step 4 Adapters before the actual model layers
 """
 import jax.numpy as jnp
-from typing import Optional
 from beartype import beartype
 from reservoir.core.types import JaxF64
 from reservoir.utils.reporting import print_feature_stats
@@ -18,7 +17,7 @@ class Flatten:
         return self
     
     @staticmethod
-    def transform(X: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def transform(X: JaxF64, log_label: str | None = None) -> JaxF64:
         if X.ndim == 3:
             result = X.reshape(X.shape[0], -1)
         elif X.ndim == 2:
@@ -27,20 +26,20 @@ class Flatten:
             result = X.flatten()
         
         if log_label is not None:
-            from reservoir.utils.reporting import print_feature_stats
-            print_feature_stats(result, log_label)
+            from reservoir.core.types import to_np_f64
+            print_feature_stats(to_np_f64(result), log_label)
         
         return result
 
     @staticmethod
-    def align_targets(targets: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def align_targets(targets: JaxF64, log_label: str | None = None) -> JaxF64:
         """No alignment needed for Flatten adapter."""
         if log_label is not None:
-            from reservoir.utils.reporting import print_feature_stats
-            print_feature_stats(targets, log_label)
+            from reservoir.core.types import to_np_f64
+            print_feature_stats(to_np_f64(targets), log_label)
         return targets
 
-    def __call__(self, X: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def __call__(self, X: JaxF64, log_label: str | None = None) -> JaxF64:
         return self.transform(X, log_label=log_label)
 
 
@@ -52,13 +51,13 @@ class TimeDelayEmbedding:
     Flattening the batch and time dimensions allows standard FNNs to process the windows as independent samples.
     """
     def __init__(self, window_size: int = 10):
-        print(f"\n=== Step 4: Adapter ===")
+        print("\n=== Step 4: Adapter ===")
         self.window_size = window_size
 
     def fit(self) -> "TimeDelayEmbedding":
         return self
 
-    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: Optional[str] = None) -> JaxF64:
+    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None) -> JaxF64:
         # Support 2D input (T, F) - treat as single batch
         is_2d = X.ndim == 2
         if is_2d:
@@ -91,26 +90,28 @@ class TimeDelayEmbedding:
         
         # Log feature stats only when log_label is provided
         if log_label is not None:
-            print_feature_stats(X_embedded, log_label)
+            print_feature_stats(to_np_f64(X_embedded), log_label)
 
         return X_embedded
 
-    def align_targets(self, targets: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def align_targets(self, targets: JaxF64, log_label: str | None = None) -> JaxF64:
         """Align targets by dropping first (window_size-1) timesteps to match windowed X."""
         W = self.window_size
         # Support 2D (T, Out)
         if targets.ndim == 2:
             result = targets[W-1:, :]
             if log_label is not None:
-                print_feature_stats(result, f"{log_label} (Time-Trimmed)")
+                from reservoir.core.types import to_np_f64
+                print_feature_stats(to_np_f64(result), f"{log_label} (Time-Trimmed)")
             return result
         # 3D (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
         aligned = targets[:, W-1:, :]
         reshaped = aligned.reshape(-1, aligned.shape[-1])
         if log_label is not None:
-            print_feature_stats(reshaped, f"{log_label} (Time-Trimmed)")
+            from reservoir.core.types import to_np_f64
+            print_feature_stats(to_np_f64(reshaped), f"{log_label} (Time-Trimmed)")
         return reshaped
 
-    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: Optional[str] = None) -> JaxF64:
+    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None) -> JaxF64:
         return self.transform(X, flatten_batch=flatten_batch, log_label=log_label)
 

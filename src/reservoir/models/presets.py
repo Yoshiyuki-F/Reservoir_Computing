@@ -5,7 +5,6 @@ SSOT: all default hyperparameters live in these dataclasses.
 from __future__ import annotations
 
 import numpy as np
-from typing import Dict, Tuple
 
 from reservoir.core.identifiers import AggregationMode, Model, Dataset
 from reservoir.models.config import (
@@ -333,7 +332,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 # Dispatch table based on (Model, is_classification)
 # If entry matches, use specific preset. Else fallback to MODEL_PRESETS.
-SPECIFIC_PRESETS: Dict[Tuple[Model, bool], PipelineConfig] = {
+SPECIFIC_PRESETS: dict[tuple[Model, bool], PipelineConfig] = {
     (Model.CLASSICAL_RESERVOIR, True): CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, True): FNN_PRESET,
     (Model.FNN_DISTILLATION, True): FNN_DISTILLATION_PRESET,
@@ -350,12 +349,14 @@ SPECIFIC_PRESETS: Dict[Tuple[Model, bool], PipelineConfig] = {
 def get_model_preset(model: Model, dataset: Dataset) -> PipelineConfig:
     """Retrieves a model preset by enum key with task-aware dispatch."""
     ds_preset = get_dataset_preset(dataset)
-    is_classification = ds_preset.classification
+    if ds_preset is None:
+        raise ValueError(f"No dataset preset found for dataset: {dataset}")
+    is_classification = getattr(ds_preset, "classification", False)
     
     if (model, is_classification) in SPECIFIC_PRESETS:
         return SPECIFIC_PRESETS[(model, is_classification)]
     else:
-        raise Error(f"No preset found for model {model} with classification={is_classification}")
+        raise ValueError(f"No preset found for model {model} with classification={is_classification}")
 
 __all__ = [
     "PipelineConfig",

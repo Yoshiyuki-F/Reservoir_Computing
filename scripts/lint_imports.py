@@ -119,7 +119,7 @@ def check_file(path: Path) -> list[str]:
         line_clean = line.split('#')[0]
         # Valid type characters: word chars, dots, brackets, spaces, commas
         pipe_match = re.search(r"(?::|->)\s*[\w\.\[\] ,]*\|", line_clean)
-        if pipe_match and not "import" in line_clean and not "==" in line_clean:
+        if pipe_match and "import" not in line_clean and "==" not in line_clean:
             # Check if the pipe character is inside quotes (naive for single line)
             pipe_pos = pipe_match.end() - 1
             prefix = line_clean[:pipe_pos]
@@ -140,7 +140,7 @@ def check_file(path: Path) -> list[str]:
                 violations.append(f"L{i}: ❌ Rule 2: 'Any' is strictly prohibited except for **kwargs and *args.")
         
         if _forbidden_object.search(line):
-            if not re.search(r"class\s+\w+\s*\(object\):", line) and not "logger" in line and not isinstance(eval("object"), object): # naive filters
+            if not re.search(r"class\s+\w+\s*\(object\):", line) and "logger" not in line and not isinstance(eval("object"), object): # naive filters
                 # We want to catch object entirely if used as type hint
                 if re.search(r":\s*object|->\s*object|\[object\]", line):
                     violations.append(f"L{i}: ❌ Rule 2: 'object' type hint is a prohibited escape hatch.")
@@ -168,7 +168,7 @@ def check_file(path: Path) -> list[str]:
 
     # Boundary Violation
     if has_np and has_jax and rel not in MAPPERS and rel not in CONDITIONAL_JAX_OK:
-        violations.append(f"❌ BOUNDARY VIOLATION: Imports BOTH numpy AND jax (not a registered Mapper)")
+        violations.append("❌ BOUNDARY VIOLATION: Imports BOTH numpy AND jax (not a registered Mapper)")
     
     if violations:
         return [f"\n📄 {rel}:"] + violations

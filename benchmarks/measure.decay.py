@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import numpy as np
 from reservoir.models.reservoir.quantum.model import QuantumReservoir
 from reservoir.core.identifiers import AggregationMode
 
@@ -25,7 +24,7 @@ def measure_circuit_attenuation():
         precision="complex64"
     )
 
-    print(f"--- Circuit Attenuation Test ---")
+    print("--- Circuit Attenuation Test ---")
     print(f"Config: {model.n_qubits} Qubits, {model.n_layers} Layers, Re-uploading={model.use_reuploading}")
 
     # 2. テストデータの生成

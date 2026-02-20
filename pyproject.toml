@@ -36,6 +36,7 @@ dependencies = [
     # hyper parameter optimization
     "optuna",
     "optuna-dashboard",
+    "ruff>=0.15.2",
 ]
 
 
@@ -106,3 +107,12 @@ report-unnecessary-cast = "error"
 # ==========================================
 report-missing-type-stubs = "error"  # ※ true ではなく "error" にレベルを合わせる
 report-missing-imports = "error"
+
+
+# Ruff全体の設定
+[tool.ruff]
+target-version = "py313"
+
+# Linter個別の設定
+[tool.ruff.lint]
+extend-select = ["UP", "TCH"]

@@ -6,7 +6,6 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Optional, List
 from reservoir.core.types import NpF64
 
 def _resolve_output_path(filename: str) -> Path:
@@ -28,7 +27,7 @@ def plot_qubit_dynamics(
     states: NpF64,
     filename: str,
     title: str = "Quantum Reservoir Dynamics",
-    feature_names: Optional[List[str]] = None,
+    feature_names: list[str] | None = None,
     cmap: str = "RdBu_r",
     vmin: float = -1.0,
     vmax: float = 1.0,

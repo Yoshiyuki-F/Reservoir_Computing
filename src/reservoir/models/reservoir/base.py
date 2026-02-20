@@ -4,9 +4,8 @@ Base class for Reservoir Computing models implementing ReservoirNode protocol.
 """
 from abc import ABC, abstractmethod
 from beartype import beartype
-import jax.numpy as jnp
 from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
-from typing import Dict, Tuple, TypedDict, TypeVar, Generic, Optional
+from typing import TypedDict, TypeVar, Generic
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -46,12 +45,12 @@ class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
         raise NotImplementedError
 
     @abstractmethod
-    def forward(self, state: StateT, input_data: JaxF64) -> Tuple[StateT, JaxF64]:
+    def forward(self, state: StateT, input_data: JaxF64) -> tuple[StateT, JaxF64]:
         """Compute single step dynamics returning next state and emitted features."""
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, state: StateT, inputs: JaxF64) -> Tuple[StateT, JaxF64]:
+    def step(self, state: StateT, inputs: JaxF64) -> tuple[StateT, JaxF64]:
         """Single time step - used for closed-loop generation."""
         raise NotImplementedError
 
@@ -70,14 +69,14 @@ class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
         if isinstance(initial_state, tuple):
              is_state_batched = True
         elif hasattr(initial_state, "ndim"):
-             is_state_batched = cast(JaxF64, initial_state).ndim > 1
+             is_state_batched = cast('JaxF64', initial_state).ndim > 1
         else:
              is_state_batched = False
         
         if not is_state_batched:
-             init_batched = cast(StateT, cast(JaxF64, initial_state)[None, ...] if not isinstance(initial_state, tuple) else initial_state)
+             init_batched = cast('StateT', cast('JaxF64', initial_state)[None, ...] if not isinstance(initial_state, tuple) else initial_state)
         else:
-             init_batched = cast(StateT, initial_state)
+             init_batched = initial_state
 
         _, outputs = self.forward(init_batched, inputs_batched)
         states = outputs.states if hasattr(outputs, "states") else outputs

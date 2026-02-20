@@ -3,7 +3,6 @@ STEP3 Projection which changes the dimension of feature vectors.
 """
 from __future__ import annotations
 import abc
-from typing import Dict, Type
 from functools import singledispatch
 
 from beartype import beartype
@@ -340,10 +339,10 @@ class PCAProjection(Projection):
         super().__init__(input_dim, n_units)
         self.n_units = n_units
         self.input_scaler = float(input_scaler)
-        self._components = None  # (n_units, input_dim)
+        self._components: JaxF64 | None = None  # (n_units, input_dim)
         self._fitted = False
 
-    def fit(self, X: JaxF64) -> "PCAProjection":
+    def fit(self, X: JaxF64) -> PCAProjection:
         """
         Fit PCA on training data.
         X shape: (Time, Features) or (Batch, Time, Features)
@@ -367,7 +366,7 @@ class PCAProjection(Projection):
         return self
 
     def _project(self, inputs: JaxF64) -> JaxF64:
-        if not self._fitted:
+        if not self._fitted or self._components is None:
             raise RuntimeError("PCAProjection: fit() must be called before projection")
         
         # Direct projection (no centering needed - data is already zero-mean)
@@ -395,12 +394,12 @@ def create_projection(config: ProjectionConfig, input_dim: int) -> Projection:
     raise TypeError(f"Unknown projection config type: {type(config)}")
 
 def register_projections(
-    CenterCropConfigClass: Type, 
-    RandomProjectionConfigClass: Type,
-    ResizeProjectionConfigClass: Type,
-    PolynomialProjectionConfigClass: Type = None,
-    PCAProjectionConfigClass: Type = None,
-    CoherentDriveConfigClass: Type = None,
+    CenterCropConfigClass: type, 
+    RandomProjectionConfigClass: type,
+    ResizeProjectionConfigClass: type,
+    PolynomialProjectionConfigClass: type | None = None,
+    PCAProjectionConfigClass: type | None = None,
+    CoherentDriveConfigClass: type | None = None,
 ):
     """
     Call this function once to register the handlers.

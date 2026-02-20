@@ -2,17 +2,17 @@
 printing.py
 Utilities for pretty-printing model topology and status.
 """
-from typing import Tuple, Optional, Iterable
+from collections.abc import Iterable
 from reservoir.core.types import ConfigDict
 
 
-def _fmt_dim(shape: Optional[Tuple[int, ...]]) -> str:
+def _fmt_dim(shape: tuple[int, ...] | None) -> str:
     if shape is None:
         return "?"
     return "[" + "x".join(str(d) for d in shape) + "]"
 
 
-def _fmt_layers(layers: Optional[Iterable[int]]) -> str:
+def _fmt_layers(layers: Iterable[int] | None) -> str:
     if not layers:
         return "None"
     return "->".join(str(int(v)) for v in layers)

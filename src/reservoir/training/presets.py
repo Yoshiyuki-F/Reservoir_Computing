@@ -1,4 +1,3 @@
-from typing import Dict
 
 from reservoir.training.config import TrainingConfig
 
@@ -7,7 +6,7 @@ from reservoir.training.config import TrainingConfig
 # The Dataclass defaults ARE the "standard".
 # We only define overrides for other presets.
 
-TRAINING_PRESETS: Dict[str, TrainingConfig] = {
+TRAINING_PRESETS: dict[str, TrainingConfig] = {
     "standard": TrainingConfig(
         name = "standard",
         batch_size= 2048,

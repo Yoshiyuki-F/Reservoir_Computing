@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Dict, Literal, Tuple, Optional, List
+from typing import Literal
 
 from reservoir.core.identifiers import AggregationMode, Model
 from reservoir.core.types import ConfigDict
@@ -20,7 +20,7 @@ class BaseConfig(ABC):
     """Abstract base class for all pipeline configuration components."""
 
     @abstractmethod
-    def validate(self, context: str = "") -> "BaseConfig":
+    def validate(self, context: str = "") -> BaseConfig:
         """Validate the configuration parameters."""
         pass
 
@@ -32,7 +32,7 @@ class BaseConfig(ABC):
 
 class PreprocessingConfig(BaseConfig):
     """Base class for Step 2 preprocessing configurations."""
-    def validate(self, context: str = "") -> "PreprocessingConfig":
+    def validate(self, context: str = "") -> PreprocessingConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -41,7 +41,7 @@ class PreprocessingConfig(BaseConfig):
 
 class ProjectionConfig(BaseConfig):
     """Base class for Step 3 projection configurations."""
-    def validate(self, context: str = "") -> "ProjectionConfig":
+    def validate(self, context: str = "") -> ProjectionConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -50,7 +50,7 @@ class ProjectionConfig(BaseConfig):
 
 class ModelConfig(BaseConfig):
     """Base class for Step 5 model dynamics configurations."""
-    def validate(self, context: str = "") -> "ModelConfig":
+    def validate(self, context: str = "") -> ModelConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -59,7 +59,7 @@ class ModelConfig(BaseConfig):
 
 class ReadoutConfig(BaseConfig):
     """Base class for Step 7 readout configurations."""
-    def validate(self, context: str = "") -> "ReadoutConfig":
+    def validate(self, context: str = "") -> ReadoutConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -79,9 +79,9 @@ class PipelineConfig:
     model_type: Model
     description: str
     preprocess: PreprocessingConfig
-    projection: Optional[ProjectionConfig]
+    projection: ProjectionConfig | None
     model: ModelConfig
-    readout: ReadoutConfig
+    readout: ReadoutConfig | None
 
     def __post_init__(self) -> None:
         if self.preprocess is None:
@@ -107,7 +107,7 @@ class PipelineConfig:
         return self.preprocess
 
     @property
-    def projection_config(self) -> Optional[ProjectionConfig]:
+    def projection_config(self) -> ProjectionConfig | None:
         return self.projection
 
     @property
@@ -115,12 +115,12 @@ class PipelineConfig:
         return {}
 
     @property
-    def reservoir(self) -> Optional[ClassicalReservoirConfig]:
+    def reservoir(self) -> ClassicalReservoirConfig | None:
         """Expose reservoir configs for consumers expecting the legacy attribute."""
         return self.model if isinstance(self.model, ClassicalReservoirConfig) else None
 
     @property
-    def distillation(self) -> Optional[DistillationConfig]:
+    def distillation(self) -> DistillationConfig | None:
         """Expose distillation configs for consumers expecting the legacy attribute."""
         return self.model if isinstance(self.model, DistillationConfig) else None
 
@@ -133,7 +133,8 @@ class PipelineConfig:
         merged.update(self.preprocess.to_dict())
         if self.projection is not None:
             merged.update(self.projection.to_dict())
-        merged.update(self.readout.to_dict())
+        if self.readout is not None:
+            merged.update(self.readout.to_dict())
 
         return merged
 
@@ -182,7 +183,7 @@ class CustomRangeScalerConfig(PreprocessingConfig):
     input_scale: float
     centering: bool
 
-    def validate(self, context: str = "custom_range_scaler") -> "CustomRangeScalerConfig":
+    def validate(self, context: str = "custom_range_scaler") -> CustomRangeScalerConfig:
         if float(self.input_scale) == 0:
             raise ValueError(f"{context}: input_scale must be non-zero.")
         return self
@@ -199,7 +200,7 @@ class MinMaxScalerConfig(PreprocessingConfig):
     feature_min: float
     feature_max: float
 
-    def validate(self, context: str = "min_max_scaler") -> "MinMaxScalerConfig":
+    def validate(self, context: str = "min_max_scaler") -> MinMaxScalerConfig:
         if float(self.feature_max) <= float(self.feature_min):
             raise ValueError(f"{context}: feature_max must be greater than feature_min.")
         return self
@@ -217,7 +218,7 @@ class AffineScalerConfig(PreprocessingConfig):
     input_scale: float
     shift: float
 
-    def validate(self, context: str = "affine_scaler") -> "AffineScalerConfig":
+    def validate(self, context: str = "affine_scaler") -> AffineScalerConfig:
         _ = context
         return self
 
@@ -234,7 +235,7 @@ class RandomProjectionConfig(ProjectionConfig):
     bias_scale: float
     seed: int
     
-    def validate(self, context: str = "random_projection") -> "RandomProjectionConfig":
+    def validate(self, context: str = "random_projection") -> RandomProjectionConfig:
         prefix = f"{context}: "
         if int(self.n_units) <= 0:
             raise ValueError(f"{prefix}n_units must be positive.")
@@ -261,7 +262,7 @@ class CenterCropProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Center Crop Projection (3D input only)."""
     n_units: int
     
-    def validate(self, context: str = "center_crop") -> "CenterCropProjectionConfig":
+    def validate(self, context: str = "center_crop") -> CenterCropProjectionConfig:
         prefix = f"{context}: "
         if int(self.n_units) <= 0:
             raise ValueError(f"{prefix}n_units must be positive.")
@@ -279,7 +280,7 @@ class ResizeProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Resize (Interpolation) Projection."""
     n_units: int
 
-    def validate(self, context: str = "resize_projection") -> "ResizeProjectionConfig":
+    def validate(self, context: str = "resize_projection") -> ResizeProjectionConfig:
         prefix = f"{context}: "
         if int(self.n_units) <= 0:
             raise ValueError(f"{prefix}n_units must be positive.")
@@ -297,7 +298,7 @@ class PolynomialProjectionConfig(ProjectionConfig):
     degree: int
     include_bias: bool
 
-    def validate(self, context: str = "polynomial_projection") -> "PolynomialProjectionConfig":
+    def validate(self, context: str = "polynomial_projection") -> PolynomialProjectionConfig:
         if self.degree is None or int(self.degree) < 1:
             raise ValueError(f"{context}: degree must be >=1.")
         return self
@@ -319,7 +320,7 @@ class PCAProjectionConfig(ProjectionConfig):
     n_units: int
     input_scaler: float
 
-    def validate(self, context: str = "pca_projection") -> "PCAProjectionConfig":
+    def validate(self, context: str = "pca_projection") -> PCAProjectionConfig:
         if self.n_units is None or int(self.n_units) < 1:
             raise ValueError(f"{context}: n_units must be >=1.")
         return self
@@ -338,7 +339,7 @@ class ClassicalReservoirConfig(ModelConfig):
     seed: int
     aggregation: AggregationMode
 
-    def validate(self, context: str = "dynamics") -> "ClassicalReservoirConfig":
+    def validate(self, context: str = "dynamics") -> ClassicalReservoirConfig:
         prefix = f"{context}: "
         if float(self.spectral_radius) <= 0:
             raise ValueError(f"{prefix}spectral_radius must be positive.")
@@ -373,12 +374,13 @@ class DistillationConfig(ModelConfig):
         self.validate()
 
     def to_dict(self) -> ConfigDict:
-        return {
+        from typing import cast
+        return cast("ConfigDict", {
             "teacher": self.teacher.to_dict(),
             "student.hidden_layers": tuple(int(v) for v in (self.student.hidden_layers or ())),
-        }
+        })
 
-    def validate(self, context: str = "") -> "DistillationConfig":
+    def validate(self, context: str = "") -> DistillationConfig:
         prefix = f"{context}: " if context else ""
         self.teacher.validate(context=f"{prefix}teacher")
         if not self.student.hidden_layers:
@@ -391,8 +393,8 @@ class DistillationConfig(ModelConfig):
 @dataclass(frozen=True)
 class FNNConfig(ModelConfig):
     """FNN configuration with optional sliding window for time series."""
-    hidden_layers: Optional[Tuple[int, ...]]
-    window_size: Optional[int] = None  # None = Flatten, int = TimeDelayEmbedding(K)
+    hidden_layers: tuple[int, ...] | None
+    window_size: int | None = None  # None = Flatten, int = TimeDelayEmbedding(K)
 
     def __post_init__(self) -> None:
         self.validate()
@@ -405,7 +407,7 @@ class FNNConfig(ModelConfig):
             result["window_size"] = int(self.window_size)
         return result
 
-    def validate(self, context: str = "") -> "FNNConfig":
+    def validate(self, context: str = "") -> FNNConfig:
         prefix = f"{context}: " if context else ""
         layers = self.hidden_layers or ()
         if any(width < 0 for width in layers):
@@ -425,7 +427,7 @@ class PassthroughConfig(ModelConfig):
     """Configuration for passthrough model that skips dynamics (Step 5)."""
     aggregation: AggregationMode
 
-    def validate(self, context: str = "passthrough") -> "PassthroughConfig":
+    def validate(self, context: str = "passthrough") -> PassthroughConfig:
         if not isinstance(self.aggregation, AggregationMode):
             raise TypeError(f"{context}: aggregation must be AggregationMode, got {type(self.aggregation)}.")
         return self
@@ -462,9 +464,9 @@ class QuantumReservoirConfig(ModelConfig):
     use_remat: bool          # Use gradient checkpointing (rematerialization)
     use_reuploading: bool    # Use data re-uploading strategy
     precision: Literal["complex64", "complex128"]
-    n_qubits: Optional[int] = None   # Number of qubits (None = infer from Step 3)
+    n_qubits: int | None = None   # Number of qubits (None = infer from Step 3)
 
-    def validate(self, context: str = "quantum_reservoir") -> "QuantumReservoirConfig":
+    def validate(self, context: str = "quantum_reservoir") -> QuantumReservoirConfig:
         prefix = f"{context}: "
         if int(self.n_layers) <= 0:
             raise ValueError(f"{prefix}n_layers must be positive.")
@@ -507,9 +509,9 @@ class QuantumReservoirConfig(ModelConfig):
 class RidgeReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/defaults)."""
     use_intercept: bool
-    lambda_candidates: Optional[Tuple[float, ...]] = None
+    lambda_candidates: tuple[float, ...] | None = None
 
-    def validate(self, context: str = "ridgereadout") -> "RidgeReadoutConfig":
+    def validate(self, context: str = "ridgereadout") -> RidgeReadoutConfig:
         if self.lambda_candidates is not None:
             if any(float(lam) <= 0.0 for lam in self.lambda_candidates):
                 raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
@@ -528,11 +530,11 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
     """Step 7 poly readout configuration (structure/defaults)."""
 
     use_intercept: bool
-    lambda_candidates: Optional[Tuple[float, ...]]
+    lambda_candidates: tuple[float, ...] | None
     degree: int
     mode: Literal["full", "square_only"]
 
-    def validate(self, context: str = "polyridgereadout") -> "PolyRidgeReadoutConfig":
+    def validate(self, context: str = "polyridgereadout") -> PolyRidgeReadoutConfig:
         if self.lambda_candidates is not None:
             if any(float(lam) <= 0.0 for lam in self.lambda_candidates):
                 raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
@@ -552,9 +554,9 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
 @dataclass(frozen=True)
 class FNNReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/fnn)."""
-    hidden_layers: Optional[Tuple[int, ...]]
+    hidden_layers: tuple[int, ...] | None
 
-    def validate(self, context: str = "fnnreadout") -> "FNNReadoutConfig":
+    def validate(self, context: str = "fnnreadout") -> FNNReadoutConfig:
         _ = context
         return self
 

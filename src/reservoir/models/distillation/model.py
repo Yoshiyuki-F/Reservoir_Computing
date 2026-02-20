@@ -6,7 +6,6 @@ Updated with clear logging phases.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Optional
 
 from beartype import beartype
 import jax
@@ -39,14 +38,14 @@ class DistillationModel(ClosedLoopGenerativeModel):
         self,
         teacher: ClassicalReservoir,
         student: FNNModel,
-        training_config: TrainingConfig,
+        training_config: TrainingConfig | None = None,
     ):
         self.teacher = teacher
         self.student = student
         self.training_config = training_config
         
         # State management for closed-loop generation
-        self._input_dim: Optional[int] = None
+        self._input_dim: int | None = None
         # Get window_size from student's adapter if available
         self._window_size: int = getattr(student, 'window_size', 1) or 1
 
@@ -101,7 +100,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **kwargs: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **kwargs: KwargsDict) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -113,8 +112,8 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print("    [Distillation] ==========================================")
 
         # Capture input dimension for closed-loop generation state init
-        self._input_dim = int(inputs.shape[-1])
-        teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
+        batch_sz = self.training_config.batch_size if self.training_config else 32
+        teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=batch_sz)
         
         jax.debug.print("    [Distillation] Teacher Target Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(teacher_targets), s=jnp.std(teacher_targets))
 
@@ -134,12 +133,12 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = float(student_logs.get("final_loss", 0.0))
-        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {}
+        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {} # type: ignore
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: JaxF64, y: Optional[JaxF64] = None) -> EvalMetrics:
+    def evaluate(self, X: JaxF64, y: JaxF64 | None = None) -> EvalMetrics:
         """
         Distillation evaluation: compare student output with teacher output.
         """
@@ -152,7 +151,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Delegate to student's evaluate (handles adapter and alignment internally)
         student_metrics = self.student.evaluate(X, teacher_targets)
 
-        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {}
+        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {} # type: ignore
         return metrics
 
     def get_topology_meta(self) -> ConfigDict:
@@ -180,7 +179,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
             
         return jnp.zeros((batch_size, self._window_size, self._input_dim))
 
-    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
         """
         Single step execution with window management.
         Args:
@@ -205,7 +204,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         output = BaseFlaxModel.predict(self.student, flat_input)
         return next_state, output
 
-    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> tuple[JaxF64, JaxF64]:
         """
         Process sequence using JAX scan.
         Args:

@@ -3,7 +3,6 @@ Factory for Passthrough model (projection + aggregation only).
 """
 from __future__ import annotations
 
-from typing import Optional
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.config import PassthroughConfig
@@ -19,7 +18,7 @@ class PassthroughFactory:
         pipeline_config: PipelineConfig,
         projected_input_dim: int,
         output_dim: int,
-        input_shape: Optional[tuple[int, ...]],
+        input_shape: tuple[int, ...] | None,
     ) -> PassthroughModel:
         """Create passthrough model - only needs aggregation mode from config."""
         model_config = pipeline_config.model

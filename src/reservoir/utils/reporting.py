@@ -3,7 +3,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 """
 from __future__ import annotations
 
-from typing import Optional, Sequence, List
+from collections.abc import Sequence
 import numpy as np
 from reservoir.core.types import NpF64, ConfigDict, ResultDict, TrainLogs, EvalMetrics
 from reservoir.layers.preprocessing import Preprocessor
@@ -13,7 +13,7 @@ from reservoir.data.config import DatasetPreset
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.generative import ClosedLoopGenerativeModel
 
-def _safe_get(d: ResultDict, key: str, default: Optional[ResultValue] = None) -> Optional[ResultValue]:
+def _safe_get(d: ResultDict, key: str, default: ResultValue | None = None) -> ResultValue | None:
     if not isinstance(d, dict):
         return default
     return d.get(key, default)
@@ -22,14 +22,14 @@ def _safe_get(d: ResultDict, key: str, default: Optional[ResultValue] = None) ->
 
 
 
-def print_chaos_metrics(metrics: EvalMetrics, header: Optional[str] = None) -> None:
+def print_chaos_metrics(metrics: EvalMetrics, header: str | None = None) -> None:
     """
     Print chaos metrics to console.
     """
     if header:
         print(f"{header}")
     else:
-        print(f"=== Chaos Prediction Metrics ===")
+        print("=== Chaos Prediction Metrics ===")
     
     # Direct access from strictly typed EvalMetrics
     # Optional fields use 0.0 or inf as defaults to prevent crashes if not present
@@ -72,7 +72,7 @@ def _print_feature_stats_impl(features: NpF64, stage: str, backend: str = "numpy
     if stats["std"] < 1e-6:
         print("Feature matrix has near-zero variance. Model output may be inactive.")
 
-def print_feature_stats(features: Optional[NpF64], stage: str) -> None:
+def print_feature_stats(features: NpF64 | None, stage: str) -> None:
     """
     特徴量の統計情報を表示する (Host Domain).
     """
@@ -135,7 +135,7 @@ def print_ridge_search_results(train_res: ResultDict, metric_name: str = "MSE") 
     print("=" * 40 + "\n")
 
 
-def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str, learning_rate: Optional[float] = None) -> None:
+def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str, learning_rate: float | None = None) -> None:
     if not isinstance(training_logs, dict):
         return
     loss_history = training_logs.get("loss_history")
@@ -152,24 +152,24 @@ def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str,
 
 def plot_classification_report(
     *,
-    runner: Optional[Component] = None,
-    readout: Optional[ReadoutModule],
-    train_X: Optional[NpF64],
-    train_y: Optional[NpF64],
-    test_X: Optional[NpF64],
-    test_y: Optional[NpF64],
-    val_X: Optional[NpF64],
-    val_y: Optional[NpF64],
+    runner: Component | None = None,
+    readout: ReadoutModule | None,
+    train_X: NpF64 | None,
+    train_y: NpF64 | None,
+    test_X: NpF64 | None,
+    test_y: NpF64 | None,
+    val_X: NpF64 | None,
+    val_y: NpF64 | None,
     filename: str,
     model_type_str: str,
     dataset_name: str,
     results: ResultDict,
     training_obj: TrainingConfig,
-    train_pred: Optional[NpF64] = None,
-    test_pred: Optional[NpF64] = None,
-    val_pred: Optional[NpF64] = None,
-    selected_lambda: Optional[float] = None,
-    class_names: Optional[Sequence[str]] = None,
+    train_pred: NpF64 | None = None,
+    test_pred: NpF64 | None = None,
+    val_pred: NpF64 | None = None,
+    selected_lambda: float | None = None,
+    class_names: Sequence[str] | None = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -270,7 +270,7 @@ def plot_classification_report(
     # ---------------------------------------------------------
     # 4. Plot
     # ---------------------------------------------------------
-    def _calc_acc(y_true: Optional[NpF64], y_pred: Optional[NpF64]) -> float:
+    def _calc_acc(y_true: NpF64 | None, y_pred: NpF64 | None) -> float:
         if y_true is None or y_pred is None: return 0.0
         # Ensure 1D
         y_t = y_true.ravel()
@@ -296,7 +296,7 @@ def plot_classification_report(
     if acc_val == 0.0:
         acc_val = _calc_acc(val_labels_np, val_pred_np) if val_labels_np is not None else 0.0
     
-    print(f"\n[Report] Accuracy Check (Pre-Plot):")
+    print("\n[Report] Accuracy Check (Pre-Plot):")
     print(f"  Train: {acc_train:.4%}")
     print(f"  Val  : {acc_val:.4%}")
     print(f"  Test : {acc_test:.4%}")
@@ -327,7 +327,7 @@ def plot_classification_report(
     )
 
 
-def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: Optional[ReadoutModule] = None, config: Optional[PipelineConfig] = None) -> List[str]:
+def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
     student_layers = None
     preprocess_label = "raw"
     type_lower = str(model_type_str).lower()
@@ -396,7 +396,7 @@ def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, m
                 tag += f"_rc{float(rc_conn):.2f}" if rc_conn is not None else ""
                 model_type_str = f"{model_type_str}{tag}"
 
-    filename_parts: List[str] = [model_type_str, preprocess_label]
+    filename_parts: list[str] = [model_type_str, preprocess_label]
 
     # Window Size marker (for WindowsFNN/TDE)
     if config is not None:
@@ -472,21 +472,21 @@ def generate_report(
     config: PipelineConfig,
     topo_meta: ConfigDict,
     *,
-    runner: Optional[Component] = None,
-    readout: Optional[ReadoutModule],
-    train_X: Optional[NpF64],
-    train_y: Optional[NpF64],
-    test_X: Optional[NpF64],
-    test_y: Optional[NpF64],
-    val_X: Optional[NpF64],
-    val_y: Optional[NpF64],
+    runner: Component | None = None,
+    readout: ReadoutModule | None,
+    train_X: NpF64 | None,
+    train_y: NpF64 | None,
+    test_X: NpF64 | None,
+    test_y: NpF64 | None,
+    val_X: NpF64 | None,
+    val_y: NpF64 | None,
     training_obj: TrainingConfig,
     dataset_name: str,
     model_type_str: str,
     classification: bool = False,
     # preprocessors removed
-    dataset_preset: Optional[DatasetPreset] = None,  # DatasetPreset for dt/lyapunov_time_unit
-    model_obj: Optional[ClosedLoopGenerativeModel] = None, # New Argument
+    dataset_preset: DatasetPreset | None = None,  # DatasetPreset for dt/lyapunov_time_unit
+    model_obj: ClosedLoopGenerativeModel | None = None, # New Argument
 ) -> None:
     """
     Coordinator for generating all report elements (plots, logs).
@@ -513,7 +513,7 @@ def generate_report(
     _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj)
 
 
-def _plot_distillation_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: Optional[ReadoutModule], config: PipelineConfig, dataset_name: str) -> None:
+def _plot_distillation_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, dataset_name: str) -> None:
     training_logs = dict(results.get("training_logs", {})) # type: ignore
     if training_logs:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
@@ -523,8 +523,8 @@ def _plot_distillation_section(results: ResultDict, topo_meta: ConfigDict, train
 
 
 def _plot_classification_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: Optional[ReadoutModule],
-    runner: Optional[Component], train_X: Optional[NpF64], train_y: Optional[NpF64], test_X: Optional[NpF64], test_y: Optional[NpF64], val_X: Optional[NpF64], val_y: Optional[NpF64]
+    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    runner: Component | None, train_X: NpF64 | None, train_y: NpF64 | None, test_X: NpF64 | None, test_y: NpF64 | None, val_X: NpF64 | None, val_y: NpF64 | None
 ) -> None:
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
@@ -572,8 +572,8 @@ def _plot_classification_section(
 
 
 def _plot_regression_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: Optional[ReadoutModule],
-    runner: Optional[Component], train_y: Optional[NpF64], val_y: Optional[NpF64], test_X: Optional[NpF64], test_y: Optional[NpF64], dataset_preset: Optional[DatasetPreset]
+    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    runner: Component | None, train_y: NpF64 | None, val_y: NpF64 | None, test_X: NpF64 | None, test_y: NpF64 | None, dataset_preset: DatasetPreset | None
 ) -> None:
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
@@ -634,7 +634,7 @@ def _plot_regression_section(
              pass
 
 
-def _plot_quantum_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: Optional[ReadoutModule], config: PipelineConfig, model_obj: Optional[ClosedLoopGenerativeModel]) -> None:
+def _plot_quantum_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, model_obj: ClosedLoopGenerativeModel | None) -> None:
     quantum_trace = results.get("quantum_trace")
     if quantum_trace is not None:
         try:
@@ -662,23 +662,23 @@ def _plot_quantum_section(results: ResultDict, topo_meta: ConfigDict, training_o
 
 def plot_regression_report(
     *,
-    runner: Optional[Component] = None,
+    runner: Component | None = None,
     readout: ReadoutModule,
-    train_y: Optional[NpF64],
-    val_y: Optional[NpF64] = None, # New Argument
-    test_X: Optional[NpF64],
-    test_y: Optional[NpF64],
+    train_y: NpF64 | None,
+    val_y: NpF64 | None = None, # New Argument
+    test_X: NpF64 | None,
+    test_y: NpF64 | None,
     filename: str,
     model_type_str: str,
-    mse: Optional[float] = None,
-    train_pred: Optional[NpF64] = None,
-    test_pred: Optional[NpF64] = None,
-    val_pred: Optional[NpF64] = None,
+    mse: float | None = None,
+    train_pred: NpF64 | None = None,
+    test_pred: NpF64 | None = None,
+    val_pred: NpF64 | None = None,
     # preprocessors removed
-    scaler: Optional[Preprocessor] = None,
+    scaler: Preprocessor | None = None,
     is_closed_loop: bool = False,
-    dt: Optional[float] = None,
-    lyapunov_time_unit: Optional[float] = None,
+    dt: float | None = None,
+    lyapunov_time_unit: float | None = None,
     vpt_threshold: float = 0.4,
 ) -> None:
     try:
@@ -706,7 +706,7 @@ def plot_regression_report(
     # Offset = Length(Train) + Length(Val)
     offset = 0
     
-    def get_len(arr: Optional[NpF64]) -> int:
+    def get_len(arr: NpF64 | None) -> int:
         if arr is None: return 0
         arr_np = arr
         if arr_np.ndim == 3: return int(arr_np.shape[1])
@@ -942,23 +942,23 @@ def _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_
 
 def plot_regression_report(
     *,
-    runner: Optional[Component] = None,
+    runner: Component | None = None,
     readout: ReadoutModule,
-    train_y: Optional[NpF64],
-    val_y: Optional[NpF64] = None, # New Argument
-    test_X: Optional[NpF64],
-    test_y: Optional[NpF64],
+    train_y: NpF64 | None,
+    val_y: NpF64 | None = None, # New Argument
+    test_X: NpF64 | None,
+    test_y: NpF64 | None,
     filename: str,
     model_type_str: str,
-    mse: Optional[float] = None,
-    train_pred: Optional[NpF64] = None,
-    test_pred: Optional[NpF64] = None,
-    val_pred: Optional[NpF64] = None,
+    mse: float | None = None,
+    train_pred: NpF64 | None = None,
+    test_pred: NpF64 | None = None,
+    val_pred: NpF64 | None = None,
     # preprocessors removed
-    scaler: Optional[Preprocessor] = None,
+    scaler: Preprocessor | None = None,
     is_closed_loop: bool = False,
-    dt: Optional[float] = None,
-    lyapunov_time_unit: Optional[float] = None,
+    dt: float | None = None,
+    lyapunov_time_unit: float | None = None,
     vpt_threshold: float = 0.4,
 ) -> None:
     try:
@@ -986,7 +986,7 @@ def plot_regression_report(
     # Offset = Length(Train) + Length(Val)
     offset = 0
     
-    def get_len(arr: Optional[NpF64]) -> int:
+    def get_len(arr: NpF64 | None) -> int:
         if arr is None: return 0
         arr_np = arr
         if arr_np.ndim == 3: return int(arr_np.shape[1])

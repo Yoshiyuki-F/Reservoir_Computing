@@ -110,8 +110,9 @@ Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64�
 🚫 厳密に禁止される「逃げ道」型:Importさえ禁止
 Any
 object（型ヒントとしての使用は一切禁止）
-Union / |（FailSafeとしての両対応は禁止）
+Union （FailSafeとしての両対応は禁止）
 Type 
+Optional
 
 曖昧な Callable
 ✅ 許可される型ヒント（ホワイトリスト）:
@@ -178,6 +179,12 @@ np.copy() またはスライスによる不要な複製:
 #11.
 models/ 
 ridge などはJax強制
+
+🚫 古い型ヒント（typing module）の禁止:
+Python 3.10+ のモダン構文を強制する。
+typing.Optional[X] の使用は禁止。必ず X | None を使用すること。
+typing.Union[X, Y] の使用は禁止。必ず X | Y を使用すること。
+typing.Dict, typing.List, typing.Type 等の大文字コレクションは禁止。組み込みの dict, list, type を使用すること。
 
 **HOW TO CHECK**
 uv run pyrefly check

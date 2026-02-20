@@ -21,7 +21,6 @@ import argparse
 import dataclasses
 import math
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import optuna
@@ -146,7 +145,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # === 3. Run Pipeline ===
         try:
-            results: Dict[str] = run_pipeline(config, dataset_enum)
+            results: dict[str] = run_pipeline(config, dataset_enum)
 
             # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})

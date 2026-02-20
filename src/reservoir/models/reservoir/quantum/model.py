@@ -8,9 +8,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
+from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 from jaxtyping import jaxtyped
-from typing import Tuple, Literal, Optional, List
+from typing import Literal
 from beartype import beartype
 
 from reservoir.core.identifiers import AggregationMode
@@ -19,7 +19,7 @@ from .backend import _ensure_tensorcircuit_initialized
 from .functional import _step_jit, _forward_jit
 
 class QuantumReservoirConfig(ReservoirConfig):
-    n_qubits: int
+    n_qubits: int | None
     n_layers: int
     seed: int
     feedback_scale: float
@@ -28,11 +28,10 @@ class QuantumReservoirConfig(ReservoirConfig):
     noise_prob: float
     readout_error: float
     n_trajectories: int
-    use_remat: bool
     use_reuploading: bool
     precision: Literal["complex64", "complex128"]
 
-class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
+class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
     """
     Quantum Reservoir Computing using TensorCircuit.
     
@@ -161,7 +160,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
     def _broadcast_scalar(val, count):
         return jnp.full((count,), val)
 
-    def _prepare_input(self, inputs: JaxF64) -> Tuple[JaxF64, bool]:
+    def _prepare_input(self, inputs: JaxF64) -> tuple[JaxF64, bool]:
         """Preprocess input: ensure 3D shape (Batch, Time, Feat)."""
         arr = inputs
         input_was_2d = (arr.ndim == 2)
@@ -171,7 +170,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
             raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
         return arr, input_was_2d
 
-    def initialize_state(self, batch_size: int = 1) -> Tuple[JaxF64, Optional[JaxF64]]:
+    def initialize_state(self, batch_size: int = 1) -> tuple[JaxF64, JaxF64 | None]:
         state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float_)
         if self.n_trajectories > 0:
             # Monte Carlo Mode: Return (state, key) tuple
@@ -180,12 +179,12 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
             return state, jax.random.split(key, batch_size)
         return state, None
 
-    def reset_state(self, batch_size: int) -> Tuple[JaxF64, Optional[JaxF64]]:
+    def reset_state(self, batch_size: int) -> tuple[JaxF64, JaxF64 | None]:
         """Alias for initialize_state. Resets the reservoir to the initial ground state."""
         return self.initialize_state(batch_size)
 
     @jaxtyped(typechecker=beartype)
-    def step(self, state: Tuple[JaxF64, Optional[JaxF64]], inputs: JaxF64) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
+    def step(self, state: tuple[JaxF64, JaxF64 | None], inputs: JaxF64) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
         """Batched step function for debugging/stepping."""
         # Use vmapped step logic wrapper
         step_func = partial(
@@ -202,7 +201,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
         return jax.vmap(step_func, in_axes=(0, 0))(state, inputs)
 
     @jaxtyped(typechecker=beartype)
-    def forward(self, state: Tuple[JaxF64, Optional[JaxF64]], input_data: JaxF64) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
+    def forward(self, state: tuple[JaxF64, JaxF64 | None], input_data: JaxF64) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
         """Forward pass using optimized scan."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
@@ -295,14 +294,14 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
         self,
         inputs: JaxF64,
         return_sequences: bool = False,
-        split_name: Optional[str] = None,
+        split_name: str | None = None,
         **_: KwargsDict
     ) -> JaxF64:
         arr, input_was_2d = self._prepare_input(inputs)
         
         batch_size = arr.shape[0]
         state = self.initialize_state(batch_size)
-        _, states = self.forward(state, arr)
+        final_state, states = self.forward(state, arr)
         
         if return_sequences:
             return states[0] if input_was_2d else states
@@ -313,7 +312,7 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
 
 
     @staticmethod
-    def train(_inputs: JaxF64, _targets: Optional[JaxF64] = None, **__: KwargsDict) -> TrainLogs:
+    def train(_inputs: JaxF64, _targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 
@@ -338,27 +337,27 @@ class QuantumReservoir(Reservoir[Tuple[JaxF64, Optional[JaxF64]]]):
         }
 
     @classmethod
-    def from_dict(cls, data: ConfigDict) -> "QuantumReservoir":
+    def from_dict(cls, data: ConfigDict) -> QuantumReservoir:
         try:
             return cls(
-                n_qubits=int(data["n_qubits"]) if data.get("n_qubits") is not None else None,
-                n_layers=int(data["n_layers"]),
-                seed=int(data["seed"]),
-                feedback_scale=float(data.get("feedback_scale") or 0.0),
-                aggregation_mode=AggregationMode(data["aggregation"]),
+                n_qubits=int(float(str(data["n_qubits"]))), # type: ignore
+                n_layers=int(float(str(data["n_layers"]))), # type: ignore
+                seed=int(float(str(data["seed"]))), # type: ignore
+                feedback_scale=float(data.get("feedback_scale") or 0.0), # type: ignore
+                aggregation_mode=AggregationMode(str(data["aggregation"])), # type: ignore
                 measurement_basis=str(data["measurement_basis"]), # type: ignore
                 noise_type=str(data.get("noise_type", "clean")), # type: ignore
-                noise_prob=float(data.get("noise_prob") or 0.0),
-                readout_error=float(data.get("readout_error", 0.0)),
-                n_trajectories=int(data.get("n_trajectories", 0)),
-                use_remat=bool(data.get("use_remat", False)),
-                use_reuploading=bool(data.get("use_reuploading", False)),
+                noise_prob=float(data.get("noise_prob") or 0.0), # type: ignore
+                readout_error=float(data.get("readout_error", 0.0)), # type: ignore
+                n_trajectories=int(float(str(data.get("n_trajectories", 0)))), # type: ignore
+                use_remat=bool(data.get("use_remat", False)), # type: ignore
+                use_reuploading=bool(data.get("use_reuploading", False)), # type: ignore
                 precision=str(data.get("precision", "complex64")), # type: ignore
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc
 
-    def get_observable_names(self) -> List[str]:
+    def get_observable_names(self) -> list[str]:
         """Generate human-readable names for the measured observables."""
         names = []
         if self.measurement_basis in ("Z", "Z+ZZ"):

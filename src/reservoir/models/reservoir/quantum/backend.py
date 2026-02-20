@@ -20,11 +20,11 @@ def _ensure_tensorcircuit_initialized(precision: str = "complex64") -> None:
     # Remove local x64 toggle - rely on global init in __init__.py
     if precision == "complex128":
         # Double check, but don't toggle if already set globally
-        if not jax.config.jax_enable_x64:
+        if not getattr(jax.config, "jax_enable_x64", False): # type: ignore
              jax.config.update("jax_enable_x64", True)
 
     if _TC_INITIALIZED:
-        if precision != tc.dtypestr:
+        if precision != getattr(tc, "dtypestr", "complex64"): # type: ignore
             tc.set_dtype(precision)
         return
 

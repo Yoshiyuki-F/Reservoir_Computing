@@ -5,13 +5,14 @@ State aggregation components compatible with Transformer protocol.
 
 from __future__ import annotations
 
-from typing import Dict, Optional
 
 from beartype import beartype
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64, ConfigDict
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
+from reservoir.utils.reporting import print_feature_stats
+
 
 @beartype
 class StateAggregator(Transformer):
@@ -65,24 +66,23 @@ class StateAggregator(Transformer):
                 return arr.reshape(-1)
         raise ValueError(f"Unsupported shape {arr.shape} or aggregation mode: {agg_mode}")
 
-    def fit(self, features: JaxF64, y: Optional[JaxF64] = None) -> "StateAggregator":
+    def fit(self, features: JaxF64, y: JaxF64 | None = None) -> StateAggregator:
         return self
 
-    def transform(self, features: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def transform(self, features: JaxF64, log_label: str | None = None) -> JaxF64:
         result = StateAggregator.aggregate(features, self.mode)
         
         # Assert output is 2D (Samples, Features) - required by readout layer
         assert result.ndim == 2, f"Aggregation output must be 2D, got {result.shape}"
         
         if log_label is not None:
-            from reservoir.utils.reporting import print_feature_stats
-            print_feature_stats(result, log_label)
+            print_feature_stats(to_np_f64(result), log_label)
         return result
 
     def fit_transform(self, features: JaxF64) -> JaxF64:
         return self.transform(features)
 
-    def __call__(self, features: JaxF64, log_label: Optional[str] = None) -> JaxF64:
+    def __call__(self, features: JaxF64, log_label: str | None = None) -> JaxF64:
         return self.transform(features, log_label=log_label)
 
     def get_output_dim(self, n_units: int, n_steps: int) -> int:
@@ -150,7 +150,7 @@ class StateAggregator(Transformer):
         return {"mode": self.mode.value if isinstance(self.mode, AggregationMode) else str(self.mode)}
 
     @classmethod
-    def from_dict(cls, data: ConfigDict) -> "StateAggregator":
+    def from_dict(cls, data: ConfigDict) -> StateAggregator:
         return cls(mode=AggregationMode(str(data.get("mode", AggregationMode.LAST.value))))
 
 

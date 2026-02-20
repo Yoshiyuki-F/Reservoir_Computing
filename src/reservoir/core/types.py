@@ -19,8 +19,11 @@ from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
-from typing import TypedDict, List, Union, Tuple, Dict, Optional
+from typing import TypedDict, Union, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    import reservoir.core.interfaces
+    import reservoir.layers.preprocessing
 
 # ==========================================
 # 型エイリアス定義
@@ -31,7 +34,7 @@ JaxKey = UInt32[Array, "..."]  # JAX PRNG key (uint32)
 
 class TrainLogs(TypedDict, total=False):
     """Strictly typed training logs to replace Dict[str, object]."""
-    loss_history: List[float]
+    loss_history: list[float]
     final_loss: float
     distill_mse: float
     accuracy: float
@@ -49,7 +52,7 @@ class EvalMetrics(TypedDict, total=False):
     ndei: float
     var_ratio: float
     correlation: float
-    vpt_steps: float # Stored as float for consistency in dicts, converted to int for display
+    vpt_steps: float 
     vpt_lt: float
     vpt_threshold: float
     # Add other specific keys as they emerge.
@@ -64,14 +67,14 @@ PrimitiveValue = Union[str, float, int, bool, None]
 
 # ネストを階層的に定義 (L1 -> L2 -> L3)
 # L1: 基本型とそのコレクション
-ConfigL1 = Union[PrimitiveValue, Tuple[PrimitiveValue, ...], List[PrimitiveValue], Dict[str, PrimitiveValue]]
+ConfigL1 = Union[PrimitiveValue, tuple[PrimitiveValue, ...], list[PrimitiveValue], dict[str, PrimitiveValue]]
 # L2: L1を含むコレクション (DistillationConfigなどで使用)
-ConfigL2 = Union[ConfigL1, Tuple[ConfigL1, ...], List[ConfigL1], Dict[str, ConfigL1]]
+ConfigL2 = Union[ConfigL1, tuple[ConfigL1, ...], list[ConfigL1], dict[str, ConfigL1]]
 # L3: L2を含むコレクション (将来用)
-ConfigL3 = Union[ConfigL2, Tuple[ConfigL2, ...], List[ConfigL2], Dict[str, ConfigL2]]
+ConfigL3 = Union[ConfigL2, tuple[ConfigL2, ...], list[ConfigL2], dict[str, ConfigL2]]
 
 # 全ての to_dict() の戻り値
-ConfigDict = Dict[str, ConfigL3]
+ConfigDict = dict[str, ConfigL3]
 ConfigValue = ConfigL3
 
 # ==========================================
@@ -87,15 +90,15 @@ ResultL1 = Union[
     "reservoir.layers.preprocessing.Preprocessor",
     "np.ndarray", "jax.Array"
 ]
-ResultL2 = Union[ResultL1, Tuple[ResultL1, ...], List[ResultL1], Dict[str, ResultL1]]
-ResultL3 = Union[ResultL2, Tuple[ResultL2, ...], List[ResultL2], Dict[str, ResultL2]]
-ResultL4 = Union[ResultL3, Tuple[ResultL3, ...], List[ResultL3], Dict[str, ResultL3]]
+ResultL2 = Union[ResultL1, tuple[ResultL1, ...], list[ResultL1], dict[str, ResultL1]]
+ResultL3 = Union[ResultL2, tuple[ResultL2, ...], list[ResultL2], dict[str, ResultL2]]
+ResultL4 = Union[ResultL3, tuple[ResultL3, ...], list[ResultL3], dict[str, ResultL3]]
 
-ResultDict = Dict[str, ResultL4]
+ResultDict = dict[str, ResultL4]
 ResultValue = ResultL4
 
 # **kwargs 用の厳格な型定義 (No Any)
-KwargsDict = Dict[str, Union[PrimitiveValue, JaxF64, NpF64, Tuple[PrimitiveValue, ...], List[PrimitiveValue], "ConfigDict", "ResultDict"]]
+KwargsDict = dict[str, Union[PrimitiveValue, JaxF64, NpF64, tuple[PrimitiveValue, ...], list[PrimitiveValue], "ConfigDict", "ResultDict"]]
 
 
 # ==========================================

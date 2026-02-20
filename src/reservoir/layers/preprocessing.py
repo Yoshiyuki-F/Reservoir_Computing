@@ -5,7 +5,6 @@ Here we define preprocessing which doesn't change any dimensions, such as scalin
 from __future__ import annotations
 import abc
 from functools import singledispatch
-from typing import Dict, Optional, Type
 
 from beartype import beartype
 from reservoir.core.types import NpF64, ConfigDict
@@ -23,7 +22,7 @@ class Preprocessor(abc.ABC):
     """
 
     @abc.abstractmethod
-    def fit(self, X: NpF64) -> "Preprocessor":
+    def fit(self, X: NpF64) -> Preprocessor:
         """Fit the preprocessor on training data."""
         pass
 
@@ -58,10 +57,10 @@ class StandardScaler(Preprocessor):
     """Standard scaler (mean removal and variance scaling)."""
 
     def __init__(self):
-        self.mean_: Optional[np.ndarray] = None
-        self.scale_: Optional[np.ndarray] = None
+        self.mean_: np.ndarray | None = None
+        self.scale_: np.ndarray | None = None
 
-    def fit(self, X: NpF64) -> "StandardScaler":
+    def fit(self, X: NpF64) -> StandardScaler:
         X_np = X
 
         if X_np.ndim == 3:
@@ -119,10 +118,10 @@ class CustomRangeScaler(Preprocessor):
     def __init__(self, input_scale: float, centering: bool):
         self.input_scale = input_scale
         self.centering = centering
-        self.max_val: Optional[float] = None
-        self.mean_: Optional[np.ndarray] = None
+        self.max_val: float | None = None
+        self.mean_: np.ndarray | None = None
 
-    def fit(self, X: NpF64) -> "CustomRangeScaler":
+    def fit(self, X: NpF64) -> CustomRangeScaler:
         X_np = X
         
         if self.centering:
@@ -198,10 +197,10 @@ class MinMaxScaler(Preprocessor):
     def __init__(self, feature_min: float , feature_max: float):
         self.feature_min = feature_min
         self.feature_max = feature_max
-        self.min_: Optional[np.ndarray] = None
-        self.range_: Optional[np.ndarray] = None  # X_max - X_min
+        self.min_: np.ndarray | None = None
+        self.range_: np.ndarray | None = None  # X_max - X_min
 
-    def fit(self, X: NpF64) -> "MinMaxScaler":
+    def fit(self, X: NpF64) -> MinMaxScaler:
         X_np = X
 
         if X_np.ndim == 3:
@@ -266,7 +265,7 @@ class MinMaxScaler(Preprocessor):
 class IdentityPreprocessor(Preprocessor):
     """No-op preprocessor for RAW mode."""
 
-    def fit(self, X: NpF64) -> "IdentityPreprocessor":
+    def fit(self, X: NpF64) -> IdentityPreprocessor:
         return self
 
     def transform(self, X: NpF64) -> NpF64:
@@ -292,7 +291,7 @@ class AffineScaler(Preprocessor):
         self.input_scale = input_scale
         self.shift = shift
 
-    def fit(self, X: NpF64) -> "AffineScaler":
+    def fit(self, X: NpF64) -> AffineScaler:
         # AffineScaler is stateless (parameters are provided at init), so fit does nothing.
         return self
 
@@ -340,11 +339,11 @@ def create_preprocessor(config: PreprocessingConfig) -> Preprocessor:
 
 
 def register_preprocessors(
-    RawConfigClass: Type,
-    StandardScalerConfigClass: Type,
-    CustomRangeScalerConfigClass: Type,
-    MinMaxScalerConfigClass: Type = None,
-    AffineScalerConfigClass: Type = None,
+    RawConfigClass: type,
+    StandardScalerConfigClass: type,
+    CustomRangeScalerConfigClass: type,
+    MinMaxScalerConfigClass: type | None = None,
+    AffineScalerConfigClass: type | None = None,
 ):
     """
     Register config classes with the factory.

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -10,7 +9,7 @@ class BaseDatasetConfig:
     n_input: int
     n_output: int
     noise_level: float
-    seed: Optional[int]
+    seed: int | None
 
 @dataclass(frozen=True)
 class MNISTConfig(BaseDatasetConfig):
@@ -21,7 +20,7 @@ class MNISTConfig(BaseDatasetConfig):
 
 @dataclass(frozen=True)
 class SineWaveConfig(BaseDatasetConfig):
-    frequencies: Tuple[float, ...]
+    frequencies: tuple[float, ...]
     time_steps: int
 
 @dataclass(frozen=True)
@@ -60,4 +59,4 @@ class DatasetPreset:
     description: str
     classification: bool
     config: BaseDatasetConfig
-    use_dimensions: Optional[tuple[int, ...]]
+    use_dimensions: tuple[int, ...] | None

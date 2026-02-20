@@ -2,10 +2,9 @@
 src/reservoir/components/readout/ridge.py
 Refactored Ridge regression designed with SOLID principles.
 """
-from typing import Dict, Optional, Tuple, List
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
+from reservoir.core.types import JaxF64, ConfigDict
 import jax.scipy.linalg
 
 from reservoir.core.interfaces import ReadoutModule
@@ -24,9 +23,9 @@ class RidgeRegression(ReadoutModule):
     def __init__(self, ridge_lambda: float, use_intercept: bool = True) -> None:
         self.ridge_lambda = float(ridge_lambda)
         self.use_intercept = bool(use_intercept)
-        self.coef_: Optional[JaxF64] = None
-        self.intercept_: Optional[JaxF64] = None
-        self._input_dim: Optional[int] = None
+        self.coef_: JaxF64 | None = None
+        self.intercept_: JaxF64 | None = None
+        self._input_dim: int | None = None
 
     def _add_intercept(self, X: JaxF64) -> JaxF64:
         if not self.use_intercept:
@@ -122,7 +121,7 @@ class RidgeCV(ReadoutModule):
     """
     def __init__(
         self, 
-        lambda_candidates: Tuple[float, ...],
+        lambda_candidates: tuple[float, ...],
         use_intercept: bool = True
     ):
         if not lambda_candidates:
@@ -130,7 +129,7 @@ class RidgeCV(ReadoutModule):
 
         self.lambda_candidates = lambda_candidates
         self.use_intercept = use_intercept
-        self.best_model: Optional[RidgeRegression] = None
+        self.best_model: RidgeRegression | None = None
 
         # Initialize default model with first candidate (state consistency)
         if self.lambda_candidates:
@@ -141,11 +140,11 @@ class RidgeCV(ReadoutModule):
         return self.best_model.ridge_lambda if self.best_model else float(self.lambda_candidates[0])
 
     @property
-    def coef_(self) -> Optional[JaxF64]:
+    def coef_(self) -> JaxF64 | None:
         return self.best_model.coef_ if self.best_model else None
 
     @property
-    def intercept_(self) -> Optional[JaxF64]:
+    def intercept_(self) -> JaxF64 | None:
         return self.best_model.intercept_ if self.best_model else None
 
     def fit(self, states: JaxF64, targets: JaxF64) -> "RidgeCV":

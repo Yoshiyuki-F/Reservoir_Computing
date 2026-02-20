@@ -4,7 +4,6 @@ Global entry point for model creation. Delegates to specialized factories.
 """
 from __future__ import annotations
 
-from typing import Dict, Tuple, Optional
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.nn.fnn import FNNModel
@@ -23,10 +22,10 @@ class ModelFactory:
     @staticmethod
     def create_model(
         config: PipelineConfig,
-        training: TrainingConfig = None,
-        input_dim: int = None,
-        output_dim: int = None,
-        input_shape: tuple[int, ...] = None,
+        training: TrainingConfig | None = None,
+        input_dim: int | None = None,
+        output_dim: int | None = None,
+        input_shape: tuple[int, ...] | None = None,
     ) -> ClosedLoopGenerativeModel:
 
         if input_dim is None or input_dim <= 0:
@@ -74,6 +73,7 @@ class ModelFactory:
                 if len(input_shape) > 1:
                     timesteps = int(input_shape[1])
             
+            windowed_samples = None
             if window_size is not None:
                 # Windowed FNN: flattened_dim = window_size * input_dim
                 flattened_dim = window_size * int(input_dim)
@@ -83,7 +83,6 @@ class ModelFactory:
             else:
                 # Standard FNN: flatten all timesteps
                 flattened_dim = timesteps * int(input_dim) if timesteps else int(input_dim)
-                windowed_samples = None
 
             model = FNNModel(
                 model_config=config.model,
@@ -122,7 +121,7 @@ class ModelFactory:
                     "readout": "None",
                 },
             }
-            model.topology_meta = topo_meta
+            model.topology_meta = topo_meta # type: ignore
             return model
 
         if pipeline_enum == Model.PASSTHROUGH:

@@ -3,7 +3,6 @@ MNIST dataset utilities used by reservoir.data.* modules."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 from beartype import beartype
 from reservoir.core.types import NpF64
 
@@ -14,7 +13,7 @@ from torchvision import datasets, transforms
 MNIST_ROOT = Path("data/mnist")
 
 
-def get_mnist_datasets() -> Tuple[datasets.MNIST, datasets.MNIST]:
+def get_mnist_datasets() -> tuple[datasets.MNIST, datasets.MNIST]:
     """Download (if needed) and return MNIST train/test datasets."""
     transform = transforms.Compose([
         transforms.PILToTensor(),
@@ -43,7 +42,7 @@ def image_to_sequence(image: NpF64, *, n_steps: int) -> NpF64:
     return result
 
 
-def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num_workers: int = 0) -> Tuple[DataLoader, DataLoader]:
+def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num_workers: int = 0) -> tuple[DataLoader, DataLoader]:
     """Convenience PyTorch dataloaders for MNIST."""
     train_set, test_set = get_mnist_datasets()
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers)

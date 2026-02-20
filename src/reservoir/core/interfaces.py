@@ -6,8 +6,7 @@ Transformer / Readout contracts referenced throughout the codebase.
 """
 from __future__ import annotations
 
-from typing import Dict, Protocol, runtime_checkable, Optional
-import jax.numpy as jnp
+from typing import Protocol, runtime_checkable
 from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
 
 
@@ -15,7 +14,7 @@ from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
 class Transformer(Protocol):
     """Stateless/fitful preprocessing contract."""
 
-    def fit(self, features: JaxF64, y: Optional[JaxF64] = None) -> "Transformer":
+    def fit(self, features: JaxF64, y: JaxF64 | None = None) -> Transformer:
         ...
 
     def transform(self, features: JaxF64) -> JaxF64:
@@ -32,7 +31,7 @@ class Transformer(Protocol):
 class ReadoutModule(Protocol):
     """Protocol for readout components (e.g., ridge regression, FNN)."""
 
-    def fit(self, states: JaxF64, targets: JaxF64) -> "ReadoutModule":
+    def fit(self, states: JaxF64, targets: JaxF64) -> ReadoutModule:
         ...
 
     def predict(self, states: JaxF64) -> JaxF64:

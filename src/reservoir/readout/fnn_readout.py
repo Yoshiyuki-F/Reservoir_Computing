@@ -1,7 +1,6 @@
 """FNN-based readout module implementing ReadoutModule protocol."""
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
 
 from beartype import beartype
 from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
@@ -18,19 +17,19 @@ class FNNReadout(ReadoutModule):
 
     def __init__(
         self,
-        hidden_layers: Optional[Tuple[int, ...]] = None,
-        training_config: Optional[TrainingConfig] = None,
+        hidden_layers: tuple[int, ...] | None = None,
+        training_config: TrainingConfig | None = None,
         classification: bool = False
     ) -> None:
         self.hidden_layers = hidden_layers or ()
         self.training_config = training_config
         self.classification = classification
-        self._model: Optional[FNNModel] = None
-        self._input_dim: Optional[int] = None
-        self._output_dim: Optional[int] = None
-        self.training_logs: Optional[TrainLogs] = None
+        self._model: FNNModel | None = None
+        self._input_dim: int | None = None
+        self._output_dim: int | None = None
+        self.training_logs: TrainLogs | None = None
 
-    def fit(self, states: JaxF64, targets: JaxF64) -> "FNNReadout":
+    def fit(self, states: JaxF64, targets: JaxF64) -> FNNReadout:
         """Fit the FNN readout on states and targets."""
         X = states
         y = targets
@@ -78,6 +77,6 @@ class FNNReadout(ReadoutModule):
         }
 
     @classmethod
-    def from_dict(cls, data: ConfigDict) -> "FNNReadout":
+    def from_dict(cls, data: ConfigDict) -> FNNReadout:
         """Deserialize an FNN readout (note: model weights not preserved)."""
         return cls(hidden_layers=tuple(data.get("hidden_layers", ()))) # type: ignore

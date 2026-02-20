@@ -5,11 +5,9 @@ src/reservoir/pipelines/components/data_coordinator.py
 Implements DataCoordinator to handle data fetching, padding, and alignment,
 freeing PipelineExecutor from low-level data manipulation.
 """
-from typing import Optional
 from beartype import beartype
 from reservoir.core.types import NpF64
 
-import numpy as np
 
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext
 from reservoir.utils.data_prep import apply_halo_padding
@@ -32,7 +30,7 @@ class DataCoordinator:
         """Get training inputs (no padding usually)."""
         return self.processed.train_X
 
-    def get_val_inputs(self, window_size: int = 0) -> Optional[NpF64]:
+    def get_val_inputs(self, window_size: int = 0) -> NpF64 | None:
         """Get validation inputs with Halo Padding applied."""
         if self.processed.val_X is None:
             return None
@@ -44,7 +42,7 @@ class DataCoordinator:
             window_size
         )
 
-    def get_test_inputs(self, window_size: int = 0) -> Optional[NpF64]:
+    def get_test_inputs(self, window_size: int = 0) -> NpF64 | None:
         """Get test inputs with Halo Padding applied."""
         if self.processed.test_X is None:
             return None
@@ -60,9 +58,9 @@ class DataCoordinator:
 
     def align_targets(
         self, 
-        features: Optional[NpF64], 
+        features: NpF64 | None, 
         split: str
-    ) -> Optional[NpF64]:
+    ) -> NpF64 | None:
         """
         Align targets for a specific split to match the given features.
         Trims targets from the start if they are longer than features (causal alignment).

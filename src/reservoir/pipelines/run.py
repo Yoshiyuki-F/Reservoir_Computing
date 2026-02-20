@@ -7,7 +7,6 @@ Architecture V2 Compliance:
 - Component-Based: Delegates to DataManager, ModelBuilder, Executor, and Reporter.
 """
 
-from typing import Dict, Optional, Tuple
 from reservoir.core.identifiers import Dataset
 from reservoir.core.types import ConfigDict
 from reservoir.models.presets import PipelineConfig
@@ -24,7 +23,7 @@ from reservoir.pipelines.components.data_coordinator import DataCoordinator
 def run_pipeline(
     config: PipelineConfig, 
     dataset: Dataset, 
-    training_config: Optional[TrainingConfig] = None
+    training_config: TrainingConfig | None = None
 ) -> ConfigDict:
     """
     Declarative orchestrator for the unified pipeline.

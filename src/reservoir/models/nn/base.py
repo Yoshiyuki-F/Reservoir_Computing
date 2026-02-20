@@ -1,15 +1,16 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/nn/base.py
 Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 
-from typing import Dict, Optional, List
 
 from beartype import beartype
 import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics, ConfigDict
 import optax
+import flax.linen as nn
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
+from abc import ABC, abstractmethod
 
 from reservoir.training.presets import TrainingConfig
 
@@ -18,7 +19,7 @@ from reservoir.training.presets import TrainingConfig
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
         """
         Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
         Defaults to a no-op so models without a pre-training stage can conform to the interface.
@@ -47,20 +48,23 @@ class BaseModel(ABC):
 class BaseFlaxModel(BaseModel, ABC):
     """Adapter that turns a flax.linen Module into a BaseModel."""
 
-    def __init__(self, model_config: ConfigDict, training_config: TrainingConfig, classification: bool = False) -> None:
+    def __init__(self, model_config: ConfigDict, classification: bool = False, training_config: TrainingConfig | None = None) -> None:
         self.model_config = model_config
         self.training_config = training_config
-        self.learning_rate: float = float(training_config.learning_rate)
-        self.epochs: int = int(training_config.epochs)
-        self.batch_size: int = int(training_config.batch_size)
+        self.learning_rate: float = float(getattr(training_config, "learning_rate", 0.001))
+        self.epochs: int = int(getattr(training_config, "epochs", 1))
+        self.batch_size: int = int(getattr(training_config, "batch_size", 32))
         self.classification: bool = classification
-        self.seed: int = int(model_config.get("seed", training_config.seed))
+        
+        seed_val = model_config.get("seed", getattr(training_config, "seed", 0))
+        self.seed: int = 0 if seed_val is None else int(float(seed_val))  # type: ignore
+        
         self._model_def = self._create_model_def()
-        self._state: Optional[train_state.TrainState] = None
+        self._state: train_state.TrainState | None = None
         self.trained: bool = False
 
     @abstractmethod
-    def _create_model_def(self):
+    def _create_model_def(self) -> nn.Module:
         """Return the flax.linen Module definition."""
         raise NotImplementedError
 
@@ -123,11 +127,11 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **_) -> TrainLogs:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
-        print(f"\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
+        print("\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
         # Inputs/Targets are already JaxF64 (Device Domain)
         num_samples = inputs.shape[0]
         num_batches = num_samples // self.batch_size
@@ -139,7 +143,7 @@ class BaseFlaxModel(BaseModel, ABC):
         sample_input = inputs[:1]
 
         if self._state is None:
-            print(f"    [JAX] Initializing parameters...")
+            print("    [JAX] Initializing parameters...")
             self._state = self._init_train_state(init_key, sample_input, num_train_steps)
 
         # JIT function
@@ -148,7 +152,7 @@ class BaseFlaxModel(BaseModel, ABC):
             new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
             return new_state, loss
 
-        loss_history: List[float] = []
+        loss_history: list[float] = []
         limit = num_batches * self.batch_size
 
         print(f"    [JAX] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")

@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Optional, Tuple, Callable
+from collections.abc import Callable
 
 from reservoir.core.identifiers import Dataset
 from reservoir.core.types import to_jax_f64
@@ -34,11 +34,11 @@ class PipelineDataManager:
     Encapsulates memory management and stats logging for data preparation.
     """
 
-    def __init__(self, dataset: Dataset, config: PipelineConfig, training_override: Optional[TrainingConfig] = None):
+    def __init__(self, dataset: Dataset, config: PipelineConfig, training_override: TrainingConfig | None = None):
         self.config = config
         self.dataset = dataset
         self.training_override = training_override
-        self.metadata: Optional[DatasetMetadata] = None
+        self.metadata: DatasetMetadata | None = None
 
     def prepare(self) -> FrontendContext:
         """
@@ -55,7 +55,7 @@ class PipelineDataManager:
         
         return frontend_ctx
 
-    def _load_dataset(self) -> Tuple[DatasetMetadata, SplitDataset]:
+    def _load_dataset(self) -> tuple[DatasetMetadata, SplitDataset]:
         """Step 1: Resolve presets and load dataset without mutating inputs later."""
         print("=== Step 1: Loading Dataset ===")
         dataset_enum, dataset_preset = self.dataset, DATASET_REGISTRY.get(self.dataset)
@@ -86,7 +86,7 @@ class PipelineDataManager:
         """
         Step 2 Apply preprocessing.
         """
-        print(f"\n=== Step 2: Preprocessing ===")
+        print("\n=== Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
         if preprocessing_config is not None:
             print(f"    [Config] {preprocessing_config}")

@@ -1,13 +1,10 @@
 #/home/yoshi/PycharmProjects/Reservoir/src/reservoir/data/presets.py
 from __future__ import annotations
 
-from typing import Dict, Optional
 
 from reservoir.core.presets import StrictRegistry
 from .config import (
-    SineWaveConfig,
     LorenzConfig,
-    Lorenz96Config,
     MackeyGlassConfig,
     MNISTConfig, DatasetPreset,
 )
@@ -15,7 +12,7 @@ from reservoir.core.identifiers import Dataset
 
 
 
-DATASET_DEFINITIONS: Dict[Dataset, DatasetPreset] = {
+DATASET_DEFINITIONS: dict[Dataset, DatasetPreset] = {
     # Dataset.SINE_WAVE: DatasetPreset(
     #     name="sine_wave",
     #     description="Multi-frequency sine wave composite",
@@ -113,7 +110,7 @@ DATASET_REGISTRY = StrictRegistry(DATASET_DEFINITIONS)
 DATASET_PRESETS = DATASET_DEFINITIONS
 
 
-def get_dataset_preset(dataset: Dataset) -> Optional[DatasetPreset]:
+def get_dataset_preset(dataset: Dataset) -> DatasetPreset | None:
     return DATASET_REGISTRY.get(dataset)
 
 

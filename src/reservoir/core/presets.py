@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 K = TypeVar("K", bound=Enum)
@@ -15,10 +15,10 @@ class StrictRegistry(Generic[K, T]):
     No strings, no aliases, no normalization.
     """
 
-    def __init__(self, items: Dict[K, T]):
+    def __init__(self, items: dict[K, T]):
         self._items = dict(items)
 
-    def get(self, key: K) -> Optional[T]:
+    def get(self, key: K) -> T | None:
         if not isinstance(key, Enum):
             raise TypeError(f"Registry lookup requires an Enum, got {type(key)}")
         return self._items.get(key)

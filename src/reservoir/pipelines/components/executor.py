@@ -1,6 +1,5 @@
 
 from functools import partial
-from typing import Tuple, Optional
 
 import jax.numpy as jnp
 from reservoir.core.types import NpF64, JaxF64
@@ -139,7 +138,7 @@ class PipelineExecutor:
             "quantum_trace": quantum_trace,
         }
 
-    def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> Tuple[Optional[NpF64], ...]:
+    def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> tuple[NpF64 | None, ...]:
         """
         Orchestrate feature extraction.
         If projection_layer is deferred, fuse projection + model forward.
@@ -171,10 +170,10 @@ class PipelineExecutor:
     @staticmethod
     def _compute_split(
         model: ClosedLoopGenerativeModel, 
-        inputs: Optional[NpF64], 
+        inputs: NpF64 | None, 
         split_name: str, 
         batch_size: int,
-        projection: Optional[Projection] = None,
+        projection: Projection | None = None,
     ):
         """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
         if inputs is None:

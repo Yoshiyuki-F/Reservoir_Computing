@@ -21,7 +21,6 @@ Visualization:
 import argparse
 import dataclasses
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import optuna
@@ -39,7 +38,6 @@ from reservoir.models.config import (
     MinMaxScalerConfig,
     PolyRidgeReadoutConfig,
     RandomProjectionConfig,
-    RidgeReadoutConfig,
 )
 from reservoir.core.identifiers import Dataset
 
@@ -156,7 +154,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
         # === 3. Run Pipeline ===
         try:
             from typing import Any
-            results: Dict[str, Any] = run_pipeline(config, dataset_enum)
+            results: dict[str, Any] = run_pipeline(config, dataset_enum)
 
             # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})

@@ -1,4 +1,3 @@
-from typing import Optional
 from reservoir.core.types import JaxF64, EvalMetrics
 from reservoir.utils.metrics import calculate_chaos_metrics
 from reservoir.utils.reporting import print_chaos_metrics
@@ -12,12 +11,12 @@ class Evaluator:
     def compute_chaos_metrics(
         truth: JaxF64,
         pred: JaxF64,
-        scaler: Optional[Preprocessor],
+        scaler: Preprocessor | None,
         dataset_config: BaseDatasetConfig,
         global_start: int,
         global_end: int,
         verbose: bool
-    ) -> Optional[EvalMetrics]:
+    ) -> EvalMetrics | None:
         """Compute VPT, NDEI, and other chaos metrics with inverse transform."""
         if scaler is None:
             return None
@@ -40,7 +39,7 @@ class Evaluator:
         return metrics
 
     @staticmethod
-    def align_targets(features: Optional[JaxF64], targets: Optional[JaxF64]) -> Optional[JaxF64]:
+    def align_targets(features: JaxF64 | None, targets: JaxF64 | None) -> JaxF64 | None:
         """Align target length (dim 0) to match feature length (warmup handling)."""
         if features is None or targets is None:
             return targets

@@ -3,7 +3,7 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple
+from collections.abc import Callable
 from beartype import beartype
 from reservoir.core.types import NpF64
 
@@ -19,7 +19,6 @@ from reservoir.data.generators import (
 )
 from reservoir.data.presets import get_dataset_preset
 from reservoir.data.config import (
-    BaseDatasetConfig,
     SineWaveConfig,
     MackeyGlassConfig,
     LorenzConfig,
@@ -34,8 +33,11 @@ from reservoir.data.structs import SplitDataset
 LOADER_REGISTRY = StrictRegistry({})
 
 
-def register_loader(dataset: Dataset) -> (Callable)[[Callable[[BaseDatasetConfig]]], Callable[[BaseDatasetConfig]]]:
-    def decorator(fn: Callable[[BaseDatasetConfig]]) -> Callable[[BaseDatasetConfig]]:
+from typing import TypeVar
+F = TypeVar("F")
+
+def register_loader(dataset: Dataset) -> Callable[[F], F]:
+    def decorator(fn: F) -> F:
         LOADER_REGISTRY.register(dataset, fn)
         return fn
 
@@ -44,7 +46,7 @@ def register_loader(dataset: Dataset) -> (Callable)[[Callable[[BaseDatasetConfig
 
 @register_loader(Dataset.SINE_WAVE)
 @beartype
-def load_sine_wave(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
+def load_sine_wave(config: SineWaveConfig) -> tuple[NpF64, NpF64]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X_arr, y_arr = generate_sine_data(config)
     assert X_arr.dtype == np.float64, f"Sine wave X_arr must be float64, got {X_arr.dtype}"
@@ -110,7 +112,7 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 
 @register_loader(Dataset.MACKEY_GLASS)
 @beartype
-def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
+def load_mackey_glass(config: MackeyGlassConfig) -> tuple[NpF64, NpF64]:
     """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
 
     # 1. Generate (returns jnp arrays)
@@ -148,7 +150,7 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
 
 @register_loader(Dataset.LORENZ)
 @beartype
-def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
+def load_lorenz(config: LorenzConfig) -> tuple[NpF64, NpF64]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
     assert X.dtype == np.float64, f"Lorenz X must be float64, got {X.dtype}"
@@ -160,7 +162,7 @@ def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
 
 @register_loader(Dataset.LORENZ96)
 @beartype
-def load_lorenz96(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
+def load_lorenz96(config: Lorenz96Config) -> tuple[NpF64, NpF64]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
     assert X.dtype == np.float64, f"Lorenz96 X must be float64, got {X.dtype}"
@@ -176,7 +178,7 @@ def load_lorenz96(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
 
 def load_dataset_with_validation_split(
     dataset_enum: Dataset,
-    training_cfg: Optional[TrainingConfig] = None,
+    training_cfg: TrainingConfig | None = None,
     require_3d: bool = True,
 ) -> SplitDataset:
     """
@@ -245,13 +247,16 @@ def load_dataset_with_validation_split(
             hasattr(config, 'dt')
         )
 
-        if has_lt_split and config.lyapunov_time_unit > 0:
+        if has_lt_split and getattr(config, "lyapunov_time_unit", 0) > 0:
+            from reservoir.data.config import ChaosDatasetConfig
+            from typing import cast
+            chaos_config = cast("ChaosDatasetConfig", config)
             # LT-based splitting for chaotic datasets
             # steps_per_lt = lyapunov_time_unit / dt
-            steps_per_lt = int(config.lyapunov_time_unit / config.dt)
-            train_count = int(config.train_lt * steps_per_lt)
-            val_count = int(config.val_lt * steps_per_lt)
-            test_count = int(config.test_lt * steps_per_lt)
+            steps_per_lt = int(chaos_config.lyapunov_time_unit / chaos_config.dt)
+            train_count = int(chaos_config.train_lt * steps_per_lt)
+            val_count = int(chaos_config.val_lt * steps_per_lt)
+            test_count = int(chaos_config.test_lt * steps_per_lt)
             
             required_total = train_count + val_count + test_count
             if total < required_total:
@@ -265,8 +270,8 @@ def load_dataset_with_validation_split(
             val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
             test_X, test_y = X[train_count + val_count:train_count + val_count + test_count], y[train_count + val_count:train_count + val_count + test_count]
             
-            print(f"    [Dataset] LT-based split: train={train_count} ({config.train_lt} LT), "
-                  f"val={val_count} ({config.val_lt} LT), test={test_count} ({config.test_lt} LT)")
+            print(f"    [Dataset] LT-based split: train={train_count} ({chaos_config.train_lt} LT), "
+                  f"val={val_count} ({chaos_config.val_lt} LT), test={test_count} ({chaos_config.test_lt} LT)")
         else:
             # Percentage-based splitting (original logic)
             train_ratio = float(training_cfg.train_size)

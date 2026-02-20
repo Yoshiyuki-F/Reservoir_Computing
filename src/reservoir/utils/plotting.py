@@ -5,7 +5,7 @@ Classification visualization utilities with validation support.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,12 +39,12 @@ def plot_classification_results(
     test_predictions: NpF64,
     title: str,
     filename: str,
-    metrics_info: Optional[Dict[str]] = None,
-    val_labels: Optional[NpF64] = None,
-    val_predictions: Optional[NpF64] = None,
-    best_lambda: Optional[float] = None,
-    lambda_norm: Optional[float] = None,
-    class_names: Optional[Sequence[str]] = None,
+    metrics_info: dict[str] | None = None,
+    val_labels: NpF64 | None = None,
+    val_predictions: NpF64 | None = None,
+    best_lambda: float | None = None,
+    lambda_norm: float | None = None,
+    class_names: Sequence[str] | None = None,
 ) -> None:
     """
     Visualize classification results with confusion matrix and accuracy bars, with optional validation.
@@ -174,7 +174,7 @@ def plot_classification_results(
     print(f"分類結果を '{output_path}' に保存しました。")
 
 
-def plot_loss_history(history: Sequence[float], filename: str, title: str = "Loss Curve", learning_rate: Optional[float] = None) -> None:
+def plot_loss_history(history: Sequence[float], filename: str, title: str = "Loss Curve", learning_rate: float | None = None) -> None:
     """Plot a generic loss history curve and save to outputs."""
     output_path = _resolve_output_path(filename)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,7 +205,7 @@ def plot_timeseries_comparison(
     title: str = "TimeSeries Prediction",
     max_features: int = 3,
     start_step: int = 0,
-    end_step: Optional[int] = None,
+    end_step: int | None = None,
     time_offset: int = 0,
 ) -> None:
     """
@@ -270,10 +270,10 @@ def plot_timeseries_comparison(
 
 
 def plot_lambda_search_boxplot(
-    residuals_history: Dict[float, np.ndarray],
+    residuals_history: dict[float, np.ndarray],
     filename: str,
     title: str = "Lambda Search: Residuals Distribution",
-    best_lambda: Optional[float] = None,
+    best_lambda: float | None = None,
     metric_name: str = "NMSE",
 ) -> None:
     """

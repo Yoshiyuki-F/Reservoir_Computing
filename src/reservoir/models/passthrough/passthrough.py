@@ -5,7 +5,6 @@ Flow: [Batch, Time, Hidden] -> Aggregation -> [Batch, Feature]
 """
 from __future__ import annotations
 
-from typing import Dict, Tuple, Optional
 
 from beartype import beartype
 import jax
@@ -29,9 +28,9 @@ class PassthroughModel(ClosedLoopGenerativeModel):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
         self.aggregator = StateAggregator(mode=aggregation_mode)
         self.topology_meta: ConfigDict = {}
-        self._n_units: Optional[int] = None  # Set on first forward pass
+        self._n_units: int | None = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **_: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **_: KwargsDict) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 
@@ -45,13 +44,13 @@ class PassthroughModel(ClosedLoopGenerativeModel):
             raise RuntimeError("Passthrough n_units not set. Call forward() first.")
         return jnp.zeros((batch_size, self._n_units))
 
-    def step(self, state: JaxF64, projected_input: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
         """Passthrough step: ignore state, return input as next state."""
-        # projected_input: [batch, features] - ensure dtype matches state
-        next_state = projected_input
+        # inputs: [batch, features] - ensure dtype matches state
+        next_state = inputs
         return next_state, next_state
 
-    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> tuple[JaxF64, JaxF64]:
         """Process sequence. Returns (final_state, all_states)."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
@@ -68,7 +67,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Standard Interface                                                 #
     # ------------------------------------------------------------------ #
 
-    def __call__(self, inputs: JaxF64, split_name: Optional[str] = None, **_: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, split_name: str | None = None, **_: KwargsDict) -> JaxF64:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs

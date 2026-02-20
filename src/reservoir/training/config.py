@@ -6,7 +6,6 @@ Training configurations and Hyperparameter search spaces.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
 from reservoir.core.types import ConfigDict
 
 
@@ -22,7 +21,7 @@ class TrainingConfig:
     seed: int
 
     # Learning Rate Scheduler
-    scheduler_type: Optional[str]  # "cosine", "piecewise", or None (constant)
+    scheduler_type: str | None  # "cosine", "piecewise", or None (constant)
     warmup_epochs: int
 
     # Data Splitting

@@ -9,7 +9,7 @@ Feedback QRC (Murauer et al., 2025):
 """
 from __future__ import annotations
 
-from typing import Tuple, Optional, cast
+from typing import cast
 from functools import partial
 
 import jax
@@ -49,7 +49,7 @@ def _make_circuit_logic(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool,
-    rng_key: Optional[jax.Array] = None
+    rng_key: jax.Array | None = None
 ) -> JaxF64:
     """
     Core circuit construction logic with Feedback QRC architecture.
@@ -102,11 +102,11 @@ def _make_circuit_logic(
         if is_mc:
             state_vec, current_key = carry_state
             # In MC mode, we use pure state circuit even if noisy (noise is manual)
-            c = tc.Circuit(n_qubits, inputs=state_vec)
+            c = tc.Circuit(n_qubits, inputs=state_vec) # type: ignore
         elif is_noisy:
-            c = tc.DMCircuit(n_qubits, inputs=carry_state)
+            c = tc.DMCircuit(n_qubits, inputs=carry_state) # type: ignore
         else:
-            c = tc.Circuit(n_qubits, inputs=carry_state)
+            c = tc.Circuit(n_qubits, inputs=carry_state) # type: ignore
 
         # Decoherence -  nothing with 1-3p, Px with p, Py with p, Pz with p
         # to simulate NISQ inaccuracy
@@ -202,16 +202,16 @@ def _make_circuit_logic(
     if is_noisy and not is_mc:
         # final_state is Density Matrix (2^N, 2^N)
         # Probabilities are diagonal elements.
-        probs = jnp.real(jnp.diag(cast(JaxF64, final_state)))
+        probs = jnp.real(jnp.diag(cast("JaxF64", final_state)))
         return probs
     else:
         # Pure State (Clean or MC)
         # final_state is Vector (2^N,)
-        return jnp.abs(cast(JaxF64, final_state)) ** 2
+        return jnp.abs(cast("JaxF64", final_state)) ** 2
 
 
 def _step_logic(
-    state: Tuple[JaxF64, Optional[JaxF64]],
+    state: tuple[JaxF64, JaxF64 | None],
     input_slice: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -221,7 +221,7 @@ def _step_logic(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
+) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
     """
     Core step logic - Feedback QRC (Murauer et al., 2025).
     
@@ -271,7 +271,7 @@ def _step_logic(
     next_state_vec = output[:n_qubits]
 
     if next_key is not None:
-        return (next_state_vec, cast(JaxF64, next_key)), output
+        return (next_state_vec, cast("JaxF64", next_key)), output
         
     return (next_state_vec, None), output
 
@@ -282,7 +282,7 @@ def _step_logic(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
-    state: Tuple[JaxF64, Optional[JaxF64]],
+    state: tuple[JaxF64, JaxF64 | None],
     input_slice: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -292,7 +292,7 @@ def _step_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
+) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
     """
     Standalone JIT wrapper for single step execution.
     """
@@ -306,7 +306,7 @@ def _step_jit(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
-    state_init: Tuple[JaxF64, Optional[JaxF64]],
+    state_init: tuple[JaxF64, JaxF64 | None],
     inputs_time_major: JaxF64,
     reservoir_params: JaxF64,
     measurement_matrix: JaxF64,
@@ -316,7 +316,7 @@ def _forward_jit(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Tuple[JaxF64, Optional[JaxF64]], JaxF64]:
+) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
     """
     Forward pass (scan) execution (JIT Compiled).
     Uses uncompiled `_step_logic` inside to ensure proper XLA fusion.

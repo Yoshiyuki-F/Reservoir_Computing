@@ -1,6 +1,5 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/reporter.py"""
 import time
-from typing import Dict
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack

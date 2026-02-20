@@ -1,7 +1,7 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/strategies.py"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Callable
+from collections.abc import Callable
 from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, ResultDict, JaxF64
 import jax.numpy as jnp
 import numpy as np
@@ -20,7 +20,7 @@ class ReadoutStrategy(ABC):
         self.metric_name = metric_name
 
     @staticmethod
-    def _flatten_3d_to_2d(arr: Optional[NpF64], label: str = "array") -> Optional[NpF64]:
+    def _flatten_3d_to_2d(arr: NpF64 | None, label: str = "array") -> NpF64 | None:
         """Flatten 3D states (Batch, Time, Features) -> 2D (Batch, Features)."""
         if arr is None:
             return None
@@ -30,7 +30,7 @@ class ReadoutStrategy(ABC):
         return arr
 
     @staticmethod
-    def _get_seed_sequence(train_X: NpF64, val_X: Optional[NpF64]) -> JaxF64:
+    def _get_seed_sequence(train_X: NpF64, val_X: NpF64 | None) -> JaxF64:
         """Prepare seed for closed-loop (concat train+val)."""
         if val_X is not None:
             axis = 1 if train_X.ndim == 3 else 0
@@ -42,13 +42,13 @@ class ReadoutStrategy(ABC):
     def fit_and_evaluate(
         self,
         model: Callable,
-        readout: Optional[Callable],
+        readout: Callable | None,
         train_Z: NpF64,
-        val_Z: Optional[NpF64],
-        test_Z: Optional[NpF64],
-        train_y: Optional[NpF64],
-        val_y: Optional[NpF64],
-        test_y: Optional[NpF64],
+        val_Z: NpF64 | None,
+        test_Z: NpF64 | None,
+        train_y: NpF64 | None,
+        val_y: NpF64 | None,
+        test_y: NpF64 | None,
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
         pipeline_config: PipelineConfig
@@ -62,13 +62,13 @@ class EndToEndStrategy(ReadoutStrategy):
     
     def fit_and_evaluate(
         self, model: Callable, 
-        readout: Optional[Callable], 
+        readout: Callable | None, 
         train_Z: NpF64, 
-        val_Z: Optional[NpF64], 
-        test_Z: Optional[NpF64], 
-        train_y: Optional[NpF64], 
-        val_y: Optional[NpF64], 
-        test_y: Optional[NpF64],
+        val_Z: NpF64 | None, 
+        test_Z: NpF64 | None, 
+        train_y: NpF64 | None, 
+        val_y: NpF64 | None, 
+        test_y: NpF64 | None,
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
         pipeline_config: PipelineConfig
@@ -139,7 +139,7 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: Optional[Callable], train_Z: NpF64, val_Z: Optional[NpF64], test_Z: Optional[NpF64], train_y: Optional[NpF64], val_y: Optional[NpF64], test_y: Optional[NpF64], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self, model: Callable, readout: Callable | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
     ) -> ResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         
@@ -148,9 +148,9 @@ class ClassificationStrategy(ReadoutStrategy):
         test_Z = self._flatten_3d_to_2d(test_Z, "test states")
         ty_reshaped, vy_reshaped = train_y, val_y
         
-        search_history: Dict[float, float] = {}
-        weight_norms: Dict[float, float] = {}
-        best_lambda: Optional[float] = None
+        search_history: dict[float, float] = {}
+        weight_norms: dict[float, float] = {}
+        best_lambda: float | None = None
         best_score = -float("inf")
 
         from reservoir.readout.ridge import RidgeCV, RidgeRegression
@@ -239,13 +239,13 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
     def fit_and_evaluate(
         self,
             model: Callable,
-            readout: Optional[Callable],
+            readout: Callable | None,
             train_Z: NpF64,
-            val_Z: Optional[NpF64],
-            test_Z: Optional[NpF64],
-            train_y: Optional[NpF64],
-            val_y: Optional[NpF64],
-            test_y: Optional[NpF64],
+            val_Z: NpF64 | None,
+            test_Z: NpF64 | None,
+            train_y: NpF64 | None,
+            val_y: NpF64 | None,
+            test_y: NpF64 | None,
             frontend_ctx: FrontendContext,
             dataset_meta: DatasetMetadata,
             pipeline_config: PipelineConfig
@@ -319,9 +319,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              all_val_preds = jnp.einsum("sf,lfo->lso", val_X_jax, all_weights)
              all_val_preds_np = to_np_f64(all_val_preds)
 
-             search_history: Dict[float, float] = {}
-             weight_norms: Dict[float, float] = {}
-             residuals_history: Dict[float, np.ndarray] = {}
+             search_history: dict[float, float] = {}
+             weight_norms: dict[float, float] = {}
+             residuals_history: dict[float, np.ndarray] = {}
              best_lambda = readout.lambda_candidates[0]
              best_score = float('inf')
 
@@ -468,7 +468,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              raise err
 
         # Calculate global_start based on dimensions
-        def get_time_steps(arr: Optional[NpF64]) -> int:
+        def get_time_steps(arr: NpF64 | None) -> int:
             if arr is None: return 0
             # If 3D (Batch, Time, Feat), return Time (shape[1])
             if arr.ndim == 3: return int(arr.shape[1])
@@ -536,7 +536,7 @@ class ReadoutStrategyFactory:
     
     @staticmethod
     def create_strategy(
-        readout: Optional[Callable],
+        readout: Callable | None,
         dataset_meta: DatasetMetadata,
         evaluator: Evaluator,
         metric_name: str

@@ -1,4 +1,3 @@
-from typing import Optional
 
 from reservoir.models import ModelFactory
 from reservoir.models.presets import PipelineConfig
@@ -81,7 +80,7 @@ class PipelineModelBuilder:
         )
 
     @staticmethod
-    def get_adapter(stack: ModelStack) -> Optional[Adapter]:
+    def get_adapter(stack: ModelStack) -> Adapter | None:
         """Helper to retrieve adapter from various model wrappers in the stack."""
         model = stack.model
         if hasattr(model, 'adapter') and not hasattr(model, 'student'):

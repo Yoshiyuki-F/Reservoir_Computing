@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Tuple
 
 from reservoir.core.identifiers import Dataset
 from reservoir.core.interfaces import ReadoutModule
@@ -18,12 +17,12 @@ from reservoir.layers.projection import Projection
 @dataclass(frozen=True)
 class FrontendContext:
     processed_split: SplitDataset
-    preprocessor: Optional[Preprocessor]  # Single Preprocessor instance
+    preprocessor: Preprocessor | None  # Single Preprocessor instance
     preprocessed_shape: tuple[int, ...]
-    projected_shape: Optional[tuple[int, ...]]
+    projected_shape: tuple[int, ...] | None
     input_shape_for_meta: tuple[int, ...]
     input_dim_for_factory: int
-    projection_layer: Optional[Projection] = None
+    projection_layer: Projection | None = None
 
 
 @dataclass(frozen=True)
@@ -43,7 +42,7 @@ from reservoir.core.types import ConfigDict
 @dataclass(frozen=True)
 class ModelStack:
     model: ClosedLoopGenerativeModel
-    readout: Optional[ReadoutModule]
+    readout: ReadoutModule | None
     topo_meta: ConfigDict
     metric: str
     model_label: str

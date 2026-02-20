@@ -2,7 +2,6 @@
 Reservoir Computing用のデータ生成関数。
 """
 
-from typing import Tuple, Optional
 from beartype import beartype
 from reservoir.core.types import NpF64
 
@@ -26,7 +25,7 @@ from reservoir.data.config import (
 
 
 @beartype
-def generate_sine_data(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
+def generate_sine_data(config: SineWaveConfig) -> tuple[NpF64, NpF64]:
     """複数周波数のサイン波を合成した時系列データを生成。
     
     複数の正弦波を重ね合わせて合成信号を作成し、ガウシアンノイズを
@@ -42,7 +41,7 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
             - 目標データ: 形状 (time_steps-1, 1) の次時刻値
     """
 
-    t = np.arange(config.time_steps) * config.dt
+    t = np.arange(config.time_steps)
     
     # 複数の周波数のサインwave合成
     signal = np.zeros(config.time_steps)
@@ -65,7 +64,7 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
 
 
 @beartype
-def generate_lorenz_data(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
+def generate_lorenz_data(config: LorenzConfig) -> tuple[NpF64, NpF64]:
     """Lorenz方程式による決定論的カオス時系列データを生成。
     
     Lorenzアトラクターは気象学から生まれた有名なカオス系で、
@@ -129,7 +128,7 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
 
 
 @beartype
-def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
+def generate_lorenz96_data(config: Lorenz96Config) -> tuple[NpF64, NpF64]:
     """Generates Lorenz 96 chaotic time series data.
     
     The Lorenz 96 model is defined by:
@@ -154,8 +153,10 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
     x0 = np.full(N, F, dtype=np.float64)
     x0 += np.random.normal(0, 0.01, N)
     
-    warmup_steps = config.washup_lt * config.steps_per_lt
-    total_steps = config.time_steps + warmup_steps
+    steps_per_lt = int(config.lyapunov_time_unit / config.dt)
+    warmup_steps = int(config.washup_lt * steps_per_lt)
+    data_steps = int((config.train_lt + config.val_lt + config.test_lt) * steps_per_lt) + 1
+    total_steps = warmup_steps + data_steps
 
     # Pre-compute indices for cyclic boundary conditions
     indices = np.arange(N)
@@ -189,7 +190,7 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
 
 
 @beartype
-def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
+def generate_mackey_glass_data(config: MackeyGlassConfig) -> tuple[NpF64, NpF64]:
     """
     Mackey-Glassカオス時系列データを生成します。
 
@@ -262,8 +263,8 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]
 def generate_mnist_sequence_data(
     config: MNISTConfig,
     *,
-    split: Optional[str] = None,
-) -> Tuple[NpF64, NpF64]:
+    split: str | None = None,
+) -> tuple[NpF64, NpF64]:
     """
     Generate MNIST-based sequence data by scanning images as time series.
 

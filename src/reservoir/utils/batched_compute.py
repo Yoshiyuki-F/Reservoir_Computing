@@ -3,7 +3,7 @@ utils/batched_compute.py
 GPU OOMを防ぐためのバッチ処理ユーティリティ。
 """
 
-from typing import Callable
+from collections.abc import Callable
 from beartype import beartype
 from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
 

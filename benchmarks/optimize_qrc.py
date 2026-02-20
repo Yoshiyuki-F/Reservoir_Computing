@@ -29,7 +29,6 @@ import argparse
 import dataclasses
 import math
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import optuna
@@ -41,7 +40,6 @@ from reservoir.models.presets import (
 )
 from reservoir.models.config import (
     PolyRidgeReadoutConfig,
-    RidgeReadoutConfig,
 )
 from reservoir.core.identifiers import Dataset
 
@@ -143,7 +141,7 @@ def make_objective(measurement_basis: str, readout_config):
 
         # === 3. Run Pipeline ===
         try:
-            results: Dict[str] = run_pipeline(config, Dataset.MACKEY_GLASS)
+            results: dict[str] = run_pipeline(config, Dataset.MACKEY_GLASS)
 
             # === 4. Extract Metrics ===
             test_results = results.get("test", {})

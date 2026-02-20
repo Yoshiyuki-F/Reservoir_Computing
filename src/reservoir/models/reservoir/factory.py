@@ -5,7 +5,6 @@ Handles creation of Physical Nodes (Reservoir) and assembly into sequential pipe
 """
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
 
 from reservoir.models.config import ClassicalReservoirConfig, QuantumReservoirConfig
 from reservoir.models.presets import PipelineConfig
@@ -23,7 +22,7 @@ class ReservoirFactory:
         pipeline_config: PipelineConfig,
         projected_input_dim: int,
         output_dim: int,
-        input_shape: Optional[tuple[int, ...]],
+        input_shape: tuple[int, ...] | None,
     ) -> Reservoir:
         """
         Assemble reservoir node with embedded aggregation (Steps 5-6).
@@ -118,5 +117,5 @@ class ReservoirFactory:
             "agg_mode": agg_mode_enum.value,
             "student_layers": None,
         }
-        node.topology_meta = topo_meta
+        node.topology_meta = topo_meta # type: ignore
         return node

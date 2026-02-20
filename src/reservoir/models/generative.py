@@ -3,7 +3,8 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, runtime_checkable
+from typing import TypeVar, Generic, Protocol, runtime_checkable, cast
+from collections.abc import Callable
 
 from beartype import beartype
 import jax
@@ -32,12 +33,12 @@ class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, state: StateT, inputs: JaxF64) -> Tuple[StateT, JaxF64]:
+    def step(self, state: StateT, inputs: JaxF64) -> tuple[StateT, JaxF64]:
         """Single time step execution: (state, input) -> (next_state, output)."""
         raise NotImplementedError
     
     @abstractmethod
-    def forward(self, state: StateT, input_data: JaxF64) -> Tuple[StateT, JaxF64]:
+    def forward(self, state: StateT, input_data: JaxF64) -> tuple[StateT, JaxF64]:
         """Process sequence: (state, input_seq) -> (final_state, output_seq)."""
         raise NotImplementedError
 
@@ -45,8 +46,8 @@ class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
         self,
         seed_data: JaxF64,
         steps: int,
-        readout: Optional[Predictable] = None,
-        projection_fn: Optional[Callable[[JaxF64], JaxF64]] = None,
+        readout: Predictable | None = None,
+        projection_fn: Callable[[JaxF64], JaxF64] | None = None,
         verbose: bool = True
     ) -> JaxF64:
         """
@@ -93,7 +94,6 @@ class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
         last_output = history_outputs[:, -1, :]  # (batch, features)
         first_prediction = predict_one(last_output)
         
-        from reservoir.utils.reporting import print_feature_stats
 
         def scan_step(carry, _):
             h_prev, x_raw, step_idx = carry
@@ -103,11 +103,12 @@ class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
             y_next = predict_one(output)
             
             # Periodic Stats Logging (Every 50 steps)
-            def log_stats(args: Tuple[int, JaxF64, StateT, JaxF64]) -> None:
+            def log_stats(args: tuple[int, JaxF64, StateT, JaxF64]) -> None:
                 st_idx, x, h, y = args
+                h_cast = cast('JaxF64', h)
                 jax.debug.print("--- Step {i} ---", i=st_idx)
                 jax.debug.print("Loop:Input - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
-                jax.debug.print("Loop:State - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h), s=jnp.std(h), mn=jnp.min(h), mx=jnp.max(h))
+                jax.debug.print("Loop:State - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h_cast), s=jnp.std(h_cast), mn=jnp.min(h_cast), mx=jnp.max(h_cast))
                 jax.debug.print("Loop:Pred  - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(y), s=jnp.std(y), mn=jnp.min(y), mx=jnp.max(y))
 
             # Conditional Execution

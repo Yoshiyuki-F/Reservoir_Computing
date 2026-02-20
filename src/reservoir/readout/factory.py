@@ -2,7 +2,6 @@
 Factory for creating readout instances from configuration."""
 from __future__ import annotations
 
-from typing import Optional
 
 from reservoir.models.config import RidgeReadoutConfig, PolyRidgeReadoutConfig, FNNReadoutConfig, ReadoutConfig
 from reservoir.readout.ridge import RidgeCV
@@ -16,10 +15,10 @@ class ReadoutFactory:
 
     @staticmethod
     def create_readout(
-        config: Optional[ReadoutConfig],
+        config: ReadoutConfig | None,
         classification: bool,
-        training_config: Optional[TrainingConfig] = None,
-    ) -> Optional[ReadoutModule]:
+        training_config: TrainingConfig | None = None,
+    ) -> ReadoutModule | None:
         # None (End-to-End) の場合
         if config is None:
             return None

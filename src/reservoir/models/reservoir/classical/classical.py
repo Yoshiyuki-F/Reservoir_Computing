@@ -4,7 +4,6 @@ Standard Echo State Network implementation.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Optional
 
 from beartype import beartype
 import jax
@@ -50,18 +49,18 @@ class ClassicalReservoir(Reservoir):
     def initialize_state(self, batch_size: int = 1) -> JaxF64:
         return jnp.zeros((batch_size, self.n_units))
 
-    def step(self, state: JaxF64, projected_input: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
         # 論文の式:   (1 - a) * state + tanh(...)
 
         # 論文 Eq(7) 通りの実装 Li-ESN
-        # next_state = (1.0 - self.leak_rate) * state + jnp.tanh(projected_input + jnp.dot(state, self.W))
+        # next_state = (1.0 - self.leak_rate) * state + jnp.tanh(inputs + jnp.dot(state, self.W))
         
         # Jaeger (2007) Standard Li-ESN
-        next_state = (1.0 - self.leak_rate) * state + self.leak_rate * jnp.tanh(projected_input + jnp.dot(state, self.W))
+        next_state = (1.0 - self.leak_rate) * state + self.leak_rate * jnp.tanh(inputs + jnp.dot(state, self.W))
 
         return next_state, next_state
 
-    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> tuple[JaxF64, JaxF64]:
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
         batch, time, feat = input_data.shape
@@ -74,7 +73,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: Optional[str] = None, **_: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str | None = None, **_: KwargsDict) -> JaxF64:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs
         
@@ -87,7 +86,7 @@ class ClassicalReservoir(Reservoir):
         
         batch_size = arr.shape[0]
         initial_state = self.initialize_state(batch_size)
-        _, artifacts = self.forward(initial_state, arr)
+        final_state, artifacts = self.forward(initial_state, arr)
         states = artifacts
 
         if return_sequences:
@@ -99,7 +98,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **__: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
@@ -117,15 +116,15 @@ class ClassicalReservoir(Reservoir):
         return res
 
     @classmethod
-    def from_dict(cls, data: ConfigDict) -> "ClassicalReservoir":
+    def from_dict(cls, data: ConfigDict) -> ClassicalReservoir:
         try:
             return cls(
-                n_units=int(data["n_units"]),
-                spectral_radius=float(data["spectral_radius"]),
-                leak_rate=float(data["leak_rate"]),
-                rc_connectivity=float(data["rc_connectivity"]),
-                seed=int(data["seed"]),
-                aggregation_mode=AggregationMode(data["aggregation"]),
+                n_units=int(float(str(data["n_units"]))), # type: ignore
+                spectral_radius=float(str(data["spectral_radius"])), # type: ignore
+                leak_rate=float(str(data["leak_rate"])), # type: ignore
+                rc_connectivity=float(str(data["rc_connectivity"])), # type: ignore
+                seed=int(float(str(data["seed"]))), # type: ignore
+                aggregation_mode=AggregationMode(str(data["aggregation"])), # type: ignore
             )
         except KeyError as exc:
             raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc

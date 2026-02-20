@@ -5,12 +5,16 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Optional, Tuple
+from typing import TYPE_CHECKING
+from collections.abc import Sequence, Callable
+
+if TYPE_CHECKING:
+    from reservoir.models.generative import Predictable
 
 from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, KwargsDict
+from reservoir.core.types import JaxF64, KwargsDict, TrainLogs, EvalMetrics
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
@@ -34,7 +38,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     def input_window_size(self) -> int:
         return self.window_size or 0
 
-    def __init__(self, model_config: FNNConfig, training_config: TrainingConfig, input_dim: int, output_dim: int, classification: bool = False):
+    def __init__(self, model_config: FNNConfig, input_dim: int, output_dim: int, classification: bool = False, training_config: TrainingConfig | None = None):
         if not isinstance(model_config, FNNConfig):
             raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")
         if int(input_dim) <= 0 or int(output_dim) <= 0:
@@ -47,10 +51,10 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         # Select adapter based on config
         if self.window_size is not None:
             # TimeDelayEmbedding: adapter for windowed time series
-            self.adapter = TimeDelayEmbedding(window_size=self.window_size)
+            self.adapter = TimeDelayEmbedding(window_size=self.window_size) # type: ignore
         else:
             # Flatten: standard behavior for classification or global sequences
-            self.adapter = Flatten()
+            self.adapter = Flatten() # type: ignore
 
         # input_dim passed to the constructor is now the EFFECTIVE dimension (post-adapter)
         # e.g., 784 for MNIST (28*28), or window_size * features for TDE.
@@ -61,9 +65,9 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         self.layer_dims: Sequence[int] = (effective_input_dim, *hidden_layers, int(output_dim))
 
-        super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
+        super().__init__({"layer_dims": self.layer_dims}, classification=classification, training_config=training_config)
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs: KwargsDict) -> TrainLogs:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim
@@ -121,7 +125,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             return jnp.zeros((batch_size, self.window_size, self._output_dim))
         return jnp.zeros((batch_size, 1))
 
-    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
         """
         Single step for closed-loop generation.
         For windowed FNN: concatenate window buffer to form input, predict, update buffer.
@@ -148,7 +152,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             output = super().predict(inputs)
             return state, output
 
-    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> tuple[JaxF64, JaxF64]:
         """
         Process seed sequence to initialize the sliding window state.
         For windowed FNN: fill the window buffer with the last `window_size` values from input.
@@ -193,8 +197,8 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         self,
         seed_data: JaxF64,
         steps: int,
-        readout: Optional['ReadoutStrategy'] = None,
-        projection_fn: Optional[Callable[[JaxF64], JaxF64]] = None,
+        readout: Predictable | None = None,
+        projection_fn: Callable[[JaxF64], JaxF64] | None = None,
         verbose: bool = True
     ) -> JaxF64:
         """
@@ -245,7 +249,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 class FNN(nn.Module):
     """Feed-forward network whose depth/width comes from layer_dims."""
 
-    layer_dims: Sequence[int]
+    layer_dims: Sequence[int] = ()
     return_hidden: bool = False
 
     @nn.compact

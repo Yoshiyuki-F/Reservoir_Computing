@@ -23,7 +23,6 @@ __all__ = [
     "Reservoir",
     "ClassicalReservoir",
     "PipelineConfig",
-    "MODEL_PRESETS",
     "get_model_preset",
     "DistillationConfig",
 ]
