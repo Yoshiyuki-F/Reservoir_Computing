@@ -15,10 +15,11 @@ dependencies = [
     #ML
     "jax[cuda12]",
     "jaxlib",
+    "optax",
+    "flax",
+    #Type scrict
     "beartype",
     "jaxtyping",
-    "flax",
-    "optax",
     #Quantum
     "tensorcircuit-ng[jax]",
     #mnist dataset

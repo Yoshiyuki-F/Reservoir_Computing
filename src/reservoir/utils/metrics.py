@@ -2,12 +2,12 @@
 src/reservoir/utils/metrics.py
 Refactored metrics calculation logic.
 """
-from typing import Any, Dict
-import jax.numpy as jnp
+from typing import Dict
+import numpy as np
 
 # --- Standard Metric Functions ---
 
-def mse(y_true: Any, y_pred: Any) -> float:
+def mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Mean Squared Error."""
     y_true_arr = jnp.asarray(y_true)
     y_pred_arr = jnp.asarray(y_pred)
@@ -16,11 +16,11 @@ def mse(y_true: Any, y_pred: Any) -> float:
         y_pred_arr = y_pred_arr.reshape(y_true_arr.shape)
     return float(jnp.mean((y_true_arr - y_pred_arr) ** 2))
 
-def rmse(y_true: Any, y_pred: Any) -> float:
+def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Root Mean Squared Error."""
     return float(jnp.sqrt(mse(y_true, y_pred)))
 
-def nmse(y_true: Any, y_pred: Any) -> float:
+def nmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Normalized Mean Squared Error (User Definition).
     NMSE = sum((y - y_hat)^2) / sum(y^2)
@@ -37,7 +37,7 @@ def nmse(y_true: Any, y_pred: Any) -> float:
     
     return float(numerator / denominator) if denominator > 1e-9 else float('inf')
 
-def nrmse(y_true: Any, y_pred: Any) -> float:
+def nrmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Normalized Root Mean Squared Error.
     NRMSE = RMSE / std(y)
@@ -46,14 +46,14 @@ def nrmse(y_true: Any, y_pred: Any) -> float:
     std_true = float(jnp.std(jnp.asarray(y_true)))
     return float(rmse_val / std_true) if std_true > 1e-9 else float('inf')
 
-def ndei(y_true: Any, y_pred: Any) -> float:
+def ndei(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Non-Dimensional Error Index.
     Defined as RMSE / std(y). Same as NRMSE within this context.
     """
     return nrmse(y_true, y_pred)
 
-def mase(y_true: Any, y_pred: Any) -> float:
+def mase(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Mean Absolute Scaled Error.
     MAE / Mean Absolute Error of Naive Forecast (on true data).
@@ -73,13 +73,13 @@ def mase(y_true: Any, y_pred: Any) -> float:
         return float(mae / naive_mae) if naive_mae > 1e-9 else float('inf')
     return float('inf')
 
-def var_ratio(y_true: Any, y_pred: Any) -> float:
+def var_ratio(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Variance Ratio: std(pred) / std(true)."""
     std_true = float(jnp.std(jnp.asarray(y_true)))
     std_pred = float(jnp.std(jnp.asarray(y_pred)))
     return std_pred / std_true if std_true > 1e-9 else 0.0
 
-def correlation(y_true: Any, y_pred: Any) -> float:
+def correlation(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Pearson Correlation Coefficient."""
     y_true_arr = jnp.asarray(y_true).flatten()
     y_pred_arr = jnp.asarray(y_pred).flatten()
@@ -97,7 +97,7 @@ def correlation(y_true: Any, y_pred: Any) -> float:
         return float(matrix[0, 1])
     return 0.0
 
-def accuracy(y_true: Any, y_pred: Any) -> float:
+def accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Classification Accuracy."""
     y_true_arr = jnp.asarray(y_true)
     y_pred_arr = jnp.asarray(y_pred)
@@ -107,7 +107,7 @@ def accuracy(y_true: Any, y_pred: Any) -> float:
     
     return float(jnp.mean(pred_labels == true_labels))
 
-def vpt_score(y_true: Any, y_pred: Any, threshold: float = 0.4) -> int:
+def vpt_score(y_true: np.ndarray, y_pred: np.ndarray, threshold: float = 0.4) -> int:
     """
     Valid Prediction Time (VPT).
     Calculated based on normalized error at each time step.
@@ -148,7 +148,7 @@ def vpt_score(y_true: Any, y_pred: Any, threshold: float = 0.4) -> int:
 
 # --- Dispatcher and Aggregator ---
 
-def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
+def compute_score(preds: np.ndarray, targets: np.ndarray, metric_name: str) -> float:
     """
     Compute generic score (MSE, NMSE, or Accuracy).
     Dispatcher to specific functions.
@@ -172,8 +172,8 @@ def compute_score(preds: Any, targets: Any, metric_name: str) -> float:
     return mse(targets, preds)
 
 def calculate_chaos_metrics(
-    y_true: Any, 
-    y_pred: Any,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
     dt: float,
     lyapunov_time_unit: float,
     vpt_threshold: float = 0.4,

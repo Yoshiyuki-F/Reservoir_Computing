@@ -5,7 +5,6 @@ Reservoir Computing用のデータ生成関数。
 from typing import Tuple, Optional
 
 import numpy as np
-import jax.numpy as jnp
 
 try:
     import torch  # type: ignore
@@ -24,7 +23,7 @@ from reservoir.data.config import (
 )
 
 
-def generate_sine_data(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_sine_data(config: SineWaveConfig) -> Tuple[np.ndarray, np.ndarray]:
     """複数周波数のサイン波を合成した時系列データを生成。
     
     複数の正弦波を重ね合わせて合成信号を作成し、ガウシアンノイズを
@@ -56,13 +55,13 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     signal += noise
     
     # 入力は現在の値、ターゲットは次の値
-    input_data = jnp.array(signal[:-1].reshape(-1, 1))   # 形状: (time_steps-1, 1)
-    target_data = jnp.array(signal[1:].reshape(-1, 1))   # 形状: (time_steps-1, 1)
+    input_data = np.array(signal[:-1].reshape(-1, 1))   # 形状: (time_steps-1, 1)
+    target_data = np.array(signal[1:].reshape(-1, 1))   # 形状: (time_steps-1, 1)
     
     return input_data, target_data
 
 
-def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_lorenz_data(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
     """Lorenz方程式による決定論的カオス時系列データを生成。
     
     Lorenzアトラクターは気象学から生まれた有名なカオス系で、
@@ -119,13 +118,13 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray
     data = data[warmup_steps:]
     
     # 入力は現在の状態、ターゲットは次の状態
-    input_data = jnp.array(data[:-1])
-    target_data = jnp.array(data[1:])
+    input_data = np.array(data[:-1])
+    target_data = np.array(data[1:])
     
     return input_data, target_data
 
 
-def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[np.ndarray, np.ndarray]:
     """Generates Lorenz 96 chaotic time series data.
     
     The Lorenz 96 model is defined by:
@@ -140,6 +139,7 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
             - target_data: Shape (time_steps, N)
     """
     import jax
+    import jax.numpy as jnp
     
     N = config.n_input
     F = config.F
@@ -191,13 +191,13 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.nda
     data = data[warmup_steps:]
     
     # Input is current state, Target is next state
-    input_data = data[:-1]
-    target_data = data[1:]
+    input_data = np.asarray(data[:-1])
+    target_data = np.asarray(data[1:])
     
     return input_data, target_data
 
 
-def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[np.ndarray, np.ndarray]:
     """
     Mackey-Glassカオス時系列データを生成します。
 
@@ -261,8 +261,8 @@ def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, 
         x += noise
 
     # 入力は現在の値、ターゲットは次の値
-    input_data = jnp.array(x[:-1].reshape(-1, 1))
-    target_data = jnp.array(x[1:].reshape(-1, 1))
+    input_data = np.array(x[:-1].reshape(-1, 1))
+    target_data = np.array(x[1:].reshape(-1, 1))
 
     return input_data, target_data
 
@@ -271,7 +271,7 @@ def generate_mnist_sequence_data(
     config: MNISTConfig,
     *,
     split: Optional[str] = None,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate MNIST-based sequence data by scanning images as time series.
 
@@ -282,7 +282,7 @@ def generate_mnist_sequence_data(
             - time_steps: Number of time steps to reshape each image into.
 
     Returns:
-        Tuple (input_sequences, labels) where sequences are float64 JAX arrays.
+        Tuple (input_sequences, labels) where sequences are float64 Numpy arrays.
 
     Raises:
         ImportError: If torch/torchvision are not available.
@@ -327,6 +327,6 @@ def generate_mnist_sequence_data(
         sequences.append(seq.astype(np.float64))
         labels.append(label)
 
-    input_data = jnp.array(sequences)
-    target_labels = jnp.array(labels)
+    input_data = np.array(sequences)
+    target_labels = np.array(labels)
     return input_data, target_labels

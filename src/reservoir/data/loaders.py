@@ -3,7 +3,7 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -34,8 +34,8 @@ LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tup
 )
 
 
-def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig], Any]], Callable[[BaseDatasetConfig], Any]]:
-    def decorator(fn: Callable[[BaseDatasetConfig], Any]) -> Callable[[BaseDatasetConfig], Any]:
+def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig]]], Callable[[BaseDatasetConfig]]]:
+    def decorator(fn: Callable[[BaseDatasetConfig]]) -> Callable[[BaseDatasetConfig]]:
         LOADER_REGISTRY.register(dataset, fn)
         return fn
 

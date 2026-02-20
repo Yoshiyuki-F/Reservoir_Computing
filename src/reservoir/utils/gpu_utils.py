@@ -1,7 +1,7 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/utils/gpu_utils.py
 Reservoir Computing用のGPUユーティリティ関数。
 """
-from typing import Callable, Any
+from typing import Callable
 import re
 import shutil
 
@@ -110,7 +110,7 @@ def check_gpu_available() -> bool:
         raise RuntimeError(f"GPU availability check failed: {e}")
 
 
-def require_gpu() -> Callable[..., Any]:
+def require_gpu() -> Callable:
     """GPUを必須とするテスト用のデコレータ。
     
     このデコレータを付けたテスト関数は、実行前に`check_gpu_available`を
@@ -128,7 +128,7 @@ def require_gpu() -> Callable[..., Any]:
     """
     import sys
     
-    def decorator(test_func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(test_func: Callable[...]) -> Callable[...]:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 check_gpu_available()

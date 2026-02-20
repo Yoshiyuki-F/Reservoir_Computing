@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
-import jax.numpy as jnp
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
@@ -24,7 +23,7 @@ def get_mnist_datasets() -> Tuple[datasets.MNIST, datasets.MNIST]:
     return train_set, test_set
 
 
-def image_to_sequence(image: np.ndarray, *, n_steps: int) -> jnp.ndarray:
+def image_to_sequence(image: np.ndarray, *, n_steps: int) -> np.ndarray:
     """Convert a single MNIST image into a (time, features) sequence."""
     if image.ndim == 3 and image.shape[0] == 1:
         image = image[0]
@@ -36,7 +35,7 @@ def image_to_sequence(image: np.ndarray, *, n_steps: int) -> jnp.ndarray:
         raise ValueError(f"n_steps must be positive and divide {total_pixels}, got {n_steps}")
     features_per_step = total_pixels // n_steps
     flat = image.reshape(total_pixels)
-    return flat.reshape(n_steps, features_per_step).astype(jnp.float64)
+    return flat.reshape(n_steps, features_per_step).astype(np.float64)
 
 
 def get_mnist_dataloaders(batch_size: int = 128, shuffle_train: bool = True, num_workers: int = 0) -> Tuple[DataLoader, DataLoader]:

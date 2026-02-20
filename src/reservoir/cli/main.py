@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
+
+# Ensure x64 is enabled before any JAX ops or imports
+os.environ["JAX_ENABLE_X64"] = "True"
 
 import jax
 
-# Ensure x64 is enabled before any other JAX ops
 if not jax.config.jax_enable_x64:
     jax.config.update("jax_enable_x64", True)
 

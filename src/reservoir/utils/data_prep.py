@@ -3,17 +3,16 @@
 src/reservoir/utils/data_prep.py
 Data preparation utilities for Reservoir Computing pipelines.
 """
-from typing import Optional, Union
+from typing import Optional
 
-import jax.numpy as jnp
 import numpy as np
 
-
+#TODO beartype
 def apply_halo_padding(
-    current_data: Union[jnp.ndarray, np.ndarray],
-    context_data: Optional[Union[jnp.ndarray, np.ndarray]],
+    current_data: np.ndarray,
+    context_data: Optional[np.ndarray],
     window_size: int
-) -> Union[jnp.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Apply Halo Padding (Time Delay Overlap) to the start of current_data 
     using the end of context_data.
@@ -49,8 +48,5 @@ def apply_halo_padding(
     context = context_data[-overlap:]
     
     # Concatenate along axis 0 (Time)
-    # JAX/Numpy dispatch
-    if isinstance(current_data, jnp.ndarray) or isinstance(context, jnp.ndarray):
-        return jnp.concatenate([context, current_data], axis=0)
-    else:
-        return np.concatenate([context, current_data], axis=0)
+    # Numpy array assumed
+    return np.concatenate([context, current_data], axis=0)

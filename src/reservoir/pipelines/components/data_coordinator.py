@@ -5,9 +5,8 @@ src/reservoir/pipelines/components/data_coordinator.py
 Implements DataCoordinator to handle data fetching, padding, and alignment,
 freeing PipelineExecutor from low-level data manipulation.
 """
-from typing import Optional, Union
+from typing import Optional
 
-import jax.numpy as jnp
 import numpy as np
 
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext
@@ -26,11 +25,11 @@ class DataCoordinator:
         self.meta = dataset_meta
         self.processed = frontend_ctx.processed_split
 
-    def get_train_inputs(self) -> Union[jnp.ndarray, np.ndarray]:
+    def get_train_inputs(self) -> np.ndarray:
         """Get training inputs (no padding usually)."""
         return self.processed.train_X
 
-    def get_val_inputs(self, window_size: int = 0) -> Optional[Union[jnp.ndarray, np.ndarray]]:
+    def get_val_inputs(self, window_size: int = 0) -> Optional[np.ndarray]:
         """Get validation inputs with Halo Padding applied."""
         if self.processed.val_X is None:
             return None
@@ -42,7 +41,7 @@ class DataCoordinator:
             window_size
         )
 
-    def get_test_inputs(self, window_size: int = 0) -> Optional[Union[jnp.ndarray, np.ndarray]]:
+    def get_test_inputs(self, window_size: int = 0) -> Optional[np.ndarray]:
         """Get test inputs with Halo Padding applied."""
         if self.processed.test_X is None:
             return None
@@ -58,9 +57,9 @@ class DataCoordinator:
 
     def align_targets(
         self, 
-        features: Optional[Union[jnp.ndarray, np.ndarray]], 
+        features: Optional[np.ndarray], 
         split: str
-    ) -> Optional[Union[jnp.ndarray, np.ndarray]]:
+    ) -> Optional[np.ndarray]:
         """
         Align targets for a specific split to match the given features.
         Trims targets from the start if they are longer than features (causal alignment).
