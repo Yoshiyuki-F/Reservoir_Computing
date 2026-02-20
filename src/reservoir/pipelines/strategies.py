@@ -2,12 +2,9 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Callable
-from beartype import beartype
 from reservoir.core.types import NpF64, to_np_f64
 import jax.numpy as jnp
 import numpy as np
-# YES: strategies.py is a Mapper layer — it receives np.ndarray from Frontend
-# and delegates to metric/readout functions that internally use JAX.
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.models.presets import PipelineConfig

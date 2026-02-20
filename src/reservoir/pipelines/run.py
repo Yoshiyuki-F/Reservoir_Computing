@@ -9,11 +9,6 @@ Architecture V2 Compliance:
 
 from typing import Any, Dict, Optional
 
-# Core Imports
-import jax
-# Enable x64 globally for consistency and precision in all pipeline runs
-jax.config.update("jax_enable_x64", True)
-
 from reservoir.core.identifiers import Dataset
 from reservoir.models.presets import PipelineConfig
 from reservoir.training.presets import TrainingConfig
