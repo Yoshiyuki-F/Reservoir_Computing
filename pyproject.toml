@@ -67,16 +67,42 @@ torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
 
 [tool.pyrefly]
-# 解析対象のディレクトリ
 project-includes = ["**/*.py*"]
 
-# 厳格モードをON（暗黙の型解決を許さない）
+# ==========================================
+# 1. 基本の厳格化（ユーザー設定済）
+# ==========================================
 strict = true
-
-# エージェントや開発者のサボり（Any / object）を許さない設定
-report-missing-type-stubs = true
-report-any = "error"                # Any型の使用をエラーとして弾く
-report-explicit-any = "error"       # typing.Any の明示的な使用も弾く
-report-implicit-override = "error"
 untyped-def-behavior = "check-and-infer-return-type"
+
+# ==========================================
+# 2. Any / object / 型引数不足 の明示的な使用を許さない（ユーザー設定済）
+# ==========================================
+report-any = "error"
+report-explicit-any = "error"
+report-implicit-override = "error"
 report-missing-type-args = "error"
+
+# ==========================================
+# 3. 【追加】外部ライブラリ由来の「暗黙のAny (Unknown)」を完全封鎖
+# ==========================================
+# サードパーティの関数が型推論できず Any を返してきた場合、
+# それを変数に入れたり引数に渡したりする行為そのものをエラーにします。
+report-unknown-variable-type = "error"
+report-unknown-parameter-type = "error"
+report-unknown-argument-type = "error"
+report-unknown-member-type = "error"
+
+# ==========================================
+# 4. 【追加】開発者の「コメントによる逃げ」を封鎖
+# ==========================================
+# 「とりあえず # type: ignore でエラー消しとこ」というサボりを監視します。
+# 本当にエラーが出ていない行に ignore を書くと逆に怒られます。
+report-unnecessary-type-ignore = "error"
+report-unnecessary-cast = "error"
+
+# ==========================================
+# 5. 【修正】インポートとスタブの厳格化
+# ==========================================
+report-missing-type-stubs = "error"  # ※ true ではなく "error" にレベルを合わせる
+report-missing-imports = "error"

@@ -111,6 +111,8 @@ Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64�
 Any
 object（型ヒントとしての使用は一切禁止）
 Union / |（FailSafeとしての両対応は禁止）
+Type 
+
 曖昧な Callable
 ✅ 許可される型ヒント（ホワイトリスト）:
 引数や戻り値の型ヒントには、以下のいずれかしか使用してはならない。
@@ -177,3 +179,6 @@ np.copy() またはスライスによる不要な複製:
 models/ 
 ridge などはJax強制
 
+**HOW TO CHECK**
+uv run pyrefly check
+uv run python scripts/lint_imports.py
