@@ -185,7 +185,12 @@ Python 3.10+ のモダン構文を強制する。
 typing.Optional[X] の使用は禁止。必ず X | None を使用すること。
 typing.Union[X, Y] の使用は禁止。必ず X | Y を使用すること。
 typing.Dict, typing.List, typing.Type 等の大文字コレクションは禁止。組み込みの dict, list, type を使用すること。
+type :ignore 
+
+
+
 
 **HOW TO CHECK**
 uv run pyrefly check
 uv run python scripts/lint_imports.py
+uv run ruff check
