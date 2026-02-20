@@ -129,10 +129,8 @@ class DistillationModel(ClosedLoopGenerativeModel):
                 desc="[Teacher (Proj+Fwd)]"
             ))
             
-            # Capture input dimension from projected shape for closed-loop generation
-            dummy_proj = projection_layer(to_jax_f64(inputs[:1]))
-            self._input_dim = int(dummy_proj.shape[-1])
-            del dummy_proj
+            # Capture RAW input dimension (not projected) for closed-loop generation state init
+            self._input_dim = int(inputs.shape[-1])
         else:
             # Standard path: inputs are already projected
             self._input_dim = inputs.shape[-1]

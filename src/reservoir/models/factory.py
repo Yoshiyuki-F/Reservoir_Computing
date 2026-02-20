@@ -87,7 +87,7 @@ class ModelFactory:
             model = FNNModel(
                 model_config=config.model,
                 training_config=training_cfg,
-                input_dim=input_dim,  # Original feature dim, model calculates effective dim
+                input_dim=int(flattened_dim),  # Effective input dimension (flattened/windowed)
                 output_dim=output_dim,
             )
             
@@ -100,7 +100,6 @@ class ModelFactory:
                 adapter_shape = (windowed_samples, flattened_dim) if windowed_samples else (flattened_dim,)
                 structure = f"TimeDelayEmbedding(K={window_size}) -> FNN -> Output"
             else:
-                adapter_type = "Flatten"
                 adapter_shape = (batch_size, flattened_dim) if batch_size else (flattened_dim,)
                 structure = "Flatten -> FNN -> Output"
             

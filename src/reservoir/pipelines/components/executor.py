@@ -4,7 +4,6 @@ from typing import Dict, Tuple, Optional, Union
 
 import jax.numpy as jnp
 from reservoir.core.types import NpF64, JaxF64
-import numpy as np
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
@@ -14,6 +13,7 @@ from reservoir.pipelines.strategies import ReadoutStrategyFactory
 from reservoir.pipelines.components.data_coordinator import DataCoordinator
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
+from reservoir.models.distillation.model import DistillationModel
 
 
 class PipelineExecutor:
@@ -178,12 +178,17 @@ class PipelineExecutor:
         if inputs is None:
             return None
         
-        if projection is not None:
+        # DistillationModel handles projection internally for its teacher, 
+        # but its student (which is used during predict/extraction) takes RAW inputs.
+        # Fusing projection here would cause shape mismatches in the student.
+        is_distillation = isinstance(model, DistillationModel)
+
+        if projection is not None and not is_distillation:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
                 return model(projection(x), split_name=None)
             return batched_compute(fused_fn, inputs, batch_size, desc=f"[Proj+Extract] {split_name}")
         else:
-            # No projection (already projected or no projection needed)
+            # No projection (already projected or no projection needed, or DistillationModel)
             fn = partial(model, split_name=None)
             return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")

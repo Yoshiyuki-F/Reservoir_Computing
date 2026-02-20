@@ -60,20 +60,25 @@ class DistillationFactory:
         teacher_feature_dim = teacher_node.get_feature_dim(time_steps=time_steps)
 
         #2. configure student FNN input dimension based on window or flatten
-        # Use window_size from config if set, otherwise flatten all time steps
+        # Use RAW input feature dimension (e.g., 28 for MNIST) instead of projected dim (100)
+        # Distillation typically trains the student on RAW inputs to mimic the whole pipeline.
+        student_raw_feat_dim = int(input_shape[-1]) if input_shape else projected_input_dim
+        
         window_size = distillation_config.student.window_size
         if window_size is not None:
-            student_input_dim = projected_input_dim * window_size
+            student_input_dim = student_raw_feat_dim * window_size
         else:
-            student_input_dim = time_steps * projected_input_dim
+            student_input_dim = time_steps * student_raw_feat_dim
+        
         h_layers = distillation_config.student.hidden_layers
         hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
 
-        #3, create student (FNNModel handles adapter internally based on window_size)
+        #3. create student (FNNModel handles adapter internally based on window_size)
+        # student_input_dim is the EFFECTIVE dimension (e.g. 784 for MNIST 28*28)
         student_model = FNNModel(
             model_config=distillation_config.student,
             training_config=training,
-            input_dim=projected_input_dim,  # Raw input dim, adapter will expand
+            input_dim=int(student_input_dim),  # Flattened/windowed dimension (e.g., 784)
             output_dim=int(teacher_feature_dim),
             classification=False,
         )
