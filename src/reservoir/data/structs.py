@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import jax.numpy as np
+import numpy as np
 
 
 @dataclass

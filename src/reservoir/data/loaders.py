@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Tuple, Union
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 
 from reservoir.core.identifiers import Dataset
@@ -31,7 +29,7 @@ from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
 
-LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[jnp.ndarray, jnp.ndarray], SplitDataset]]] = StrictRegistry(
+LOADER_REGISTRY: StrictRegistry[Dataset, Callable[[BaseDatasetConfig], Union[Tuple[np.ndarray, np.ndarray], SplitDataset]]] = StrictRegistry(
     {}
 )
 
@@ -45,11 +43,11 @@ def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig],
 
 
 @register_loader(Dataset.SINE_WAVE)
-def load_sine_wave(config: SineWaveConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def load_sine_wave(config: SineWaveConfig) -> Tuple[np.ndarray, np.ndarray]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X, y = generate_sine_data(config)
-    X_arr = jnp.asarray(X)
-    y_arr = jnp.asarray(y)
+    X_arr = np.asarray(X)
+    y_arr = np.asarray(y)
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -66,8 +64,8 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_seq, train_labels = generate_mnist_sequence_data(config, split=config.split)
     test_seq, test_labels = generate_mnist_sequence_data(config, split="test")
 
-    train_arr = jnp.asarray(train_seq)
-    test_arr = jnp.asarray(test_seq)
+    train_arr = np.asarray(train_seq)
+    test_arr = np.asarray(test_seq)
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
         train_arr = train_arr[..., None]
@@ -79,8 +77,12 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     test_arr = test_arr.reshape(test_arr.shape[0], test_arr.shape[1], -1)
 
     num_classes = int(config.n_output)
-    train_labels_arr = jax.nn.one_hot(jnp.asarray(train_labels).astype(int), num_classes)
-    test_labels_arr = jax.nn.one_hot(jnp.asarray(test_labels).astype(int), num_classes)
+    
+    # Numpy-based one-hot encoding
+    train_labels_int = np.asarray(train_labels).astype(int)
+    test_labels_int = np.asarray(test_labels).astype(int)
+    train_labels_arr = np.eye(num_classes)[train_labels_int]
+    test_labels_arr = np.eye(num_classes)[test_labels_int]
 
     # Create validation split from training data (10%)
     val_ratio = 0.1
@@ -94,17 +96,17 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_labels_arr = train_labels_arr[:n_train_new]
 
     return SplitDataset(
-        train_X=jnp.asarray(train_arr),
-        train_y=jnp.asarray(train_labels_arr),
-        test_X=jnp.asarray(test_arr),
-        test_y=jnp.asarray(test_labels_arr),
-        val_X=jnp.asarray(val_arr),
-        val_y=jnp.asarray(val_labels_arr),
+        train_X=np.asarray(train_arr),
+        train_y=np.asarray(train_labels_arr),
+        test_X=np.asarray(test_arr),
+        test_y=np.asarray(test_labels_arr),
+        val_X=np.asarray(val_arr),
+        val_y=np.asarray(val_labels_arr),
     )
 
 
 @register_loader(Dataset.MACKEY_GLASS)
-def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[np.ndarray, np.ndarray]:
     """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
 
     # 1. Generate (returns jnp arrays)
@@ -132,29 +134,29 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[jnp.ndarray, jnp.ndarr
     X_new = seq[:-1].reshape(-1, 1)
     y_new = seq[1:].reshape(-1, 1)
     
-    X_arr = jnp.asarray(X_new)
-    y_arr = jnp.asarray(y_new)
+    X_arr = np.asarray(X_new)
+    y_arr = np.asarray(y_new)
     
     return X_arr, y_arr
 
 
 @register_loader(Dataset.LORENZ)
-def load_lorenz(config: LorenzConfig) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def load_lorenz(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
-    X_arr = jnp.asarray(X)
-    y_arr = jnp.asarray(y)
+    X_arr = np.asarray(X)
+    y_arr = np.asarray(y)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     return X_arr, y_arr
 
 
 @register_loader(Dataset.LORENZ96)
-def load_lorenz96(config: Lorenz96Config) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def load_lorenz96(config: Lorenz96Config) -> Tuple[np.ndarray, np.ndarray]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
-    X_arr = jnp.asarray(X)
-    y_arr = jnp.asarray(y)
+    X_arr = np.asarray(X)
+    y_arr = np.asarray(y)
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     # if X_arr.ndim == 2:
@@ -188,8 +190,8 @@ def load_dataset_with_validation_split(
     # val is needed for both tasks
     val_size = float(training_cfg.val_size)
 
-    def _split_validation(features: jnp.ndarray, labels: jnp.ndarray) -> tuple[
-        jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
+    def _split_validation(features: np.ndarray, labels: np.ndarray) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray
     ]:
         # Always create validation split (minimum 1 sample)
         val_count = max(1, int(len(features) * val_size)) if val_size > 0 else 1
@@ -202,10 +204,10 @@ def load_dataset_with_validation_split(
         val_labels = labels[train_count:]
         return features[:train_count], labels[:train_count], val_features, val_labels
 
-    train_X: Union[jnp.ndarray, None]
-    train_y: Union[jnp.ndarray, None]
-    test_X: Union[jnp.ndarray, None]
-    test_y: Union[jnp.ndarray, None]
+    train_X: Union[np.ndarray, None]
+    train_y: Union[np.ndarray, None]
+    test_X: Union[np.ndarray, None]
+    test_y: Union[np.ndarray, None]
 
     if isinstance(dataset, SplitDataset):
         train_X = dataset.train_X
@@ -305,26 +307,16 @@ def load_dataset_with_validation_split(
     #                 f"Got shape {arr.shape} for split '{split_name}'. Please reshape your data source."
     #             )
 
-    # Local Warmup to ensure JAX is ready for float64 (Silent)
-    import jax
-    import warnings
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            # Force a float64 creation to verify/trigger backend capability
-            dummy = jnp.array([1.0], dtype=jnp.float64)
-            if dummy.dtype != jnp.float64:
-                 jax.config.update("jax_enable_x64", True)
-    except Exception:
-        jax.config.update("jax_enable_x64", True)
 
-    # Cast to float64 (jnp.float_) to ensure precision at entry
-    # Note: jnp.asarray respects jax_enable_x64. If True, float_ is float64.
+
+    # Cast to float64 using standard Numpy (np.float64) to allow in-place preprocessing.
+    # Casting to np.asarray too early causes immutable memory duplication (OOM).
+    # We will convert to jnp later before model execution.
     return SplitDataset(
-        train_X=jnp.asarray(train_X, dtype=jnp.float_),
-        train_y=jnp.asarray(train_y, dtype=jnp.float_),
-        test_X=jnp.asarray(test_X, dtype=jnp.float_),
-        test_y=jnp.asarray(test_y, dtype=jnp.float_),
-        val_X=jnp.asarray(val_X, dtype=jnp.float_),
-        val_y=jnp.asarray(val_y, dtype=jnp.float_),
+        train_X=np.asarray(train_X, dtype=np.float64),
+        train_y=np.asarray(train_y, dtype=np.float64),
+        test_X=np.asarray(test_X, dtype=np.float64),
+        test_y=np.asarray(test_y, dtype=np.float64),
+        val_X=np.asarray(val_X, dtype=np.float64),
+        val_y=np.asarray(val_y, dtype=np.float64),
     )

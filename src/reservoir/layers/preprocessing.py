@@ -7,7 +7,6 @@ import abc
 from functools import singledispatch
 from typing import Any, Dict, Optional, Type
 
-import jax.numpy as jnp
 import numpy as np
 
 
@@ -21,17 +20,17 @@ class Preprocessor(abc.ABC):
     """
 
     @abc.abstractmethod
-    def fit(self, X: jnp.ndarray) -> "Preprocessor":
+    def fit(self, X: np.ndarray) -> "Preprocessor":
         """Fit the preprocessor on training data."""
         pass
 
     @abc.abstractmethod
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
+    def transform(self, X: np.ndarray) -> np.ndarray:
         """Apply the transformation."""
         pass
 
     @abc.abstractmethod
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
         """Reverse the transformation."""
         pass
 
@@ -40,11 +39,11 @@ class Preprocessor(abc.ABC):
         """Serialize configuration parameters."""
         pass
 
-    def fit_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+    def fit_transform(self, X: np.ndarray) -> np.ndarray:
         """Fit and transform in one step."""
         return self.fit(X).transform(X)
 
-    def __call__(self, X: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, X: np.ndarray) -> np.ndarray:
         """Alias for transform."""
         return self.transform(X)
 
@@ -58,7 +57,7 @@ class StandardScaler(Preprocessor):
         self.mean_: Optional[np.ndarray] = None
         self.scale_: Optional[np.ndarray] = None
 
-    def fit(self, X: jnp.ndarray) -> "StandardScaler":
+    def fit(self, X: np.ndarray) -> "StandardScaler":
         X_np = np.asarray(X)
 
         if X_np.ndim == 3:
@@ -75,20 +74,26 @@ class StandardScaler(Preprocessor):
             
         return self
 
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+        
+        arr = X
         if self.mean_ is not None:
-            arr = arr - self.mean_
+            arr -= self.mean_
         if self.scale_ is not None:
-            arr = arr / self.scale_
+            arr /= self.scale_
         return arr
 
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            
+        arr = X
         if self.scale_ is not None:
-            arr = arr * self.scale_
+            arr *= self.scale_
         if self.mean_ is not None:
-            arr = arr + self.mean_
+            arr += self.mean_
         return arr
 
     def to_dict(self) -> Dict[str, Any]:
@@ -112,7 +117,7 @@ class CustomRangeScaler(Preprocessor):
         self.max_val: Optional[float] = None
         self.mean_: Optional[np.ndarray] = None
 
-    def fit(self, X: jnp.ndarray) -> "CustomRangeScaler":
+    def fit(self, X: np.ndarray) -> "CustomRangeScaler":
         X_np = np.asarray(X)
         
         if self.centering:
@@ -128,37 +133,41 @@ class CustomRangeScaler(Preprocessor):
             
         return self
 
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"CustomRangeScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
+        arr = X
         # 1. Center (if enabled)
         if self.centering and self.mean_ is not None:
-            arr = arr - self.mean_
+            arr -= self.mean_
 
         # 2. Scale to Unit (X / max_val)
         if self.max_val is not None and self.max_val != 0:
-            arr = arr / self.max_val
+            arr /= self.max_val
             
         # 3. Apply Custom Range Scale
         if self.input_scale != 1.0:
-            arr = arr * self.input_scale
+            arr *= self.input_scale
             
         return arr
 
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"CustomRangeScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
+        arr = X
         # 1. Remove Custom Range Scale
         if self.input_scale != 1.0 and self.input_scale != 0:
-            arr = arr / self.input_scale
+            arr /= self.input_scale
 
         # 2. Un-scale (multiply by max)
         if self.max_val is not None:
-            arr = arr * self.max_val
+            arr *= self.max_val
 
         # 3. Un-center
         if self.centering and self.mean_ is not None:
-            arr = arr + self.mean_
+            arr += self.mean_
             
         return arr
 
@@ -186,7 +195,7 @@ class MinMaxScaler(Preprocessor):
         self.min_: Optional[np.ndarray] = None
         self.range_: Optional[np.ndarray] = None  # X_max - X_min
 
-    def fit(self, X: jnp.ndarray) -> "MinMaxScaler":
+    def fit(self, X: np.ndarray) -> "MinMaxScaler":
         X_np = np.asarray(X)
 
         if X_np.ndim == 3:
@@ -204,30 +213,38 @@ class MinMaxScaler(Preprocessor):
 
         return self
 
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
-        
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            
+        arr = X
         # 1. Scale to [0, 1]
         if self.min_ is not None and self.range_ is not None:
-            arr = (arr - self.min_) / self.range_
+            arr -= self.min_
+            arr /= self.range_
         
         # 2. Scale to [feature_min, feature_max]
         scale = self.feature_max - self.feature_min
-        arr = arr * scale + self.feature_min
+        arr *= scale
+        arr += self.feature_min
         
         return arr
 
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        arr = jnp.asarray(X)
-        
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            
+        arr = X
         # 1. Reverse Scale to [0, 1]
         scale = self.feature_max - self.feature_min
         if scale != 0:
-            arr = (arr - self.feature_min) / scale
+            arr -= self.feature_min
+            arr /= scale
             
         # 2. Reverse Scale to Original
         if self.min_ is not None and self.range_ is not None:
-            arr = arr * self.range_ + self.min_
+            arr *= self.range_
+            arr += self.min_
             
         return arr
 
@@ -242,14 +259,14 @@ class MinMaxScaler(Preprocessor):
 class IdentityPreprocessor(Preprocessor):
     """No-op preprocessor for RAW mode."""
 
-    def fit(self, X: jnp.ndarray) -> "IdentityPreprocessor":
+    def fit(self, X: np.ndarray) -> "IdentityPreprocessor":
         return self
 
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        return jnp.asarray(X)
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return np.asarray(X)
 
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        return jnp.asarray(X)
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        return np.asarray(X)
 
     def to_dict(self) -> Dict[str, Any]:
         return {"type": "identity"}
@@ -267,18 +284,31 @@ class AffineScaler(Preprocessor):
         self.input_scale = input_scale
         self.shift = shift
 
-    def fit(self, X: jnp.ndarray) -> "AffineScaler":
+    def fit(self, X: np.ndarray) -> "AffineScaler":
         # AffineScaler is stateless (parameters are provided at init), so fit does nothing.
         return self
 
-    def transform(self, X: jnp.ndarray) -> jnp.ndarray:
-        return X * self.input_scale + self.shift
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+        
+        arr = X
+        arr *= self.input_scale
+        arr += self.shift
+        return arr
 
-    def inverse_transform(self, X: jnp.ndarray) -> jnp.ndarray:
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        if not isinstance(X, np.ndarray):
+            raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            
         # Avoid division by zero
         if self.input_scale == 0:
             return X
-        return (X - self.shift) / self.input_scale
+            
+        arr = X
+        arr -= self.shift
+        arr /= self.input_scale
+        return arr
 
     def to_dict(self) -> Dict[str, Any]:
         return {
