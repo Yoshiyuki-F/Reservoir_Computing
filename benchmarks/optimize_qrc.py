@@ -29,7 +29,7 @@ import argparse
 import dataclasses
 import math
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 import numpy as np
 import optuna
@@ -143,7 +143,7 @@ def make_objective(measurement_basis: str, readout_config):
 
         # === 3. Run Pipeline ===
         try:
-            results: Dict[str, Any] = run_pipeline(config, Dataset.MACKEY_GLASS)
+            results: Dict[str] = run_pipeline(config, Dataset.MACKEY_GLASS)
 
             # === 4. Extract Metrics ===
             test_results = results.get("test", {})
