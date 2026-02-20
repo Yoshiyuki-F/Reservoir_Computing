@@ -1395,7 +1395,7 @@ requires-dist = [
     { name = "pandas-stubs" },
     { name = "pyrefly" },
     { name = "pytest" },
-    { name = "ruff", specifier = ">=0.15.2" },
+    { name = "ruff" },
     { name = "tensorcircuit-ng", extras = ["jax"], git = "https://github.com/tensorcircuit/tensorcircuit-ng.git" },
     { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", index = "https://download.pytorch.org/whl/cpu" },
