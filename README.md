@@ -25,7 +25,7 @@ This library enforces **JAX 64-bit precision** (`jax_enable_x64=True`) globally.
 - **Why**: `RidgeRegression` (Readout) requires 64-bit precision. If not enforced globally, upstream components (like `RandomProjection`) may run in 32-bit initially, then switch to 64-bit in subsequent runs (after Ridge enables it), causing non-deterministic behavior.
 - **Benefit**: Ensures that **all pipeline stages** (Projection, Reservoir, Readout) consistently use 64-bit precision from the start.
 - **Entry Points**: x64 is automatically enabled in:
-    - `reservoir-cli` (CLI)
+    - `python -m reservoir.cli.main` (CLI)
     - `reservoir.pipelines.run_pipeline` (Python API)
     - `optuna` benchmarks
 
@@ -40,14 +40,10 @@ uv sync --upgrade
 source .venv/bin/activate
 ```
 
-## Usage
-
-The project provides a unified CLI entry point `reservoir-cli`.
-
 ### Basic Command
 
 ```bash
-uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
+uv run python -m reservoir.cli.main --model <MODEL> --dataset <DATASET> [OPTIONS]
 ```
 
 ### Arguments
@@ -68,17 +64,17 @@ uv run reservoir-cli --model <MODEL> --dataset <DATASET> [OPTIONS]
 
 **1. Classical Reservoir on Sine Wave**
 ```bash
-uv run reservoir-cli --model classical_reservoir --dataset mnist
+uv run python -m reservoir.cli.main --model classical_reservoir --dataset mnist
 ```
 
 **2. Quantum Gate-based Reservoir on Lorenz Attractor**
 ```bash
-uv run reservoir-cli --model quantum_reservoir --dataset lorenz
+uv run python -m reservoir.cli.main --model quantum_reservoir --dataset lorenz
 ```
 
 **3. MLP Training (FNN) on MNIST**
 ```bash
-uv run reservoir-cli --model fnn --dataset mnist
+uv run python -m reservoir.cli.main --model fnn --dataset mnist
 ```
 
 ### GPU & Testing with Poe
