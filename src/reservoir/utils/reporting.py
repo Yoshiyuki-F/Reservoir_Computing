@@ -3,7 +3,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 import numpy as np
 from reservoir.core.types import NpF64
 

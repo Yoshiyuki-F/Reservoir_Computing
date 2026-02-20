@@ -125,7 +125,7 @@ class PipelineDataManager:
         # Use full 3D shape
         preprocessed_shape = train_X.shape
 
-        print("\n=== Step 3: Projection (for reservoir/distillation) ===")
+        print("\n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
         projection_config = self.config.projection
 
         if projection_config is None:
@@ -162,33 +162,35 @@ class PipelineDataManager:
             print(f"Fitting {type(projection).__name__} on training data...")
             projection.fit(train_X)
         
-        proj_name = type(projection).__name__
-        desc = f"[{proj_name}] (Batch: {batch_size})"
-        print(f"Applying {proj_name} in batches of {batch_size}...")
-        projected_train = batched_compute(projection, train_X, batch_size, desc=desc + "train")
-        # del train_X  # Managed by scope
+        # ==========================================
+        # DEFERRED PROJECTION (OOM Prevention)
+        # ==========================================
+        # Do NOT materialize the projected arrays here.
+        # For MNIST with n_units=1200: (54000, 28, 1200) float64 = 14.5 GB
+        # Instead, keep the preprocessed arrays (~0.44 GB) and store the
+        # projection layer. The executor will fuse projection + model forward
+        # inside batched_compute, so the projected tensor only exists
+        # ephemerally on GPU per batch.
 
-        projected_val = None
-        if val_X is not None:
-            projected_val = batched_compute(projection, val_X, batch_size, desc=desc + "val")
+        # Infer projected output shape from a single dummy sample
+        import jax.numpy as jnp
+        from reservoir.core.types import to_jax_f64
+        dummy_in = to_jax_f64(train_X[:1])
+        dummy_out = projection(dummy_in)
+        projected_output_dim = int(dummy_out.shape[-1])
+        projected_shape = train_X.shape[:-1] + (projected_output_dim,)
+        del dummy_in, dummy_out
 
-        projected_test = None
-        if test_X is not None:
-            projected_test = batched_compute(projection, test_X, batch_size, desc=desc + "test")
-
-        projected_shape = projected_train.shape # (Batch, Time, ProjUnits)
-        input_dim_for_factory = int(projected_shape[-1])
+        print(f"    [Deferred] Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
 
         processed_split = SplitDataset(
-            train_X=projected_train,
+            train_X=train_X,
             train_y=data_split.train_y,
-            test_X=projected_test,
+            test_X=test_X,
             test_y=data_split.test_y,
-            val_X=projected_val,
+            val_X=val_X,
             val_y=data_split.val_y,
         )
-
-        self._log_dataset_stats(processed_split, "3")
 
         return FrontendContext(
             processed_split=processed_split,
@@ -196,7 +198,7 @@ class PipelineDataManager:
             preprocessed_shape=preprocessed_shape,
             projected_shape=projected_shape,
             input_shape_for_meta=projected_shape,
-            input_dim_for_factory=input_dim_for_factory,
+            input_dim_for_factory=projected_output_dim,
             projection_layer=projection,
         )
 

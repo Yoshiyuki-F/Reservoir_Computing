@@ -63,9 +63,9 @@ MinusOneToOne = MinMaxScalerConfig(
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=1200,
-    input_scale=0.6,
-    input_connectivity=0.1,
-    bias_scale=1.0,
+    input_scale=0.16801209585993304,
+    input_connectivity=0.12089089454109181,
+    bias_scale=0.7862943891668603,
     seed=1,
 )
 
@@ -114,9 +114,9 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
 # Dynamics Definitions
 # -----------------------------------------------------------------------------
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    spectral_radius=1.3,
-    leak_rate=0.2,
-    rc_connectivity=0.9,
+    spectral_radius=1.4541275055298999,
+    leak_rate= 0.6932897186142716,
+    rc_connectivity=0.4402710000522045,
     seed=42,
     aggregation=AggregationMode.MEAN,
 )

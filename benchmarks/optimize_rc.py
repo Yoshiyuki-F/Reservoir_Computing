@@ -13,6 +13,8 @@ Target Preset: TIME_CLASSICAL_RESERVOIR_PRESET
 Usage:
     uv run python benchmarks/optimize_rc.py
     uv run python benchmarks/optimize_rc.py --n-trials 100
+Visualization:
+    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
 """
 
 import argparse

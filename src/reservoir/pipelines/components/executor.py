@@ -42,11 +42,11 @@ class PipelineExecutor:
         train_X = self.coordinator.get_train_inputs()
         train_logs = self.stack.model.train(train_X, self.frontend_ctx.processed_split.train_y) or {}
 
-        print("\n=== Step 6: Extract Features ===")
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)
-        
-        if train_Z is not None: 
+
+        print("\n=== Step 6: Extract Features (Output) ===")
+        if train_Z is not None:
             print_feature_stats(train_Z, "6:Z:train")
             if jnp.std(train_Z) < 0.1:
                 raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
@@ -131,36 +131,50 @@ class PipelineExecutor:
     def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> Tuple[Optional[NpF64], ...]:
         """
         Orchestrate feature extraction.
-        Coordinator supplies properly padded data.
-        Model performs computation.
+        If projection_layer is deferred, fuse projection + model forward.
         """
-        # Ask Model for its requirements
         window_size = getattr(model, 'input_window_size', 0)
         batch_size = self.dataset_meta.training.batch_size
+        projection = self.frontend_ctx.projection_layer  # May be None
         
         if window_size > 1:
             print(f"    [Executor] Requesting Halo Padding (Window={window_size}) from Coordinator...")
+        
+        if projection is not None:
+            print(f"    [Executor] Fusing {type(projection).__name__} + {type(model).__name__} in batched_compute (OOM-safe)")
 
         # 1. Train
         train_in = self.coordinator.get_train_inputs()
-        train_Z = self._compute_split(model, train_in, "train", batch_size)
+        train_Z = self._compute_split(model, train_in, "train", batch_size, projection=projection)
 
         # 2. Validation
         val_in = self.coordinator.get_val_inputs(window_size)
-        val_Z = self._compute_split(model, val_in, "val", batch_size)
+        val_Z = self._compute_split(model, val_in, "val", batch_size, projection=projection)
 
         # 3. Test
         test_in = self.coordinator.get_test_inputs(window_size)
-        test_Z = self._compute_split(model, test_in, "test", batch_size)
+        test_Z = self._compute_split(model, test_in, "test", batch_size, projection=projection)
             
         return train_Z, val_Z, test_Z
 
     @staticmethod
-    def _compute_split(model: ClosedLoopGenerativeModel, inputs: Optional[NpF64], split_name: str, batch_size: int):
-        """Helper to run batched computation if input exists."""
+    def _compute_split(
+        model: ClosedLoopGenerativeModel, 
+        inputs: Optional[NpF64], 
+        split_name: str, 
+        batch_size: int,
+        projection: Optional[object] = None,
+    ):
+        """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
         if inputs is None:
             return None
         
-        # Don't pass split_name here to avoid logging per batch (inside model/aggregator)
-        fn = partial(model, split_name=None)
-        return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")
+        if projection is not None:
+            # Fused: projection + model forward in a single GPU pass
+            def fused_fn(x: JaxF64) -> JaxF64:
+                return model(projection(x), split_name=None)
+            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Proj+Extract] {split_name}")
+        else:
+            # No projection (already projected or no projection needed)
+            fn = partial(model, split_name=None)
+            return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")
