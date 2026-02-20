@@ -179,6 +179,7 @@ def plot_classification_report(
     precalc_preds: Optional[Dict[str, object]] = None,
     # preprocessors, metric removed
     selected_lambda: Optional[float] = None,
+    class_names: Optional[Sequence[str]] = None,
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
@@ -323,6 +324,7 @@ def plot_classification_report(
         metrics_info=metrics_payload,
         best_lambda=selected_lambda,
         lambda_norm=lambda_norm,
+        class_names=class_names,
     )
 
 

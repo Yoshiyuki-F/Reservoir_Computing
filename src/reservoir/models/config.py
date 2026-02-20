@@ -8,7 +8,48 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, Literal, Tuple, Union, Optional
 
+from abc import ABC, abstractmethod
+from typing import Dict, Literal, Tuple, Optional
+
 from reservoir.core.identifiers import AggregationMode, Model
+
+# -----------------------------------------------------------------------------
+# Base Config ABCs
+# -----------------------------------------------------------------------------
+
+class BaseConfig(ABC):
+    """Abstract base class for all pipeline configuration components."""
+
+    @abstractmethod
+    def validate(self, context: str = "") -> "BaseConfig":
+        """Validate the configuration parameters."""
+        pass
+
+    @abstractmethod
+    def to_dict(self) -> dict:
+        """Convert the configuration to a dictionary block."""
+        pass
+
+
+class PreprocessingConfig(BaseConfig):
+    """Base class for Step 2 preprocessing configurations."""
+    pass
+
+
+class ProjectionConfig(BaseConfig):
+    """Base class for Step 3 projection configurations."""
+    pass
+
+
+class ModelConfig(BaseConfig):
+    """Base class for Step 5 model dynamics configurations."""
+    pass
+
+
+class ReadoutConfig(BaseConfig):
+    """Base class for Step 7 readout configurations."""
+    pass
+
 
 
 
@@ -39,11 +80,7 @@ class PipelineConfig:
         if self.readout is not None:
             self.readout.validate(context=f"{self.name}.readout")
 
-        model_cfg = self.model
-        if isinstance(model_cfg, DistillationConfig):
-            model_cfg.validate(context=f"{self.name}.model")
-        elif hasattr(model_cfg, "validate"):
-            model_cfg.validate(context=f"{self.name}.model")
+        self.model.validate(context=f"{self.name}.model")
 
     # Legacy-friendly aliases (SSOT remains the explicit fields above)
     @property
@@ -76,14 +113,7 @@ class PipelineConfig:
         """Flatten pipeline configuration into a serializable dictionary."""
         merged: dict = {}
 
-        model_cfg = self.model
-        if isinstance(model_cfg, DistillationConfig):
-            merged.update(model_cfg.teacher.to_dict())
-            merged["student.hidden_layers"] = tuple(int(v) for v in (model_cfg.student.hidden_layers or ()))
-        elif hasattr(model_cfg, "to_dict"):
-            merged.update(model_cfg.to_dict())
-        else:
-            merged.update(asdict(model_cfg))
+        merged.update(self.model.to_dict())
 
         merged.update(self.preprocess.to_dict())
         if self.projection is not None:
@@ -108,7 +138,7 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
-class RawConfig:
+class RawConfig(PreprocessingConfig):
     """Step 2 parameters for Raw (no preprocessing)."""
 
     def validate(self, context: str = "raw") -> "RawConfig":
@@ -121,7 +151,7 @@ class RawConfig:
 
 
 @dataclass(frozen=True)
-class StandardScalerConfig:
+class StandardScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Standard Scaler (mean removal and variance scaling)."""
 
     def validate(self, context: str = "standard_scaler") -> "StandardScalerConfig":
@@ -134,7 +164,7 @@ class StandardScalerConfig:
 
 
 @dataclass(frozen=True)
-class CustomRangeScalerConfig:
+class CustomRangeScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Custom Range Scaler."""
     input_scale: float
     centering: bool
@@ -149,7 +179,7 @@ class CustomRangeScalerConfig:
 
 
 @dataclass(frozen=True)
-class MinMaxScalerConfig:
+class MinMaxScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Min-Max Scaler (feature range scaling).
     Scales data to [feature_min, feature_max].
     """
@@ -169,7 +199,7 @@ class MinMaxScalerConfig:
         }
 
 @dataclass(frozen=True)
-class AffineScalerConfig:
+class AffineScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Affine Scaler (y = X * scale + shift)."""
     input_scale: float
     shift: float
@@ -182,17 +212,8 @@ class AffineScalerConfig:
         return {"method": "affine_scaler", "scale": float(self.input_scale), "shift": float(self.shift)}
 
 
-PreprocessingConfig = (
-    RawConfig |
-    StandardScalerConfig |
-    CustomRangeScalerConfig |
-    MinMaxScalerConfig |
-    AffineScalerConfig
-)
-
-
 @dataclass(frozen=True)
-class RandomProjectionConfig:
+class RandomProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Random Projection."""
     n_units: int
     input_scale: float
@@ -223,7 +244,7 @@ class RandomProjectionConfig:
         }
 
 @dataclass(frozen=True)
-class CenterCropProjectionConfig:
+class CenterCropProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Center Crop Projection (3D input only)."""
     n_units: int
     
@@ -241,7 +262,7 @@ class CenterCropProjectionConfig:
 
 
 @dataclass(frozen=True)
-class ResizeProjectionConfig:
+class ResizeProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Resize (Interpolation) Projection."""
     n_units: int
 
@@ -258,7 +279,7 @@ class ResizeProjectionConfig:
         }
 
 @dataclass(frozen=True)
-class PolynomialProjectionConfig:
+class PolynomialProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Polynomial Projection (feature expansion)."""
     degree: int
     include_bias: bool
@@ -273,7 +294,7 @@ class PolynomialProjectionConfig:
 
 
 @dataclass(frozen=True)
-class PCAProjectionConfig:
+class PCAProjectionConfig(ProjectionConfig):
     """Step 3 parameters for PCA Projection (dimensionality reduction).
     
     Note: PCA assumes StandardScaler preprocessing (zero mean, unit variance).
@@ -294,21 +315,8 @@ class PCAProjectionConfig:
         return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
 
 
-ProjectionConfig = (
-    RandomProjectionConfig
-    | CenterCropProjectionConfig
-    | ResizeProjectionConfig
-    | PolynomialProjectionConfig
-    | PCAProjectionConfig
-    | None
-)
-
-
-
-
-
 @dataclass(frozen=True)
-class ClassicalReservoirConfig:
+class ClassicalReservoirConfig(ModelConfig):
     """Step 5 and 6 reservoir dynamics parameters."""
 
     spectral_radius: float
@@ -341,7 +349,7 @@ class ClassicalReservoirConfig:
         }
 
 @dataclass(frozen=True)
-class DistillationConfig:
+class DistillationConfig(ModelConfig):
     """Configuration for distilling reservoir dynamics into a Student FNN."""
     """Step 5 and 6 distillation fnn dynamics parameters."""
 
@@ -357,17 +365,18 @@ class DistillationConfig:
             "student.hidden_layers": tuple(int(v) for v in (self.student.hidden_layers or ())),
         }
 
-    def validate(self, *, context: str = "") -> None:
+    def validate(self, context: str = "") -> "DistillationConfig":
         prefix = f"{context}: " if context else ""
         self.teacher.validate(context=f"{prefix}teacher")
         if not self.student.hidden_layers:
             raise ValueError(f"{prefix}student.hidden_layers must contain at least one layer size.")
         if any(width < 0 for width in self.student.hidden_layers):
             raise ValueError(f"{prefix}student.hidden_layers values must be non negative.")
+        return self
 
 
 @dataclass(frozen=True)
-class FNNConfig:
+class FNNConfig(ModelConfig):
     """FNN configuration with optional sliding window for time series."""
     hidden_layers: Optional[Tuple[int, ...]]
     window_size: Optional[int] = None  # None = Flatten, int = TimeDelayEmbedding(K)
@@ -383,13 +392,14 @@ class FNNConfig:
             result["window_size"] = int(self.window_size)
         return result
 
-    def validate(self, *, context: str = "") -> None:
+    def validate(self, context: str = "") -> "FNNConfig":
         prefix = f"{context}: " if context else ""
         layers = self.hidden_layers or ()
         if any(width < 0 for width in layers):
             raise ValueError(f"{prefix}hidden_layers values must be non-negative.")
         if self.window_size is not None and int(self.window_size) < 1:
             raise ValueError(f"{prefix}window_size must be >= 1.")
+        return self
 
 
 
@@ -398,7 +408,7 @@ class FNNConfig:
 
 
 @dataclass(frozen=True)
-class PassthroughConfig:
+class PassthroughConfig(ModelConfig):
     """Configuration for passthrough model that skips dynamics (Step 5)."""
     aggregation: AggregationMode
 
@@ -414,7 +424,7 @@ class PassthroughConfig:
 
 
 @dataclass(frozen=True)
-class QuantumReservoirConfig:
+class QuantumReservoirConfig(ModelConfig):
     """Step 5 Quantum Reservoir dynamics parameters.
     
     n_qubits: Optional. If None, inferred from projected_input_dim (Step 3 output).
@@ -481,7 +491,7 @@ class QuantumReservoirConfig:
 
 
 @dataclass(frozen=True)
-class RidgeReadoutConfig:
+class RidgeReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/defaults)."""
     use_intercept: bool
     lambda_candidates: Optional[Tuple[float, ...]] = None
@@ -501,7 +511,7 @@ class RidgeReadoutConfig:
 
 
 @dataclass(frozen=True)
-class PolyRidgeReadoutConfig:
+class PolyRidgeReadoutConfig(ReadoutConfig):
     """Step 7 poly readout configuration (structure/defaults)."""
 
     use_intercept: bool
@@ -527,7 +537,7 @@ class PolyRidgeReadoutConfig:
 
 
 @dataclass(frozen=True)
-class FNNReadoutConfig:
+class FNNReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/fnn)."""
     hidden_layers: Optional[Tuple[int, ...]]
 
@@ -539,16 +549,4 @@ class FNNReadoutConfig:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
 
 
-ModelConfig = (
-    ClassicalReservoirConfig
-    | DistillationConfig
-    | FNNConfig
-    | PassthroughConfig
-    | QuantumReservoirConfig
-)
-ReadoutConfig = (
-    RidgeReadoutConfig
-    | PolyRidgeReadoutConfig
-    | FNNReadoutConfig
-    | None
-)
+

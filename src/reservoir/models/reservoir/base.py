@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from beartype import beartype
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64
-from typing import Dict, Tuple, TypedDict, TypeVar, Generic, Optional
+from typing import Dict, Tuple, TypedDict, TypeVar, Generic, Optional, Any
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -90,7 +90,7 @@ class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
             "aggregation": self.aggregator.mode.value,
         }
 
-    def get_topology_meta(self) -> Dict[str, list[int]]:
+    def get_topology_meta(self) -> Dict[str, Any]:
         """Optional topology metadata set by factories."""
         return getattr(self, "topology_meta", {}) or {}
 

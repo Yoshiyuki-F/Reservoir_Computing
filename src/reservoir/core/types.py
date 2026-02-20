@@ -43,7 +43,10 @@ def to_jax_f64(x: NpF64) -> JaxF64:
         raise ValueError(f"NaN detected at CPU→GPU boundary! shape={x.shape}")
     if np.any(np.isinf(x)):
         raise ValueError(f"Inf detected at CPU→GPU boundary! shape={x.shape}")
-    return jax.device_put(jnp.asarray(x, dtype=jnp.float64))
+    ret = jax.device_put(jnp.array(x, dtype=jnp.float64))
+    if ret.dtype != jnp.float64:
+        print(f"DEBUG to_jax_f64: {x.dtype} -> {ret.dtype}, config={jax.config.read('jax_enable_x64')}")
+    return ret
 
 #takes only JaxF64 and returns NpF64, checks for NaN/Inf, and uses np.asarray to ensure it's on CPU
 @beartype

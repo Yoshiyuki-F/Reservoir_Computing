@@ -154,7 +154,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # === 3. Run Pipeline ===
         try:
-            results: Dict[str] = run_pipeline(config, dataset_enum)
+            from typing import Any
+            results: Dict[str, Any] = run_pipeline(config, dataset_enum)
 
             # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})
@@ -199,6 +200,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
                 trial.set_user_attr("status", "exception")
                 return 0.0
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Trial {trial.number}: EXCEPTION - {e}")
             trial.set_user_attr("status", "exception")
             return 0.0

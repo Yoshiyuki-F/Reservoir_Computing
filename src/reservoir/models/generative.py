@@ -3,7 +3,7 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, Union
+from typing import Tuple, Optional, Callable, TypeVar, Generic, Protocol, Union, runtime_checkable
 
 from beartype import beartype
 import jax
@@ -13,6 +13,7 @@ from reservoir.core.types import JaxF64
 
 
 
+@runtime_checkable
 class Predictable(Protocol):
     def predict(self, x: JaxF64) -> JaxF64: ...
 

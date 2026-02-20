@@ -49,7 +49,7 @@ def batched_compute(
     # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
     # Ensure dummy input is on GPU and is float64
     if not jax.config.jax_enable_x64:
-        print("[batched_compute] WARNING: jax_enable_x64 is False! Arrays will be float32.")
+        raise ValueError("JAX is not configured for float64! Please enable jax_enable_x64 for this function.")
         
     dummy_input_jax = to_jax_f64(inputs[:1])
     dummy_out_jax = fn(dummy_input_jax)

@@ -44,6 +44,7 @@ def plot_classification_results(
     val_predictions: Optional[NpF64] = None,
     best_lambda: Optional[float] = None,
     lambda_norm: Optional[float] = None,
+    class_names: Optional[Sequence[str]] = None,
 ) -> None:
     """
     Visualize classification results with confusion matrix and accuracy bars, with optional validation.

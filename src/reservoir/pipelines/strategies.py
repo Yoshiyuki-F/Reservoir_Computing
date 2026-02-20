@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Callable
 from beartype import beartype
-from reservoir.core.types import NpF64, JaxF64
+from reservoir.core.types import NpF64, to_np_f64
 import jax.numpy as jnp
 import numpy as np
 # YES: strategies.py is a Mapper layer — it receives np.ndarray from Frontend
@@ -188,20 +188,20 @@ class ClassificationStrategy(ReadoutStrategy):
 
         # Train
         metrics = {"train": {
-            self.metric_name: compute_score(train_pred, train_y, self.metric_name)
+            self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
         }}
         
 
         # Val
         if val_pred is not None and val_y is not None:
              metrics["val"] = {
-                 self.metric_name: compute_score(val_pred, val_y, self.metric_name)
+                 self.metric_name: compute_score(to_np_f64(val_pred), val_y, self.metric_name)
              }
              
         # Test
         if test_pred is not None and test_y is not None:
              metrics["test"] = {
-                 self.metric_name: compute_score(test_pred, test_y, self.metric_name)
+                 self.metric_name: compute_score(to_np_f64(test_pred), test_y, self.metric_name)
              }
 
         return {

@@ -4,7 +4,7 @@ Standard Echo State Network implementation.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Optional
+from typing import Dict, Tuple, Union, Optional, Any
 
 from beartype import beartype
 import jax
@@ -74,7 +74,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str = None, **_) -> JaxF64:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: Optional[str] = None, **_) -> JaxF64:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs
         
@@ -99,7 +99,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **__) -> Dict[str, float]:
+    def train(self, inputs: Any, targets: Optional[Any] = None, **__) -> Dict[str, float]:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """
