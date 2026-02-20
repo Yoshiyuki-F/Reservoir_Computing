@@ -40,7 +40,16 @@ class PipelineExecutor:
         # Step 5: Model Dynamics (Training/Warmup)
         # Coordinator provides raw training data
         train_X = self.coordinator.get_train_inputs()
-        train_logs = self.stack.model.train(train_X, self.frontend_ctx.processed_split.train_y) or {}
+        projection = self.frontend_ctx.projection_layer
+        
+        # Pass projection_layer to model.train() so models can compose it internally
+        # (e.g. DistillationModel fuses projection+teacher in batched_compute)
+        # NpF64 stays as-is: ClassicalReservoir.train() accepts Any,
+        # DistillationModel handles domain crossing internally.
+        train_logs = self.stack.model.train(
+            train_X, self.frontend_ctx.processed_split.train_y,
+            projection_layer=projection,
+        ) or {}
 
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)

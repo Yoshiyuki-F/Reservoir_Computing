@@ -89,6 +89,8 @@ class PipelineDataManager:
         batch_size = self.metadata.training.batch_size
         print(f"\n=== Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
+        if preprocessing_config is not None:
+            print(f"    [Config] {preprocessing_config}")
         
         # Factory dispatch on config type
         preprocessor = create_preprocessor(preprocessing_config)

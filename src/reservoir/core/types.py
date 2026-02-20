@@ -13,7 +13,7 @@ NOTE: このファイルは MAPPER として登録済み（lint_imports.py）。
       型定義の橋渡し（Bridge）+ ドメイン転送の関所という責任を持つ。
 """
 from beartype import beartype
-from jaxtyping import Float64
+from jaxtyping import Float64, UInt32
 import jax
 from jax import Array
 import jax.numpy as jnp
@@ -24,6 +24,7 @@ import numpy as np
 # ==========================================
 NpF64 = Float64[np.ndarray, "..."]
 JaxF64 = Float64[Array, "..."]
+JaxKey = UInt32[Array, "..."]  # JAX PRNG key (uint32)
 
 
 # ==========================================

@@ -11,7 +11,7 @@ from typing import Dict, Tuple, Optional
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, NpF64, to_jax_f64
 from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
@@ -102,20 +102,43 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, **kwargs) -> Dict[str, float]:
+    def train(self, inputs: NpF64, targets: Optional[object] = None, **kwargs) -> Dict[str, float]:
         """
         Orchestrate the distillation process with clear phase separation in logs.
+        
+        With deferred projection, inputs are NpF64 (preprocessed, not projected).
+        Teacher targets: fused projection+teacher via batched_compute (OOM-safe).
+        Student: trained on preprocessed inputs (converted to JaxF64).
         """
-        # Capture input dimension for later state initialization
-        self._input_dim = inputs.shape[-1]
+        projection_layer = kwargs.pop("projection_layer", None)
         
         # --- Phase A: Teacher Target Generation ---
         print("\n    [Distillation] ==========================================")
         print("    [Distillation] Phase A: Teacher Target Generation")
         print("    [Distillation] ==========================================")
 
-        # Use batched computation for teacher targets (safe for large datasets)
-        teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=self.training_config.batch_size)
+        if projection_layer is not None:
+            from reservoir.utils.batched_compute import batched_compute
+            
+            # Fused projection + teacher (OOM-safe, projected tensor only lives on GPU per batch)
+            def proj_teacher(x: JaxF64) -> JaxF64:
+                return self.teacher(projection_layer(x))
+            
+            teacher_targets = to_jax_f64(batched_compute(
+                proj_teacher, inputs, self.training_config.batch_size,
+                desc="[Teacher (Proj+Fwd)]"
+            ))
+            
+            # Capture input dimension from projected shape for closed-loop generation
+            dummy_proj = projection_layer(to_jax_f64(inputs[:1]))
+            self._input_dim = int(dummy_proj.shape[-1])
+            del dummy_proj
+        else:
+            # Standard path: inputs are already projected
+            self._input_dim = inputs.shape[-1]
+            inputs_jax = to_jax_f64(inputs)
+            teacher_targets = self._compute_teacher_targets_batched(inputs_jax, batch_size=self.training_config.batch_size)
+        
         print_feature_stats(teacher_targets, "6A:teacher")
 
         # --- Phase B: Student Model Training ---
@@ -125,11 +148,12 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         # Student training - FNNModel.train() handles adapter and alignment internally
-        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
+        student_inputs_jax = to_jax_f64(inputs)
+        student_logs = self.student.train(student_inputs_jax, teacher_targets, log_prefix="4B", **kwargs) or {}
         
         # --- Generate 5B: Student Output (Predicted State) ---
         # To verify Distillation, we show the student's output stats
-        student_outputs = self.student.predict(inputs)
+        student_outputs = self.student.predict(student_inputs_jax)
         print_feature_stats(student_outputs, "5B:student_output")
 
         # Optional: Compute final distillation MSE for logging

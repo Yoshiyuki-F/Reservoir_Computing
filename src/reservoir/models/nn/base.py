@@ -9,7 +9,7 @@ from typing import Dict, Optional
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, JaxKey
 import optax
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
@@ -96,7 +96,7 @@ class BaseFlaxModel(BaseModel, ABC):
             # Constant learning rate
             return optax.adam(self.learning_rate)
 
-    def _init_train_state(self, key: JaxF64, sample_input: JaxF64, num_train_steps: int) -> train_state.TrainState:
+    def _init_train_state(self, key: JaxKey, sample_input: JaxF64, num_train_steps: int) -> train_state.TrainState:
         variables = self._model_def.init(key, sample_input)
         params = variables["params"]
         tx = self._build_optimizer(num_train_steps)
