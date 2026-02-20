@@ -4,6 +4,8 @@ Dataset loader registrations and preparation helpers."""
 from __future__ import annotations
 
 from typing import Callable, Optional, Tuple, Union
+from beartype import beartype
+from reservoir.core.types import NpF64
 
 import numpy as np
 
@@ -43,7 +45,8 @@ def register_loader(dataset: Dataset) -> Callable[[Callable[[BaseDatasetConfig]]
 
 
 @register_loader(Dataset.SINE_WAVE)
-def load_sine_wave(config: SineWaveConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def load_sine_wave(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X, y = generate_sine_data(config)
     X_arr = np.asarray(X)
@@ -106,7 +109,8 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
 
 
 @register_loader(Dataset.MACKEY_GLASS)
-def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
     """Generate Mackey-Glass samples (N, 1) compatible with sequence models."""
 
     # 1. Generate (returns jnp arrays)
@@ -141,7 +145,8 @@ def load_mackey_glass(config: MackeyGlassConfig) -> Tuple[np.ndarray, np.ndarray
 
 
 @register_loader(Dataset.LORENZ)
-def load_lorenz(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def load_lorenz(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
     X_arr = np.asarray(X)
@@ -152,7 +157,8 @@ def load_lorenz(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
 
 
 @register_loader(Dataset.LORENZ96)
-def load_lorenz96(config: Lorenz96Config) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def load_lorenz96(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
     X_arr = np.asarray(X)

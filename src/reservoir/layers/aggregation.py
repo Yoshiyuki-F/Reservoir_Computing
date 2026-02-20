@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
 
@@ -29,7 +30,7 @@ class StateAggregator(Transformer):
         raise TypeError(f"Aggregation mode must be AggregationMode or str, got {type(mode)}.")
 
     @staticmethod
-    def aggregate(states: jnp.ndarray, mode: AggregationMode) -> jnp.ndarray:
+    def aggregate(states: JaxF64, mode: AggregationMode) -> JaxF64:
         """Static aggregator for reuse in functional contexts."""
         agg_mode = StateAggregator._resolve_mode(mode)
         arr = jnp.asarray(states)
@@ -62,10 +63,10 @@ class StateAggregator(Transformer):
                 return arr.reshape(-1)
         raise ValueError(f"Unsupported shape {arr.shape} or aggregation mode: {agg_mode}")
 
-    def fit(self, features: jnp.ndarray, y: Any = None) -> "StateAggregator":
+    def fit(self, features: JaxF64, y: Any = None) -> "StateAggregator":
         return self
 
-    def transform(self, features: jnp.ndarray, log_label: Optional[str] = None) -> jnp.ndarray:
+    def transform(self, features: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         result = StateAggregator.aggregate(features, self.mode)
         
         # Assert output is 2D (Samples, Features) - required by readout layer
@@ -76,10 +77,10 @@ class StateAggregator(Transformer):
             print_feature_stats(result, log_label)
         return result
 
-    def fit_transform(self, features: jnp.ndarray) -> jnp.ndarray:
+    def fit_transform(self, features: JaxF64) -> JaxF64:
         return self.transform(features)
 
-    def __call__(self, features: jnp.ndarray, log_label: Optional[str] = None) -> jnp.ndarray:
+    def __call__(self, features: JaxF64, log_label: Optional[str] = None) -> JaxF64:
         return self.transform(features, log_label=log_label)
 
     def get_output_dim(self, n_units: int, n_steps: int) -> int:

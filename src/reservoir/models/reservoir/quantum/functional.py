@@ -9,11 +9,12 @@ Feedback QRC (Murauer et al., 2025):
 """
 from __future__ import annotations
 
-from typing import Any, Tuple, Union, Optional, cast
+from typing import Tuple, Union, Optional, cast
 from functools import partial
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 import tensorcircuit as tc
 
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
@@ -21,7 +22,7 @@ from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
 
 # --- Paper R Gate (Murauer et al., 2025 Eq.1) ---
 
-def _apply_paper_R_gate(c: Any, i: int, j: int, val, scaling: float):
+def _apply_paper_R_gate(c, i: int, j: int, val, scaling: float):
     """
     論文 Eq.(1) の R_{i,j}(theta) ゲート.
     R_{i,j}(θ) = CX_{ij} · RZ_j(θ) · CX_{ij} · RX_j(θ) · RX_i(θ)
@@ -38,9 +39,9 @@ def _apply_paper_R_gate(c: Any, i: int, j: int, val, scaling: float):
 # --- Pure Logic Functions (No JIT Decoration) ---
 
 def _make_circuit_logic(
-    input_val: jnp.ndarray,       # 現在の入力 u_t (size: n_qubits)
-    feedback_val: jnp.ndarray,    # 前回の測定値 m_{t-1} (size: n_qubits)
-    params: jnp.ndarray,
+    input_val: JaxF64,       # 現在の入力 u_t (size: n_qubits)
+    feedback_val: JaxF64,    # 前回の測定値 m_{t-1} (size: n_qubits)
+    params: JaxF64,
     n_qubits: int,
     feedback_scale: float,        # a_fb: R gate feedback scaling
 
@@ -49,7 +50,7 @@ def _make_circuit_logic(
     use_remat: bool,
     use_reuploading: bool,
     rng_key: Optional[jax.Array] = None
-) -> jnp.ndarray:
+) -> JaxF64:
     """
     Core circuit construction logic with Feedback QRC architecture.
 
@@ -201,26 +202,26 @@ def _make_circuit_logic(
     if is_noisy and not is_mc:
         # final_state is Density Matrix (2^N, 2^N)
         # Probabilities are diagonal elements.
-        probs = jnp.real(jnp.diag(cast(jnp.ndarray, final_state)))
+        probs = jnp.real(jnp.diag(cast(JaxF64, final_state)))
         return probs.astype(jnp.float_)
     else:
         # Pure State (Clean or MC)
         # final_state is Vector (2^N,)
-        return (jnp.abs(cast(jnp.ndarray, final_state)) ** 2).astype(jnp.float_)
+        return (jnp.abs(cast(JaxF64, final_state)) ** 2).astype(jnp.float_)
 
 
 def _step_logic(
-    state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
-    input_slice: jnp.ndarray,
-    reservoir_params: jnp.ndarray,
-    measurement_matrix: jnp.ndarray,
+    state: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    input_slice: JaxF64,
+    reservoir_params: JaxF64,
+    measurement_matrix: JaxF64,
     n_qubits: int,
     feedback_scale: float,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
+) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
     """
     Core step logic - Feedback QRC (Murauer et al., 2025).
     
@@ -270,7 +271,7 @@ def _step_logic(
     next_state_vec = output[:n_qubits]
 
     if next_key is not None:
-        return (next_state_vec, cast(jnp.ndarray, next_key)), output
+        return (next_state_vec, cast(JaxF64, next_key)), output
         
     return next_state_vec, output
 
@@ -281,17 +282,17 @@ def _step_logic(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _step_jit(
-    state: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
-    input_slice: jnp.ndarray,
-    reservoir_params: jnp.ndarray,
-    measurement_matrix: jnp.ndarray,
+    state: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    input_slice: JaxF64,
+    reservoir_params: JaxF64,
+    measurement_matrix: JaxF64,
     n_qubits: int,
     feedback_scale: float,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
+) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
     """
     Standalone JIT wrapper for single step execution.
     """
@@ -305,17 +306,17 @@ def _step_jit(
     "n_qubits", "noise_type", "use_remat", "use_reuploading"
 ])
 def _forward_jit(
-    state_init: Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],
-    inputs_time_major: jnp.ndarray,
-    reservoir_params: jnp.ndarray,
-    measurement_matrix: jnp.ndarray,
+    state_init: Union[JaxF64, Tuple[JaxF64, JaxF64]],
+    inputs_time_major: JaxF64,
+    reservoir_params: JaxF64,
+    measurement_matrix: JaxF64,
     n_qubits: int,
     feedback_scale: float,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool
-) -> Tuple[Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
+) -> Tuple[Union[JaxF64, Tuple[JaxF64, JaxF64]], JaxF64]:
     """
     Forward pass (scan) execution (JIT Compiled).
     Uses uncompiled `_step_logic` inside to ensure proper XLA fusion.

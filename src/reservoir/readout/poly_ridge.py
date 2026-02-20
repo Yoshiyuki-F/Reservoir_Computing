@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Dict, Literal
 
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.readout.ridge import RidgeCV
 
@@ -42,7 +43,7 @@ class PolyRidgeReadout(RidgeCV):
     # ------------------------------------------------------------------
     # Feature expansion (pure JAX)
     # ------------------------------------------------------------------
-    def _expand_features(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _expand_features(self, X: JaxF64) -> JaxF64:
         """Expand input features according to the configured mode."""
         if self.mode == "square_only":
             return self._expand_square_only(X)
@@ -51,7 +52,7 @@ class PolyRidgeReadout(RidgeCV):
         else:
             raise ValueError(f"Unknown PolyRidgeReadout mode: {self.mode!r}")
 
-    def _expand_square_only(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _expand_square_only(self, X: JaxF64) -> JaxF64:
         """Append x_i^k for k=2..degree to the original feature vector.
 
         For degree=2:  [x1, ..., xN, x1^2, ..., xN^2]
@@ -61,7 +62,7 @@ class PolyRidgeReadout(RidgeCV):
             parts.append(X ** k)
         return jnp.concatenate(parts, axis=-1)
 
-    def _expand_full(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _expand_full(self, X: JaxF64) -> JaxF64:
         """Pure-JAX full polynomial expansion (degree=2).
 
         Produces: [original features] + [x_i * x_j for i <= j]
@@ -78,23 +79,23 @@ class PolyRidgeReadout(RidgeCV):
     # ------------------------------------------------------------------
     # Overridden ReadoutModule interface
     # ------------------------------------------------------------------
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "PolyRidgeReadout":
+    def fit(self, states: JaxF64, targets: JaxF64) -> "PolyRidgeReadout":
         """Expand features, then delegate to RidgeCV.fit."""
         X_expanded = self._expand_features(states)
         super().fit(X_expanded, targets)
         return self
 
-    def predict(self, states: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, states: JaxF64) -> JaxF64:
         """Expand features, then delegate to RidgeCV.predict."""
         X_expanded = self._expand_features(states)
         return super().predict(X_expanded)
 
     def fit_with_validation(
         self,
-        train_Z: jnp.ndarray,
-        train_y: jnp.ndarray,
-        val_Z: jnp.ndarray,
-        val_y: jnp.ndarray,
+        train_Z: JaxF64,
+        train_y: JaxF64,
+        val_Z: JaxF64,
+        val_y: JaxF64,
         scoring_fn,
         maximize_score: bool = True,
     ):

@@ -37,8 +37,6 @@ dependencies = [
     "optuna-dashboard",
 ]
 
-[project.scripts]
-reservoir-cli = "reservoir.cli.main:main"
 
 [tool.uv]
 dev-dependencies = []

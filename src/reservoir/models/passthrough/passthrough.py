@@ -9,6 +9,7 @@ from typing import Any, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
@@ -28,7 +29,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         self.topology_meta: Dict[str, Any] = {}
         self._n_units: Optional[int] = None  # Set on first forward pass
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **_: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Any = None, **_: Any) -> Dict[str, Any]:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 
@@ -36,19 +37,19 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Stateful Interface (Compatible with Reservoir)                     #
     # ------------------------------------------------------------------ #
 
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         """Return zero state. Passthrough is stateless but needs compatible interface."""
         if self._n_units is None:
             raise RuntimeError("Passthrough n_units not set. Call forward() first.")
         return jnp.zeros((batch_size, self._n_units))
 
-    def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, projected_input: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Passthrough step: ignore state, return input as next state."""
         # projected_input: [batch, features] - ensure dtype matches state
         next_state = jnp.asarray(projected_input)
         return next_state, next_state
 
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Process sequence. Returns (final_state, all_states)."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
@@ -65,7 +66,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Standard Interface                                                 #
     # ------------------------------------------------------------------ #
 
-    def __call__(self, inputs: jnp.ndarray, split_name: str = None, **_: Any) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64, split_name: str = None, **_: Any) -> JaxF64:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = jnp.asarray(inputs)

@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any, Dict
 
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -33,23 +34,23 @@ class Reservoir(ClosedLoopGenerativeModel, ABC):
         return self.n_units
 
     @abstractmethod
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         """Initialize reservoir state (must be implemented by subclasses)."""
         raise NotImplementedError
 
     @abstractmethod
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Compute single step dynamics returning next state and emitted features."""
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Single time step - used for closed-loop generation."""
         raise NotImplementedError
 
     # generate_closed_loop is inherited from ClosedLoopGenerativeModel
 
-    def generate_trajectory(self, initial_state: jnp.ndarray, inputs: jnp.ndarray) -> jnp.ndarray:
+    def generate_trajectory(self, initial_state: JaxF64, inputs: JaxF64) -> JaxF64:
 
         """Process sequences by delegating to the subclass forward implementation."""
         is_sequence_batched = inputs.ndim == 3
@@ -78,7 +79,7 @@ class Reservoir(ClosedLoopGenerativeModel, ABC):
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64) -> JaxF64:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

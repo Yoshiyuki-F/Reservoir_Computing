@@ -3,7 +3,9 @@ utils/batched_compute.py
 GPU OOMを防ぐためのバッチ処理ユーティリティ。
 """
 
-from typing import Callable, Union, Any
+from typing import Callable
+from beartype import beartype
+from reservoir.core.types import NpF64, JaxF64
 
 import jax
 import jax.numpy as jnp
@@ -11,12 +13,13 @@ import numpy as np
 from tqdm.auto import tqdm
 
 
+@beartype
 def batched_compute(
-    fn: Callable[[jnp.ndarray], jnp.ndarray],
-    inputs: Union[np.ndarray, jnp.ndarray, Any],
+    fn: Callable[[JaxF64], JaxF64],
+    inputs: NpF64,
     batch_size: int,
     desc: str = "[Batched]",
-) -> np.ndarray:
+) -> NpF64:
     """
     データセット全体を一括でGPUに載せるとOOMになるため、
     バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
@@ -36,7 +39,7 @@ def batched_compute(
     # Handle 2D input (T, F) - Regression time series
     # Check ndim on inputs (works for both np and jnp)
     if inputs.ndim == 2:
-        inputs_jax = jnp.asarray(inputs)
+        inputs_jax = jnp.asarray(inputs, dtype=jnp.float64)
         result_jax = fn(inputs_jax)
         return np.asarray(result_jax)  # Transfer to CPU
     
@@ -47,8 +50,8 @@ def batched_compute(
         return np.array([])
 
     # 1. 形状推論 & JITコンパイルのトリガー (最初の1サンプル)
-    # Ensure dummy input is on GPU
-    dummy_input_jax = jnp.asarray(inputs[:1])
+    # Ensure dummy input is on GPU and is float64
+    dummy_input_jax = jnp.asarray(inputs[:1], dtype=jnp.float64)
     dummy_out_jax = fn(dummy_input_jax)
 
     # Detect Expansion Factor (e.g. 1 sample -> N samples after aggregation)
@@ -61,8 +64,7 @@ def batched_compute(
 
     # 2. Pre-allocate results array on CPU to prevent OOM
     out_shape = (n_samples * expansion_factor, *dummy_out_jax.shape[1:])
-    out_dtype = dummy_out_jax.dtype
-    result_array = np.empty(out_shape, dtype=out_dtype)
+    result_array = np.empty(out_shape, dtype=np.float64)
 
     # 3. JITコンパイル済みの実行関数を用意
     @jax.jit
@@ -77,13 +79,13 @@ def batched_compute(
 
             # (A) GPUでスライス & 計算
             batch_data = inputs[i:batch_end]
-            batch_jax = jnp.asarray(batch_data)
+            batch_jax = jnp.asarray(batch_data, dtype=jnp.float64)
             batch_out_jax = step(batch_jax)
             
             # (B) Transfer to CPU directly into pre-allocated array
             out_start = i * expansion_factor
             out_end = out_start + batch_out_jax.shape[0]
-            result_array[out_start:out_end] = np.asarray(batch_out_jax)
+            result_array[out_start:out_end] = np.asarray(batch_out_jax, dtype=np.float64)
 
             # 進捗更新
             pbar.update(current_batch_size)

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 import optax
 from flax.training import train_state
 from tqdm import tqdm  # 進行状況表示用
@@ -26,11 +27,11 @@ class BaseModel(ABC):
         return {}
 
     @abstractmethod
-    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, X: JaxF64) -> JaxF64:
         ...
 
     @abstractmethod
-    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
         ...
 
     def get_topology_meta(self) -> Dict[str, Any]:
@@ -92,7 +93,7 @@ class BaseFlaxModel(BaseModel, ABC):
             # Constant learning rate
             return optax.adam(self.learning_rate)
 
-    def _init_train_state(self, key: jnp.ndarray, sample_input: jnp.ndarray, num_train_steps: int) -> train_state.TrainState:
+    def _init_train_state(self, key: JaxF64, sample_input: JaxF64, num_train_steps: int) -> train_state.TrainState:
         variables = self._model_def.init(key, sample_input)
         params = variables["params"]
         tx = self._build_optimizer(num_train_steps)
@@ -103,7 +104,7 @@ class BaseFlaxModel(BaseModel, ABC):
         )
 
     @staticmethod
-    def _train_step(state: train_state.TrainState, batch_x: jnp.ndarray, batch_y: jnp.ndarray, classification: bool):
+    def _train_step(state: train_state.TrainState, batch_x: JaxF64, batch_y: JaxF64, classification: bool):
         def loss_fn(params):
             logits = state.apply_fn({"params": params}, batch_x)
             if classification:
@@ -173,14 +174,14 @@ class BaseFlaxModel(BaseModel, ABC):
                 batch_losses.append(float(loss))  # LossをCPUに戻すコストのみ
 
             if batch_losses:
-                avg_loss = float(jnp.mean(batch_losses))
+                avg_loss = float(jnp.mean(jnp.array(batch_losses)))
                 loss_history.append(avg_loss)
                 pbar.set_postfix({"loss": f"{avg_loss:.6f}"})
 
         self.trained = True
         return {"loss_history": loss_history}
 
-    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, X: JaxF64) -> JaxF64:
         if self._state is None:
             raise RuntimeError("Model not trained")
         X = jnp.asarray(X)
@@ -190,7 +191,7 @@ class BaseFlaxModel(BaseModel, ABC):
 
         return _predict_fn(self._state.params, X)
 
-    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
         preds = self.predict(X)
         y_arr = jnp.asarray(y)
         if self.classification:

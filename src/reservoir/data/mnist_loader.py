@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Tuple
+from beartype import beartype
+from reservoir.core.types import NpF64
 
 import numpy as np
 from torch.utils.data import DataLoader
@@ -23,7 +25,8 @@ def get_mnist_datasets() -> Tuple[datasets.MNIST, datasets.MNIST]:
     return train_set, test_set
 
 
-def image_to_sequence(image: np.ndarray, *, n_steps: int) -> np.ndarray:
+@beartype
+def image_to_sequence(image: NpF64, *, n_steps: int) -> NpF64:
     """Convert a single MNIST image into a (time, features) sequence."""
     if image.ndim == 3 and image.shape[0] == 1:
         image = image[0]

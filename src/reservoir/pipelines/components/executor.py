@@ -3,6 +3,7 @@ from functools import partial
 from typing import Dict, Any, Tuple, Optional, Union
 
 import jax.numpy as jnp
+from reservoir.core.types import NpF64, JaxF64
 import numpy as np
 
 from reservoir.models.presets import PipelineConfig
@@ -126,7 +127,7 @@ class PipelineExecutor:
             "quantum_trace": quantum_trace,
         }
 
-    def _extract_all_features(self, model: Any) -> Tuple[Optional[Union[jnp.ndarray, np.ndarray]], ...]:
+    def _extract_all_features(self, model: Any) -> Tuple[Optional[Union[JaxF64, np.ndarray]], ...]:
         """
         Orchestrate feature extraction.
         Coordinator supplies properly padded data.
@@ -154,7 +155,7 @@ class PipelineExecutor:
         return train_Z, val_Z, test_Z
 
     @staticmethod
-    def _compute_split(model: Any, inputs: Optional[Union[jnp.ndarray, np.ndarray]], split_name: str, batch_size: int):
+    def _compute_split(model: Any, inputs: Optional[Union[JaxF64, np.ndarray]], split_name: str, batch_size: int):
         """Helper to run batched computation if input exists."""
         if inputs is None:
             return None

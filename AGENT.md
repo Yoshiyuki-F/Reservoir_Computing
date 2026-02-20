@@ -51,17 +51,17 @@ NPかJNPどちらか。どちらもImportしているファイルはそれを変
 3. **静的型チェック（Mypy/Pyright）との併用:**
    - 実行時エラー（Beartype）に加えて、エディタ上でも静的チェッカーによる警告を出せるよう併用します。
 
-float32 は禁止（精度がガタ落ちするので）→ `Float64[np.ndarray, "*dims"]` で物理的に弾く
+float32 は禁止（精度がガタ落ちするので）→ `JaxF64` で物理的に弾く
 
 ## 5. ヘキサゴナルアーキテクチャ — Import境界の物理的制約
 
 ### Domain分類ルール
-| Domain | Import許可 | 例 |
-|--------|-----------|-----|
-| **NUMPY** | `numpy` のみ | `preprocessing.py`, `data_prep.py`, `loaders.py` |
+| Domain | Import許可 | 例                                                   |
+|--------|-----------|-----------------------------------------------------|
+| **NUMPY** | `numpy` のみ | `preprocessing.py`, `data_prep.py`, `loaders.py`    |
 | **JAX** | `jax` のみ | `projection.py`, `models/nn/*.py`, `aggregation.py` |
-| **MAPPER** | 両方OK | `batched_compute.py`, `metrics.py`, `strategies.py` |
-| **PURE** | どちらもなし | `config.py`, `identifiers.py`, `presets.py` |
+| **MAPPER** | 両方OK | `batched_compute.py`, `types.py' `strategies.py`     |
+| **PURE** | どちらもなし | `config.py`, `identifiers.py`, `presets.py`         |
 
 > `jaxtyping`/`beartype` は型アノテーションツールなのでNUMPYドメインでも使用可。
 
@@ -102,4 +102,14 @@ JaxF64 = Float64[jax.Array, "..."]
 もしくは
 NpF64 = Float64[np.ndarray, "..."]
 # ArrayはデフォルトでJAX/NumPy汎用だが、JAX領域では実質JAX専用として扱う
-のように定義することでFloat64という形タイプをJaxのそれだと矯正します
+のようにtypes.py 定義することでFloat64という形タイプをJaxのそれだと矯正します。そうすることでJaxTypingはtypes.py以外ではImportされないはず。
+2. Ctrl+F で Any, Union, などの曖昧な型ヒントがないか全ファイルを検索して、もしあれば即修正するルールを徹底する。
+3. Asarray も禁止。Mapper層以外でjnp.asarrayを使っているファイルがあれば即to_jax_f64やto_np_f64に修正するルールを徹底する。(これらもType.pyに定義済み)
+4. Float64, Float32 Float などの型エイリアスも禁止。JaxF64　やNpF64を徹底する。
+だからといって型ヒントを無視するのは禁止。例えば、def vpt_score(y_true, y_pred, threshold: float = 0.4) -> int: のように、型ヒントが実際の値と乖離している場合は即修正するルールを徹底する。
+5. UserWarning: Explicitly requested dtype float64 requested in asarray is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+この警告は出るべきではない。だからといって警告を無視するようなコードを書くのは禁止。もしこの警告が出るコードがあれば、即修正するルールを徹底する。
+6. lint_imports.py もしくは同様のスクリプトを作成して、
+     両方np とjnpimportしているファイルがないか
+     上に書いてあるTypeが使われているか
+全ファイルをチェックTestを追加する。

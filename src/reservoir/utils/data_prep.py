@@ -4,15 +4,17 @@ src/reservoir/utils/data_prep.py
 Data preparation utilities for Reservoir Computing pipelines.
 """
 from typing import Optional
+from beartype import beartype
+from reservoir.core.types import NpF64
 
 import numpy as np
 
-#TODO beartype
+@beartype
 def apply_halo_padding(
-    current_data: np.ndarray,
-    context_data: Optional[np.ndarray],
+    current_data: NpF64,
+    context_data: Optional[NpF64],
     window_size: int
-) -> np.ndarray:
+) -> NpF64:
     """
     Apply Halo Padding (Time Delay Overlap) to the start of current_data 
     using the end of context_data.

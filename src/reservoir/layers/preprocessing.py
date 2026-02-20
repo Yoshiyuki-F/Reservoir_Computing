@@ -7,11 +7,14 @@ import abc
 from functools import singledispatch
 from typing import Any, Dict, Optional, Type
 
+from beartype import beartype
+from reservoir.core.types import NpF64
 import numpy as np
 
 
 # --- 1. Interface Definition ---
 
+@beartype
 class Preprocessor(abc.ABC):
     """
     Abstract Base Class for Preprocessing Layers.
@@ -20,17 +23,17 @@ class Preprocessor(abc.ABC):
     """
 
     @abc.abstractmethod
-    def fit(self, X: np.ndarray) -> "Preprocessor":
+    def fit(self, X: NpF64) -> "Preprocessor":
         """Fit the preprocessor on training data."""
         pass
 
     @abc.abstractmethod
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         """Apply the transformation."""
         pass
 
     @abc.abstractmethod
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         """Reverse the transformation."""
         pass
 
@@ -39,17 +42,18 @@ class Preprocessor(abc.ABC):
         """Serialize configuration parameters."""
         pass
 
-    def fit_transform(self, X: np.ndarray) -> np.ndarray:
+    def fit_transform(self, X: NpF64) -> NpF64:
         """Fit and transform in one step."""
         return self.fit(X).transform(X)
 
-    def __call__(self, X: np.ndarray) -> np.ndarray:
+    def __call__(self, X: NpF64) -> NpF64:
         """Alias for transform."""
         return self.transform(X)
 
 
 # --- 2. Concrete Implementations ---
 
+@beartype
 class StandardScaler(Preprocessor):
     """Standard scaler (mean removal and variance scaling)."""
 
@@ -57,7 +61,7 @@ class StandardScaler(Preprocessor):
         self.mean_: Optional[np.ndarray] = None
         self.scale_: Optional[np.ndarray] = None
 
-    def fit(self, X: np.ndarray) -> "StandardScaler":
+    def fit(self, X: NpF64) -> "StandardScaler":
         X_np = np.asarray(X)
 
         if X_np.ndim == 3:
@@ -74,7 +78,7 @@ class StandardScaler(Preprocessor):
             
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
@@ -85,7 +89,7 @@ class StandardScaler(Preprocessor):
             arr /= self.scale_
         return arr
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
             
@@ -102,6 +106,7 @@ class StandardScaler(Preprocessor):
         }
 
 
+@beartype
 class CustomRangeScaler(Preprocessor):
     """
     Scales data by dividing by the maximum value and multiplying by a scalar.
@@ -117,7 +122,7 @@ class CustomRangeScaler(Preprocessor):
         self.max_val: Optional[float] = None
         self.mean_: Optional[np.ndarray] = None
 
-    def fit(self, X: np.ndarray) -> "CustomRangeScaler":
+    def fit(self, X: NpF64) -> "CustomRangeScaler":
         X_np = np.asarray(X)
         
         if self.centering:
@@ -133,7 +138,7 @@ class CustomRangeScaler(Preprocessor):
             
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"CustomRangeScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
@@ -152,7 +157,7 @@ class CustomRangeScaler(Preprocessor):
             
         return arr
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"CustomRangeScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
@@ -181,6 +186,7 @@ class CustomRangeScaler(Preprocessor):
 
 
 
+@beartype
 class MinMaxScaler(Preprocessor):
     """
     Min-Max Scaler with feature range scaling.
@@ -195,7 +201,7 @@ class MinMaxScaler(Preprocessor):
         self.min_: Optional[np.ndarray] = None
         self.range_: Optional[np.ndarray] = None  # X_max - X_min
 
-    def fit(self, X: np.ndarray) -> "MinMaxScaler":
+    def fit(self, X: NpF64) -> "MinMaxScaler":
         X_np = np.asarray(X)
 
         if X_np.ndim == 3:
@@ -213,7 +219,7 @@ class MinMaxScaler(Preprocessor):
 
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
             
@@ -230,7 +236,7 @@ class MinMaxScaler(Preprocessor):
         
         return arr
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
             
@@ -256,16 +262,17 @@ class MinMaxScaler(Preprocessor):
         }
 
 
+@beartype
 class IdentityPreprocessor(Preprocessor):
     """No-op preprocessor for RAW mode."""
 
-    def fit(self, X: np.ndarray) -> "IdentityPreprocessor":
+    def fit(self, X: NpF64) -> "IdentityPreprocessor":
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         return np.asarray(X)
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         return np.asarray(X)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -274,6 +281,7 @@ class IdentityPreprocessor(Preprocessor):
 
 
 
+@beartype
 class AffineScaler(Preprocessor):
     """
     Affine transformation scaler.
@@ -284,11 +292,11 @@ class AffineScaler(Preprocessor):
         self.input_scale = input_scale
         self.shift = shift
 
-    def fit(self, X: np.ndarray) -> "AffineScaler":
+    def fit(self, X: NpF64) -> "AffineScaler":
         # AffineScaler is stateless (parameters are provided at init), so fit does nothing.
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
@@ -297,7 +305,7 @@ class AffineScaler(Preprocessor):
         arr += self.shift
         return arr
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+    def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
             raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
             

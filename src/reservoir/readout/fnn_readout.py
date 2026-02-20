@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, Tuple
 
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.models.config import FNNConfig
@@ -28,7 +29,7 @@ class FNNReadout(ReadoutModule):
         self._output_dim: Optional[int] = None
         self.training_logs: Optional[Dict[str, Any]] = None
 
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "FNNReadout":
+    def fit(self, states: JaxF64, targets: JaxF64) -> "FNNReadout":
         """Fit the FNN readout on states and targets."""
         X = jnp.asarray(states)
         y = jnp.asarray(targets)
@@ -60,7 +61,7 @@ class FNNReadout(ReadoutModule):
         self.training_logs = model.train(X, y)
         return self
 
-    def predict(self, states: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, states: JaxF64) -> JaxF64:
         """Predict using the trained FNN."""
         if self._model is None:
             raise RuntimeError("FNNReadout is not fitted yet.")

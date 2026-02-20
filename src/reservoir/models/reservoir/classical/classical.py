@@ -8,6 +8,7 @@ from typing import Dict, Any, Tuple
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -48,10 +49,10 @@ class ClassicalReservoir(Reservoir):
         scale = self.spectral_radius / eig if eig > 0 else 1.0
         self.W = W_dense * scale
 
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         return jnp.zeros((batch_size, self.n_units))
 
-    def step(self, state: jnp.ndarray, projected_input: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, projected_input: JaxF64) -> Tuple[JaxF64, JaxF64]:
         # 論文の式:   (1 - a) * state + tanh(...)
 
         # 論文 Eq(7) 通りの実装 Li-ESN
@@ -62,7 +63,7 @@ class ClassicalReservoir(Reservoir):
 
         return next_state, next_state
 
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         if input_data.ndim != 3:
             raise ValueError(f"Expected batched sequences (batch, time, input), got {input_data.shape}")
         batch, time, feat = input_data.shape
@@ -75,7 +76,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: jnp.ndarray, return_sequences: bool = False, split_name: str = None, **_: Any) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str = None, **_: Any) -> JaxF64:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = jnp.asarray(inputs)
         
@@ -100,7 +101,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **__: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Any = None, **__: Any) -> Dict[str, Any]:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """

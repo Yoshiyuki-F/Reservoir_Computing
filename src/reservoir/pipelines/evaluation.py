@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 from reservoir.utils.metrics import calculate_chaos_metrics
 from reservoir.utils.reporting import print_chaos_metrics
 
@@ -8,8 +9,8 @@ class Evaluator:
 
     @staticmethod
     def compute_chaos_metrics(
-        truth: jnp.ndarray,
-        pred: jnp.ndarray,
+        truth: JaxF64,
+        pred: JaxF64,
         scaler: Any,
         dataset_config: Any,
         global_start: int = 0,
@@ -38,7 +39,7 @@ class Evaluator:
         return metrics
 
     @staticmethod
-    def align_targets(features: Optional[jnp.ndarray], targets: Optional[jnp.ndarray]) -> Optional[jnp.ndarray]:
+    def align_targets(features: Optional[JaxF64], targets: Optional[JaxF64]) -> Optional[JaxF64]:
         """Align target length (dim 0) to match feature length (warmup handling)."""
         if features is None or targets is None:
             return targets

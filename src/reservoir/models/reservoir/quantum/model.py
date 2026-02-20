@@ -9,6 +9,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 from jaxtyping import Float, Array, jaxtyped
 from beartype import beartype
 
@@ -99,7 +100,7 @@ class QuantumReservoir(Reservoir):
         )
         self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float_)
 
-    def _compute_measurement_matrix_vectorized(self) -> jnp.ndarray:
+    def _compute_measurement_matrix_vectorized(self) -> JaxF64:
         """Vectorized Precomputation of Parity/Measurement Matrix."""
         dim = 2 ** self.n_qubits
         basis_states = jnp.arange(dim)
@@ -147,7 +148,7 @@ class QuantumReservoir(Reservoir):
         return jnp.full((count,), val)
 
     @staticmethod
-    def _prepare_input(inputs: Union[jnp.ndarray, Array]) -> Tuple[jnp.ndarray, bool]:
+    def _prepare_input(inputs: Union[JaxF64, Array]) -> Tuple[JaxF64, bool]:
         """Preprocess input: cast to float64 and ensure 3D shape (Batch, Time, Feat)."""
         # Cast to float_ to match global JAX config (float64)
         arr = jnp.asarray(inputs, dtype=jnp.float_)
@@ -158,7 +159,7 @@ class QuantumReservoir(Reservoir):
             raise ValueError(f"QuantumReservoir expects 2D or 3D input, got {arr.shape}")
         return arr, input_was_2d
 
-    def initialize_state(self, batch_size: int = 1) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+    def initialize_state(self, batch_size: int = 1) -> Union[JaxF64, Tuple[JaxF64, JaxF64]]:
         state = jnp.zeros((batch_size, self.n_qubits), dtype=jnp.float_)
         if self.n_trajectories > 0:
             # Monte Carlo Mode: Return (state, key) tuple
@@ -167,12 +168,12 @@ class QuantumReservoir(Reservoir):
             return state, jax.random.split(key, batch_size)
         return state
 
-    def reset_state(self, batch_size: int) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+    def reset_state(self, batch_size: int) -> Union[JaxF64, Tuple[JaxF64, JaxF64]]:
         """Alias for initialize_state. Resets the reservoir to the initial ground state."""
         return self.initialize_state(batch_size)
 
     @jaxtyped(typechecker=beartype)
-    def step(self, state: Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], input_data: Float[Array, "batch features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], Float[Array, "batch output_dim"]]:
+    def step(self, state: Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], input_data: Float[Array, "batch features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], Float[Array, "batch output_dim"]]:
         """Batched step function for debugging/stepping."""
         # Use vmapped step logic wrapper
         step_func = partial(
@@ -189,7 +190,7 @@ class QuantumReservoir(Reservoir):
         return jax.vmap(step_func, in_axes=(0, 0))(state, input_data)
 
     @jaxtyped(typechecker=beartype)
-    def forward(self, state: Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], input_data: Float[Array, "batch time features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[jnp.ndarray, jnp.ndarray]], Float[Array, "batch time output_dim"]]:
+    def forward(self, state: Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], input_data: Float[Array, "batch time features"]) -> Tuple[Union[Float[Array, "batch n_qubits"], Tuple[JaxF64, JaxF64]], Float[Array, "batch time output_dim"]]:
         """Forward pass using optimized scan."""
         if input_data.ndim != 3:
             raise ValueError(f"Expected (batch, time, feat), got {input_data.shape}")
@@ -300,7 +301,7 @@ class QuantumReservoir(Reservoir):
 
 
     @staticmethod
-    def train(_inputs: jnp.ndarray, _targets: Any = None, **__: Any) -> Dict[str, Any]:
+    def train(_inputs: JaxF64, _targets: Any = None, **__: Any) -> Dict[str, Any]:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 

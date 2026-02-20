@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Protocol, runtime_checkable
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 
 @runtime_checkable
@@ -47,7 +48,7 @@ __all__ = ["Transformer", "ReadoutModule", "Component"]
 class Component(Protocol):
     """Minimal component contract for sequential composition."""
 
-    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64, **kwargs: Any) -> JaxF64:
         ...
 
     def get_topology_meta(self) -> Dict[str, Any]:

@@ -3,6 +3,8 @@ Reservoir Computing用のデータ生成関数。
 """
 
 from typing import Tuple, Optional
+from beartype import beartype
+from reservoir.core.types import NpF64
 
 import numpy as np
 
@@ -23,7 +25,8 @@ from reservoir.data.config import (
 )
 
 
-def generate_sine_data(config: SineWaveConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def generate_sine_data(config: SineWaveConfig) -> Tuple[NpF64, NpF64]:
     """複数周波数のサイン波を合成した時系列データを生成。
     
     複数の正弦波を重ね合わせて合成信号を作成し、ガウシアンノイズを
@@ -61,7 +64,8 @@ def generate_sine_data(config: SineWaveConfig) -> Tuple[np.ndarray, np.ndarray]:
     return input_data, target_data
 
 
-def generate_lorenz_data(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def generate_lorenz_data(config: LorenzConfig) -> Tuple[NpF64, NpF64]:
     """Lorenz方程式による決定論的カオス時系列データを生成。
     
     Lorenzアトラクターは気象学から生まれた有名なカオス系で、
@@ -124,7 +128,8 @@ def generate_lorenz_data(config: LorenzConfig) -> Tuple[np.ndarray, np.ndarray]:
     return input_data, target_data
 
 
-def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[NpF64, NpF64]:
     """Generates Lorenz 96 chaotic time series data.
     
     The Lorenz 96 model is defined by:
@@ -138,66 +143,53 @@ def generate_lorenz96_data(config: Lorenz96Config) -> Tuple[np.ndarray, np.ndarr
             - input_data: Shape (time_steps, N)
             - target_data: Shape (time_steps, N)
     """
-    import jax
-    import jax.numpy as jnp
-    
     N = config.n_input
     F = config.F
     dt = config.dt
     
     # Initialization
-    # Use JAX PRNG for consistency if needed, but numpy seed is provided
     if config.seed is not None:
         np.random.seed(config.seed)
     
-    x0 = np.full(N, F)
+    x0 = np.full(N, F, dtype=np.float64)
     x0 += np.random.normal(0, 0.01, N)
-    x0 = jnp.array(x0)
     
     warmup_steps = config.washup_lt * config.steps_per_lt
     total_steps = config.time_steps + warmup_steps
 
     # Pre-compute indices for cyclic boundary conditions
-    indices = jnp.arange(N)
+    indices = np.arange(N)
     idx_minus_2 = (indices - 2) % N
     idx_minus_1 = (indices - 1) % N
     idx_plus_1 = (indices + 1) % N
 
-    def lorenz96_deriv(x, _):
+    def lorenz96_deriv(x):
         # dx/dt = (x[i+1] - x[i-2]) * x[i-1] - x[i] + F
         return (x[idx_plus_1] - x[idx_minus_2]) * x[idx_minus_1] - x + F
 
-    def step_fn(carry, _):
-        x = carry
-        
-        # RK4 Integration
-        k1 = lorenz96_deriv(x, None)
-        k2 = lorenz96_deriv(x + k1 * dt / 2, None)
-        k3 = lorenz96_deriv(x + k2 * dt / 2, None)
-        k4 = lorenz96_deriv(x + k3 * dt, None)
-        
-        x_next = x + (k1 + 2*k2 + 2*k3 + k4) * dt / 6.0
-        
-        # Check for numeric stability (optional in scan, can be costly)
-        # JAX usually handles NaNs nicely by propagating them
-        return x_next, x_next
-
-    # Run simulation
-    # scan returns (final_carry, stacked_outputs)
-    # We pass None as 'xs' to scan for the number of steps
-    _, data = jax.lax.scan(step_fn, x0, None, length=total_steps)
+    # RK4 Integration (pure NumPy loop — runs once during data generation)
+    data = np.empty((total_steps, N), dtype=np.float64)
+    x = x0.copy()
+    for t in range(total_steps):
+        k1 = lorenz96_deriv(x)
+        k2 = lorenz96_deriv(x + k1 * dt / 2)
+        k3 = lorenz96_deriv(x + k2 * dt / 2)
+        k4 = lorenz96_deriv(x + k3 * dt)
+        x = x + (k1 + 2*k2 + 2*k3 + k4) * dt / 6.0
+        data[t] = x
         
     # Discard warmup steps
     data = data[warmup_steps:]
     
     # Input is current state, Target is next state
-    input_data = np.asarray(data[:-1])
-    target_data = np.asarray(data[1:])
+    input_data = data[:-1]
+    target_data = data[1:]
     
     return input_data, target_data
 
 
-def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[np.ndarray, np.ndarray]:
+@beartype
+def generate_mackey_glass_data(config: MackeyGlassConfig) -> Tuple[NpF64, NpF64]:
     """
     Mackey-Glassカオス時系列データを生成します。
 
@@ -322,7 +314,7 @@ def generate_mnist_sequence_data(
 
     for idx in range(limit):
         img_tensor, label = dataset[idx]
-        img_np = img_tensor.numpy()
+        img_np = img_tensor.numpy().astype(np.float64)
         seq = image_to_sequence(img_np, n_steps=n_steps)
         sequences.append(seq.astype(np.float64))
         labels.append(label)

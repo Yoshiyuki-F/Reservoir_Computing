@@ -1,11 +1,16 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/strategies.py"""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Callable
+from beartype import beartype
+from reservoir.core.types import NpF64, JaxF64
 import jax.numpy as jnp
 import numpy as np
+# YES: strategies.py is a Mapper layer — it receives np.ndarray from Frontend
+# and delegates to metric/readout functions that internally use JAX.
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
+from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
@@ -18,7 +23,7 @@ class ReadoutStrategy(ABC):
         self.metric_name = metric_name
 
     @staticmethod
-    def _flatten_3d_to_2d(arr: Optional[Union[jnp.ndarray, np.ndarray, Any]], label: str = "array") -> Optional[Union[jnp.ndarray, np.ndarray]]:
+    def _flatten_3d_to_2d(arr: Optional[np.ndarray], label: str = "array") -> Optional[np.ndarray]:
         """Flatten 3D states (Batch, Time, Features) -> 2D (Batch, Features)."""
         if arr is None:
             return None
@@ -28,7 +33,7 @@ class ReadoutStrategy(ABC):
         return arr
 
     @staticmethod
-    def _get_seed_sequence(train_X: Union[jnp.ndarray, np.ndarray, Any], val_X: Optional[Union[jnp.ndarray, np.ndarray, Any]]):
+    def _get_seed_sequence(train_X: np.ndarray, val_X: Optional[np.ndarray]):
         """Prepare seed for closed-loop (concat train+val)."""
         if val_X is not None:
             axis = 1 if train_X.ndim == 3 else 0
@@ -38,18 +43,18 @@ class ReadoutStrategy(ABC):
     @abstractmethod
     def fit_and_evaluate(
         self,
-        model: Any,
-        readout: Any,
-        train_Z: Union[jnp.ndarray, np.ndarray],
-        val_Z: Optional[Union[jnp.ndarray, np.ndarray]],
-        test_Z: Optional[Union[jnp.ndarray, np.ndarray]],
-        train_y: Optional[Union[jnp.ndarray, np.ndarray]],
-        val_y: Optional[Union[jnp.ndarray, np.ndarray]],
-        test_y: Optional[Union[jnp.ndarray, np.ndarray]],
+        model: Callable,
+        readout: Optional[Callable],
+        train_Z: np.ndarray,
+        val_Z: Optional[np.ndarray],
+        test_Z: Optional[np.ndarray],
+        train_y: Optional[np.ndarray],
+        val_y: Optional[np.ndarray],
+        test_y: Optional[np.ndarray],
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
-        pipeline_config: Any
-    ) -> Dict[str, Any]:
+        pipeline_config: PipelineConfig
+    ) -> Dict:
         """Fit readout and return predictions/metrics."""
         pass
 
@@ -58,8 +63,18 @@ class EndToEndStrategy(ReadoutStrategy):
     """Strategy for End-to-End models where features are predictions."""
     
     def fit_and_evaluate(
-        self,model, readout, train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta, pipeline_config
-    ) -> Dict[str, Any]:
+        self, model: Callable, 
+        readout: Optional[Callable], 
+        train_Z: np.ndarray, 
+        val_Z: Optional[np.ndarray], 
+        test_Z: Optional[np.ndarray], 
+        train_y: Optional[np.ndarray], 
+        val_y: Optional[np.ndarray], 
+        test_y: Optional[np.ndarray],
+        frontend_ctx: FrontendContext, 
+        dataset_meta: DatasetMetadata, 
+        pipeline_config: PipelineConfig
+    ) -> Dict:
         print("Readout is None. End-to-End mode.")
         
         # For FNN windowed mode, align targets using the model's adapter
@@ -126,8 +141,8 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model, readout, train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta, pipeline_config
-    ) -> Dict[str, Any]:
+        self, model: Callable, readout: Optional[Callable], train_Z: np.ndarray, val_Z: Optional[np.ndarray], test_Z: Optional[np.ndarray], train_y: Optional[np.ndarray], val_y: Optional[np.ndarray], test_y: Optional[np.ndarray], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+    ) -> Dict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
@@ -208,8 +223,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
     """Closed-Loop regression strategy (VPT optimization)."""
 
     def fit_and_evaluate(
-        self, model, readout, train_Z, val_Z, test_Z, train_y, val_y, test_y, frontend_ctx, dataset_meta, pipeline_config
-    ) -> Dict[str, Any]:
+        self, model: Callable, readout: Optional[Callable], train_Z: np.ndarray, val_Z: Optional[np.ndarray], test_Z: Optional[np.ndarray], train_y: Optional[np.ndarray], val_y: Optional[np.ndarray], test_y: Optional[np.ndarray], frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+    ) -> Dict:
 
 
         proj_fn = None
@@ -426,7 +441,7 @@ class ReadoutStrategyFactory:
     
     @staticmethod
     def create_strategy(
-        readout: Optional[Any],
+        readout: Optional[Callable],
         dataset_meta: DatasetMetadata,
         evaluator: Evaluator,
         metric_name: str

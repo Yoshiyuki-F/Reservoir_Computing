@@ -8,6 +8,7 @@ from functools import singledispatch
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 # --- 1. Interface Definition ---
 
@@ -27,7 +28,7 @@ class Projection(abc.ABC):
         """Return the output dimension size."""
         return self._output_dim
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64) -> JaxF64:
         """
         Apply the projection to the inputs.
         template method: validates input shape then calls _forward.
@@ -38,7 +39,7 @@ class Projection(abc.ABC):
         return self._project(arr)
 
     @abc.abstractmethod
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         """Actual projection logic to be implemented by subclasses."""
         pass
 
@@ -97,7 +98,7 @@ class RandomProjection(Projection):
         self.W = W
         self.bias = bias
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         # Template ensures inputs is 2D or 3D ndarray
         if inputs.ndim == 3:
             return jnp.einsum("bti,io->bto", inputs, self.W) + self.bias
@@ -172,7 +173,7 @@ class CoherentDriveProjection(Projection):
         self.W = W
         self.bias = bias
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         # Step 1: Linear projection (like RandomProjection)
         if inputs.ndim == 3:
             linear_out = jnp.einsum("bti,io->bto", inputs, self.W) + self.bias
@@ -217,7 +218,7 @@ class CenterCropProjection(Projection):
         self.start_idx = (self.input_dim - self._output_dim) // 2
         self.end_idx = self.start_idx + self._output_dim
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         # inputs shape: (Batch, Time, Features)
         if inputs.ndim != 3:
              raise ValueError(f"CenterCropProjection requires 3D input (Batch, Time, Features), got ndim={inputs.ndim}")
@@ -246,7 +247,7 @@ class ResizeProjection(Projection):
                 f"than input_dim ({self.input_dim})."
             )
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         # inputs shape: (Batch, Time, Features) or (Batch, Features)
         # We assume the last dimension is Features.
         # jax.image.resize expects shape to resize to.
@@ -281,7 +282,7 @@ class PolynomialProjection(Projection):
         self.degree = degree
         self.include_bias = include_bias
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         # inputs shape: (Batch, Time, Features) or (Batch, Features)
         features = [inputs]
         if self.degree > 1:
@@ -333,7 +334,7 @@ class PCAProjection(Projection):
         self._components = None  # (n_units, input_dim)
         self._fitted = False
 
-    def fit(self, X: jnp.ndarray) -> "PCAProjection":
+    def fit(self, X: JaxF64) -> "PCAProjection":
         """
         Fit PCA on training data.
         X shape: (Time, Features) or (Batch, Time, Features)
@@ -357,7 +358,7 @@ class PCAProjection(Projection):
         self._fitted = True
         return self
 
-    def _project(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _project(self, inputs: JaxF64) -> JaxF64:
         if not self._fitted:
             raise RuntimeError("PCAProjection: fit() must be called before projection")
         

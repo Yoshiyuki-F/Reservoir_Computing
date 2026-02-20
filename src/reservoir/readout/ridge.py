@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, Callable
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 import jax.scipy.linalg
 import numpy as np
 from tqdm import tqdm
@@ -32,18 +33,18 @@ class RidgeRegression(ReadoutModule):
     def __init__(self, ridge_lambda: float, use_intercept: bool = True) -> None:
         self.ridge_lambda = float(ridge_lambda)
         self.use_intercept = bool(use_intercept)
-        self.coef_: Optional[jnp.ndarray] = None
-        self.intercept_: Optional[jnp.ndarray] = None
+        self.coef_: Optional[JaxF64] = None
+        self.intercept_: Optional[JaxF64] = None
         self._input_dim: Optional[int] = None
 
-    def _add_intercept(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _add_intercept(self, X: JaxF64) -> JaxF64:
         if not self.use_intercept:
             return X
         n_samples = X.shape[0]
         ones = jnp.ones((n_samples, 1))
         return jnp.concatenate([ones, X], axis=1)
 
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeRegression":
+    def fit(self, states: JaxF64, targets: JaxF64) -> "RidgeRegression":
         _ensure_x64()
         # Ensure input formats
         X = jnp.asarray(states)
@@ -92,7 +93,7 @@ class RidgeRegression(ReadoutModule):
         
         return self
 
-    def predict(self, states: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, states: JaxF64) -> JaxF64:
         if self.coef_ is None:
             raise RuntimeError("Model is not fitted.")
         
@@ -157,10 +158,10 @@ class RidgeCV(ReadoutModule):
 
     def fit_with_validation(
         self, 
-        train_Z: jnp.ndarray, 
-        train_y: jnp.ndarray, 
-        val_Z: jnp.ndarray, 
-        val_y: jnp.ndarray, 
+        train_Z: JaxF64, 
+        train_y: JaxF64, 
+        val_Z: JaxF64, 
+        val_y: JaxF64, 
         scoring_fn: ScoringFn, 
         maximize_score: bool = True
     ) -> tuple[float, float, Dict[float, float], Dict[float, float]]:
@@ -211,14 +212,14 @@ class RidgeCV(ReadoutModule):
         
         return best_lambda, best_score, search_history, weight_norms, residuals_history
 
-    def fit(self, states: jnp.ndarray, targets: jnp.ndarray) -> "RidgeCV":
+    def fit(self, states: JaxF64, targets: JaxF64) -> "RidgeCV":
         """Fallback fit without validation (uses current best/default lambda)."""
         if self.best_model is None:
              self.best_model = RidgeRegression(self.lambda_candidates[0], self.use_intercept)
         self.best_model.fit(states, targets)
         return self
 
-    def predict(self, states: jnp.ndarray) -> jnp.ndarray:
+    def predict(self, states: JaxF64) -> JaxF64:
         if self.best_model is None:
             raise RuntimeError("RidgeCV model is not fitted.")
         return self.best_model.predict(states)

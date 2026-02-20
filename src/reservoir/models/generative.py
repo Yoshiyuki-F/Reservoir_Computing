@@ -3,10 +3,11 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import Tuple, Any, Optional, Callable
+from typing import Tuple, Optional, Callable
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 
 
@@ -18,28 +19,28 @@ class ClosedLoopGenerativeModel(ABC):
     """
 
     @abstractmethod
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         """Initialize hidden state."""
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Single time step execution: (state, input) -> (next_state, output)."""
         raise NotImplementedError
     
     @abstractmethod
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """Process sequence: (state, input_seq) -> (final_state, output_seq)."""
         raise NotImplementedError
 
     def generate_closed_loop(
         self,
-        seed_data: jnp.ndarray,
+        seed_data: JaxF64,
         steps: int,
-        readout: Optional[Any] = None,
-        projection_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
+        readout: Optional[Callable] = None,
+        projection_fn: Optional[Callable[[JaxF64], JaxF64]] = None,
         verbose: bool = True
-    ) -> jnp.ndarray:
+    ) -> JaxF64:
         """
         Generate closed-loop predictions using Fast JAX Scan.
         

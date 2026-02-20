@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 from tqdm.auto import tqdm
 
 from reservoir.models.reservoir.classical import ClassicalReservoir
@@ -48,19 +49,19 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Get window_size from student's adapter if available
         self._window_size: int = getattr(student, 'window_size', 1) or 1
 
-    def __call__(self, inputs: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def __call__(self, inputs: JaxF64, **kwargs: Any) -> JaxF64:
         return self.predict(inputs)
 
-    def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def predict(self, X: JaxF64, **kwargs: Any) -> JaxF64:
         """Delegate to student's predict (which handles adapter internally)."""
         return self.student.predict(X)
 
-    def _compute_teacher_targets(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _compute_teacher_targets(self, inputs: JaxF64) -> JaxF64:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
         teacher_outputs = self.teacher(inputs)
         return jax.lax.stop_gradient(teacher_outputs)
 
-    def _compute_teacher_targets_batched(self, inputs: jnp.ndarray, batch_size: int) -> jnp.ndarray:
+    def _compute_teacher_targets_batched(self, inputs: JaxF64, batch_size: int) -> JaxF64:
         """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
         inputs_np = jnp.asarray(inputs)
         n_samples = inputs_np.shape[0]
@@ -100,7 +101,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return jnp.array(targets)
 
-    def train(self, inputs: jnp.ndarray, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Any = None, **kwargs: Any) -> Dict[str, Any]:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         """
@@ -137,7 +138,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: jnp.ndarray, y: Any = None) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: Any = None) -> Dict[str, float]:
         """
         Distillation evaluation: compare student output with teacher output.
         """
@@ -168,7 +169,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
     # ClosedLoopGenerativeModel Interface                                #
     # ------------------------------------------------------------------ #
 
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         """
         Initialize the sliding window state.
         CAUTION: Requires self._input_dim to be set via train().
@@ -181,7 +182,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
             
         return jnp.zeros((batch_size, self._window_size, self._input_dim))
 
-    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """
         Single step execution with window management.
         Args:
@@ -206,7 +207,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         output = BaseFlaxModel.predict(self.student, flat_input)
         return next_state, output
 
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """
         Process sequence using JAX scan.
         Args:

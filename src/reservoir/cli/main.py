@@ -1,39 +1,14 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/cli/main.py
-Unified CLI that delegates to reservoir.pipelines.run.run_pipeline."""
+Unified CLI that delegates to reservoir.pipelines.run.run_pipeline.
+
+Launch: uv run python -m reservoir.cli.main --model fnn --dataset mnist
+NOTE: Do NOT use reservoir-cli entry point — JAX 0.9 x64 will silently fail.
+"""
 
 from __future__ import annotations
 
 import argparse
 import sys
-import os
-
-# Ensure x64 is enabled before any JAX ops or imports
-os.environ["JAX_ENABLE_X64"] = "True"
-
-import jax
-
-if not jax.config.jax_enable_x64:
-    jax.config.update("jax_enable_x64", True)
-
-def verify_and_warmup_x64():
-    """Aggressively verify and force JAX x64 backend initialization."""
-    import jax.numpy as jnp
-    import numpy as np
-    
-    # Try 3 times to force it
-    for i in range(3):
-        try:
-            x = jnp.array([1.0], dtype=jnp.float64)
-            if x.dtype != jnp.float64:
-                raise ValueError(f"Created array dtype is {x.dtype}, expected float64")
-            return
-        except Exception:
-            # Force update again
-            jax.config.update("jax_enable_x64", True)
-            # Maybe some dummy op triggers update
-            _ = jnp.array([0.0]) 
-
-verify_and_warmup_x64()
 
 from reservoir.training import get_training_preset
 from reservoir.utils import check_gpu_available

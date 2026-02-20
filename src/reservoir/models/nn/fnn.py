@@ -9,6 +9,7 @@ from typing import Any, Dict, Sequence, Optional, Tuple
 
 import flax.linen as nn
 import jax.numpy as jnp
+from reservoir.core.types import JaxF64
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
@@ -58,7 +59,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, training_config, classification=classification)
 
-    def train(self, inputs: jnp.ndarray, targets: Optional[jnp.ndarray] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
+    def train(self, inputs: JaxF64, targets: Optional[JaxF64] = None, log_prefix: str = "4", **kwargs: Any) -> Dict[str, Any]:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim
@@ -77,7 +78,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         return super().train(adapted_inputs, aligned_targets, **kwargs)
 
-    def predict(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def predict(self, X: JaxF64, **kwargs: Any) -> JaxF64:
         """Predict with adapter-transformed inputs."""
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
@@ -86,7 +87,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         adapted_inputs = self.adapter(X)
         return super().predict(adapted_inputs)
 
-    def evaluate(self, X: jnp.ndarray, y: jnp.ndarray) -> Dict[str, float]:
+    def evaluate(self, X: JaxF64, y: JaxF64) -> Dict[str, float]:
         """Evaluate with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
@@ -96,7 +97,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         aligned_targets = self.adapter.align_targets(y)
         return super().evaluate(adapted_inputs, aligned_targets)
 
-    def __call__(self, X: jnp.ndarray, **kwargs: Any) -> jnp.ndarray:
+    def __call__(self, X: JaxF64, **kwargs: Any) -> JaxF64:
         """Make model callable for batched_compute compatibility."""
         return self.predict(X)
 
@@ -106,7 +107,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     # ------------------------------------------------------------------ #
     # ClosedLoopGenerativeModel implementation                           #
     # ------------------------------------------------------------------ #
-    def initialize_state(self, batch_size: int = 1) -> jnp.ndarray:
+    def initialize_state(self, batch_size: int = 1) -> JaxF64:
         """
         For windowed FNN, state is the sliding window buffer of last `window_size` values.
         For non-windowed FNN, state is a dummy.
@@ -116,7 +117,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             return jnp.zeros((batch_size, self.window_size, self._output_dim))
         return jnp.zeros((batch_size, 1))
 
-    def step(self, state: jnp.ndarray, inputs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """
         Single step for closed-loop generation.
         For windowed FNN: concatenate window buffer to form input, predict, update buffer.
@@ -143,7 +144,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             output = super().predict(inputs)
             return state, output
 
-    def forward(self, state: jnp.ndarray, input_data: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def forward(self, state: JaxF64, input_data: JaxF64) -> Tuple[JaxF64, JaxF64]:
         """
         Process seed sequence to initialize the sliding window state.
         For windowed FNN: fill the window buffer with the last `window_size` values from input.
@@ -186,12 +187,12 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
     def generate_closed_loop(
         self,
-        seed_data: jnp.ndarray,
+        seed_data: JaxF64,
         steps: int,
         readout: Any = None,
         projection_fn: Any = None,
         verbose: bool = True
-    ) -> jnp.ndarray:
+    ) -> JaxF64:
         """
         FNN-specific closed-loop generation using simple 2D arrays.
         Optimized with jax.lax.scan for speed.
@@ -244,7 +245,7 @@ class FNN(nn.Module):
     return_hidden: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.ndarray):
+    def __call__(self, x: JaxF64):
         x = jnp.asarray(x)
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
@@ -257,7 +258,7 @@ class FNN(nn.Module):
 
         for idx, feat in enumerate(target_dims):
             # nn.Denseは入力次元を自動推論するため、features（出力次元）だけ指定すればOK
-            x = nn.Dense(features=feat)(x)
+            x = nn.Dense(features=feat, dtype=jnp.float64, param_dtype=jnp.float64)(x)
             is_last = idx == len(target_dims) - 1
             if not is_last:
                 x = nn.relu(x)
