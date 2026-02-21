@@ -8,7 +8,6 @@ from __future__ import annotations
 from reservoir.core.identifiers import Model
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.distillation.model import DistillationModel
-from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from typing import TYPE_CHECKING
 

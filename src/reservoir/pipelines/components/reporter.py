@@ -1,7 +1,5 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/reporter.py"""
 import time
-import jax
-import jax.numpy as jnp
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack

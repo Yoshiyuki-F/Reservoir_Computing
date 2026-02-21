@@ -64,7 +64,6 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         
         # State batch handling depends on whether the state is a tuple or a direct array
         # This allows polymorphism from children implementing Generic[StateT]
-        from typing import cast
         
         # Assume initial_state is correctly shaped or typed (Trust the Type System)
         init_batched = initial_state
