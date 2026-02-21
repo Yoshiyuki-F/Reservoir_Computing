@@ -32,7 +32,7 @@ class BaseConfig(ABC):
 
 class PreprocessingConfig(BaseConfig):
     """Base class for Step 2 preprocessing configurations."""
-    def validate(self, _context: str = "") -> PreprocessingConfig:
+    def validate(self, context: str = "") -> PreprocessingConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -41,7 +41,7 @@ class PreprocessingConfig(BaseConfig):
 
 class ProjectionConfig(BaseConfig):
     """Base class for Step 3 projection configurations."""
-    def validate(self, _context: str = "") -> ProjectionConfig:
+    def validate(self, context: str = "") -> ProjectionConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -50,7 +50,7 @@ class ProjectionConfig(BaseConfig):
 
 class ModelConfig(BaseConfig):
     """Base class for Step 5 model dynamics configurations."""
-    def validate(self, _context: str = "") -> ModelConfig:
+    def validate(self, context: str = "") -> ModelConfig:
         return self
         
     def to_dict(self) -> ConfigDict:
@@ -59,7 +59,7 @@ class ModelConfig(BaseConfig):
 
 class ReadoutConfig(BaseConfig):
     """Base class for Step 7 readout configurations."""
-    def validate(self, _context: str = "") -> ReadoutConfig:
+    def validate(self, context: str = "") -> ReadoutConfig:
         return self
         
     def to_dict(self) -> ConfigDict:

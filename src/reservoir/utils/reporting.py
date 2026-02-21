@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from reservoir.models.presets import PipelineConfig
     from reservoir.data.config import DatasetPreset
     from reservoir.training.config import TrainingConfig
-    from reservoir.core.interfaces import ReadoutModule
+    from reservoir.readout.base import ReadoutModule
     from reservoir.layers.preprocessing import Preprocessor
     from collections.abc import Sequence
 

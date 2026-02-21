@@ -312,7 +312,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
 
 
     @staticmethod
-    def train(_inputs: JaxF64, _targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
+    def train(inputs: JaxF64, targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 

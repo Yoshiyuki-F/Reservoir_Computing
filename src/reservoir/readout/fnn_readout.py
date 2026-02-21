@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from beartype import beartype
 
-from reservoir.core.interfaces import ReadoutModule
+from reservoir.readout.base import ReadoutModule
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.fnn import FNNModel
 from typing import TYPE_CHECKING

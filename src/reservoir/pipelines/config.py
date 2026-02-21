@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from reservoir.training import TrainingConfig
     from reservoir.data.config import DatasetPreset
     from reservoir.data import SplitDataset
-    from reservoir.core.interfaces import ReadoutModule
+    from reservoir.readout.base import ReadoutModule
     from reservoir.core.identifiers import Dataset
     from reservoir.models.generative import ClosedLoopGenerativeModel
 

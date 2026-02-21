@@ -8,7 +8,7 @@ from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
 from typing import TypedDict, TypeVar
 
 from reservoir.core.identifiers import AggregationMode
-from reservoir.layers.aggregation import StateAggregator
+from reservoir.layers.aggregation import create_aggregator
 from reservoir.models.generative import ClosedLoopGenerativeModel
 
 StateT = TypeVar('StateT')
@@ -33,7 +33,7 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         if not isinstance(aggregation_mode, AggregationMode):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
             
-        self.aggregator = StateAggregator(mode=aggregation_mode)
+        self.aggregator = create_aggregator(aggregation_mode)
 
     @property
     def output_dim(self) -> int:
@@ -87,7 +87,7 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def __call__(self, inputs: JaxF64, _params: KwargsDict | None = None) -> JaxF64:
+    def __call__(self, inputs: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

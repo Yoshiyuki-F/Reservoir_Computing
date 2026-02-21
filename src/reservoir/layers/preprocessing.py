@@ -264,7 +264,8 @@ class MinMaxScaler(Preprocessor):
 class IdentityPreprocessor(Preprocessor):
     """No-op preprocessor for RAW mode."""
 
-    def fit(self, _X: NpF64) -> IdentityPreprocessor:
+    def fit(self, X: NpF64) -> IdentityPreprocessor:
+        _ = X  # Identity: no fitting needed
         return self
 
     def transform(self, X: NpF64) -> NpF64:
@@ -290,7 +291,7 @@ class AffineScaler(Preprocessor):
         self.input_scale = input_scale
         self.shift = shift
 
-    def fit(self, _X: NpF64) -> AffineScaler:
+    def fit(self, X: NpF64) -> AffineScaler:
         # AffineScaler is stateless (parameters are provided at init), so fit does nothing.
         return self
 

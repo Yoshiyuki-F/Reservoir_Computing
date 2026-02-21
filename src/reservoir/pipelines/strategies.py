@@ -14,7 +14,7 @@ from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
-from reservoir.core.interfaces import ReadoutModule
+from reservoir.readout.base import ReadoutModule
 
 
 def _check_closed_loop_divergence(pred_std: float, threshold: float) -> None:
@@ -76,12 +76,12 @@ class EndToEndStrategy(ReadoutStrategy):
         train_Z: NpF64, 
         val_Z: NpF64 | None, 
         test_Z: NpF64 | None, 
-        _train_y: NpF64 | None,
-        _val_y: NpF64 | None,
+        train_y: NpF64 | None,
+        val_y: NpF64 | None,
         test_y: NpF64 | None,
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
-        _pipeline_config: PipelineConfig
+        pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("Readout is None. End-to-End mode.")
         
@@ -149,7 +149,7 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, _frontend_ctx: FrontendContext, _dataset_meta: DatasetMetadata, _pipeline_config: PipelineConfig
+        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         if readout is None:

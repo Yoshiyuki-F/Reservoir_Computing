@@ -196,8 +196,8 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         self,
         seed_data: JaxF64,
         steps: int,
-        _readout: Predictable | None = None,
-        _projection_fn: Callable[[JaxF64], JaxF64] | None = None,
+        readout: Predictable | None = None,
+        projection_fn: Callable[[JaxF64], JaxF64] | None = None,
         verbose: bool = True
     ) -> JaxF64:
         """

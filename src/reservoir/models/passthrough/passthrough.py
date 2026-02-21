@@ -12,7 +12,7 @@ import jax.numpy as jnp
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
-from reservoir.layers.aggregation import StateAggregator
+from reservoir.layers.aggregation import create_aggregator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,11 +29,11 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     def __init__(self, aggregation_mode: AggregationMode) -> None:
         if not isinstance(aggregation_mode, AggregationMode):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
-        self.aggregator = StateAggregator(mode=aggregation_mode)
+        self.aggregator = create_aggregator(aggregation_mode)
         self.topology_meta: ConfigDict = {}
         self._n_units: int | None = None  # Set on first forward pass
 
-    def train(self, _inputs: JaxF64, _targets: JaxF64 | None = None, **_: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **_: KwargsDict) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 
@@ -47,7 +47,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
             raise RuntimeError("Passthrough n_units not set. Call forward() first.")
         return jnp.zeros((batch_size, self._n_units))
 
-    def step(self, _state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
+    def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
         """Passthrough step: ignore state, return input as next state."""
         # inputs: [batch, features] - ensure dtype matches state
         next_state = inputs

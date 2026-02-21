@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from reservoir.training.config import TrainingConfig
-    from reservoir.core.interfaces import ReadoutModule
+    from reservoir.readout.base import ReadoutModule
 
 class ReadoutFactory:
     """Builds readout modules from ReadoutConfig."""

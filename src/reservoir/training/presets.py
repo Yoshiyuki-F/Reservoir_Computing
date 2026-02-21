@@ -43,7 +43,6 @@ TRAINING_PRESETS: dict[str, TrainingConfig] = {
 
 
 def get_training_preset(name: str) -> TrainingConfig:
-    # Training presets remain string-keyed; StrictRegistry enforces Enum keys, so use direct dict access.
     preset = TRAINING_PRESETS.get(name)
     if preset is None:
         raise KeyError(f"Training preset '{name}' not found.")

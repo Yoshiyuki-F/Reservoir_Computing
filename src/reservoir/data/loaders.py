@@ -17,12 +17,11 @@ from reservoir.data.generators import (
     generate_lorenz96_data,
 )
 from reservoir.data.presets import get_dataset_preset
-from reservoir.core.presets import StrictRegistry
 from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
 
 
-LOADER_REGISTRY = StrictRegistry({})
+LOADER_REGISTRY: dict[Dataset, Callable] = {}
 
 
 if TYPE_CHECKING:
@@ -40,7 +39,7 @@ F = TypeVar("F")
 
 def register_loader(dataset: Dataset) -> Callable[[F], F]:
     def decorator(fn: F) -> F:
-        LOADER_REGISTRY.register(dataset, fn)
+        LOADER_REGISTRY[dataset] = fn
         return fn
 
     return decorator
@@ -191,7 +190,7 @@ def load_lorenz96(config: Lorenz96Config) -> tuple[NpF64, NpF64]:
 def load_dataset_with_validation_split(
     dataset_enum: Dataset,
     training_cfg: TrainingConfig | None = None,
-    _require_3d: bool = True,
+    require_3d: bool = True,
 ) -> SplitDataset:
     """
     Load dataset via registry, apply task-specific preprocessing, and split into train/val/test.

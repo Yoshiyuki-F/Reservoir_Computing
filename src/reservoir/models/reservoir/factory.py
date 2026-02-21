@@ -88,14 +88,14 @@ class ReservoirFactory:
              return shape_wo_batch
 
         # Use Aggregator execution logic to determine feature shape
-        from reservoir.layers.aggregation import StateAggregator
-        
+        from reservoir.layers.aggregation import create_aggregator
+
         # internal_shape is the output of the Reservoir (Step 5), which is input to Aggregation (Step 6)
         # Use node.n_units because QuantumReservoir (and others) might expand dimension (e.g., 4 -> 10)
         internal_dim = node.n_units
         internal_shape = _with_batch((t_steps, internal_dim))
         
-        aggregator = StateAggregator(agg_mode_enum)
+        aggregator = create_aggregator(agg_mode_enum)
         feature_shape = aggregator.get_output_shape(internal_shape)
         
         # Output shape matches feature shape but with last dimension replaced by output_dim

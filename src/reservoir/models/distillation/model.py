@@ -103,7 +103,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, _targets: JaxF64 | None = None, _params: KwargsDict | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, params: KwargsDict | None = None) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -141,7 +141,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: JaxF64, _y: JaxF64 | None = None) -> EvalMetrics:
+    def evaluate(self, X: JaxF64, y: JaxF64 | None = None) -> EvalMetrics:
         """
         Distillation evaluation: compare student output with teacher output.
         """

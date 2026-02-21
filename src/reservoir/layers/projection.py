@@ -388,7 +388,7 @@ if TYPE_CHECKING:
 # --- 3. The Factory Logic (Dependency Injection Helper) ---
 
 @singledispatch
-def create_projection(config: ProjectionConfig, _input_dim: int) -> Projection:
+def create_projection(config: ProjectionConfig, input_dim: int) -> Projection:
     """
     Factory function to create a Projection instance based on the config type.
     Raises TypeError if the config type is not registered.

@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from reservoir.core.types import JaxF64, ConfigDict
 import jax.scipy.linalg
 
-from reservoir.core.interfaces import ReadoutModule
+from reservoir.readout.base import ReadoutModule
 
 # Robustness: Ridge Regression often requires x64 for matrix inversion stability.
 def _ensure_x64() -> None:

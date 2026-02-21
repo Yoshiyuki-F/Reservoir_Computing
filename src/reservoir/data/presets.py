@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 
-from reservoir.core.presets import StrictRegistry
 from .config import (
     LorenzConfig,
     MackeyGlassConfig,
@@ -106,7 +105,7 @@ DATASET_DEFINITIONS: dict[Dataset, DatasetPreset] = {
 }
 
 
-DATASET_REGISTRY = StrictRegistry(DATASET_DEFINITIONS)
+DATASET_REGISTRY: dict[Dataset, DatasetPreset] = dict(DATASET_DEFINITIONS)
 DATASET_PRESETS = DATASET_DEFINITIONS
 
 
