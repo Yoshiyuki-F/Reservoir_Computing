@@ -33,9 +33,9 @@ class PolyRidgeReadout(RidgeCV):
     def __init__(
         self,
         lambda_candidates: tuple[float, ...],
-        use_intercept: bool = True,
-        degree: int = 2,
-        mode: Literal["full", "square_only"] = "square_only",
+        use_intercept: bool,
+        degree,
+        mode: Literal["full", "square_only", "interaction_only"]
     ) -> None:
         super().__init__(lambda_candidates=lambda_candidates, use_intercept=use_intercept)
         self.degree = degree
@@ -50,6 +50,8 @@ class PolyRidgeReadout(RidgeCV):
             return self._expand_square_only(X)
         elif self.mode == "full":
             return self._expand_full(X)
+        elif self.mode == "interaction_only":
+            return self._expand_interaction_only(X)
         else:
             raise ValueError(f"Unknown PolyRidgeReadout mode: {self.mode!r}")
 
@@ -73,6 +75,21 @@ class PolyRidgeReadout(RidgeCV):
 
         # Upper-triangle indices (including diagonal) → x_i * x_j for i <= j
         idx_i, idx_j = jnp.triu_indices(n_features)
+        cross_terms = X[..., idx_i] * X[..., idx_j]  # works for any batch dims
+
+        return jnp.concatenate([X, cross_terms], axis=-1)
+
+    def _expand_interaction_only(self, X: JaxF64) -> JaxF64:
+        """Pure-JAX interaction-only polynomial expansion (degree=2).
+
+        Produces: [original features] + [x_i * x_j for i < j] (no self-squared terms).
+        Perfectly matches QRC Z + ZZ feature dimensionality.
+        For n features → n + n*(n-1)/2 output features.
+        """
+        n_features = X.shape[-1]
+
+        # k=1 specifies strict upper-triangle indices (i < j), excluding the diagonal
+        idx_i, idx_j = jnp.triu_indices(n_features, k=1)
         cross_terms = X[..., idx_i] * X[..., idx_j]  # works for any batch dims
 
         return jnp.concatenate([X, cross_terms], axis=-1)
