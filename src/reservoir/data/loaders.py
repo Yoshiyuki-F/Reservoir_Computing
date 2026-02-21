@@ -25,17 +25,18 @@ LOADER_REGISTRY: dict[Dataset, Callable] = {}
 
 
 from reservoir.core.types import NpF64
-
-if TYPE_CHECKING:
-    from reservoir.data.config import ChaosDatasetConfig
-    from reservoir.data.config import (
+from reservoir.data.config import (
         SineWaveConfig,
         MackeyGlassConfig,
         LorenzConfig,
         Lorenz96Config,
+    )
+
+if TYPE_CHECKING:
+    from reservoir.data.config import ChaosDatasetConfig
+    from reservoir.data.config import (
         MNISTConfig,
     )
-    pass
     from collections.abc import Callable
 F = TypeVar("F")
 

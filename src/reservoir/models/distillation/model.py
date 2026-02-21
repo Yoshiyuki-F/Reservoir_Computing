@@ -15,13 +15,12 @@ from tqdm.auto import tqdm
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from typing import TYPE_CHECKING
 
-from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict, TopologyMeta
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, TopologyMeta
 
 if TYPE_CHECKING:
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.nn.fnn import FNNModel
     from reservoir.models.reservoir.classical import ClassicalReservoir
-    pass
 
 
 @beartype

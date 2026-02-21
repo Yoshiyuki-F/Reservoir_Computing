@@ -4,7 +4,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 from __future__ import annotations
 
 import numpy as np
-from reservoir.core.types import NpF64, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict, TopologyMeta, DetailsMeta
+from reservoir.core.types import NpF64, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict, TopologyMeta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

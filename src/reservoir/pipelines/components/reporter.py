@@ -57,7 +57,7 @@ class ResultReporter:
 
         # Test Score
         test_score = 0.0
-        test_metrics: TestMetrics = cast(TestMetrics, metrics.get("test") or {})
+        test_metrics: TestMetrics = cast("TestMetrics", metrics.get("test") or {})
         if metric_name in test_metrics:
              test_score = float(str(test_metrics[metric_name]))
 
@@ -111,7 +111,7 @@ class ResultReporter:
                  "val_pred": fit_result.get("val_pred"),
              }
 
-        results["outputs"] = cast(dict[str, NpF64 | None], _to_np_recursive(outputs_raw))
+        results["outputs"] = cast("dict[str, NpF64 | None]", _to_np_recursive(outputs_raw))
 
         results["readout"] = self.stack.readout
         results["preprocessor"] = self.frontend_ctx.preprocessor

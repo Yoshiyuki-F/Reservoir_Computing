@@ -13,7 +13,7 @@ from reservoir.models.reservoir.quantum import QuantumReservoir
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict, TopologyMeta
+    from reservoir.core.types import TopologyMeta
     from reservoir.models.reservoir.base import Reservoir
 
 

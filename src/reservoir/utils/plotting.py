@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 from reservoir.core.types import NpF64
 
 if TYPE_CHECKING:
-    pass
     from collections.abc import Sequence
 
 

@@ -10,6 +10,7 @@ from reservoir.models.nn.fnn import FNNModel
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from reservoir.training.config import TrainingConfig
     from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
 
@@ -82,5 +83,4 @@ class FNNReadout(ReadoutModule):
     @classmethod
     def from_dict(cls, data: ConfigDict) -> FNNReadout:
         from typing import cast
-        from collections.abc import Iterable
-        return cls(hidden_layers=tuple(cast(Iterable[int], data.get("hidden_layers", ()))))
+        return cls(hidden_layers=tuple(cast("Iterable[int]", data.get("hidden_layers", ()))))

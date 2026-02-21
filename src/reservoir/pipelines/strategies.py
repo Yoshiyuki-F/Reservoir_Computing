@@ -9,14 +9,15 @@ from typing import cast, TYPE_CHECKING
 from tqdm import tqdm
 import numpy as np
 
-from reservoir.pipelines.config import FrontendContext, DatasetMetadata
-from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
-from reservoir.pipelines.evaluation import Evaluator
-from reservoir.readout.base import ReadoutModule
 
 if TYPE_CHECKING:
+    from reservoir.models.generative import Predictable
+    from reservoir.models.presets import PipelineConfig
+    from reservoir.pipelines.config import FrontendContext, DatasetMetadata
+    from reservoir.readout.base import ReadoutModule
+    from reservoir.pipelines.evaluation import Evaluator
     from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
@@ -130,8 +131,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
                 # For E2E, readout is None or implicit, pass explicit None if needed, but signature says readout
                 # EndToEnd typically has readout=None.
-                from reservoir.models.generative import Predictable
-                readout_cast = cast(Predictable, readout)
+                readout_cast = cast("Predictable", readout)
                 closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout_cast)
                 
                 # Check for divergence
@@ -469,8 +469,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
         
         # seed_data is already JAX array from _get_seed_sequence
-        from reservoir.models.generative import Predictable
-        readout_cast = cast(Predictable, readout)
+        readout_cast = cast("Predictable", readout)
         closed_loop_pred = model.generate_closed_loop(
             full_seed_data, steps=generation_steps, readout=readout_cast, projection_fn=proj_fn
         )
