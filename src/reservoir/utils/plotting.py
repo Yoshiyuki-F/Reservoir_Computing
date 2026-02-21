@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import NpF64
+
 if TYPE_CHECKING:
-    from reservoir.core.types import NpF64
+    pass
     from collections.abc import Sequence
 
 
@@ -42,7 +44,7 @@ def plot_classification_results(
     test_predictions: NpF64,
     title: str,
     filename: str,
-    metrics_info: dict[str, float | str] | None = None,
+    metrics_info: dict[str, str] | None = None,
     val_labels: NpF64 | None = None,
     val_predictions: NpF64 | None = None,
     best_lambda: float | None = None,

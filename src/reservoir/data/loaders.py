@@ -24,6 +24,8 @@ from reservoir.data.structs import SplitDataset
 LOADER_REGISTRY: dict[Dataset, Callable] = {}
 
 
+from reservoir.core.types import NpF64
+
 if TYPE_CHECKING:
     from reservoir.data.config import ChaosDatasetConfig
     from reservoir.data.config import (
@@ -33,7 +35,7 @@ if TYPE_CHECKING:
         Lorenz96Config,
         MNISTConfig,
     )
-    from reservoir.core.types import NpF64
+    pass
     from collections.abc import Callable
 F = TypeVar("F")
 
@@ -89,10 +91,10 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     
     # Memory-efficient Numpy-based one-hot encoding (avoiding np.eye broadcasting)
     train_labels_arr = np.zeros((len(train_labels), num_classes), dtype=np.float64)
-    train_labels_arr[np.arange(len(train_labels)), train_labels] = 1.0
+    train_labels_arr[np.arange(len(train_labels)), train_labels.astype(int)] = 1.0 #TODO as type forbidden
     
     test_labels_arr = np.zeros((len(test_labels), num_classes), dtype=np.float64)
-    test_labels_arr[np.arange(len(test_labels)), test_labels] = 1.0
+    test_labels_arr[np.arange(len(test_labels)), test_labels.astype(int)] = 1.0
 
     # Create validation split from training data (10%)
     val_ratio = 0.1

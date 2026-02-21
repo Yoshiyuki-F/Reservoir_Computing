@@ -13,8 +13,10 @@ from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
+
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
+    pass
 
 
 @beartype
@@ -101,7 +103,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """

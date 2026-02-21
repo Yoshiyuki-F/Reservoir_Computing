@@ -8,10 +8,7 @@ from beartype import beartype
 import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from reservoir.core.types import NpF64
+from reservoir.core.types import NpF64
 
 MNIST_ROOT = Path("data/mnist")
 

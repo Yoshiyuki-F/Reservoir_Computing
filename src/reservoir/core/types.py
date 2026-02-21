@@ -143,7 +143,7 @@ class FitResultDict(TypedDict, total=False):
 class ResultDict(TypedDict, total=False):
     fit_result: FitResultDict
     train_logs: TrainLogs
-    quantum_trace: JaxF64 | None
+    quantum_trace: NpF64 | None
     train: TrainMetrics
     test: TestMetrics
     validation: EvalMetrics

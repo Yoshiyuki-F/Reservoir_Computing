@@ -68,7 +68,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         super().__init__({"layer_dims": self.layer_dims}, classification=classification, training_config=training_config)
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """Train with adapter-transformed inputs (and aligned targets if windowed)."""
         # Check if inputs are already adapted (Step 4 done externally)
         # Heuristic: if input feature dim matches the network's input layer dim

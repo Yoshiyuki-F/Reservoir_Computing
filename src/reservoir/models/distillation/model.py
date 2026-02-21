@@ -15,11 +15,13 @@ from tqdm.auto import tqdm
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict, TopologyMeta
+
 if TYPE_CHECKING:
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.nn.fnn import FNNModel
     from reservoir.models.reservoir.classical import ClassicalReservoir
-    from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict, TopologyMeta
+    pass
 
 
 @beartype
@@ -57,7 +59,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def predict(self, X: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         """Delegate to student's predict (which handles adapter internally)."""
-        return self.student.predict(X, params=params)
+        return self.student.predict(X)
 
     def _compute_teacher_targets(self, inputs: JaxF64) -> JaxF64:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
@@ -103,7 +105,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         

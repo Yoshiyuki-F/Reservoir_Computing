@@ -18,8 +18,10 @@ from reservoir.training.presets import TrainingConfig
 @beartype
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
+    
+    topology_meta: TopologyMeta = {}
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """
         Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
         Defaults to a no-op so models without a pre-training stage can conform to the interface.
@@ -127,7 +129,7 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 

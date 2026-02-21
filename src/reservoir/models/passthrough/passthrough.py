@@ -15,8 +15,10 @@ from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.aggregation import create_aggregator
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import JaxF64, TrainLogs, TopologyMeta
+
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, TrainLogs, TopologyMeta
+    pass
 
 
 @beartype
@@ -33,7 +35,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         self.topology_meta: TopologyMeta = {}
         self._n_units: int | None = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 

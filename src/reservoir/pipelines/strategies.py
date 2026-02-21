@@ -1,4 +1,5 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/strategies.py"""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, JaxF64
@@ -129,13 +130,15 @@ class EndToEndStrategy(ReadoutStrategy):
                 seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
                 # For E2E, readout is None or implicit, pass explicit None if needed, but signature says readout
                 # EndToEnd typically has readout=None.
-                closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout)
+                from reservoir.models.generative import Predictable
+                readout_cast = cast(Predictable, readout)
+                closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout_cast)
                 
                 # Check for divergence
                 pred_std = float(np.std(closed_loop_pred))
                 _check_closed_loop_divergence(pred_std, threshold=50)
 
-                print_feature_stats(closed_loop_pred, "8:fnn_closed_loop_prediction")
+                print_feature_stats(to_np_f64(closed_loop_pred), "8:fnn_closed_loop_prediction")
 
                 global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
                 global_end = global_start + generation_steps
@@ -285,7 +288,10 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         proj_fn = None
         # Check pipeline_config for projection, not dataset_meta
         if pipeline_config.projection is not None and hasattr(frontend_ctx, "projection_layer"):
-             def proj_fn(x): return frontend_ctx.projection_layer(x)
+             if frontend_ctx.projection_layer is not None:
+                 def proj_fn(x: JaxF64) -> JaxF64: return frontend_ctx.projection_layer(x)  # type: ignore
+             else:
+                 proj_fn = None
 
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         ty_reshaped = train_y
@@ -463,17 +469,19 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
         
         # seed_data is already JAX array from _get_seed_sequence
+        from reservoir.models.generative import Predictable
+        readout_cast = cast(Predictable, readout)
         closed_loop_pred = model.generate_closed_loop(
-            full_seed_data, steps=generation_steps, readout=readout, projection_fn=proj_fn
+            full_seed_data, steps=generation_steps, readout=readout_cast, projection_fn=proj_fn
         )
-        print_feature_stats(closed_loop_pred, "8:closed_loop_prediction")
+        print_feature_stats(to_np_f64(closed_loop_pred), "8:closed_loop_prediction")
 
         closed_loop_truth = test_y
         print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
 
         # Check for divergence
         pred_np = to_np_f64(closed_loop_pred)
-        truth_np = to_np_f64(test_y) if test_y is not None else np.array([])
+        truth_np = test_y if test_y is not None else np.array([])
 
         pred_std = np.std(pred_np)
         pred_max = np.max(pred_np)

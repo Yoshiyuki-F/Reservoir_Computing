@@ -1,3 +1,4 @@
+import numpy as np
 from reservoir.core.types import JaxF64, EvalMetrics
 from reservoir.utils.metrics import calculate_chaos_metrics
 from reservoir.utils.reporting import print_chaos_metrics
@@ -24,8 +25,10 @@ class Evaluator:
         shape_pred = pred.shape
         shape_truth = truth.shape
         # Flatten -> Inverse Transform -> Reshape back
-        pred_raw = scaler.inverse_transform(pred.reshape(-1, shape_pred[-1])).reshape(shape_pred)
-        truth_raw = scaler.inverse_transform(truth.reshape(-1, shape_truth[-1])).reshape(shape_truth)
+        pred_np = np.asarray(pred)
+        truth_np = np.asarray(truth)
+        pred_raw = scaler.inverse_transform(pred_np.reshape(-1, shape_pred[-1])).reshape(shape_pred)
+        truth_raw = scaler.inverse_transform(truth_np.reshape(-1, shape_truth[-1])).reshape(shape_truth)
 
         if verbose:
             print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")

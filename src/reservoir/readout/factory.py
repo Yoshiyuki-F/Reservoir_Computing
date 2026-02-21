@@ -29,6 +29,10 @@ class ReadoutFactory:
         # PolyRidgeの場合 (must check before RidgeReadoutConfig)
         if isinstance(config, PolyRidgeReadoutConfig):
             candidates = config.lambda_candidates
+            if candidates is None:
+                candidates = getattr(config, "init_lambda", (1e-6,))
+                if isinstance(candidates, float): ## TODO too defensive "isinstance" is not allowed
+                    candidates = (candidates,)
             return PolyRidgeReadout(
                 use_intercept=config.use_intercept,
                 lambda_candidates=candidates,
@@ -40,7 +44,9 @@ class ReadoutFactory:
         if isinstance(config, RidgeReadoutConfig):
             candidates = config.lambda_candidates
             if candidates is None:
-                candidates = (config.init_lambda,)
+                candidates = getattr(config, "init_lambda", (1e-6,))
+                if isinstance(candidates, float):
+                    candidates = (candidates,)
             
             return RidgeCV(
                 use_intercept=config.use_intercept,

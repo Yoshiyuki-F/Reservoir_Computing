@@ -1,10 +1,11 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/reporter.py"""
 import time
+from typing import cast
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.reporting import generate_report
-from reservoir.core.types import ResultDict, FitResultDict, FitResultMetrics, TrainMetrics, TestMetrics, EvalMetrics, to_np_f64
+from reservoir.core.types import ResultDict, FitResultDict, FitResultMetrics, TrainMetrics, TestMetrics, EvalMetrics, to_np_f64, NpF64
 
 
 class ResultReporter:
@@ -34,31 +35,39 @@ class ResultReporter:
         # Use aligned_test_y from fit_result if available (for FNN windowed mode)
         aligned_test_y = fit_result.get("aligned_test_y", test_y)
 
+        def _safe_to_np(val):
+            if val is None:
+                return None
+            if hasattr(val, "block_until_ready") or hasattr(val, "device_buffer"):
+                return to_np_f64(val)
+            return val
+
         if fit_result["closed_loop_pred"] is not None:
             # Predictions from strategies might be JaxF64, convert to NpF64 for reporting
-            test_pred = to_np_f64(fit_result["closed_loop_pred"])
-            to_np_f64(fit_result["closed_loop_truth"])
+            test_pred = _safe_to_np(fit_result["closed_loop_pred"])
+            
+            _safe_to_np(fit_result["closed_loop_truth"])
             results["is_closed_loop"] = True
         else:
-            test_pred = to_np_f64(fit_result["test_pred"])
-            to_np_f64(aligned_test_y)
+            test_pred = _safe_to_np(fit_result.get("test_pred"))
+            _safe_to_np(aligned_test_y)
 
         # Try to use pre-calculated metrics from Strategy
         metrics: FitResultMetrics = fit_result.get("metrics") or {}
 
         # Test Score
         test_score = 0.0
-        test_metrics: TestMetrics = metrics.get("test") or {}
+        test_metrics: TestMetrics = cast(TestMetrics, metrics.get("test") or {})
         if metric_name in test_metrics:
              test_score = float(str(test_metrics[metric_name]))
 
         # Train Score 
         train_metrics_from_strat: EvalMetrics = metrics.get("train") or {}
-        results["train"] = {
+        results["train"] = cast("TrainMetrics", {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
             **train_metrics_from_strat
-        }
+        })
         if fit_result["best_lambda"] is not None:
             results["train"]["best_lambda"] = fit_result["best_lambda"]
         
@@ -66,7 +75,7 @@ class ResultReporter:
         if "residuals_history" in fit_result:
             results["residuals_history"] = fit_result["residuals_history"]
 
-        results["test"] = {metric_name: test_score, **test_metrics}
+        results["test"] = cast("TestMetrics", {metric_name: test_score, **test_metrics})
         if fit_result["chaos_results"] is not None:
             chaos = fit_result["chaos_results"]
             results["test"]["chaos_metrics"] = chaos
@@ -84,7 +93,7 @@ class ResultReporter:
              # Keep this fallback as best_score corresponds to validation during fit
              val_score = float(fit_result["best_score"])
             
-        results["validation"] = {metric_name: val_score, **val_metrics}
+        results["validation"] = cast("EvalMetrics", {metric_name: val_score, **val_metrics})
 
         # Ensure all predictions and outputs are moved to Host Domain (NpF64)
         def _to_np_recursive(val):
@@ -102,13 +111,13 @@ class ResultReporter:
                  "val_pred": fit_result.get("val_pred"),
              }
 
-        results["outputs"] = _to_np_recursive(outputs_raw)
+        results["outputs"] = cast(dict[str, NpF64 | None], _to_np_recursive(outputs_raw))
 
         results["readout"] = self.stack.readout
         results["preprocessor"] = self.frontend_ctx.preprocessor
         results["scaler"] = self.frontend_ctx.preprocessor  # Alias for reporting.py
         results["training_logs"] = train_logs
-        results["quantum_trace"] = to_np_f64(quantum_trace) if quantum_trace is not None else None
+        results["quantum_trace"] = _safe_to_np(quantum_trace)
         results["meta"] = {
             "metric": metric_name,
             "elapsed_sec": time.time() - self.start_time,
@@ -123,11 +132,8 @@ class ResultReporter:
         processed = self.frontend_ctx.processed_split
         report_payload = dict(
             readout=self.stack.readout,
-            train_X=processed.train_X,
             train_y=processed.train_y,
-            test_X=processed.test_X,
             test_y=processed.test_y,
-            val_X=processed.val_X,
             val_y=processed.val_y,
             training_obj=self.dataset_meta.training,
             dataset_name=self.dataset_meta.dataset_name,

@@ -10,8 +10,10 @@ from beartype import beartype
 import numpy as np
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import NpF64
+
 if TYPE_CHECKING:
-    from reservoir.core.types import NpF64, ConfigDict
+    from reservoir.core.types import ConfigDict
 
 
 # --- 1. Interface Definition ---

@@ -10,8 +10,10 @@ import jax
 import jax.numpy as jnp
 from typing import TYPE_CHECKING
 
+from reservoir.core.types import JaxF64
+
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, ConfigDict
+    from reservoir.core.types import ConfigDict
 
 
 # --- 1. Interface Definition ---

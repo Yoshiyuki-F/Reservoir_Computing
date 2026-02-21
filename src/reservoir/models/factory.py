@@ -13,7 +13,7 @@ from reservoir.models.reservoir.factory import ReservoirFactory
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict, TopologyMeta
+    from reservoir.core.types import TopologyMeta
     from reservoir.models.presets import PipelineConfig
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.generative import ClosedLoopGenerativeModel

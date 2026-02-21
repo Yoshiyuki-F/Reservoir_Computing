@@ -18,9 +18,12 @@ import jax.numpy as jnp
 
 from reservoir.readout.ridge import RidgeCV
 
+from reservoir.core.types import JaxF64, ConfigDict
+from reservoir.core.types import NpF64
+
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, ConfigDict
-    from reservoir.core.types import NpF64
+    pass
+    pass
     from collections.abc import Callable
 
 
@@ -92,37 +95,6 @@ class PolyRidgeReadout(RidgeCV):
         """Expand features, then delegate to RidgeCV.predict."""
         X_expanded = self._expand_features(states)
         return super().predict(X_expanded)
-
-    def fit_with_validation(
-        self,
-        train_Z: JaxF64,
-        train_y: JaxF64,
-        val_Z: JaxF64,
-        val_y: JaxF64,
-        scoring_fn: Callable,
-        maximize_score: bool = True,
-    ) -> tuple[float, float, dict[float, float], dict[float, float], dict[float, NpF64]]:
-        """Expand features for both train and val, then delegate to RidgeCV."""
-        from reservoir.utils.reporting import print_feature_stats
-
-        train_expanded = self._expand_features(train_Z)
-        val_expanded = self._expand_features(val_Z)
-
-        print(
-            f"    [PolyRidge] mode={self.mode}, degree={self.degree} | "
-            f"input_dim={train_Z.shape[-1]} → expanded_dim={train_expanded.shape[-1]}"
-        )
-        print_feature_stats(train_expanded, "7:poly_expanded_train")
-        print_feature_stats(val_expanded, "7:poly_expanded_val")
-
-        return super().fit_with_validation(
-            train_Z=train_expanded,
-            train_y=train_y,
-            val_Z=val_expanded,
-            val_y=val_y,
-            scoring_fn=scoring_fn,
-            maximize_score=maximize_score,
-        )
 
     # ------------------------------------------------------------------
     # Serialisation
