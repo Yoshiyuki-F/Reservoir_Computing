@@ -328,8 +328,6 @@ class AffineScaler(Preprocessor):
         }
 
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from reservoir.models.config import PreprocessingConfig
 

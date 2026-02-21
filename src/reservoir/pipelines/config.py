@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from reservoir.data import SplitDataset
     from reservoir.core.interfaces import ReadoutModule
     from reservoir.core.identifiers import Dataset
+    from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
 @dataclass(frozen=True)
@@ -37,12 +38,6 @@ class DatasetMetadata:
     training: TrainingConfig
     classification: bool
     input_shape: tuple[int, ...]
-
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
 @dataclass(frozen=True)

@@ -108,7 +108,8 @@ class EndToEndStrategy(ReadoutStrategy):
              try:
                 processed = frontend_ctx.processed_split
                 generation_steps = processed.test_X.shape[1] if hasattr(processed.test_X, "shape") else 0
-                if processed.test_X.ndim == 2: generation_steps = processed.test_X.shape[0]
+                if processed.test_X.ndim == 2:
+                    generation_steps = processed.test_X.shape[0]
 
                 seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
                 # For E2E, readout is None or implicit, pass explicit None if needed, but signature says readout
@@ -276,7 +277,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              scaler = frontend_ctx.preprocessor
              
              def _inverse(arr: NpF64) -> NpF64:
-                 if scaler is None: return arr
+                 if scaler is None:
+                     return arr
                  # Basic inverse logic assuming (N, features)
                  shape = arr.shape
                  try:
@@ -295,7 +297,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              # Prepare JAX inputs
              X_jax = to_jax_f64(tf_reshaped)
              y_jax = to_jax_f64(ty_reshaped)
-             if y_jax.ndim == 1: y_jax = y_jax[:, None]
+             if y_jax.ndim == 1:
+                 y_jax = y_jax[:, None]
              
              val_X_jax = to_jax_f64(vf_reshaped)
              
@@ -314,8 +317,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
              @jax.jit
              def solve_ridge_vectorized(lams: JaxF64) -> JaxF64:
-                 def solve_one(l: float) -> JaxF64:
-                     return jax.scipy.linalg.solve(XtX + l * identity, Xty, assume_a="pos")
+                 def solve_one(lam_l: float) -> JaxF64:
+                     return jax.scipy.linalg.solve(XtX + lam_l * identity, Xty, assume_a="pos")
                  return jax.vmap(solve_one)(lams)
 
              lambdas_jax = jnp.array(readout.lambda_candidates)
@@ -392,12 +395,15 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  # I'll define it locally for safety if not defined.
                  scaler = frontend_ctx.preprocessor
                  def _inv_local(arr: NpF64) -> NpF64:
-                     if scaler is None: return arr
+                     if scaler is None:
+                         return arr
                      try:
                          val = arr
-                         if val.ndim == 1: val = val.reshape(-1, 1)
+                         if val.ndim == 1:
+                             val = val.reshape(-1, 1)
                          return scaler.inverse_transform(val).reshape(arr.shape)
-                     except Exception: return arr
+                     except Exception:
+                         return arr
                  
                  val_y_raw = _inv_local(val_y)
                  val_pred_raw = _inv_local(to_np_f64(val_pred_early))
@@ -475,9 +481,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr: NpF64 | None) -> int:
-            if arr is None: return 0
+            if arr is None:
+                return 0
             # If 3D (Batch, Time, Feat), return Time (shape[1])
-            if arr.ndim == 3: return int(arr.shape[1])
+            if arr.ndim == 3:
+                return int(arr.shape[1])
             # If 2D (Time, Feat) or (Batch, Feat) - assuming Time for Series
             # For Reservoir time-series Time is usually axis 0 in 2D
             return int(arr.shape[0])

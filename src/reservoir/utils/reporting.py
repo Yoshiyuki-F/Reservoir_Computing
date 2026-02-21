@@ -26,21 +26,28 @@ def _format_cls_array(arr: NpF64 | None) -> NpF64 | None:
     return res.ravel()
 
 def _calc_acc(y_true: NpF64 | None, y_pred: NpF64 | None) -> float:
-    if y_true is None or y_pred is None: return 0.0
+    if y_true is None or y_pred is None:
+        return 0.0
     y_t = y_true.ravel()
     y_p = y_pred.ravel()
-    if len(y_t) == 0: return 0.0
+    if len(y_t) == 0:
+        return 0.0
     return float(np.mean(y_t == y_p))
 
 def _get_seq_len(arr: NpF64 | None) -> int:
-    if arr is None: return 0
-    if arr.ndim == 3: return int(arr.shape[1])
-    if arr.ndim >= 1: return int(arr.shape[0])
+    if arr is None:
+        return 0
+    if arr.ndim == 3:
+        return int(arr.shape[1])
+    if arr.ndim >= 1:
+        return int(arr.shape[0])
     return 0
 
 def _to_2d(arr: NpF64) -> NpF64:
-    if arr.ndim == 3: return arr.reshape(-1, arr.shape[-1])
-    if arr.ndim == 1: return arr.reshape(-1, 1)
+    if arr.ndim == 3:
+        return arr.reshape(-1, arr.shape[-1])
+    if arr.ndim == 1:
+        return arr.reshape(-1, 1)
     return arr
 
 # --- Metrics Calculation ---
@@ -133,7 +140,8 @@ def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE
     print("-" * 40)
     sorted_lambdas = sorted(history.keys())
     for lam in sorted_lambdas:
-        if lam is None: continue
+        if lam is None:
+            continue
         try:
              score = float(history[lam])
              lam_val = float(lam)

@@ -72,8 +72,10 @@ def check_file(path: Path) -> list[str]:
             continue
 
         # Rule 1: Import Boundaries
-        if _import_np.match(line): has_np = True
-        if _import_jax.match(line): has_jax = True
+        if _import_np.match(line):
+            has_np = True
+        if _import_jax.match(line):
+            has_jax = True
 
         # Rule 2: Don't import both NpF64 and JaxF64 outside of Mappers
         types_match = _import_types.search(line)

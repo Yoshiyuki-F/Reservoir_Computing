@@ -384,8 +384,6 @@ class PCAProjection(Projection):
             "input_scaler": self.input_scaler,
         }
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from reservoir.models.config import ProjectionConfig
 

@@ -114,7 +114,8 @@ def _make_circuit_logic(
         # to simulate NISQ inaccuracy
         def apply_noise_in_layer(indices):
             nonlocal current_key
-            if not is_noisy: return
+            if not is_noisy:
+                return
             
             for target_idx in indices:
                 if is_mc:
@@ -173,9 +174,9 @@ def _make_circuit_logic(
             apply_noise_in_layer([k])
             
         # === [D] Reverse Ladder ===
-        for l in range(n_qubits - 2, -1, -1):
-            c.cnot(l, l + 1)
-            apply_noise_in_layer([l, l + 1])
+        for q_idx in range(n_qubits - 2, -1, -1):
+            c.cnot(q_idx, q_idx + 1)
+            apply_noise_in_layer([q_idx, q_idx + 1])
             
         new_state = c.state()
         

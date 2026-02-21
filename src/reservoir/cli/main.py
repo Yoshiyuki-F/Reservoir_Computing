@@ -65,7 +65,8 @@ def main() -> None:
     
     import json
     def print_section(name: str, data: ConfigDict):
-        if not data: return
+        if not data:
+            return
         print(f"\n[{name}]")
         # filter out None values for cleaner output
         clean_data: ConfigDict = {k: v for k, v in data.items() if v is not None}

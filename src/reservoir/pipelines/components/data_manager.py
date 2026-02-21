@@ -1,5 +1,7 @@
 from dataclasses import replace
 from collections.abc import Callable
+from reservoir.training.presets import get_training_preset, TrainingConfig
+from reservoir.utils.reporting import print_feature_stats
 
 from reservoir.core.identifiers import Dataset
 from reservoir.core.types import to_jax_f64
@@ -23,9 +25,6 @@ register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeP
 
 # Register preprocessor configs #TODO there is a interface for config
 register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig, AffineScalerConfig)
-
-from reservoir.training.presets import get_training_preset, TrainingConfig
-from reservoir.utils.reporting import print_feature_stats
 
 
 class PipelineDataManager:

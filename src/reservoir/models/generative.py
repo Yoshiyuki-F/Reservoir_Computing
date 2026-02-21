@@ -84,7 +84,8 @@ class ClosedLoopGenerativeModel[StateT](ABC):
                 # If features are (batch, feat), readout.predict usually handles it
                 # Ensure input is suitable for readout
                 f_in = features
-                if f_in.ndim == 1: f_in = f_in[None, :]
+                if f_in.ndim == 1:
+                    f_in = f_in[None, :]
                 
                 out = readout.predict(f_in)
                 return out
