@@ -11,11 +11,12 @@ float32 は禁止（精度がガタ落ちするので）→ `JaxF64` で物理�
 
 ### 物理的強制 (Lint Script)
 ```bash
+uv run ruff check
 uv run python scripts/lint_imports.py
 uv run pyrefly check
-uv run ruff check
 ```
 
+上から順に、エラーが０になるまで実行してください。コードスタイル、型ヒントの厳格化、そして両方のインポート禁止をチェックするためのスクリプトです
 
 ## CRITICAL: JAX 0.9 x64 起動方法
 
