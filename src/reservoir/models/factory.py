@@ -11,11 +11,12 @@ from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
 from typing import TYPE_CHECKING
+from reservoir.training.presets import TrainingConfig
+
 
 if TYPE_CHECKING:
     from reservoir.core.types import TopologyMeta
     from reservoir.models.presets import PipelineConfig
-    from reservoir.training.presets import TrainingConfig
     from reservoir.models.generative import ClosedLoopGenerativeModel
 
 

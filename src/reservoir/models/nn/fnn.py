@@ -6,11 +6,12 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from reservoir.training.presets import TrainingConfig
+from reservoir.core.types import JaxF64,  TrainLogs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence, Callable
-    from reservoir.training.presets import TrainingConfig
-    from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics
+    from reservoir.core.types import EvalMetrics
     from reservoir.models.generative import Predictable
 
 from beartype import beartype
@@ -38,7 +39,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     def input_window_size(self) -> int:
         return self.window_size or 0
 
-    def __init__(self, model_config: FNNConfig, input_dim: int, output_dim: int, classification: bool = False, training_config: TrainingConfig | None = None):
+    def __init__(self, model_config: FNNConfig, input_dim: int, output_dim: int, classification: bool, training_config: TrainingConfig | None = None):
         if not isinstance(model_config, FNNConfig):
             raise TypeError(f"FNNModel expects FNNConfig, got {type(model_config)}.")
         if int(input_dim) <= 0 or int(output_dim) <= 0:

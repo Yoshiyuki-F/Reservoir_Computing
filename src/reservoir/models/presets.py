@@ -110,7 +110,7 @@ DEFAULT_POLY_RIDGE_READOUT = PolyRidgeReadoutConfig(
 )
 
 
-DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(1000,))
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 
 
 "=============================================Classification Presets============================================"
