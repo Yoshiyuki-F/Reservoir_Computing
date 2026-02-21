@@ -87,7 +87,7 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def __call__(self, inputs: JaxF64, params: KwargsDict | None = None) -> JaxF64:
+    def __call__(self, inputs: JaxF64, _params: KwargsDict | None = None) -> JaxF64:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

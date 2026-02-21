@@ -115,7 +115,7 @@ def run_benchmark():
             })
             print(f"{n:<5} | {'Sparse':<8} | {mem_sparse:<10.2f} | {build_time_sparse:<10.4f} | {dot_time_sparse:<10.4f} | {correct}")
             
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError) as e:
             print(f"{n:<5} | {'Sparse':<8} | {'ERROR':<10} | {'-':<10} | {'-':<10} | {str(e)}")
 
     return pd.DataFrame(results)

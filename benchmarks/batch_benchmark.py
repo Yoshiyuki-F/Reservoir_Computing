@@ -76,7 +76,7 @@ def run_benchmark():
             })
             print(f"{bs:<8} | {avg_time:<10.4f} | {throughput:<25.2f}")
             
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError) as e:
             print(f"{bs:<8} | {'ERROR':<10} | {str(e)}")
             break # Stop if OOM or error
 

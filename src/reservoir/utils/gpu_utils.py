@@ -8,6 +8,28 @@ import shutil
 
 T = TypeVar('T')
 
+
+def _assert_x64_enabled() -> None:
+    """Raise if JAX x64 mode is not enabled."""
+    import jax
+    if not jax.config.jax_enable_x64:
+        raise ValueError("CRITICAL: JAX x64 mode is NOT enabled. Double-check import order and environment variables.")
+
+
+def _assert_gpu_detected(gpu_devices: list, devices: list) -> None:
+    """Raise if no GPU devices are found."""
+    if not gpu_devices:
+        print("ERROR: GPU not detected!")
+        print("Available devices:", devices)
+        if devices and all('cpu' in str(d).lower() for d in devices):
+            print("Only CPU devices detected - GPU initialization failed")
+        raise RuntimeError(
+            "GPU not detected. This is a GPU-required test.\n"
+            "詳細なトラブルシューティングは docs/TROUBLESHOOTING.md を参照してください\n"
+            "または --force-cpu オプションでCPU実行も可能です"
+        )
+
+
 def check_gpu_available() -> bool:
     """JAXがGPUを認識し、利用可能かを確認。
     
@@ -27,14 +49,10 @@ def check_gpu_available() -> bool:
     print("=== GPU認識確認 ===")
 
     try:
-        # Check x64 status
-        
         # Enforce x64 explicitly before checking/initializing backend
         jax.config.update("jax_enable_x64", True)
-        
-        if not jax.config.jax_enable_x64:
-             raise ValueError("CRITICAL: JAX x64 mode is NOT enabled. Double-check import order and environment variables.")
-            
+        _assert_x64_enabled()
+
         x64_enabled = jax.config.jax_enable_x64
         print(f"JAX x64 Enabled: {x64_enabled}")
         
@@ -43,20 +61,7 @@ def check_gpu_available() -> bool:
 
         # GPU利用可能性チェック
         gpu_devices = [d for d in devices if 'gpu' in str(d).lower() or 'cuda' in str(d).lower()]
-
-        if not gpu_devices:
-            print("ERROR: GPU not detected!")
-            print("Available devices:", devices)
-
-            # CPU専用デバイスのチェック
-            if devices and all('cpu' in str(d).lower() for d in devices):
-                print("Only CPU devices detected - GPU initialization failed")
-
-            raise RuntimeError(
-                "GPU not detected. This is a GPU-required test.\n"
-                "詳細なトラブルシューティングは docs/TROUBLESHOOTING.md を参照してください\n"
-                "または --force-cpu オプションでCPU実行も可能です"
-            )
+        _assert_gpu_detected(gpu_devices, devices)
 
         # 簡単なGPU計算テスト
         try:
@@ -107,7 +112,7 @@ def check_gpu_available() -> bool:
                             nvcc_version = nvcc_match.group(1)
                 else:
                     device_name = f"CUDA Device {device.id}"
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 # nvidia-smiが失敗した場合はデバイスIDのみ表示
                 device_name = f"CUDA Device {device.id}"
 
@@ -119,15 +124,15 @@ def check_gpu_available() -> bool:
             if nvcc_version:
                 print(f"nvcc CUDA Toolkit: {nvcc_version}")
             print(f"GPU計算テスト成功: {float(result)}")
-        except Exception as e:
+        except RuntimeError as e:
             print(f"GPU計算テスト失敗: {e}")
-            raise RuntimeError(f"GPU computation test failed: {e}")
-            
-        return True
-        
-    except Exception as e:
+            raise RuntimeError(f"GPU computation test failed: {e}") from e
+        else:
+            return True
+
+    except RuntimeError as e:
         print(f"GPU確認エラー: {e}")
-        raise RuntimeError(f"GPU availability check failed: {e}")
+        raise
 
 
 def require_gpu() -> Callable:
@@ -183,5 +188,5 @@ def print_gpu_info() -> None:
         else:
             print("No GPU available - using CPU")
             
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Cannot get GPU info: {e}")

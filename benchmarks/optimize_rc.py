@@ -175,7 +175,6 @@ def make_objective(readout_config, dataset_enum: Dataset):
                   f"(in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
-            return vpt_lt
 
         except ValueError as e:
             if "diverged" in str(e).lower():
@@ -186,10 +185,12 @@ def make_objective(readout_config, dataset_enum: Dataset):
                 print(f"Trial {trial.number}: EXCEPTION (ValueError) - {e}")
                 trial.set_user_attr("status", "exception")
                 return 0.0
-        except Exception as e:
+        except RuntimeError as e:
             print(f"Trial {trial.number}: EXCEPTION - {e}")
             trial.set_user_attr("status", "exception")
             return 0.0
+        else:
+            return vpt_lt
 
     return objective
 

@@ -38,7 +38,7 @@ def main() -> None:
     if not args.force_cpu:
         try:
             check_gpu_available()
-        except Exception as exc:
+        except RuntimeError as exc:
             print(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config (strict preset + dataset only)

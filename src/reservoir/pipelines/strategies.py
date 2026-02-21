@@ -16,6 +16,13 @@ from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
 from reservoir.core.interfaces import ReadoutModule
 
+
+def _check_closed_loop_divergence(pred_std: float, threshold: float) -> None:
+    """Raise ValueError if closed-loop prediction has diverged."""
+    if pred_std > threshold:
+        raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > {threshold}")
+
+
 class ReadoutStrategy(ABC):
     """Abstract base class for readout fitting and evaluation strategies."""
     
@@ -69,12 +76,12 @@ class EndToEndStrategy(ReadoutStrategy):
         train_Z: NpF64, 
         val_Z: NpF64 | None, 
         test_Z: NpF64 | None, 
-        train_y: NpF64 | None, 
-        val_y: NpF64 | None, 
+        _train_y: NpF64 | None,
+        _val_y: NpF64 | None,
         test_y: NpF64 | None,
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
-        pipeline_config: PipelineConfig
+        _pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("Readout is None. End-to-End mode.")
         
@@ -117,9 +124,8 @@ class EndToEndStrategy(ReadoutStrategy):
                 
                 # Check for divergence
                 pred_std = np.std(closed_loop_pred)
-                if pred_std > 50:
-                    raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > 50")
-                
+                _check_closed_loop_divergence(pred_std, threshold=50)
+
                 print_feature_stats(closed_loop_pred, "8:fnn_closed_loop_prediction")
 
                 global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
@@ -132,7 +138,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 result["closed_loop_pred"] = closed_loop_pred
                 result["closed_loop_truth"] = processed.test_y
                 result["chaos_results"] = chaos_results
-             except Exception as e:
+             except (ValueError, RuntimeError) as e:
                 print(f"[Warning] FNN Closed-loop generation failed: {e}")
         
         return cast("FitResultDict", result)
@@ -143,7 +149,7 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, _frontend_ctx: FrontendContext, _dataset_meta: DatasetMetadata, _pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         if readout is None:
@@ -290,7 +296,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                      # Use scaler
                      inv = scaler.inverse_transform(val)
                      return inv.reshape(shape)
-                 except Exception:
+                 except (ValueError, TypeError):
                      return arr
 
              print(f"    [Strategy] Optimizing RidgeCV (NMSE) over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
@@ -403,7 +409,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                          if val.ndim == 1:
                              val = val.reshape(-1, 1)
                          return scaler.inverse_transform(val).reshape(arr.shape)
-                     except Exception:
+                     except (ValueError, TypeError):
                          return arr
                  
                  val_y_raw = _inv_local(val_y)

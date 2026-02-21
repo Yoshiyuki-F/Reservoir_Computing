@@ -129,7 +129,7 @@ class PipelineExecutor:
                      trace = self.stack.model(sample_input_jax, return_sequences=True)
                      quantum_trace = trace
                      print(f"    [Executor] Captured trace shape: {trace.shape}")
-             except Exception as e:
+             except (ValueError, RuntimeError, TypeError) as e:
                  print(f"    [Executor] Failed to capture quantum trace: {e}")
 
         from typing import cast

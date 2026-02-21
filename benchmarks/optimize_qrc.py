@@ -183,9 +183,8 @@ def make_objective(measurement_basis: str, readout_config):
                   f"(in_s={input_scale:.3f}, in_sh={input_shift:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
-            return vpt_lt
 
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             # Try to retrieve stats if attached to exception (from strategies.py)
             if hasattr(e, "stats") and isinstance(e.stats, dict):
                 print(f"    [Divergence Stats] {e.stats}")
@@ -209,6 +208,8 @@ def make_objective(measurement_basis: str, readout_config):
                  trial.set_user_attr("status", "exception")
                  trial.set_user_attr("error", err_msg)
                  return -1.0  # Return a negative value to indicate failure
+        else:
+            return vpt_lt
 
     return objective
 

@@ -60,7 +60,7 @@ class StateAggregator(Transformer):
                 return arr.reshape(-1)
         raise ValueError(f"Unsupported shape {arr.shape} or aggregation mode: {agg_mode}")
 
-    def fit(self, features: JaxF64, y: JaxF64 | None = None) -> StateAggregator:
+    def fit(self, _features: JaxF64, _y: JaxF64 | None = None) -> StateAggregator:
         return self
 
     def transform(self, features: JaxF64, log_label: str | None = None) -> JaxF64:

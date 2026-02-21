@@ -173,7 +173,7 @@ def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str,
         return
     try:
         from reservoir.utils.plotting import plot_loss_history
-    except Exception as exc:  # pragma: no cover
+    except ImportError as exc:  # pragma: no cover
         print(f"Skipping distillation loss plotting due to import error: {exc}")
         return
     loss_list = list(loss_history)
@@ -197,7 +197,7 @@ def plot_classification_report(
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_classification_results
-    except Exception as exc:  # pragma: no cover
+    except ImportError as exc:  # pragma: no cover
         print(f"Skipping plotting due to import error: {exc}")
         return
 
@@ -604,7 +604,7 @@ def _plot_quantum_section(results: ResultDict, topo_meta: ConfigDict, training_o
 
         except ImportError:
             pass # Skipping quantum plotting (ImportError)
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             print(f"Skipping quantum plotting (Error: {e})")
 
 
@@ -625,7 +625,7 @@ def plot_regression_report(
 ) -> None:
     try:
         from reservoir.utils.plotting import plot_timeseries_comparison
-    except Exception as exc:  # pragma: no cover
+    except ImportError as exc:  # pragma: no cover
         print(f"Skipping plotting due to import error: {exc}")
         return
 
@@ -664,7 +664,7 @@ def plot_regression_report(
                 test_pred_plot = scaler.inverse_transform(test_pred_plot)
             if test_y_plot is not None:
                 test_y_plot = scaler.inverse_transform(test_y_plot)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             print(f"  [Report] Scaler inverse transform failed: {e}")
 
     # Update variables for plotting

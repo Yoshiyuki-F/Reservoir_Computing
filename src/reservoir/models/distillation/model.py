@@ -103,7 +103,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, params: KwargsDict | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, _targets: JaxF64 | None = None, _params: KwargsDict | None = None) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -127,8 +127,8 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         # Student training - FNNModel.train() handles adapter and alignment internally
-        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", params=params) or {}
-        
+        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B") or {}
+
         # --- Generate 5B: Student Output (Predicted State) ---
         # To verify Distillation, we show the student's output stats
         student_outputs = self.student.predict(inputs)
@@ -141,7 +141,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         logs.setdefault("final_loss", distill_mse)
         return logs
 
-    def evaluate(self, X: JaxF64, y: JaxF64 | None = None) -> EvalMetrics:
+    def evaluate(self, X: JaxF64, _y: JaxF64 | None = None) -> EvalMetrics:
         """
         Distillation evaluation: compare student output with teacher output.
         """
