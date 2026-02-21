@@ -6,6 +6,7 @@ GPU OOMを防ぐためのバッチ処理ユーティリティ。
 from collections.abc import Callable
 from beartype import beartype
 from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
+from reservoir.utils.reporting import print_feature_stats
 
 import jax
 import numpy as np
@@ -68,7 +69,7 @@ def batched_compute(
 
     # 3. JITコンパイル済みの実行関数を用意
     @jax.jit
-    def step(x):
+    def step(x: JaxF64) -> JaxF64:
         return fn(x)
 
     # 4. バッチ処理ループ (tqdm適用)
@@ -90,4 +91,5 @@ def batched_compute(
             # 進捗更新
             pbar.update(current_batch_size)
 
+        print_feature_stats(result_array, desc+" Output")
     return result_array

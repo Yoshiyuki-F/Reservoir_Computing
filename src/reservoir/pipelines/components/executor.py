@@ -188,7 +188,7 @@ class PipelineExecutor:
         if projection is not None and not is_distillation:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
-                return model(projection(x), split_name=None)
+                return model(projection(x))
             return batched_compute(fused_fn, inputs, batch_size, desc=f"[Proj+Extract] {split_name}")
         else:
             # No projection (already projected or no projection needed, or DistillationModel)

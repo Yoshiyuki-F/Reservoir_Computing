@@ -48,9 +48,9 @@ MinusOneToOne = MinMaxScalerConfig(
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=100,
-    input_scale=0.16801209585993304,
-    input_connectivity=0.12089089454109181,
-    bias_scale=0.7862943891668603,
+    input_scale=1.0,
+    input_connectivity=0.11458754901458218,
+    bias_scale= 0.8295811429210161,
     seed=1,
 )
 
@@ -99,9 +99,9 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 # Dynamics Definitions
 # -----------------------------------------------------------------------------
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    spectral_radius=1.4541275055298999,
-    leak_rate= 0.6932897186142716,
-    rc_connectivity=0.4402710000522045,
+    spectral_radius=1.45,
+    leak_rate= 0.66,
+    rc_connectivity=0.457758485877939,
     seed=42,
     aggregation=AggregationMode.MEAN,
 )
@@ -113,7 +113,10 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=ZeroToOne,
+    preprocess=MinMaxScalerConfig(
+        feature_min=-0.07768410112268466,
+        feature_max=0.08160917176536134,
+    ),
     projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT

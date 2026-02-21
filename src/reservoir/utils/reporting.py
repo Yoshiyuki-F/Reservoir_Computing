@@ -83,7 +83,7 @@ def print_chaos_metrics(metrics: EvalMetrics, header: str | None = None) -> None
 
 # --- Logging / Printing ---
 
-def _print_feature_stats_impl(features: NpF64, stage: str, backend: str = "numpy") -> None:
+def print_feature_stats(features: NpF64, stage: str, backend: str = "numpy") -> None:
     """Internal implementation handling concrete numpy arrays."""
     # 基本統計量
     stats = {
@@ -104,16 +104,6 @@ def _print_feature_stats_impl(features: NpF64, stage: str, backend: str = "numpy
     if stats["std"] < 1e-6:
         print("Feature matrix has near-zero variance. Model output may be inactive.")
 
-def print_feature_stats(features: NpF64 | None, stage: str) -> None:
-    """
-    特徴量の統計情報を表示する (Host Domain).
-    """
-    if features is None:
-        print(f"[FeatureStats:{stage}(skipped)] Closed-Loop mode: using raw data")
-        return
-
-    # In Host Domain, we expect NpF64
-    _print_feature_stats_impl(features, stage, backend="numpy")
 
 def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE") -> None:
     history = train_res.get("search_history")
