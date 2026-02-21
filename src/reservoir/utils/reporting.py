@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import numpy as np
-from reservoir.core.types import NpF64, ConfigDict, ResultDict, TrainLogs, EvalMetrics, to_np_f64, to_jax_f64, FitResultDict
+from reservoir.core.types import NpF64, ConfigDict, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict
 from reservoir.layers.preprocessing import Preprocessor
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.training.config import TrainingConfig

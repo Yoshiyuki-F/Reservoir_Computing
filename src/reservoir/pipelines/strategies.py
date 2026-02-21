@@ -4,11 +4,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, JaxF64
 import jax
-import jax
 import jax.numpy as jnp
 from typing import cast
 from tqdm import tqdm
-from typing import cast
 import numpy as np
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
@@ -137,7 +135,7 @@ class EndToEndStrategy(ReadoutStrategy):
              except Exception as e:
                 print(f"[Warning] FNN Closed-loop generation failed: {e}")
         
-        return cast(FitResultDict, result)
+        return cast("FitResultDict", result)
 
 
 
@@ -190,7 +188,7 @@ class ClassificationStrategy(ReadoutStrategy):
             print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
             readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
             readout.best_model.fit(train_Z_jax, train_y_jax)
-            print_ridge_search_results(cast(FitResultDict, {
+            print_ridge_search_results(cast("FitResultDict", {
                 "search_history": search_history,
                 "weight_norms": weight_norms,
                 "best_lambda": best_lambda,
@@ -225,7 +223,7 @@ class ClassificationStrategy(ReadoutStrategy):
                  self.metric_name: compute_score(to_np_f64(test_pred), test_y, self.metric_name)
              }
 
-        return cast(FitResultDict, {
+        return cast("FitResultDict", {
             "train_pred": train_pred,
             "val_pred": val_pred,
             "test_pred": test_pred,
@@ -365,7 +363,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
                  readout.best_model.coef_ = all_weights[best_idx]
              
-             print_ridge_search_results(cast(FitResultDict, {
+             print_ridge_search_results(cast("FitResultDict", {
                 "search_history": search_history,
                 "best_lambda": best_lambda,
                 "weight_norms": weight_norms,
@@ -526,7 +524,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                      self.metric_name: compute_score(test_p_np, test_y, self.metric_name)
                  }
 
-        return cast(FitResultDict, {
+        return cast("FitResultDict", {
             "train_pred": None, # Not returned by this strategy
             "val_pred": None,   # Not returned
             "test_pred": None,  # Not returned
