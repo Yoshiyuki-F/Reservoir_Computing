@@ -23,6 +23,7 @@ def batched_compute(
     """
     データセット全体を一括でGPUに載せるとOOMになるため、
     バッチごとにJAX(GPU)で計算し、結果をCPU(Numpy)に退避させる関数。
+    tqdm + GPUバッチ処理のオーケストレーションを提供。
 
     Args:
         fn: JAX関数（projection, feature extractionなど）
