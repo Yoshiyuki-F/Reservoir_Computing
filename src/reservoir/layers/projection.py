@@ -46,12 +46,10 @@ class Projection(abc.ABC):
     @abc.abstractmethod
     def _project(self, inputs: JaxF64) -> JaxF64:
         """Actual projection logic to be implemented by subclasses."""
-        pass
 
     @abc.abstractmethod
     def to_dict(self) -> ConfigDict:
         """Serialize configuration parameters."""
-        pass
 
 
 # --- 2. Concrete Implementations ---

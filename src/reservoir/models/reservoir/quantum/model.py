@@ -68,7 +68,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
              warnings.warn(
                  f"n_qubits={n_qubits} requires >100MB per state vector (complex64). "
                  "Ensure you have sufficient VRAM.",
-                 ResourceWarning
+                 ResourceWarning, stacklevel=2
              )
         
         # --- Calculate output dimension based on measurement basis ---

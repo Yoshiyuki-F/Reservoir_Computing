@@ -24,12 +24,10 @@ class BaseConfig(ABC):
     @abstractmethod
     def validate(self, context: str = "") -> BaseConfig:
         """Validate the configuration parameters."""
-        pass
 
     @abstractmethod
     def to_dict(self) -> ConfigDict:
         """Convert the configuration to a dictionary block."""
-        pass
 
 
 class PreprocessingConfig(BaseConfig):

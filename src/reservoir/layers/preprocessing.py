@@ -27,22 +27,18 @@ class Preprocessor(abc.ABC):
     @abc.abstractmethod
     def fit(self, X: NpF64) -> Preprocessor:
         """Fit the preprocessor on training data."""
-        pass
 
     @abc.abstractmethod
     def transform(self, X: NpF64) -> NpF64:
         """Apply the transformation."""
-        pass
 
     @abc.abstractmethod
     def inverse_transform(self, X: NpF64) -> NpF64:
         """Reverse the transformation."""
-        pass
 
     @abc.abstractmethod
     def to_dict(self) -> ConfigDict:
         """Serialize configuration parameters."""
-        pass
 
     def fit_transform(self, X: NpF64) -> NpF64:
         """Fit and transform in one step."""

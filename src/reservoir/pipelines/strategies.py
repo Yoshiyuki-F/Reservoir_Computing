@@ -58,7 +58,6 @@ class ReadoutStrategy(ABC):
         pipeline_config: PipelineConfig
     ) -> FitResultDict:
         """Fit readout and return predictions/metrics."""
-        pass
 
 
 class EndToEndStrategy(ReadoutStrategy):

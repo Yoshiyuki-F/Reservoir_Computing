@@ -108,6 +108,24 @@ report-unnecessary-cast = "error"
 report-missing-type-stubs = "error"  # ※ true ではなく "error" にレベルを合わせる
 report-missing-imports = "error"
 
+# ==========================================
+# 【追加】Pyrefly 究極の論理チェック
+# ==========================================
+# 1. 戻り値の無視を禁止 (Functional Strictness)
+# 関数が値を返しているのに、変数に代入せずに捨てた場合にエラーにします。
+# 例: `scaler.transform(X)` と書いて代入し忘れるバグ（MLあるある）を物理的に防ぎます。
+reportUnusedCallResult = "error"
+
+# 2. 無意味な比較の禁止 (Logic Check)
+# 既に Pyrefly が「これは絶対に None ではない」と推論できているのに、
+# 念のため `if x is not None:` と書くと「そのチェックは無意味だ！」と怒られます。
+# 先ほどの「過剰な防衛コード」を型チェッカーレベルで焼き払います。
+reportUnnecessaryComparison = "error"
+
+# 3. 未到達コードの禁止
+# 絶対に実行されない if 文の分岐（デッドコード）を許しません。
+reportUnreachable = "error"
+
 
 # Ruff全体の設定
 [tool.ruff]
@@ -115,7 +133,32 @@ target-version = "py313"
 
 # Linter個別の設定
 [tool.ruff.lint]
-extend-select = ["UP", "TCH", "S101"]
+extend-select = [
+    "UP", "TCH", "S101",
 
+    # 1. B (flake8-bugbear): 潜在的なバグの温床を破壊
+    # def func(data=[]): のようなミュータブルなデフォルト引数や、
+    # ループ変数のスコープ漏れなど、Python特有の罠をすべて弾きます。
+    "B",
+
+    # 2. BLE / TRY (Blind Except / Tryceratops): 例外の握りつぶし禁止
+    # `except Exception:` や `except:` を完全に禁止します。
+    # OOMやキーエラーをサイレントに握りつぶすことを防ぎ、必ず `except ValueError:` のように明示させます。
+    "BLE", "TRY",
+
+    # 3. ARG (flake8-unused-arguments): 未使用引数の禁止
+    # 関数で引数を定義したのに、中で使っていない場合に怒られます。
+    # （インターフェースとして必要な場合は `_` をプレフィックスにすれば回避可能）
+    "ARG",
+
+    # 4. ERA (eradicate): コメントアウトされたコードの禁止
+    # 「とりあえずコメントアウトして残しておこう…」を許しません。
+    # コードの履歴は Git を信じろ、という強い意思表示です。
+    "ERA",
+
+    # 5. PIE (flake8-pie): 無駄なコードの排除
+    # passだけの不必要なブロックなどを禁止します。
+    "PIE"
+]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]

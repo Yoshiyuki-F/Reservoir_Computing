@@ -149,7 +149,7 @@ def plot_classification_results(
     ax_bar.set_title('Accuracy Overview')
     ax_bar.grid(True, axis='x', alpha=0.3, linestyle='--')
 
-    for bar, accuracy in zip(bars, accuracy_values):
+    for bar, accuracy in zip(bars, accuracy_values, strict=False):
         display_value = min(accuracy + 1.0, 99.9)
         ax_bar.text(
             display_value,

@@ -203,7 +203,7 @@ class PipelineDataManager:
         """
         print("\n=== Step 4: Adapter ===")
         
-        if adapter is None or not hasattr(adapter, '__call__'):
+        if adapter is None or not callable(adapter):
             return frontend_ctx
         
         processed = frontend_ctx.processed_split
