@@ -40,7 +40,8 @@ def run_pipeline(
     # It handles memory management and stats logging internally.
     data_mgr = PipelineDataManager(dataset, config, training_config)
     frontend_ctx = data_mgr.prepare()
-    assert data_mgr.metadata is not None, "DataManager.prepare() must set metadata"
+    if data_mgr.metadata is None:
+        raise ValueError("DataManager.prepare() must set metadata")
     metadata = data_mgr.metadata
 
     # === Step 2: Model Stack Construction ===

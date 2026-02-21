@@ -51,8 +51,10 @@ def register_loader(dataset: Dataset) -> Callable[[F], F]:
 def load_sine_wave(config: SineWaveConfig) -> tuple[NpF64, NpF64]:
     """Load or generate sine wave data and return as (N, T, F) sequences."""
     X_arr, y_arr = generate_sine_data(config)
-    assert X_arr.dtype == np.float64, f"Sine wave X_arr must be float64, got {X_arr.dtype}"
-    assert y_arr.dtype == np.float64, f"Sine wave y_arr must be float64, got {y_arr.dtype}"
+    if X_arr.dtype != np.float64:
+        raise ValueError(f"Sine wave X_arr must be float64, got {X_arr.dtype}")
+    if y_arr.dtype != np.float64:
+        raise ValueError(f"Sine wave y_arr must be float64, got {y_arr.dtype}")
 
     # Ensure 3D shape (N, T, F). Treat each timestep as a length-1 sequence.
     if X_arr.ndim == 2:
@@ -167,8 +169,10 @@ def load_lorenz(config: LorenzConfig) -> tuple[NpF64, NpF64]:
 def load_lorenz96(config: Lorenz96Config) -> tuple[NpF64, NpF64]:
     """Generate Lorenz 96 sequences."""
     X, y = generate_lorenz96_data(config)
-    assert X.dtype == np.float64, f"Lorenz96 X must be float64, got {X.dtype}"
-    assert y.dtype == np.float64, f"Lorenz96 y must be float64, got {y.dtype}"
+    if X.dtype != np.float64:
+        raise ValueError(f"Lorenz96 X must be float64, got {X.dtype}")
+    if y.dtype != np.float64:
+        raise ValueError(f"Lorenz96 y must be float64, got {y.dtype}")
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     # if X.ndim == 2:

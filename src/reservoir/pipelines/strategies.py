@@ -256,7 +256,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             dataset_meta: DatasetMetadata,
             pipeline_config: PipelineConfig
     ) -> FitResultDict:
-        assert readout is not None, "Readout must be provided for ClosedLoopRegressionStrategy"
+        if readout is None:
+            raise ValueError("Readout must be provided for ClosedLoopRegressionStrategy")
 
 
         proj_fn = None

@@ -66,9 +66,10 @@ class StateAggregator(Transformer):
     def transform(self, features: JaxF64, log_label: str | None = None) -> JaxF64:
         result = StateAggregator.aggregate(features, self.mode)
         
-        # Assert output is 2D (Samples, Features) - required by readout layer
-        assert result.ndim == 2, f"Aggregation output must be 2D, got {result.shape}"
-        
+        # Validate output is 2D (Samples, Features) - required by readout layer
+        if result.ndim != 2:
+            raise ValueError(f"Aggregation output must be 2D, got {result.shape}")
+
         if log_label is not None:
             print_feature_stats(to_np_f64(result), log_label)
         return result
