@@ -59,6 +59,8 @@ READOUT_MAP = {
 
 
 def build_config(
+        feature_min: float,
+        feature_max: float,
         input_scale: float,
         input_connectivity: float,
         bias_scale: float,
@@ -74,6 +76,16 @@ def build_config(
 
 
 
+
+    # Update Preprocess (MinMaxScaler)
+    if isinstance(base.preprocess, MinMaxScalerConfig):
+        new_prep = dataclasses.replace(
+            base.preprocess,
+            feature_min=feature_min,
+            feature_max=feature_max,
+        )
+    else:
+        new_prep = base.preprocess
 
     # Ensure base projection is RandomProjectionConfig
     if isinstance(base.projection, RandomProjectionConfig):
@@ -98,6 +110,7 @@ def build_config(
     # Construct final config
     return dataclasses.replace(
         base,
+        preprocess=new_prep,
         projection=new_proj,
         model=new_model,
         readout=readout_config,
@@ -116,9 +129,13 @@ def make_objective(readout_config, dataset_enum: Dataset):
         
         # === 1. Suggest Parameters ===
 
+        # Preprocess
+        feature_min = trial.suggest_float("feature_min", -5.0, 0.0)
+        feature_max = trial.suggest_float("feature_max", 0.0, 5.0)
+
         # Projection
-        input_scale = trial.suggest_float("input_scale", 0.05, 5.0, log=True)
-        # input_scale = trial.suggest_float("input_scale", 3.1537235606199965, 3.1537235606199965)
+        # input_scale = trial.suggest_float("input_scale", 0.05, 5.0, log=True)
+        input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
 
         input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
@@ -142,6 +159,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # === 2. Build Config ===
         config = build_config(
+            feature_min=feature_min,
+            feature_max=feature_max,
             input_scale=input_scale,
             input_connectivity=input_connectivity,
             bias_scale=bias_scale,
@@ -184,7 +203,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
                  # We still return valid accuracy, but mark it.
 
             print(f"Trial {trial.number}: Acc={accuracy:.4f}, λ={best_lambda} "
-                  f"(in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
+                  f"(min={feature_min:.2f}, max={feature_max:.2f}, in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
 
@@ -224,7 +243,8 @@ def derive_names(readout_key: str, dataset_name: str):
     
     # Custom MinMax tag
     if isinstance(base.preprocess, MinMaxScalerConfig):
-        prep_tag = f"Min{int(base.preprocess.feature_min)}Max{int(base.preprocess.feature_max)}"
+        # prep_tag = f"Min{int(base.preprocess.feature_min)}Max{int(base.preprocess.feature_max)}"
+        prep_tag = f"MinMax"
 
     # Projection
     proj = base.projection
