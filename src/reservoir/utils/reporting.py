@@ -278,8 +278,12 @@ def plot_classification_report(
 
 def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
     details: dict = topo_meta.get("details", {})
-
+    
+    # Use config object class name if available (more reliable)
     raw_label = str(details.get("preprocess", ""))
+    if config is not None and hasattr(config, "preprocess"):
+        raw_label = type(config.preprocess).__name__.replace("Config", "")
+
     if raw_label == "MinMaxScaler":
         f_min, f_max = 0.0, 1.0
         if config is not None and hasattr(config, "preprocess"):
@@ -301,28 +305,29 @@ def _get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> st
         return None
     
     proj_config = config.projection
-    proj_type = str(getattr(proj_config, "type", "")).lower()
+    # Use class name instead of .type attribute (which doesn't exist on all configs)
+    proj_type_name = type(proj_config).__name__.lower()
     proj_units = int(getattr(proj_config, "n_units", 0))
     
-    if proj_type == "random":
+    if "random" in proj_type_name:
         input_scale = float(getattr(proj_config, "input_scale", 0.0))
         input_conn = float(getattr(proj_config, "input_connectivity", 0.0))
         bias_scale = float(getattr(proj_config, "bias_scale", 0.0))
         return f"RP{proj_units}_is{input_scale:.2f}_c{input_conn:.2f}_bs{bias_scale:.2f}"
-    elif proj_type == "center_crop":
+    elif "center_crop" in proj_type_name:
         return f"CCP{proj_units}"
-    elif proj_type == "resize":
+    elif "resize" in proj_type_name:
         return f"Res{proj_units}"
-    elif proj_type == "polynomial":
+    elif "polynomial" in proj_type_name:
         shapes = topo_meta.get("shapes", {})
         projected_shape = shapes.get("projected")
         poly_output = 0
         if projected_shape and len(projected_shape) > 0:
             poly_output = int(projected_shape[-1])
         return f"Poly{poly_output}"
-    elif proj_type == "pca":
+    elif "pca" in proj_type_name:
         return f"PCA{proj_units}"
-    elif proj_type == "angle_embedding":
+    elif "angle_embedding" in proj_type_name:
         freq = float(getattr(proj_config, "frequency", 0.0))
         phase = float(getattr(proj_config, "phase_offset", 0.0))
         return f"AEP{proj_units}f{freq}p{phase}"

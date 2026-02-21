@@ -130,15 +130,14 @@ def make_objective(readout_config, dataset_enum: Dataset):
         # === 1. Suggest Parameters ===
 
         # Preprocess
-        feature_min = trial.suggest_float("feature_min", -5.0, 0.0)
-        feature_max = trial.suggest_float("feature_max", 0.0, 5.0)
+        feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
+        feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
 
         # Projection
-        # input_scale = trial.suggest_float("input_scale", 0.05, 5.0, log=True)
-        input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
+        input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
+        # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
-
-        input_connectivity = trial.suggest_float("input_connectivity", 0.01, 1.0)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.05, 1.0)
         # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
 
         bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
@@ -146,12 +145,14 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
 
         # Reservoir
-        spectral_radius = trial.suggest_float("spectral_radius", 0.1, 2.0)
+        # spectral_radius = trial.suggest_float("spectral_radius", 1.0, 2.0)
+        spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
 
-        leak_rate = trial.suggest_float("leak_rate", 0.1, 1.0)
+        # leak_rate = trial.suggest_float("leak_rate", 0.1, 1.0)
+        leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
 
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.1, 1.0)
-        # rc_connectivity = trial.suggest_float("rc_connectivity",  0.6213282741686085,  0.6213282741686085)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.1, 1.0)
+        rc_connectivity = trial.suggest_float("rc_connectivity",  0.46,  0.46)
 
         # Readout Alpha (Logic to override preset lambda candidates if we want to optimize single alpha)
         # For now, we rely on RidgeReadoutConfig's list of candidates which are scanned automatically via CV/LOO.
