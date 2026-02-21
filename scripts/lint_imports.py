@@ -25,6 +25,7 @@ MAPPERS = {
     "utils/batched_compute.py",
     "pipelines/strategies.py",
     "pipelines/components/executor.py",
+    "pipelines/evaluation.py"
 }
 
 CONDITIONAL_JAX_OK = {}
