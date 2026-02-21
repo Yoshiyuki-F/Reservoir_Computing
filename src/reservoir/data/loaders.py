@@ -8,7 +8,7 @@ from beartype import beartype
 
 import numpy as np
 
-from reservoir.core.identifiers import Dataset
+from reservoir.data.identifiers import Dataset
 from reservoir.data.generators import (
     generate_sine_data,
     generate_mnist_sequence_data,

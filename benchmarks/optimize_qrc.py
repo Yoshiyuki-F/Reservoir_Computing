@@ -41,7 +41,7 @@ from reservoir.models.presets import (
 from reservoir.models.config import (
     PolyRidgeReadoutConfig,
 )
-from reservoir.core.identifiers import Dataset
+from reservoir.data.identifiers import Dataset
 
 
 # ---------------------------------------------------------------------------

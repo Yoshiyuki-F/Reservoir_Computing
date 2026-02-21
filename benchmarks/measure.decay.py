@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from reservoir.models.reservoir.quantum.model import QuantumReservoir
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 
 
 def measure_circuit_attenuation():

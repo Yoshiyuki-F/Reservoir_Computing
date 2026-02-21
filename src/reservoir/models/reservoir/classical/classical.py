@@ -9,7 +9,7 @@ from beartype import beartype
 import jax
 import jax.numpy as jnp
 
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
 from typing import TYPE_CHECKING
 

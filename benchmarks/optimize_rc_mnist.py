@@ -39,7 +39,7 @@ from reservoir.models.config import (  # noqa: E402
     PolyRidgeReadoutConfig,
     RandomProjectionConfig,
 )
-from reservoir.core.identifiers import Dataset  # noqa: E402
+from reservoir.data.identifiers import Dataset  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

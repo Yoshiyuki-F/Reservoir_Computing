@@ -6,7 +6,7 @@ from __future__ import annotations
 
 
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.core.identifiers import Model
+from reservoir.models.identifiers import Model
 from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig, FNNConfig, QuantumReservoirConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory

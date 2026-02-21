@@ -7,7 +7,7 @@ from .config import (
     MackeyGlassConfig,
     MNISTConfig, DatasetPreset,
 )
-from reservoir.core.identifiers import Dataset
+from reservoir.data.identifiers import Dataset
 
 
 

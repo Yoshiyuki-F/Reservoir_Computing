@@ -12,7 +12,8 @@ import sys
 
 from reservoir.training import get_training_preset
 from reservoir.utils import check_gpu_available
-from reservoir.core.identifiers import Model, Dataset
+from reservoir.models.identifiers import Model
+from reservoir.data.identifiers import Dataset
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import get_model_preset
 from typing import TYPE_CHECKING

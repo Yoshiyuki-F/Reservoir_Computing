@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from reservoir.core.identifiers import AggregationMode, Model, Dataset
+from reservoir.layers.aggregation import AggregationMode
+from reservoir.models.identifiers import Model
 from reservoir.models.config import (
     StandardScalerConfig,
     CustomRangeScalerConfig,
@@ -22,6 +23,10 @@ from reservoir.models.config import (
     QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AffineScalerConfig
 )
 from reservoir.data.presets import get_dataset_preset 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.data.identifiers import Dataset
 
 
 

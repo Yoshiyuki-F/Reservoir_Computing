@@ -7,7 +7,7 @@ from beartype import beartype
 from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
 from typing import TypedDict, TypeVar
 
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 from reservoir.layers.aggregation import create_aggregator
 from reservoir.models.generative import ClosedLoopGenerativeModel
 

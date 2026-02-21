@@ -3,7 +3,7 @@ from collections.abc import Callable
 from reservoir.training.presets import get_training_preset, TrainingConfig
 from reservoir.utils.reporting import print_feature_stats
 
-from reservoir.core.identifiers import Dataset
+from reservoir.data.identifiers import Dataset
 from reservoir.core.types import to_jax_f64
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
 from reservoir.data.loaders import load_dataset_with_validation_split

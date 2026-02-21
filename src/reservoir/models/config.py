@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import Literal, TYPE_CHECKING
 
-from reservoir.core.identifiers import AggregationMode, Model
+from reservoir.layers.aggregation import AggregationMode
 
 if TYPE_CHECKING:
+    from reservoir.models.identifiers import Model
     from reservoir.core.types import ConfigDict
 
 # -----------------------------------------------------------------------------

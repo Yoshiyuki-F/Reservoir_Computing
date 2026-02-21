@@ -13,7 +13,7 @@ from jaxtyping import jaxtyped
 from typing import Literal
 from beartype import beartype
 
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir, ReservoirConfig
 from .backend import _ensure_tensorcircuit_initialized
 from .functional import _step_jit, _forward_jit

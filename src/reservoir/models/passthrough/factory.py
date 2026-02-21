@@ -4,7 +4,7 @@ Factory for Passthrough model (projection + aggregation only).
 from __future__ import annotations
 
 
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.config import PassthroughConfig
 from reservoir.models.passthrough.passthrough import PassthroughModel
 from typing import TYPE_CHECKING

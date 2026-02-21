@@ -13,7 +13,7 @@ import os
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
 from reservoir.models.reservoir.quantum import QuantumReservoir
-from reservoir.core.identifiers import AggregationMode
+from reservoir.layers.aggregation import AggregationMode
 
 def run_benchmark():
     n_qubits = 12 # Moderate size for speed
