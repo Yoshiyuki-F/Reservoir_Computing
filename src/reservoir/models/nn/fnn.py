@@ -51,10 +51,10 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         # Select adapter based on config
         if self.window_size is not None:
             # TimeDelayEmbedding: adapter for windowed time series
-            self.adapter = TimeDelayEmbedding(window_size=self.window_size) # type: ignore
+            self.adapter = TimeDelayEmbedding(window_size=self.window_size)
         else:
             # Flatten: standard behavior for classification or global sequences
-            self.adapter = Flatten() # type: ignore
+            self.adapter = Flatten()
 
         # input_dim passed to the constructor is now the EFFECTIVE dimension (post-adapter)
         # e.g., 784 for MNIST (28*28), or window_size * features for TDE.

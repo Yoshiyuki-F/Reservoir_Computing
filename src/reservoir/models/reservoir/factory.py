@@ -117,5 +117,5 @@ class ReservoirFactory:
             "agg_mode": agg_mode_enum.value,
             "student_layers": None,
         }
-        node.topology_meta = topo_meta # type: ignore
+        node.topology_meta = topo_meta
         return node

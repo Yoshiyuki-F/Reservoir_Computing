@@ -10,8 +10,8 @@ import jax.scipy.linalg
 from reservoir.core.interfaces import ReadoutModule
 
 # Robustness: Ridge Regression often requires x64 for matrix inversion stability.
-def _ensure_x64():
-    if not jax.config.jax_enable_x64:
+def _ensure_x64() -> None:
+    if not jax.config.read("jax_enable_x64"):
         jax.config.update("jax_enable_x64", True)
 
 class RidgeRegression(ReadoutModule):
@@ -98,19 +98,21 @@ class RidgeRegression(ReadoutModule):
         return {
             "ridge_lambda": self.ridge_lambda,
             "use_intercept": self.use_intercept,
-            "coef": tuple(self.coef_.tolist()) if self.coef_ is not None else None, # type: ignore
-            "intercept": tuple(self.intercept_.tolist()) if self.intercept_ is not None else None # type: ignore
+            "coef": tuple(self.coef_.tolist()) if self.coef_ is not None else None,
+            "intercept": tuple(self.intercept_.tolist()) if self.intercept_ is not None else None
         }
 
     @classmethod
     def from_dict(cls, data: ConfigDict) -> "RidgeRegression":
+        lam_val = data.get("ridge_lambda")
+        r_lam = float(lam_val) if isinstance(lam_val, (int, float, str)) else 0.0
         model = cls(
-            ridge_lambda=float(data["ridge_lambda"]), # type: ignore
-            use_intercept=bool(data["use_intercept"])
+            ridge_lambda=r_lam,
+            use_intercept=bool(data.get("use_intercept", True))
         )
         if data.get("coef") is not None:
-            model.coef_ = jnp.array(data["coef"], dtype=jnp.float64) # type: ignore
-            model.intercept_ = jnp.array(data.get("intercept", 0.0), dtype=jnp.float64) # type: ignore
+            model.coef_ = jnp.array(data["coef"], dtype=jnp.float64)
+            model.intercept_ = jnp.array(data.get("intercept", 0.0), dtype=jnp.float64)
         return model
 
 
@@ -169,9 +171,12 @@ class RidgeCV(ReadoutModule):
     def from_dict(cls, data: ConfigDict) -> "RidgeCV":
         candidates_list = data.get("lambda_candidates")
         if candidates_list is None:
-             candidates = (float(data["ridge_lambda"]),) # type: ignore
+             lam_val = data.get("ridge_lambda")
+             candidates = (float(lam_val) if isinstance(lam_val, (int, float, str)) else 0.0,)
+        elif isinstance(candidates_list, (list, tuple)):
+             candidates = tuple(float(x) for x in candidates_list if isinstance(x, (int, float, str)))
         else:
-             candidates = tuple(candidates_list) # type: ignore
+             candidates = (0.0,)
              
         instance = cls(lambda_candidates=candidates, use_intercept=bool(data.get("use_intercept", True)))
         instance.best_model = RidgeRegression.from_dict(data)

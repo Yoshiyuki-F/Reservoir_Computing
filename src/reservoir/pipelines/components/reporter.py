@@ -1,5 +1,7 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/reporter.py"""
 import time
+import jax
+import jax.numpy as jnp
 
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
@@ -22,7 +24,7 @@ class ResultReporter:
         """
         Compile final results and trigger report generation.
         """
-        fit_result: ResultDict = dict(execution_results["fit_result"]) # type: ignore
+        fit_result: ResultDict = dict(execution_results["fit_result"])
         train_logs = execution_results["train_logs"]
         quantum_trace = execution_results.get("quantum_trace") # New
         processed = self.frontend_ctx.processed_split
@@ -36,55 +38,55 @@ class ResultReporter:
 
         if fit_result["closed_loop_pred"] is not None:
             # Predictions from strategies might be JaxF64, convert to NpF64 for reporting
-            test_pred = to_np_f64(fit_result["closed_loop_pred"]) # type: ignore
-            test_y_final = to_np_f64(fit_result["closed_loop_truth"]) # type: ignore
+            test_pred = to_np_f64(fit_result["closed_loop_pred"])
+            test_y_final = to_np_f64(fit_result["closed_loop_truth"])
             results["is_closed_loop"] = True
         else:
-            test_pred = to_np_f64(fit_result["test_pred"]) # type: ignore
-            test_y_final = to_np_f64(aligned_test_y) # type: ignore
+            test_pred = to_np_f64(fit_result["test_pred"])
+            test_y_final = to_np_f64(aligned_test_y)
 
         # Try to use pre-calculated metrics from Strategy
-        metrics: ResultDict = dict(fit_result.get("metrics", {})) # type: ignore
+        metrics: ResultDict = dict(fit_result.get("metrics", {}))
         
         # Test Score
         test_score = 0.0
-        test_metrics: ResultDict = dict(metrics.get("test", {})) # type: ignore
+        test_metrics: ResultDict = dict(metrics.get("test", {}))
         if metric_name in test_metrics:
-             test_score = float(test_metrics[metric_name]) # type: ignore
+             test_score = float(test_metrics[metric_name])
         
         # Train Score 
         # (Assuming strategy populates metrics["train"], merging it)
         results["train"] = {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
-            **dict(metrics.get("train", {})) # type: ignore
+            **dict(metrics.get("train", {}))
         }
         if fit_result["best_lambda"] is not None:
-            results["train"]["best_lambda"] = fit_result["best_lambda"] # type: ignore
+            results["train"]["best_lambda"] = fit_result["best_lambda"]
         
         # Propagate residuals history for plotting
         if "residuals_history" in fit_result:
             results["residuals_history"] = fit_result["residuals_history"]
 
-        results["test"] = {metric_name: test_score, **test_metrics} # type: ignore
+        results["test"] = {metric_name: test_score, **test_metrics}
         if fit_result["chaos_results"] is not None:
-            chaos: ResultDict = dict(fit_result["chaos_results"]) # type: ignore
-            results["test"]["chaos_metrics"] = chaos # type: ignore
-            results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0) # type: ignore
-            results["test"]["ndei"] = chaos.get("ndei", float("inf")) # type: ignore
-            results["test"]["var_ratio"] = chaos.get("var_ratio", 0.0) # type: ignore
-            results["test"]["mse"] = chaos.get("mse", float("inf")) # type: ignore
+            chaos: ResultDict = dict(fit_result["chaos_results"])
+            results["test"]["chaos_metrics"] = chaos
+            results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
+            results["test"]["ndei"] = chaos.get("ndei", float("inf"))
+            results["test"]["var_ratio"] = chaos.get("var_ratio", 0.0)
+            results["test"]["mse"] = chaos.get("mse", float("inf"))
 
         # Val Score
         val_score = 0.0
-        val_metrics: ResultDict = dict(metrics.get("val", {})) # type: ignore
+        val_metrics: ResultDict = dict(metrics.get("val", {}))
         if metric_name in val_metrics:
-            val_score = float(val_metrics[metric_name]) # type: ignore
+            val_score = float(val_metrics[metric_name])
         elif fit_result["best_score"] is not None:
              # Keep this fallback as best_score corresponds to validation during fit
-             val_score = float(fit_result["best_score"]) # type: ignore
+             val_score = float(fit_result["best_score"])
             
-        results["validation"] = {metric_name: val_score, **val_metrics} # type: ignore
+        results["validation"] = {metric_name: val_score, **val_metrics}
 
         # Ensure all predictions and outputs are moved to Host Domain (NpF64)
         def _to_np_recursive(val):
@@ -107,11 +109,11 @@ class ResultReporter:
 
         results["outputs"] = _to_np_recursive(outputs_raw)
 
-        results["readout"] = self.stack.readout # type: ignore
-        results["preprocessor"] = self.frontend_ctx.preprocessor # type: ignore
-        results["scaler"] = self.frontend_ctx.preprocessor  # type: ignore # Alias for reporting.py
+        results["readout"] = self.stack.readout
+        results["preprocessor"] = self.frontend_ctx.preprocessor
+        results["scaler"] = self.frontend_ctx.preprocessor  # Alias for reporting.py
         results["training_logs"] = train_logs
-        results["quantum_trace"] = to_np_f64(quantum_trace) if quantum_trace is not None else None # New
+        results["quantum_trace"] = to_np_f64(quantum_trace) if quantum_trace is not None else None
         results["meta"] = {
             "metric": metric_name,
             "elapsed_sec": time.time() - self.start_time,

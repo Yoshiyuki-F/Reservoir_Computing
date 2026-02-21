@@ -66,7 +66,7 @@ def plot_qubit_dynamics(
         interpolation="nearest",
         vmin=vmin, 
         vmax=vmax,
-        extent=[0, time_steps, n_features - 0.5, -0.5] # Align indices
+        extent=(0.0, float(time_steps), float(n_features) - 0.5, -0.5) # Align indices
     )
     
     # Colorbar

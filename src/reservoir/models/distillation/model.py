@@ -133,7 +133,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = float(student_logs.get("final_loss", 0.0))
-        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {} # type: ignore
+        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {}
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
         return logs
@@ -151,7 +151,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Delegate to student's evaluate (handles adapter and alignment internally)
         student_metrics = self.student.evaluate(X, teacher_targets)
 
-        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {} # type: ignore
+        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {}
         return metrics
 
     def get_topology_meta(self) -> ConfigDict:

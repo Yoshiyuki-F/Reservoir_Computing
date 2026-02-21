@@ -121,7 +121,7 @@ class ModelFactory:
                     "readout": "None",
                 },
             }
-            model.topology_meta = topo_meta # type: ignore
+            model.topology_meta = topo_meta
             return model
 
         if pipeline_enum == Model.PASSTHROUGH:

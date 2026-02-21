@@ -119,12 +119,12 @@ class ClassicalReservoir(Reservoir):
     def from_dict(cls, data: ConfigDict) -> ClassicalReservoir:
         try:
             return cls(
-                n_units=int(float(str(data["n_units"]))), # type: ignore
-                spectral_radius=float(str(data["spectral_radius"])), # type: ignore
-                leak_rate=float(str(data["leak_rate"])), # type: ignore
-                rc_connectivity=float(str(data["rc_connectivity"])), # type: ignore
-                seed=int(float(str(data["seed"]))), # type: ignore
-                aggregation_mode=AggregationMode(str(data["aggregation"])), # type: ignore
+                n_units=int(float(str(data["n_units"]))),
+                spectral_radius=float(str(data["spectral_radius"])),
+                leak_rate=float(str(data["leak_rate"])),
+                rc_connectivity=float(str(data["rc_connectivity"])),
+                seed=int(float(str(data["seed"]))),
+                aggregation_mode=AggregationMode(str(data["aggregation"])),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required reservoir parameter '{exc.args[0]}'") from exc

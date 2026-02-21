@@ -2,7 +2,7 @@
 from functools import partial
 
 import jax.numpy as jnp
-from reservoir.core.types import NpF64, JaxF64
+from reservoir.core.types import NpF64, JaxF64, to_jax_f64
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
@@ -86,7 +86,7 @@ class PipelineExecutor:
         print(f"\n=== Step 7: Readout ({readout_name}) with val data ===")
         
         strategy = ReadoutStrategyFactory.create_strategy(
-            self.stack.readout, 
+            self.stack.readout,
             self.dataset_meta, 
             self.evaluator, 
             self.stack.metric
@@ -132,11 +132,12 @@ class PipelineExecutor:
              except Exception as e:
                  print(f"    [Executor] Failed to capture quantum trace: {e}")
 
-        return {
+        from typing import cast
+        return cast("ResultDict", {
             "fit_result": fit_result,
             "train_logs": train_logs,
             "quantum_trace": quantum_trace,
-        }
+        })
 
     def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> tuple[NpF64 | None, ...]:
         """

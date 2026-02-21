@@ -79,4 +79,4 @@ class FNNReadout(ReadoutModule):
     @classmethod
     def from_dict(cls, data: ConfigDict) -> FNNReadout:
         """Deserialize an FNN readout (note: model weights not preserved)."""
-        return cls(hidden_layers=tuple(data.get("hidden_layers", ()))) # type: ignore
+        return cls(hidden_layers=tuple(data.get("hidden_layers", ())))

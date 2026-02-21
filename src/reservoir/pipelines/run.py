@@ -61,4 +61,5 @@ def run_pipeline(
     reporter = ResultReporter(stack, frontend_ctx, metadata)
     final_results = reporter.compile_and_save(execution_results, config)
 
-    return final_results
+    from typing import cast
+    return cast("ConfigDict", final_results)

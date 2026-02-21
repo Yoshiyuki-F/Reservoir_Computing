@@ -2,8 +2,13 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, ResultDict, JaxF64
+from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, JaxF64
+import jax
+import jax
 import jax.numpy as jnp
+from typing import cast
+from tqdm import tqdm
+from typing import cast
 import numpy as np
 
 from reservoir.pipelines.config import FrontendContext, DatasetMetadata
@@ -11,6 +16,7 @@ from reservoir.models.presets import PipelineConfig
 from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
+from reservoir.core.interfaces import ReadoutModule
 
 class ReadoutStrategy(ABC):
     """Abstract base class for readout fitting and evaluation strategies."""
@@ -42,7 +48,7 @@ class ReadoutStrategy(ABC):
     def fit_and_evaluate(
         self,
         model: Callable,
-        readout: Callable | None,
+        readout: ReadoutModule | None,
         train_Z: NpF64,
         val_Z: NpF64 | None,
         test_Z: NpF64 | None,
@@ -52,7 +58,7 @@ class ReadoutStrategy(ABC):
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
         pipeline_config: PipelineConfig
-    ) -> ResultDict:
+    ) -> FitResultDict:
         """Fit readout and return predictions/metrics."""
         pass
 
@@ -62,7 +68,7 @@ class EndToEndStrategy(ReadoutStrategy):
     
     def fit_and_evaluate(
         self, model: Callable, 
-        readout: Callable | None, 
+        readout: ReadoutModule | None, 
         train_Z: NpF64, 
         val_Z: NpF64 | None, 
         test_Z: NpF64 | None, 
@@ -72,7 +78,7 @@ class EndToEndStrategy(ReadoutStrategy):
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
         pipeline_config: PipelineConfig
-    ) -> ResultDict:
+    ) -> FitResultDict:
         print("Readout is None. End-to-End mode.")
         
         # For FNN windowed mode, align targets using the model's adapter
@@ -123,7 +129,7 @@ class EndToEndStrategy(ReadoutStrategy):
 
                 chaos_results = self.evaluator.compute_chaos_metrics(
                     jnp.array(processed.test_y), jnp.array(closed_loop_pred), frontend_ctx.preprocessor,
-                    dataset_meta.preset.config, global_start, global_end)
+                    dataset_meta.preset.config, global_start, global_end, verbose=False)
 
                 result["closed_loop_pred"] = closed_loop_pred
                 result["closed_loop_truth"] = processed.test_y
@@ -131,7 +137,7 @@ class EndToEndStrategy(ReadoutStrategy):
              except Exception as e:
                 print(f"[Warning] FNN Closed-loop generation failed: {e}")
         
-        return result
+        return cast(FitResultDict, result)
 
 
 
@@ -139,9 +145,10 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: Callable | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
-    ) -> ResultDict:
+        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+    ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
+        assert readout is not None, "Readout must be provided for ClassificationStrategy"
         
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
@@ -181,14 +188,14 @@ class ClassificationStrategy(ReadoutStrategy):
                     best_lambda = lam_val
             
             print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
-            readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept) # type: ignore
+            readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
             readout.best_model.fit(train_Z_jax, train_y_jax)
-            
-            print_ridge_search_results({
+            print_ridge_search_results(cast(FitResultDict, {
                 "search_history": search_history,
+                "weight_norms": weight_norms,
                 "best_lambda": best_lambda,
-                "weight_norms": weight_norms
-            }, metric_name="Accuracy")
+                "best_score": best_score,
+            }), metric_name="Accuracy")
         else:
             print("    [Runner] No hyperparameter search needed for this readout.")
             readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
@@ -218,7 +225,7 @@ class ClassificationStrategy(ReadoutStrategy):
                  self.metric_name: compute_score(to_np_f64(test_pred), test_y, self.metric_name)
              }
 
-        return {
+        return cast(FitResultDict, {
             "train_pred": train_pred,
             "val_pred": val_pred,
             "test_pred": test_pred,
@@ -230,7 +237,7 @@ class ClassificationStrategy(ReadoutStrategy):
             "closed_loop_pred": None,
             "closed_loop_truth": None,
             "chaos_results": None,
-        }
+        })
 
 
 class ClosedLoopRegressionStrategy(ReadoutStrategy):
@@ -239,7 +246,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
     def fit_and_evaluate(
         self,
             model: Callable,
-            readout: Callable | None,
+            readout: ReadoutModule | None,
             train_Z: NpF64,
             val_Z: NpF64 | None,
             test_Z: NpF64 | None,
@@ -249,7 +256,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             frontend_ctx: FrontendContext,
             dataset_meta: DatasetMetadata,
             pipeline_config: PipelineConfig
-    ) -> ResultDict:
+    ) -> FitResultDict:
+        assert readout is not None, "Readout must be provided for ClosedLoopRegressionStrategy"
 
 
         proj_fn = None
@@ -357,12 +365,12 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
                  readout.best_model.coef_ = all_weights[best_idx]
              
-             print_ridge_search_results({
+             print_ridge_search_results(cast(FitResultDict, {
                 "search_history": search_history,
                 "best_lambda": best_lambda,
                 "weight_norms": weight_norms,
                 "residuals_history": residuals_history
-             }, metric_name="NMSE")
+             }), metric_name="NMSE")
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
              readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
@@ -491,32 +499,34 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         train_pred = readout.predict(to_jax_f64(train_Z))
 
         # Train
-        metrics: ResultDict = {"train": {
+        metrics: dict[str, dict[str, float]] = {"train": {
             self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
-        }} # type: ignore
+        }}
         
 
         # Val (if needed, though Strategy optimized on it)
         # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
         # Using separate predict calls ensures consistency.
         val_pred = val_pred_early
-        if val_pred is None and val_Z is not None:
+        if val_pred is None and val_Z is not None and readout is not None:
             val_pred = readout.predict(to_jax_f64(val_Z))
             
         if val_pred is not None and val_y is not None:
-            metrics["val"] = {
+            metrics["validation"] = {
                 self.metric_name: compute_score(to_np_f64(val_pred), val_y, self.metric_name)
-            } # type: ignore
+            }
 
         # Test
         test_pred = None
-        if test_Z is not None:
+        if test_Z is not None and readout is not None:
              test_pred = readout.predict(to_jax_f64(test_Z))
-             metrics["test"] = {
-                 self.metric_name: compute_score(to_np_f64(test_pred), test_y, self.metric_name)
-             } # type: ignore
+             test_p_np = to_np_f64(test_pred)
+             if test_p_np is not None and test_y is not None:
+                 metrics["test"] = {
+                     self.metric_name: compute_score(test_p_np, test_y, self.metric_name)
+                 }
 
-        return {
+        return cast(FitResultDict, {
             "train_pred": None, # Not returned by this strategy
             "val_pred": None,   # Not returned
             "test_pred": None,  # Not returned
@@ -528,8 +538,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "residuals_history": residuals_history if 'residuals_history' in locals() else None,
             "closed_loop_pred": closed_loop_pred,
             "closed_loop_truth": closed_loop_truth,
-            "chaos_results": {**chaos_results, **stats_dict}, # Merge stats
-        }
+            "chaos_results": {**(chaos_results or {}), **(stats_dict or {})}, # Merge stats
+        })
 
 class ReadoutStrategyFactory:
     """Factory to create appropriate ReadoutStrategy based on config."""

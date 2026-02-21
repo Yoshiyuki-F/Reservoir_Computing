@@ -53,7 +53,8 @@ _forbidden_callable_ellipsis = re.compile(r"\bCallable\[\s*\.\.\.")
 # 5. Type Checking Escape Hatches
 _forbidden_isinstance_dict = re.compile(r"isinstance\s*\([^,]+,\s*dict\s*\)")
 _forbidden_isinstance_list = re.compile(r"isinstance\s*\([^,]+,\s*list\s*\)")
-
+_forbidden_kwargs = re.compile(r"\bdef\s+\w+\s*\(.*(?:\*args|\*\*kwargs)")
+_forbidden_cast_any = re.compile(r"cast\s*\(\s*Any\s*,")
 
 def check_file(path: Path) -> list[str]:
     """Return list of violation messages for a file."""
@@ -123,6 +124,14 @@ def check_file(path: Path) -> list[str]:
 
         if _forbidden_isinstance_list.search(line):
             violations.append(f"L{i}: ❌ Rule 11: 'isinstance(x, list)' forbidden. Trust your strict type hints.")
+
+        # check_file の forループ内
+        if _forbidden_kwargs.search(line):
+            violations.append(
+                f"L{i}: ❌ Rule 12: '*args' and '**kwargs' are forbidden. Define all arguments explicitly for strict typing.")
+
+        if _forbidden_cast_any.search(line):
+            violations.append(f"L{i}: ❌ Rule 13: 'cast(Any, ...)' is strictly forbidden. It is a dangerous escape hatch that destroys type safety.")
 
     # Boundary Violation Check (Numpy + JAX in same file)
     if has_np and has_jax and rel not in MAPPERS and rel not in CONDITIONAL_JAX_OK:

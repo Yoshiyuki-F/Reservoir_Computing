@@ -57,6 +57,11 @@ class EvalMetrics(TypedDict, total=False):
     vpt_threshold: float
     # Add other specific keys as they emerge.
 
+class TrainMetrics(EvalMetrics, total=False):
+    weight_norms: dict[float, float]
+
+class TestMetrics(EvalMetrics, total=False):
+    pass
 
 # ==========================================
 # Config Domain Types (Nesting, No Recursion to satisfy beartype)
@@ -106,9 +111,9 @@ class ResultDict(TypedDict, total=False):
     fit_result: FitResultDict
     train_logs: TrainLogs
     quantum_trace: JaxF64 | None
-    train: dict[str, float | dict[float, float]]
-    test: dict[str, float | dict[str, float]]
-    validation: dict[str, float]
+    train: TrainMetrics
+    test: TestMetrics
+    validation: EvalMetrics
     outputs: dict[str, NpF64 | None]
     readout: "reservoir.core.interfaces.ReadoutModule | None"
     preprocessor: "reservoir.layers.preprocessing.Preprocessor | None"

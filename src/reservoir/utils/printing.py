@@ -28,8 +28,11 @@ def print_topology(meta: ConfigDict) -> None:
     if not meta:
         return
 
-    shapes = meta.get("shapes", {}) or {}
-    details = meta.get("details", {}) or {}
+    shapes_raw = meta.get("shapes", {})
+    shapes: dict[str, tuple[int, ...] | None] = shapes_raw if isinstance(shapes_raw, dict) else {}
+    
+    details_raw = meta.get("details", {})
+    details: dict[str, str | int | tuple[int, ...] | None] = details_raw if isinstance(details_raw, dict) else {}
 
     s_in = shapes.get("input")
     s_pre = shapes.get("preprocessed") or s_in
@@ -67,7 +70,8 @@ def print_topology(meta: ConfigDict) -> None:
 
     if student_layers_raw and s_adapter is not None:
         chain = [_fmt_dim(s_adapter)]
-        chain.extend(f"[{int(v)}]" for v in student_layers_raw)
+        iter_layers = student_layers_raw if isinstance(student_layers_raw, Iterable) else [student_layers_raw]
+        chain.extend(f"[{int(v)}]" for v in iter_layers)
         if not has_aggregation and s_feat is not None:
             chain.append(_fmt_dim(s_feat))
         model_desc = " -> ".join(chain)
@@ -89,7 +93,7 @@ def print_topology(meta: ConfigDict) -> None:
     else:
         # User Request: Report flattened 2D output for Sequence Aggregation
         s_feat_disp = s_feat
-        if agg_mode.lower() == "sequence" and s_feat and len(s_feat) == 3:
+        if str(agg_mode).lower() == "sequence" and s_feat and len(s_feat) == 3:
              # (Batch, Time, Feat) -> (Batch*Time, Feat)
              flattened_dim = s_feat[0] * s_feat[1]
              s_feat_disp = (flattened_dim, s_feat[2])
@@ -105,7 +109,7 @@ def print_topology(meta: ConfigDict) -> None:
         out_dim_str = _fmt_dim(s_out)
         
         # W_out only makes sense for Ridge (single weight matrix), not for FNN
-        is_ridge = "Ridge" in readout_label
+        is_ridge = "Ridge" in str(readout_label)
         if is_ridge and s_feat and len(s_feat) > 0 and s_out and len(s_out) > 0:
              w_rows = s_feat[-1]
              w_cols = s_out[-1]

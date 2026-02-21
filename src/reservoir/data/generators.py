@@ -8,12 +8,12 @@ from reservoir.core.types import NpF64
 import numpy as np
 
 try:
-    import torch  # type: ignore
+    import torch 
     from reservoir.data.mnist_loader import get_mnist_datasets, image_to_sequence
 except ModuleNotFoundError:  # pragma: no cover - torch optional
     torch = None
-    get_mnist_datasets = None  # type: ignore
-    image_to_sequence = None  # type: ignore
+    get_mnist_datasets = None 
+    image_to_sequence = None 
 
 from reservoir.data.config import (
     SineWaveConfig,

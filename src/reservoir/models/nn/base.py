@@ -57,7 +57,7 @@ class BaseFlaxModel(BaseModel, ABC):
         self.classification: bool = classification
         
         seed_val = model_config.get("seed", getattr(training_config, "seed", 0))
-        self.seed: int = 0 if seed_val is None else int(float(seed_val))  # type: ignore
+        self.seed: int = 0 if seed_val is None else int(float(seed_val)) 
         
         self._model_def = self._create_model_def()
         self._state: train_state.TrainState | None = None

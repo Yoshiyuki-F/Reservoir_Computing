@@ -57,8 +57,8 @@ class StandardScaler(Preprocessor):
     """Standard scaler (mean removal and variance scaling)."""
 
     def __init__(self):
-        self.mean_: np.ndarray | None = None
-        self.scale_: np.ndarray | None = None
+        self.mean_: NpF64 | None = None
+        self.scale_: NpF64 | None = None
 
     def fit(self, X: NpF64) -> StandardScaler:
         X_np = X
@@ -119,7 +119,7 @@ class CustomRangeScaler(Preprocessor):
         self.input_scale = input_scale
         self.centering = centering
         self.max_val: float | None = None
-        self.mean_: np.ndarray | None = None
+        self.mean_: NpF64 | None = None
 
     def fit(self, X: NpF64) -> CustomRangeScaler:
         X_np = X
@@ -197,8 +197,8 @@ class MinMaxScaler(Preprocessor):
     def __init__(self, feature_min: float , feature_max: float):
         self.feature_min = feature_min
         self.feature_max = feature_max
-        self.min_: np.ndarray | None = None
-        self.range_: np.ndarray | None = None  # X_max - X_min
+        self.min_: NpF64 | None = None
+        self.range_: NpF64 | None = None  # X_max - X_min
 
     def fit(self, X: NpF64) -> MinMaxScaler:
         X_np = X

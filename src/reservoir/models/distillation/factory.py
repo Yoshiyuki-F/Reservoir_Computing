@@ -107,5 +107,5 @@ class DistillationFactory:
                 "student_structure": f"TDE(w={window_size}) -> FNN",
             },
         }
-        model.topology_meta = topo_meta # type: ignore
+        model.topology_meta = topo_meta
         return model

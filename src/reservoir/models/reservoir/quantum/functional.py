@@ -14,7 +14,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, JaxKey
 import tensorcircuit as tc
 
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
@@ -49,7 +49,7 @@ def _make_circuit_logic(
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool,
-    rng_key: jax.Array | None = None
+    rng_key: JaxKey | None = None
 ) -> JaxF64:
     """
     Core circuit construction logic with Feedback QRC architecture.
@@ -102,11 +102,11 @@ def _make_circuit_logic(
         if is_mc:
             state_vec, current_key = carry_state
             # In MC mode, we use pure state circuit even if noisy (noise is manual)
-            c = tc.Circuit(n_qubits, inputs=state_vec) # type: ignore
+            c = tc.Circuit(n_qubits, inputs=state_vec)
         elif is_noisy:
-            c = tc.DMCircuit(n_qubits, inputs=carry_state) # type: ignore
+            c = tc.DMCircuit(n_qubits, inputs=carry_state)
         else:
-            c = tc.Circuit(n_qubits, inputs=carry_state) # type: ignore
+            c = tc.Circuit(n_qubits, inputs=carry_state)
 
         # Decoherence -  nothing with 1-3p, Px with p, Py with p, Pz with p
         # to simulate NISQ inaccuracy

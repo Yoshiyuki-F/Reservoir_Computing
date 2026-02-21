@@ -74,10 +74,10 @@ class PipelineDataManager:
 
         metadata = DatasetMetadata(
             dataset=dataset_enum,
-            dataset_name=dataset_preset.name,
+            dataset_name=dataset_preset.name if dataset_preset else "Unknown",
             preset=dataset_preset,
             training=training_cfg,
-            classification=dataset_preset.classification,
+            classification=dataset_preset.classification if dataset_preset else False,
             input_shape=input_shape,
         )
         return metadata, dataset_split
@@ -109,7 +109,7 @@ class PipelineDataManager:
                 test_X = preprocessor.transform(test_X)
                 
             # For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
-            if not self.metadata.classification:
+            if not (self.metadata.classification if self.metadata else False):
                  print(f"    [Preprocessing] {preprocessing_config} Applying transforms to targets (y) for REGRESSION task.")
                  # Note: use transform to reuse fitted parameters
                  if data_split.train_y is not None:

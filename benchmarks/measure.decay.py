@@ -31,7 +31,6 @@ def measure_circuit_attenuation():
     # フィードバックループに入力されると仮定したランダム信号
     # 標準正規分布 (Mean=0, Std=1.0)
     n_samples = 2000
-    dummy_input = jnp.zeros((n_samples, 16))  # 外部入力は一旦ゼロとみなす
 
     # 状態としての入力 (Feedbackとして入る値)
     # 実際のフィードバックは「前の時刻の出力(Z+ZZ)」が「次の回転角」になる

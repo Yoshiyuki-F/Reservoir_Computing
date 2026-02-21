@@ -39,7 +39,7 @@ def plot_classification_results(
     test_predictions: NpF64,
     title: str,
     filename: str,
-    metrics_info: dict[str] | None = None,
+    metrics_info: dict[str, float | str] | None = None,
     val_labels: NpF64 | None = None,
     val_predictions: NpF64 | None = None,
     best_lambda: float | None = None,
@@ -241,16 +241,17 @@ def plot_timeseries_comparison(
     # Time axis (shifted by global offset)
     t_start = start_step + time_offset
     t_end = t_start + (end_step - start_step)
+    import numpy as np
     t_axis = np.arange(t_start, t_end)
 
 
 
     fig, axes = plt.subplots(plot_feats, 1, figsize=(12, 3 * plot_feats), sharex=True)
-    if plot_feats == 1:
-        axes = [axes]
 
+    import numpy as np
+    axes_list = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
     for i in range(plot_feats):
-        ax = axes[i]
+        ax = axes_list[i]
         ax.plot(t_axis, target_slice[:, i], label="Actual", color="black", alpha=0.7)
         ax.plot(t_axis, pred_slice[:, i], label="Predicted", color="tab:blue", alpha=0.9, linestyle="--")
         ax.set_ylabel(f"Feature {i}")
@@ -301,7 +302,7 @@ def plot_lambda_search_boxplot(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    bp = ax.boxplot(data, labels=labels, patch_artist=True)
+    bp = ax.boxplot(data, tick_labels=labels, patch_artist=True)
     
     # Style all boxes light gray
     for patch in bp['boxes']:

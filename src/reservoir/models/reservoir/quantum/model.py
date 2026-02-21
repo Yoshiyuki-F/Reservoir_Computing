@@ -340,19 +340,19 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
     def from_dict(cls, data: ConfigDict) -> QuantumReservoir:
         try:
             return cls(
-                n_qubits=int(float(str(data["n_qubits"]))), # type: ignore
-                n_layers=int(float(str(data["n_layers"]))), # type: ignore
-                seed=int(float(str(data["seed"]))), # type: ignore
-                feedback_scale=float(data.get("feedback_scale") or 0.0), # type: ignore
-                aggregation_mode=AggregationMode(str(data["aggregation"])), # type: ignore
-                measurement_basis=str(data["measurement_basis"]), # type: ignore
-                noise_type=str(data.get("noise_type", "clean")), # type: ignore
-                noise_prob=float(data.get("noise_prob") or 0.0), # type: ignore
-                readout_error=float(data.get("readout_error", 0.0)), # type: ignore
-                n_trajectories=int(float(str(data.get("n_trajectories", 0)))), # type: ignore
-                use_remat=bool(data.get("use_remat", False)), # type: ignore
-                use_reuploading=bool(data.get("use_reuploading", False)), # type: ignore
-                precision=str(data.get("precision", "complex64")), # type: ignore
+                n_qubits=int(float(str(data["n_qubits"]))),
+                n_layers=int(float(str(data["n_layers"]))),
+                seed=int(float(str(data["seed"]))),
+                feedback_scale=float(data.get("feedback_scale") or 0.0),
+                aggregation_mode=AggregationMode(str(data["aggregation"])),
+                measurement_basis=str(data["measurement_basis"]),
+                noise_type=str(data.get("noise_type", "clean")),
+                noise_prob=float(data.get("noise_prob") or 0.0),
+                readout_error=float(data.get("readout_error", 0.0)),
+                n_trajectories=int(float(str(data.get("n_trajectories", 0)))),
+                use_remat=bool(data.get("use_remat", False)),
+                use_reuploading=bool(data.get("use_reuploading", False)),
+                precision=str(data.get("precision", "complex64")),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc
