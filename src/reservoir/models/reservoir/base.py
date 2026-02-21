@@ -4,7 +4,7 @@ Base class for Reservoir Computing models implementing ReservoirNode protocol.
 """
 from abc import ABC, abstractmethod
 from beartype import beartype
-from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
+from reservoir.core.types import JaxF64, ConfigDict, KwargsDict, TopologyMeta
 from typing import TypedDict, TypeVar
 
 from reservoir.layers.aggregation import AggregationMode
@@ -79,9 +79,9 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
             "aggregation": self.aggregator.mode.value,
         }
 
-    def get_topology_meta(self) -> ConfigDict:
+    def get_topology_meta(self) -> TopologyMeta:
         """Optional topology metadata set by factories."""
-        return getattr(self, "topology_meta", {}) or {}
+        return self.topology_meta
 
     def get_feature_dim(self, time_steps: int) -> int:
         """Return aggregated feature dimension without running the model."""

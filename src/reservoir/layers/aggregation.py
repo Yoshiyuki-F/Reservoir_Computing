@@ -240,12 +240,19 @@ _REGISTRY: dict[AggregationMode, type[StateAggregator]] = {
 
 def create_aggregator(mode: AggregationMode) -> StateAggregator:
     """Factory: create the right aggregator for the given mode."""
-    cls = _REGISTRY.get(mode)
-    if cls is None:
-        raise ValueError(f"Unknown aggregation mode: {mode}")
+    if mode is AggregationMode.LAST:
+        return LastAggregator()
+    if mode is AggregationMode.MEAN:
+        return MeanAggregator()
+    if mode is AggregationMode.LAST_MEAN:
+        return LastMeanAggregator(mode=AggregationMode.LAST_MEAN)
     if mode is AggregationMode.MTS:
-        return cls(mode=AggregationMode.MTS)
-    return cls()
+        return LastMeanAggregator(mode=AggregationMode.MTS)
+    if mode is AggregationMode.CONCAT:
+        return ConcatAggregator()
+    if mode is AggregationMode.SEQUENCE:
+        return SequenceAggregator()
+    raise ValueError(f"Unknown aggregation mode: {mode}")
 
 
 def _validate_positive(n_units: int, n_steps: int) -> None:

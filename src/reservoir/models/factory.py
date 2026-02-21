@@ -13,7 +13,7 @@ from reservoir.models.reservoir.factory import ReservoirFactory
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict
+    from reservoir.core.types import ConfigDict, TopologyMeta
     from reservoir.models.presets import PipelineConfig
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.generative import ClosedLoopGenerativeModel
@@ -105,7 +105,7 @@ class ModelFactory:
                 adapter_shape = (batch_size, flattened_dim) if batch_size else (flattened_dim,)
                 structure = "Flatten -> FNN -> Output"
             
-            topo_meta: ConfigDict = {
+            topo_meta: TopologyMeta = {
                 "type": pipeline_enum.value.upper(),
                 "shapes": {
                     "input": input_shape,

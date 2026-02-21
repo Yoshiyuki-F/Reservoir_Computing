@@ -16,7 +16,7 @@ from reservoir.layers.aggregation import create_aggregator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
+    from reservoir.core.types import JaxF64, TrainLogs, TopologyMeta
 
 
 @beartype
@@ -30,10 +30,10 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         if not isinstance(aggregation_mode, AggregationMode):
             raise TypeError(f"aggregation_mode must be AggregationMode, got {type(aggregation_mode)}.")
         self.aggregator = create_aggregator(aggregation_mode)
-        self.topology_meta: ConfigDict = {}
+        self.topology_meta: TopologyMeta = {}
         self._n_units: int | None = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **_: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 
@@ -41,7 +41,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Stateful Interface (Compatible with Reservoir)                     #
     # ------------------------------------------------------------------ #
 
-    def initialize_state(self, batch_size: int = 1) -> JaxF64:
+    def initialize_state(self, batch_size: int) -> JaxF64:
         """Return zero state. Passthrough is stateless but needs compatible interface."""
         if self._n_units is None:
             raise RuntimeError("Passthrough n_units not set. Call forward() first.")
@@ -70,7 +70,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
     # Standard Interface                                                 #
     # ------------------------------------------------------------------ #
 
-    def __call__(self, inputs: JaxF64, split_name: str | None = None, **_: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str | None = None) -> JaxF64:
 
         """Aggregate projected features. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs
@@ -92,7 +92,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         """Return aggregated feature dimension."""
         return self.aggregator.get_output_dim(n_units, int(time_steps))
 
-    def get_topology_meta(self) -> ConfigDict:
+    def get_topology_meta(self) -> TopologyMeta:
         return self.topology_meta
 
     def __repr__(self) -> str:

@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
 from reservoir.models.generative import ClosedLoopGenerativeModel
-from reservoir.layers.adapters import Flatten, TimeDelayEmbedding
+from reservoir.layers.adapters import Adapter, Flatten, TimeDelayEmbedding
 
 
 @beartype
@@ -49,6 +49,7 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         self._output_dim = output_dim
         
         # Select adapter based on config
+        self.adapter: Adapter
         if self.window_size is not None:
             # TimeDelayEmbedding: adapter for windowed time series
             self.adapter = TimeDelayEmbedding(window_size=self.window_size)

@@ -12,7 +12,7 @@ from reservoir.models.reservoir.classical import ClassicalReservoir
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict
+    from reservoir.core.types import TopologyMeta
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.presets import DistillationConfig
 
@@ -89,7 +89,7 @@ class DistillationFactory:
             training_config=training,
         )
 
-        topo_meta: ConfigDict = {
+        topo_meta: TopologyMeta = {
             "type": Model.FNN_DISTILLATION.value.upper(),
             "shapes": {
                 "input": input_shape,

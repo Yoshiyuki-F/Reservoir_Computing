@@ -59,9 +59,11 @@ class EvalMetrics(TypedDict, total=False):
 
 class TrainMetrics(EvalMetrics, total=False):
     weight_norms: dict[float, float]
+    search_history: dict[float, float]
+    best_lambda: float | None
 
 class TestMetrics(EvalMetrics, total=False):
-    pass
+    chaos_metrics: dict[str, float]
 
 # ==========================================
 # Config Domain Types (Nesting, No Recursion to satisfy beartype)
@@ -81,6 +83,37 @@ ConfigL3 = ConfigL2 | tuple[ConfigL2, ...] | list[ConfigL2] | dict[str, ConfigL2
 # 全ての to_dict() の戻り値
 ConfigDict = dict[str, ConfigL3]
 ConfigValue = ConfigL3
+
+# ==========================================
+# Topology Metadata Types (Model Builder Output)
+# ==========================================
+
+class ShapesMeta(TypedDict, total=False):
+    """Step shapes through the pipeline."""
+    input: tuple[int, ...] | None
+    preprocessed: tuple[int, ...] | None
+    projected: tuple[int, ...] | None
+    adapter: tuple[int, ...] | None
+    internal: tuple[int, ...] | None
+    feature: tuple[int, ...] | None
+    output: tuple[int, ...] | None
+
+class DetailsMeta(TypedDict, total=False):
+    """Pipeline component details."""
+    preprocess: str | None
+    agg_mode: str | None
+    readout: str | None
+    adapter: str | None
+    student_layers: tuple[int, ...] | None
+    student_structure: str | None
+    window_size: int | None
+    structure: str | None
+
+class TopologyMeta(TypedDict, total=False):
+    """Topology metadata produced by model factories and enriched by ModelBuilder."""
+    type: str
+    shapes: ShapesMeta
+    details: DetailsMeta
 
 # ==========================================
 # Result Domain Types (Execution Outputs)

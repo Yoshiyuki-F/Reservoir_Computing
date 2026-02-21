@@ -9,7 +9,7 @@ from collections.abc import Callable
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, TrainLogs, TopologyMeta
 
 
 
@@ -27,8 +27,23 @@ class ClosedLoopGenerativeModel[StateT](ABC):
     Implements the GenerativeModel protocol methods for closed-loop generation.
     """
 
+    topology_meta: TopologyMeta
+
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
+        """Train the model. Default no-op for models without trainable parameters."""
+        return {}
+
+    def get_topology_meta(self) -> TopologyMeta:
+        """Return topology metadata dict."""
+        return self.topology_meta if hasattr(self, "topology_meta") else {}
+
     @abstractmethod
-    def initialize_state(self, batch_size: int = 1) -> StateT:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False) -> JaxF64:
+        """Forward pass: process inputs and return predictions."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def initialize_state(self, batch_size: int) -> StateT:
         """Initialize hidden state."""
         raise NotImplementedError
 

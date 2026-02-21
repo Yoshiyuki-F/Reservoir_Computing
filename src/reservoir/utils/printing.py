@@ -3,7 +3,7 @@ printing.py
 Utilities for pretty-printing model topology and status.
 """
 from collections.abc import Iterable
-from reservoir.core.types import ConfigDict
+from reservoir.core.types import TopologyMeta, ShapesMeta, DetailsMeta
 
 
 def _fmt_dim(shape: tuple[int, ...] | None) -> str:
@@ -18,7 +18,7 @@ def _fmt_layers(layers: Iterable[int] | None) -> str:
     return "->".join(str(int(v)) for v in layers)
 
 
-def print_topology(meta: ConfigDict) -> None:
+def print_topology(meta: TopologyMeta) -> None:
     """
     Render a 7-step topology report combining orchestrator (steps 1-4) and model (steps 5-7) metadata.
     Required keys in meta['shapes'] (may be None):
@@ -28,11 +28,9 @@ def print_topology(meta: ConfigDict) -> None:
     if not meta:
         return
 
-    shapes_raw = meta.get("shapes", {})
-    shapes: dict[str, tuple[int, ...] | None] = shapes_raw
-    
-    details_raw = meta.get("details", {})
-    details: dict[str, str | int | tuple[int, ...] | None] = details_raw
+    shapes: ShapesMeta = meta.get("shapes") or {}
+
+    details: DetailsMeta = meta.get("details") or {}
 
     s_in = shapes.get("input")
     s_pre = shapes.get("preprocessed") or s_in

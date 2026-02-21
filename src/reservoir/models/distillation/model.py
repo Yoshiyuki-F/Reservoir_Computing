@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from reservoir.training.presets import TrainingConfig
     from reservoir.models.nn.fnn import FNNModel
     from reservoir.models.reservoir.classical import ClassicalReservoir
-    from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
+    from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict, TopologyMeta
 
 
 @beartype
@@ -157,7 +157,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         metrics: EvalMetrics = dict(student_metrics)
         return metrics
 
-    def get_topology_meta(self) -> ConfigDict:
+    def get_topology_meta(self) -> TopologyMeta:
         return (
             dict(getattr(self, "topology_meta", {}))
             or dict(getattr(self.student, "topology_meta", {}))

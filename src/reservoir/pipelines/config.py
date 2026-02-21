@@ -1,14 +1,10 @@
 # /home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/config.py
 from __future__ import annotations
-
 from dataclasses import dataclass
-
-
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict
+    from reservoir.core.types import TopologyMeta
     from reservoir.layers.projection import Projection
     from reservoir.layers.preprocessing import Preprocessor
     from reservoir.training import TrainingConfig
@@ -44,6 +40,6 @@ class DatasetMetadata:
 class ModelStack:
     model: ClosedLoopGenerativeModel
     readout: ReadoutModule | None
-    topo_meta: ConfigDict
+    topo_meta: TopologyMeta
     metric: str
     model_label: str

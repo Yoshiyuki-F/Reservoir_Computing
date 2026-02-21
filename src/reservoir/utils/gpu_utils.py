@@ -4,11 +4,12 @@ Reservoir Computing用のGPUユーティリティ関数。
 from collections.abc import Callable
 import re
 import shutil
+import subprocess
 
 def _assert_x64_enabled() -> None:
     """Raise if JAX x64 mode is not enabled."""
     import jax
-    if not jax.config.jax_enable_x64:
+    if not jax.config.read("jax_enable_x64"):
         raise ValueError("CRITICAL: JAX x64 mode is NOT enabled. Double-check import order and environment variables.")
 
 
@@ -49,7 +50,7 @@ def check_gpu_available() -> bool:
         jax.config.update("jax_enable_x64", True)
         _assert_x64_enabled()
 
-        x64_enabled = jax.config.jax_enable_x64
+        x64_enabled = jax.config.read("jax_enable_x64")
         print(f"JAX x64 Enabled: {x64_enabled}")
         
         devices = jax.devices()
@@ -77,7 +78,6 @@ def check_gpu_available() -> bool:
             nvcc_version = None
             try:
                 # nvidia-mlまたはpynvmlを使ってGPU名とバージョン情報を取得
-                import subprocess
 
                 if shutil.which("nvidia-smi"):
                     # GPU名

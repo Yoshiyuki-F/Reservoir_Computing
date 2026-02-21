@@ -21,15 +21,15 @@ class Adapter(ABC):
     """ABC for Step 4 structural adapters that reshape data before model layers."""
 
     @abstractmethod
-    def transform(self, X: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
+    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         """Transform input features."""
 
     @abstractmethod
     def align_targets(self, targets: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         """Align targets to match transformed features (e.g., trim for windowing)."""
 
-    def __call__(self, X: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
-        return self.transform(X, log_label=log_label, params=params)
+    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
+        return self.transform(X, flatten_batch=flatten_batch, log_label=log_label, params=params)
 
 
 # ==========================================
@@ -45,7 +45,7 @@ class Flatten(Adapter):
     def fit(self) -> Flatten:
         return self
 
-    def transform(self, X: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
+    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         if X.ndim == 3:
             result = X.reshape(X.shape[0], -1)
         elif X.ndim == 2:

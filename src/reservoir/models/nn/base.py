@@ -5,7 +5,7 @@ Flax-based BaseModel adapter optimized with jax.lax.scan and tqdm logging."""
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics, ConfigDict
+from reservoir.core.types import JaxF64, JaxKey, TrainLogs, EvalMetrics, ConfigDict, TopologyMeta
 import optax
 import flax.linen as nn
 from flax.training import train_state
@@ -19,7 +19,7 @@ from reservoir.training.presets import TrainingConfig
 class BaseModel(ABC):
     """Minimal training/evaluation contract shared by Flax adapters."""
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         """
         Execute internal pre-training phase (e.g., Distillation, Backprop). Returns metrics/logs.
         Defaults to a no-op so models without a pre-training stage can conform to the interface.
@@ -34,9 +34,9 @@ class BaseModel(ABC):
     def evaluate(self, X: JaxF64, y: JaxF64) -> EvalMetrics:
         ...
 
-    def get_topology_meta(self) -> ConfigDict:
+    def get_topology_meta(self) -> TopologyMeta:
         """Optional topology metadata for visualization."""
-        return getattr(self, "topology_meta", {})
+        return self.topology_meta
 
     @property
     def input_window_size(self) -> int:
@@ -57,8 +57,8 @@ class BaseFlaxModel(BaseModel, ABC):
         self.classification: bool = classification
         
         seed_val = model_config.get("seed", getattr(training_config, "seed", 0))
-        self.seed: int = 0 if seed_val is None else int(float(seed_val)) 
-        
+        self.seed: int = 0 if seed_val is None else int(float(str(seed_val)))
+
         self._model_def = self._create_model_def()
         self._state: train_state.TrainState | None = None
         self.trained: bool = False
@@ -127,7 +127,7 @@ class BaseFlaxModel(BaseModel, ABC):
     # ------------------------------------------------------------------ #
     # BaseModel API                                                      #
     # ------------------------------------------------------------------ #
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **_) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
@@ -201,5 +201,5 @@ class BaseFlaxModel(BaseModel, ABC):
         mae = float(jnp.mean(jnp.abs(preds - y_arr)))
         return {"mse": mse, "mae": mae}
 
-    def get_topology_meta(self) -> ConfigDict:
-        return getattr(self, "topology_meta", {})
+    def get_topology_meta(self) -> TopologyMeta:
+        return self.topology_meta

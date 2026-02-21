@@ -4,7 +4,7 @@ import time
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
 from reservoir.utils.reporting import generate_report
-from reservoir.core.types import ResultDict, to_np_f64
+from reservoir.core.types import ResultDict, FitResultDict, FitResultMetrics, TrainMetrics, TestMetrics, EvalMetrics, to_np_f64
 
 
 class ResultReporter:
@@ -22,7 +22,7 @@ class ResultReporter:
         """
         Compile final results and trigger report generation.
         """
-        fit_result: ResultDict = dict(execution_results["fit_result"])
+        fit_result: FitResultDict = execution_results["fit_result"]
         train_logs = execution_results["train_logs"]
         quantum_trace = execution_results.get("quantum_trace") # New
         processed = self.frontend_ctx.processed_split
@@ -44,20 +44,20 @@ class ResultReporter:
             to_np_f64(aligned_test_y)
 
         # Try to use pre-calculated metrics from Strategy
-        metrics: ResultDict = dict(fit_result.get("metrics", {}))
-        
+        metrics: FitResultMetrics = fit_result.get("metrics") or {}
+
         # Test Score
         test_score = 0.0
-        test_metrics: ResultDict = dict(metrics.get("test", {}))
+        test_metrics: TestMetrics = metrics.get("test") or {}
         if metric_name in test_metrics:
-             test_score = float(test_metrics[metric_name])
-        
+             test_score = float(str(test_metrics[metric_name]))
+
         # Train Score 
-        # (Assuming strategy populates metrics["train"], merging it)
+        train_metrics_from_strat: EvalMetrics = metrics.get("train") or {}
         results["train"] = {
             "search_history": fit_result["search_history"],
             "weight_norms": fit_result["weight_norms"],
-            **dict(metrics.get("train", {}))
+            **train_metrics_from_strat
         }
         if fit_result["best_lambda"] is not None:
             results["train"]["best_lambda"] = fit_result["best_lambda"]
@@ -68,7 +68,7 @@ class ResultReporter:
 
         results["test"] = {metric_name: test_score, **test_metrics}
         if fit_result["chaos_results"] is not None:
-            chaos: ResultDict = dict(fit_result["chaos_results"])
+            chaos = fit_result["chaos_results"]
             results["test"]["chaos_metrics"] = chaos
             results["test"]["vpt_lt"] = chaos.get("vpt_lt", 0.0)
             results["test"]["ndei"] = chaos.get("ndei", float("inf"))
@@ -77,9 +77,9 @@ class ResultReporter:
 
         # Val Score
         val_score = 0.0
-        val_metrics: ResultDict = dict(metrics.get("val", {}))
+        val_metrics: EvalMetrics = metrics.get("val") or {}
         if metric_name in val_metrics:
-            val_score = float(val_metrics[metric_name])
+            val_score = float(str(val_metrics[metric_name]))
         elif fit_result["best_score"] is not None:
              # Keep this fallback as best_score corresponds to validation during fit
              val_score = float(fit_result["best_score"])

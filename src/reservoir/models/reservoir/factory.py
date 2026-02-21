@@ -13,7 +13,7 @@ from reservoir.models.reservoir.quantum import QuantumReservoir
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from reservoir.core.types import ConfigDict
+    from reservoir.core.types import ConfigDict, TopologyMeta
     from reservoir.models.reservoir.base import Reservoir
 
 
@@ -78,7 +78,7 @@ class ReservoirFactory:
         else:
             raise ValueError(f"input_shape must be 2D or 3D, got {input_shape}")
 
-        topo_meta: ConfigDict = {}
+        topo_meta: TopologyMeta = {}
         agg_mode_enum = model.aggregation
 
         # Determine shapes with batch dimension if present

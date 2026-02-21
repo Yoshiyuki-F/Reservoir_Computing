@@ -1,11 +1,10 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/strategies.py"""
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, JaxF64
 import jax
 import jax.numpy as jnp
-from typing import cast
+from typing import cast, TYPE_CHECKING
 from tqdm import tqdm
 import numpy as np
 
@@ -16,11 +15,21 @@ from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 from reservoir.pipelines.evaluation import Evaluator
 from reservoir.readout.base import ReadoutModule
 
+if TYPE_CHECKING:
+    from reservoir.models.generative import ClosedLoopGenerativeModel
+
 
 def _check_closed_loop_divergence(pred_std: float, threshold: float) -> None:
     """Raise ValueError if closed-loop prediction has diverged."""
     if pred_std > threshold:
         raise ValueError(f"Closed-loop prediction diverged! STD={pred_std:.2f} > {threshold}")
+
+
+class DivergenceError(ValueError):
+    """Raised when closed-loop prediction diverges, carrying diagnostic stats."""
+    def __init__(self, message: str, stats: dict[str, float]) -> None:
+        super().__init__(message)
+        self.stats: dict[str, float] = stats
 
 
 class ReadoutStrategy(ABC):
@@ -52,7 +61,7 @@ class ReadoutStrategy(ABC):
     @abstractmethod
     def fit_and_evaluate(
         self,
-        model: Callable,
+        model: ClosedLoopGenerativeModel,
         readout: ReadoutModule | None,
         train_Z: NpF64,
         val_Z: NpF64 | None,
@@ -71,7 +80,7 @@ class EndToEndStrategy(ReadoutStrategy):
     """Strategy for End-to-End models where features are predictions."""
     
     def fit_and_evaluate(
-        self, model: Callable, 
+        self, model: ClosedLoopGenerativeModel, 
         readout: ReadoutModule | None, 
         train_Z: NpF64, 
         val_Z: NpF64 | None, 
@@ -123,7 +132,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 closed_loop_pred = model.generate_closed_loop(seed_data, steps=generation_steps, readout=readout)
                 
                 # Check for divergence
-                pred_std = np.std(closed_loop_pred)
+                pred_std = float(np.std(closed_loop_pred))
                 _check_closed_loop_divergence(pred_std, threshold=50)
 
                 print_feature_stats(closed_loop_pred, "8:fnn_closed_loop_prediction")
@@ -149,7 +158,7 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self, model: ClosedLoopGenerativeModel, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         if readout is None:
@@ -158,8 +167,11 @@ class ClassificationStrategy(ReadoutStrategy):
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         test_Z = self._flatten_3d_to_2d(test_Z, "test states")
-        ty_reshaped, _vy_reshaped = train_y, val_y
-        
+        ty_reshaped = train_y
+
+        if tf_reshaped is None or ty_reshaped is None:
+            raise ValueError("train_Z and train_y must not be None for ClassificationStrategy")
+
         search_history: dict[float, float] = {}
         weight_norms: dict[float, float] = {}
         best_lambda: float | None = None
@@ -173,20 +185,22 @@ class ClassificationStrategy(ReadoutStrategy):
             # Prepare JAX inputs
             train_Z_jax = to_jax_f64(tf_reshaped)
             train_y_jax = to_jax_f64(ty_reshaped)
+            if vf_reshaped is None or val_y is None:
+                raise ValueError("Validation data required for RidgeCV optimization")
             val_Z_jax = to_jax_f64(vf_reshaped)
 
             for lam in tqdm(readout.lambda_candidates, desc="[RidgeCV Search]"):
                 lam_val = float(lam)
-                model = RidgeRegression(ridge_lambda=lam_val, use_intercept=readout.use_intercept)
-                model.fit(train_Z_jax, train_y_jax)
-                
+                ridge_model = RidgeRegression(ridge_lambda=lam_val, use_intercept=readout.use_intercept)
+                ridge_model.fit(train_Z_jax, train_y_jax)
+
                 # Predict (Device) & Score (Host)
-                val_pred = model.predict(val_Z_jax)
+                val_pred = ridge_model.predict(val_Z_jax)
                 score = compute_score(to_np_f64(val_pred), val_y, self.metric_name)
                 
                 search_history[lam_val] = float(score)
-                if model.coef_ is not None:
-                    weight_norms[lam_val] = float(jnp.linalg.norm(model.coef_))
+                if ridge_model.coef_ is not None:
+                    weight_norms[lam_val] = float(jnp.linalg.norm(ridge_model.coef_))
 
                 if score > best_score:
                     best_score = float(score)
@@ -213,6 +227,8 @@ class ClassificationStrategy(ReadoutStrategy):
         test_pred = readout.predict(to_jax_f64(test_Z)) if test_Z is not None else None
 
         # Train
+        if train_y is None:
+            raise ValueError("train_y must not be None for ClassificationStrategy")
         metrics = {"train": {
             self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
         }}
@@ -250,7 +266,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
     def fit_and_evaluate(
         self,
-            model: Callable,
+            model: ClosedLoopGenerativeModel,
             readout: ReadoutModule | None,
             train_Z: NpF64,
             val_Z: NpF64 | None,
@@ -274,6 +290,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         ty_reshaped = train_y
         
+        if tf_reshaped is None or ty_reshaped is None:
+            raise ValueError("train_Z and train_y must not be None for ClosedLoopRegressionStrategy")
+
         # Open-Loop Validation Prep
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         vy_reshaped = val_y
@@ -307,6 +326,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              if y_jax.ndim == 1:
                  y_jax = y_jax[:, None]
              
+             if vf_reshaped is None or val_y is None:
+                 raise ValueError("Validation data required for RidgeCV optimization")
              val_X_jax = to_jax_f64(vf_reshaped)
              
              # Add intercept if needed
@@ -477,14 +498,16 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         }
 
         if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
-            err = ValueError(f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
-            err.stats = stats_dict
-            raise err
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
-             err = ValueError(f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)") 
-             err.stats = stats_dict
-             raise err
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr: NpF64 | None) -> int:
@@ -512,6 +535,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         train_pred = readout.predict(to_jax_f64(train_Z))
 
         # Train
+        if train_y is None:
+            raise ValueError("train_y must not be None for ClosedLoopRegressionStrategy")
         metrics: dict[str, dict[str, float]] = {"train": {
             self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
         }}
@@ -559,7 +584,7 @@ class ReadoutStrategyFactory:
     
     @staticmethod
     def create_strategy(
-        readout: Callable | None,
+        readout: ReadoutModule | None,
         dataset_meta: DatasetMetadata,
         evaluator: Evaluator,
         metric_name: str

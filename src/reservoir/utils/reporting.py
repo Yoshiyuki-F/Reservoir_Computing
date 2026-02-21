@@ -4,7 +4,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 from __future__ import annotations
 
 import numpy as np
-from reservoir.core.types import NpF64, ConfigDict, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict
+from reservoir.core.types import NpF64, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict, TopologyMeta, DetailsMeta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -276,9 +276,9 @@ def plot_classification_report(
     )
 
 
-def _get_preprocess_label(topo_meta: ConfigDict, config: PipelineConfig | None) -> str:
-    details = topo_meta.get("details", {})
-    
+def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
+    details: DetailsMeta = topo_meta.get("details", {})
+
     raw_label = str(details.get("preprocess", ""))
     if raw_label == "CustomRangeScaler":
         scale = 0.0
@@ -303,7 +303,7 @@ def _get_preprocess_label(topo_meta: ConfigDict, config: PipelineConfig | None) 
     return raw_label if raw_label else "raw"
 
 
-def _get_projection_label(config: PipelineConfig, topo_meta: ConfigDict) -> str | None:
+def _get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> str | None:
     if not hasattr(config, 'projection') or config.projection is None:
         return None
     
@@ -338,11 +338,11 @@ def _get_projection_label(config: PipelineConfig, topo_meta: ConfigDict) -> str 
     return None
 
 
-def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
+def _infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower
 
-    details = topo_meta.get("details", {})
+    details: DetailsMeta = topo_meta.get("details", {})
     student_layers = details.get("student_layers")
     topo_type = str(topo_meta.get("type", "")).lower()
     is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
@@ -416,7 +416,7 @@ def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, m
 def generate_report(
     results: ResultDict,
     config: PipelineConfig,
-    topo_meta: ConfigDict,
+    topo_meta: TopologyMeta,
     readout: ReadoutModule | None,
     train_y: NpF64 | None,
     test_y: NpF64 | None,
@@ -454,7 +454,7 @@ def generate_report(
     _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj)
 
 
-def _plot_distillation_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, dataset_name: str) -> None:
+def _plot_distillation_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, dataset_name: str) -> None:
     training_logs = results.get("training_logs")
     if training_logs is not None:
         filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
@@ -464,7 +464,7 @@ def _plot_distillation_section(results: ResultDict, topo_meta: ConfigDict, train
 
 
 def _plot_classification_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
     train_y: NpF64 | None, test_y: NpF64 | None, val_y: NpF64 | None
 ) -> None:
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
@@ -474,8 +474,8 @@ def _plot_classification_section(
     selected_lambda = None
     lam_val = train_res.get("best_lambda")
     if lam_val is not None:
-        selected_lambda = float(lam_val)
-    
+        selected_lambda = float(str(lam_val))
+
     # Extract predictions from ResultDict and ensure Host Domain (NpF64)
     outputs = results.get("outputs") or {}
     train_pred_raw = outputs.get("train_pred")
@@ -512,7 +512,7 @@ def _plot_classification_section(
 
 
 def _plot_regression_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
     train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, dataset_preset: DatasetPreset | None
 ) -> None:
     filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
@@ -567,7 +567,7 @@ def _plot_regression_section(
              boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
              train_res = results.get("train") or {}
              lam_val = train_res.get("best_lambda")
-             best_lam = float(lam_val) if lam_val is not None else None
+             best_lam = float(str(lam_val)) if lam_val is not None else None
              plot_lambda_search_boxplot(
                  residuals_hist, boxplot_filename,
                  title=f"Lambda Search Residuals ({model_type_str})",
@@ -578,7 +578,7 @@ def _plot_regression_section(
              pass
 
 
-def _plot_quantum_section(results: ResultDict, topo_meta: ConfigDict, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, model_obj: ClosedLoopGenerativeModel | None) -> None:
+def _plot_quantum_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, model_obj: ClosedLoopGenerativeModel | None) -> None:
     quantum_trace = results.get("quantum_trace")
     if quantum_trace is not None:
         try:
