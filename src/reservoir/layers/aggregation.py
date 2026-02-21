@@ -5,14 +5,32 @@ State aggregation components — Strategy Pattern per AggregationMode.
 
 from __future__ import annotations
 
+import enum
 from abc import ABC, abstractmethod
 
 from beartype import beartype
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64, ConfigDict
 from reservoir.core.types import to_np_f64
-from reservoir.core.identifiers import AggregationMode
 from reservoir.utils.reporting import print_feature_stats
+
+
+# ==========================================
+# Aggregation Mode Enum
+# ==========================================
+
+class AggregationMode(enum.StrEnum):
+    """State aggregation strategies for sequence-to-feature reduction."""
+
+    LAST = "last"
+    MEAN = "mean"
+    LAST_MEAN = "last_mean"
+    MTS = "mts"
+    CONCAT = "concat"
+    SEQUENCE = "sequence"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 # ==========================================
@@ -238,6 +256,7 @@ def _validate_positive(n_units: int, n_steps: int) -> None:
 
 
 __all__ = [
+    "AggregationMode",
     "StateAggregator",
     "LastAggregator",
     "MeanAggregator",
