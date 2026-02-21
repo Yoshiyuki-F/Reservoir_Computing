@@ -16,12 +16,12 @@ from reservoir.models.generative import ClosedLoopGenerativeModel
 from typing import TYPE_CHECKING
 
 from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, TopologyMeta
+from reservoir.models.reservoir.classical import ClassicalReservoir
+from reservoir.models.nn.fnn import FNNModel
+from reservoir.training.presets import TrainingConfig
 
 if TYPE_CHECKING:
-    from reservoir.training.presets import TrainingConfig
-    from reservoir.models.nn.fnn import FNNModel
-    from reservoir.models.reservoir.classical import ClassicalReservoir
-
+    pass #ruff safe breaks this
 
 @beartype
 class DistillationModel(ClosedLoopGenerativeModel):
