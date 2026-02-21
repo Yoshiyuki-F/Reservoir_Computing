@@ -51,10 +51,11 @@ _forbidden_copy = re.compile(r"\.copy\(")
 _forbidden_callable_ellipsis = re.compile(r"\bCallable\[\s*\.\.\.")
 
 # 5. Type Checking Escape Hatches
-_forbidden_isinstance_dict = re.compile(r"isinstance\s*\([^,]+,\s*dict\s*\)")
-_forbidden_isinstance_list = re.compile(r"isinstance\s*\([^,]+,\s*list\s*\)")
 _forbidden_kwargs = re.compile(r"\bdef\s+\w+\s*\(.*(?:\*args|\*\*kwargs)")
 _forbidden_cast_any = re.compile(r"cast\s*\(\s*Any\s*,")
+
+_forbidden_defensive_isinstance = re.compile(r"isinstance\s*\([^,]+,\s*\(?\s*(?:dict|list|tuple|int|float|str|bool)\b")
+
 
 def check_file(path: Path) -> list[str]:
     """Return list of violation messages for a file."""
@@ -120,12 +121,13 @@ def check_file(path: Path) -> list[str]:
             violations.append(f"L{i}: ❌ Rule 8: 'Callable[...,]' with ellipsis is forbidden. Specify exact arguments.")
 
         # check_file 関数の forループ内に追加
-        if _forbidden_isinstance_dict.search(line):
+        if _forbidden_defensive_isinstance.search(line):
+            # Unionの解決など、どうしても必要な場合は # noqa 等で回避させる設計にするか、
+            # そもそも設計を見直させる
             violations.append(
-                f"L{i}: ❌ Rule 11: 'isinstance(x, dict)' forbidden. Trust your strict types (ResultDict) and use safe utility functions.")
-
-        if _forbidden_isinstance_list.search(line):
-            violations.append(f"L{i}: ❌ Rule 11: 'isinstance(x, list)' forbidden. Trust your strict type hints.")
+                f"L{i}: ❌ Rule 14: Defensive 'isinstance' against basic types is forbidden. "
+                "Trust Pyrefly & Beartype. (Use Type Narrowing only for explicit Unions)"
+            )
 
         # check_file の forループ内
         if _forbidden_kwargs.search(line):

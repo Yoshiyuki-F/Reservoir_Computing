@@ -47,13 +47,13 @@ class ReadoutModule(Protocol):
 class Adapter(Protocol):
     """Protocol for structural adapters (Step 4) that transform data and align targets."""
 
-    def transform(self, X: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def transform(self, X: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         ...
 
-    def align_targets(self, targets: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def align_targets(self, targets: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         ...
 
-    def __call__(self, X: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def __call__(self, X: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         ...
 
 
@@ -63,7 +63,7 @@ __all__ = ["Transformer", "ReadoutModule", "Component", "Adapter"]
 class Component(Protocol):
     """Minimal component contract for sequential composition."""
 
-    def __call__(self, inputs: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         ...
 
     def get_topology_meta(self) -> ConfigDict:

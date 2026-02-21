@@ -19,8 +19,7 @@ import jax.numpy as jnp
 from reservoir.readout.ridge import RidgeCV
 
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, ConfigDict
-    import numpy as np
+    from reservoir.core.types import JaxF64, ConfigDict, NpF64
     from collections.abc import Callable
 
 
@@ -101,7 +100,7 @@ class PolyRidgeReadout(RidgeCV):
         val_y: JaxF64,
         scoring_fn: Callable,
         maximize_score: bool = True,
-    ) -> tuple[float, float, dict[float, float], dict[float, float], dict[float, np.ndarray]]:
+    ) -> tuple[float, float, dict[float, float], dict[float, float], dict[float, NpF64]]:
         """Expand features for both train and val, then delegate to RidgeCV."""
         from reservoir.utils.reporting import print_feature_stats
 

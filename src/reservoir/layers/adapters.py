@@ -3,7 +3,8 @@ Step 4 Adapters before the actual model layers
 """
 import jax.numpy as jnp
 from beartype import beartype
-from reservoir.core.types import JaxF64
+from reservoir.core.types import JaxF64, KwargsDict
+from reservoir.core.types import to_np_f64
 from reservoir.utils.reporting import print_feature_stats
 
 
@@ -17,7 +18,7 @@ class Flatten:
         return self
     
     @staticmethod
-    def transform(X: JaxF64, log_label: str | None = None) -> JaxF64:
+    def transform(X: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         if X.ndim == 3:
             result = X.reshape(X.shape[0], -1)
         elif X.ndim == 2:
@@ -32,15 +33,15 @@ class Flatten:
         return result
 
     @staticmethod
-    def align_targets(targets: JaxF64, log_label: str | None = None) -> JaxF64:
+    def align_targets(targets: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         """No alignment needed for Flatten adapter."""
         if log_label is not None:
             from reservoir.core.types import to_np_f64
             print_feature_stats(to_np_f64(targets), log_label)
         return targets
 
-    def __call__(self, X: JaxF64, log_label: str | None = None) -> JaxF64:
-        return self.transform(X, log_label=log_label)
+    def __call__(self, X: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
+        return self.transform(X, log_label=log_label, params=params)
 
 
 @beartype
@@ -57,7 +58,7 @@ class TimeDelayEmbedding:
     def fit(self) -> "TimeDelayEmbedding":
         return self
 
-    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None) -> JaxF64:
+    def transform(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         # Support 2D input (T, F) - treat as single batch
         is_2d = X.ndim == 2
         if is_2d:
@@ -94,7 +95,7 @@ class TimeDelayEmbedding:
 
         return X_embedded
 
-    def align_targets(self, targets: JaxF64, log_label: str | None = None) -> JaxF64:
+    def align_targets(self, targets: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         """Align targets by dropping first (window_size-1) timesteps to match windowed X."""
         W = self.window_size
         # Support 2D (T, Out)
@@ -112,6 +113,6 @@ class TimeDelayEmbedding:
             print_feature_stats(to_np_f64(reshaped), f"{log_label} (Time-Trimmed)")
         return reshaped
 
-    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None) -> JaxF64:
-        return self.transform(X, flatten_batch=flatten_batch, log_label=log_label)
+    def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
+        return self.transform(X, flatten_batch=flatten_batch, log_label=log_label, params=params)
 

@@ -28,18 +28,18 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
-from reservoir.pipelines import run_pipeline
-from reservoir.utils import check_gpu_available
-from reservoir.models.presets import (
+from reservoir.pipelines import run_pipeline  # noqa: E402
+from reservoir.utils import check_gpu_available  # noqa: E402
+from reservoir.models.presets import (  # noqa: E402
     CLASSICAL_RESERVOIR_PRESET,
     DEFAULT_RIDGE_READOUT,
 )
-from reservoir.models.config import (
+from reservoir.models.config import (  # noqa: E402
     MinMaxScalerConfig,
     PolyRidgeReadoutConfig,
     RandomProjectionConfig,
 )
-from reservoir.core.identifiers import Dataset
+from reservoir.core.identifiers import Dataset  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

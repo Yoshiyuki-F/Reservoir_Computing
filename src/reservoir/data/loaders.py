@@ -3,6 +3,7 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
+from typing import TypeVar, TYPE_CHECKING
 from beartype import beartype
 
 import numpy as np
@@ -23,8 +24,6 @@ from reservoir.data.structs import SplitDataset
 
 LOADER_REGISTRY = StrictRegistry({})
 
-
-from typing import TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from reservoir.data.config import ChaosDatasetConfig

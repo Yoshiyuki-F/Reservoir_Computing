@@ -133,6 +133,11 @@ typing.Union[X, Y] の使用は禁止。必ず X | Y を使用すること。
 typing.Dict, typing.List, typing.Type 等の大文字コレクションは禁止。組み込みの dict, list, type を使用すること。
 type :ignore 
 
+🚫 Rule: 内部ロジックでの isinstance 防衛の禁止 (Trust the Type System)
+PyreflyとBeartypeによって型は完全に保証されているため、「念のため」の isinstance や type() == による型チェック（Defensive Programming）を内部ロジックで行うことを固く禁ずる。
+例外が許されるのは「意図的な Union 型（例: int | str）を分岐処理（Type Narrowing）する時」のみである。
+外部からのデータ（JSONやユーザー入力）は、システム境界（MapperやConfigパース時）で一度だけバリデーションし、内部（ReportingやPipeline）には一切の型チェックを持ち込まないこと。
+
 
 
 

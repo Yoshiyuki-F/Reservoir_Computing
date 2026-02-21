@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from beartype import beartype
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, to_np_f64, ConfigDict
+from reservoir.core.types import JaxF64, ConfigDict
+from reservoir.core.types import to_np_f64
 from reservoir.core.interfaces import Transformer
 from reservoir.core.identifiers import AggregationMode
 from reservoir.utils.reporting import print_feature_stats
