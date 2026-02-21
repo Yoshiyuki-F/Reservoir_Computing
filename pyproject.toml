@@ -165,3 +165,6 @@ extend-ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-decorators = ["beartype.beartype", "beartype"]
