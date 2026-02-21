@@ -157,6 +157,7 @@ extend-select = [
 ]
 extend-ignore = [
     "TRY003", # 標準例外（ValueError等）への長文メッセージ/f-stringの直接指定を許可
+    "ARG002", # MLインターフェース慣習: 親クラスのシグネチャを保持するため未使用メソッド引数を許可 (scikit-learn convention)
 ]
 
 

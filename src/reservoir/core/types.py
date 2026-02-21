@@ -22,7 +22,7 @@ import numpy as np
 from typing import TypedDict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import reservoir.core.interfaces
+    import reservoir.readout.base
     import reservoir.layers.preprocessing
 
 # ==========================================
@@ -115,7 +115,7 @@ class ResultDict(TypedDict, total=False):
     test: TestMetrics
     validation: EvalMetrics
     outputs: dict[str, NpF64 | None]
-    readout: "reservoir.core.interfaces.ReadoutModule | None"
+    readout: "reservoir.readout.base.ReadoutModule | None"
     preprocessor: "reservoir.layers.preprocessing.Preprocessor | None"
     scaler: "reservoir.layers.preprocessing.Preprocessor | None"
     training_logs: TrainLogs
