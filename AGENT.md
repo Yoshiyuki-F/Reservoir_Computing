@@ -132,7 +132,7 @@ typing.Optional[X] の使用は禁止。必ず X | None を使用すること。
 typing.Union[X, Y] の使用は禁止。必ず X | Y を使用すること。
 typing.Dict, typing.List, typing.Type 等の大文字コレクションは禁止。組み込みの dict, list, type を使用すること。
 type :ignore 
-
+if type(candidates) is float: 禁止
 # 12. 🚫 Rule: 内部ロジックでの isinstance 防衛の禁止 (Trust the Type System)
 
 PyreflyとBeartypeによって型は完全に保証されているため、「念のため」の isinstance や type() == による型チェック（Defensive Programming）を内部ロジックで行うことを固く禁ずる。

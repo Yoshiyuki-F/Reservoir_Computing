@@ -1,5 +1,4 @@
-import numpy as np
-from reservoir.core.types import JaxF64, EvalMetrics
+from reservoir.core.types import JaxF64, EvalMetrics, to_np_f64
 from reservoir.utils.metrics import calculate_chaos_metrics
 from reservoir.utils.reporting import print_chaos_metrics
 from reservoir.layers.preprocessing import Preprocessor
@@ -25,8 +24,8 @@ class Evaluator:
         shape_pred = pred.shape
         shape_truth = truth.shape
         # Flatten -> Inverse Transform -> Reshape back
-        pred_np = np.asarray(pred)
-        truth_np = np.asarray(truth)
+        pred_np = to_np_f64(pred)
+        truth_np = to_np_f64(truth)
         pred_raw = scaler.inverse_transform(pred_np.reshape(-1, shape_pred[-1])).reshape(shape_pred)
         truth_raw = scaler.inverse_transform(truth_np.reshape(-1, shape_truth[-1])).reshape(shape_truth)
 
