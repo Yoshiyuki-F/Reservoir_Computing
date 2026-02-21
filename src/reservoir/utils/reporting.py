@@ -324,10 +324,8 @@ def _get_projection_label(config: PipelineConfig, topo_meta: ConfigDict) -> str 
         shapes = topo_meta.get("shapes", {})
         projected_shape = shapes.get("projected")
         poly_output = 0
-        if isinstance(projected_shape, (list, tuple)) and len(projected_shape) > 0:
-            p_out = projected_shape[-1]
-            if isinstance(p_out, (int, float, str, bool)):
-                poly_output = int(p_out)
+        if projected_shape and len(projected_shape) > 0:
+            poly_output = int(projected_shape[-1])
         return f"Poly{poly_output}"
     elif proj_type == "pca":
         return f"PCA{proj_units}"
@@ -343,8 +341,7 @@ def _get_projection_label(config: PipelineConfig, topo_meta: ConfigDict) -> str 
 def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower
-    student_layers = None
-    
+
     details = topo_meta.get("details", {})
     student_layers = details.get("student_layers")
     topo_type = str(topo_meta.get("type", "")).lower()
@@ -405,8 +402,8 @@ def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, m
 
     # NN marker
     if is_fnn:
-        layers_list = student_layers if isinstance(student_layers, (list, tuple)) else []
-        layers = tuple(int(v) for v in layers_list if isinstance(v, (int, float, str, bool)) and v is not None)
+        layers_list = student_layers or []
+        layers = tuple(int(v) for v in layers_list if v is not None)
         if layers:
             filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
         else:
@@ -476,7 +473,7 @@ def _plot_classification_section(
     train_res = results.get("train", {})
     selected_lambda = None
     lam_val = train_res.get("best_lambda")
-    if isinstance(lam_val, (float, int)):
+    if lam_val is not None:
         selected_lambda = float(lam_val)
     
     # Extract predictions from ResultDict and ensure Host Domain (NpF64)
@@ -503,7 +500,6 @@ def _plot_classification_section(
         train_pred=train_p,
         test_pred=test_p,
         val_pred=val_p,
-        # preprocessors removed
     )
     
     # FNN Readout Loss Plot
@@ -524,7 +520,7 @@ def _plot_regression_section(
     
     test_results = results.get("test")
     test_mse = 0.0
-    if isinstance(test_results, dict) and test_results.get("mse") is not None:
+    if test_results is not None and test_results.get("mse") is not None:
         test_mse = float(test_results["mse"])
         
     scaler = results.get("scaler")
@@ -571,7 +567,7 @@ def _plot_regression_section(
              boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
              train_res = results.get("train") or {}
              lam_val = train_res.get("best_lambda")
-             best_lam = float(lam_val) if isinstance(lam_val, (float, int)) else None
+             best_lam = float(lam_val) if lam_val is not None else None
              plot_lambda_search_boxplot(
                  residuals_hist, boxplot_filename,
                  title=f"Lambda Search Residuals ({model_type_str})",

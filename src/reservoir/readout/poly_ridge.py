@@ -19,7 +19,8 @@ import jax.numpy as jnp
 from reservoir.readout.ridge import RidgeCV
 
 if TYPE_CHECKING:
-    from reservoir.core.types import JaxF64, ConfigDict, NpF64
+    from reservoir.core.types import JaxF64, ConfigDict
+    from reservoir.core.types import NpF64
     from collections.abc import Callable
 
 

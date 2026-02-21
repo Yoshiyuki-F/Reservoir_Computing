@@ -71,7 +71,7 @@ class DistillationFactory:
             student_input_dim = time_steps * student_raw_feat_dim
         
         h_layers = distillation_config.student.hidden_layers
-        hidden_layers = [h_layers] if isinstance(h_layers, int) else list(h_layers or [])
+        hidden_layers = list(h_layers or [])
 
         #3. create student (FNNModel handles adapter internally based on window_size)
         # student_input_dim is the EFFECTIVE dimension (e.g. 784 for MNIST 28*28)

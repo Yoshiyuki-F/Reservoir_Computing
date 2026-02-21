@@ -88,12 +88,9 @@ class ResultReporter:
 
         # Ensure all predictions and outputs are moved to Host Domain (NpF64)
         def _to_np_recursive(val):
-            # Trust the type system - no defensive isinstance for basic types
-            # Only check for JAX arrays to convert them
+            # Trust the type system - only check for JAX arrays to convert them
             if hasattr(val, "block_until_ready") or hasattr(val, "device_buffer"):
                 return to_np_f64(val)
-            if isinstance(val, dict):
-                 return {k: _to_np_recursive(v) for k, v in val.items()}
             return val
 
         outputs_raw = dict(fit_result.get("outputs", {})) # strategy might have returned them

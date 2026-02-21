@@ -1,13 +1,9 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/utils/gpu_utils.py
 Reservoir Computing用のGPUユーティリティ関数。
 """
-from typing import TypeVar
 from collections.abc import Callable
 import re
 import shutil
-
-T = TypeVar('T')
-
 
 def _assert_x64_enabled() -> None:
     """Raise if JAX x64 mode is not enabled."""
@@ -154,10 +150,10 @@ def require_gpu() -> Callable:
     import sys
     
     def decorator(test_func: Callable) -> Callable:
-        def wrapper(*args: T, **kwargs: T) -> T:
+        def wrapper() -> None:
             try:
                 check_gpu_available()
-                return test_func(*args, **kwargs)
+                test_func()
             except RuntimeError as e:
                 print(f"\nGPU REQUIREMENT FAILED: {e}")
                 print("Exiting test due to GPU requirement...")
