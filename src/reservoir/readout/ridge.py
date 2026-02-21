@@ -104,8 +104,8 @@ class RidgeRegression(ReadoutModule):
 
     @classmethod
     def from_dict(cls, data: ConfigDict) -> "RidgeRegression":
-        lam_val = data.get("ridge_lambda")
-        r_lam = float(lam_val) if isinstance(lam_val, (int, float, str)) else 0.0
+        lam_val = data.get("ridge_lambda", 0.0)
+        r_lam = float(lam_val)
         model = cls(
             ridge_lambda=r_lam,
             use_intercept=bool(data.get("use_intercept", True))
@@ -171,12 +171,10 @@ class RidgeCV(ReadoutModule):
     def from_dict(cls, data: ConfigDict) -> "RidgeCV":
         candidates_list = data.get("lambda_candidates")
         if candidates_list is None:
-             lam_val = data.get("ridge_lambda")
-             candidates = (float(lam_val) if isinstance(lam_val, (int, float, str)) else 0.0,)
-        elif isinstance(candidates_list, (list, tuple)):
-             candidates = tuple(float(x) for x in candidates_list if isinstance(x, (int, float, str)))
+             lam_val = data.get("ridge_lambda", 0.0)
+             candidates = (float(lam_val),)
         else:
-             candidates = (0.0,)
+             candidates = tuple(float(x) for x in candidates_list)
              
         instance = cls(lambda_candidates=candidates, use_intercept=bool(data.get("use_intercept", True)))
         instance.best_model = RidgeRegression.from_dict(data)

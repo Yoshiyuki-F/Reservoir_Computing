@@ -241,10 +241,8 @@ def _step_logic(
     """
     # Polymorphic State Unpacking
     rng_key = None
-    if isinstance(state, (tuple, list)):
-        state_vec, rng_key = state
-    else:
-        state_vec = state
+    # Trust the type system: state is tuple[JaxF64, JaxF64 | None] per annotation
+    state_vec, rng_key = state
 
     # Prepare RNG for this step and next step
     step_key = None

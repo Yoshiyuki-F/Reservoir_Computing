@@ -52,12 +52,12 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Get window_size from student's adapter if available
         self._window_size: int = getattr(student, 'window_size', 1) or 1
 
-    def __call__(self, inputs: JaxF64, **kwargs: KwargsDict) -> JaxF64:
-        return self.predict(inputs, **kwargs)
+    def __call__(self, inputs: JaxF64, params: KwargsDict | None = None) -> JaxF64:
+        return self.predict(inputs, params=params)
 
-    def predict(self, X: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def predict(self, X: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         """Delegate to student's predict (which handles adapter internally)."""
-        return self.student.predict(X, **kwargs)
+        return self.student.predict(X, params=params)
 
     def _compute_teacher_targets(self, inputs: JaxF64) -> JaxF64:
         """Legacy single-batch implementation (prone to OOM on large datasets)."""
@@ -103,7 +103,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **kwargs: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, params: KwargsDict | None = None) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -127,7 +127,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         # Student training - FNNModel.train() handles adapter and alignment internally
-        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
+        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", params=params) or {}
         
         # --- Generate 5B: Student Output (Predicted State) ---
         # To verify Distillation, we show the student's output stats
@@ -136,7 +136,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = float(student_logs.get("final_loss", 0.0))
-        logs: TrainLogs = dict(student_logs) if isinstance(student_logs, dict) else {}
+        logs: TrainLogs = dict(student_logs)
         logs.setdefault("distill_mse", distill_mse)
         logs.setdefault("final_loss", distill_mse)
         return logs
@@ -154,7 +154,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Delegate to student's evaluate (handles adapter and alignment internally)
         student_metrics = self.student.evaluate(X, teacher_targets)
 
-        metrics: EvalMetrics = dict(student_metrics) if isinstance(student_metrics, dict) else {}
+        metrics: EvalMetrics = dict(student_metrics)
         return metrics
 
     def get_topology_meta(self) -> ConfigDict:

@@ -66,17 +66,8 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         # This allows polymorphism from children implementing Generic[StateT]
         from typing import cast
         
-        if isinstance(initial_state, tuple):
-             is_state_batched = True
-        elif hasattr(initial_state, "ndim"):
-             is_state_batched = cast('JaxF64', initial_state).ndim > 1
-        else:
-             is_state_batched = False
-        
-        if not is_state_batched:
-             init_batched = cast('StateT', cast('JaxF64', initial_state)[None, ...] if not isinstance(initial_state, tuple) else initial_state)
-        else:
-             init_batched = initial_state
+        # Assume initial_state is correctly shaped or typed (Trust the Type System)
+        init_batched = initial_state
 
         _, outputs = self.forward(init_batched, inputs_batched)
         states = outputs.states if hasattr(outputs, "states") else outputs
@@ -97,7 +88,7 @@ class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
         """Return aggregated feature dimension without running the model."""
         return self.aggregator.get_output_dim(self.n_units, int(time_steps))
 
-    def __call__(self, inputs: JaxF64, **kwargs: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, params: KwargsDict | None = None) -> JaxF64:
         """
         Allow reservoir nodes to be used directly in SequentialModel.
         Automatically initializes state and runs trajectory generation.

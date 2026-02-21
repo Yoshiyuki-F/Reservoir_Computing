@@ -30,8 +30,6 @@ class DistillationFactory:
         training: TrainingConfig | None = None,
     ) -> DistillationModel:
         teacher_cfg = distillation_config.teacher
-        if not isinstance(teacher_cfg, ClassicalReservoirConfig):
-            raise TypeError(f"Distillation teacher must be ClassicalReservoirConfig, got {type(teacher_cfg)}.")
         teacher_cfg.validate(context="distillation.teacher")
 
         projected_input_dim = int(input_dim)

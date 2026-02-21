@@ -41,9 +41,7 @@ class PipelineModelBuilder:
         )
 
         # 4. Build Topology Metadata
-        topo_meta = model.get_topology_meta()
-        if not isinstance(topo_meta, dict):
-            topo_meta = {}
+        topo_meta: ConfigDict = model.get_topology_meta() or {}
         shapes_meta = topo_meta.get("shapes", {}) or {}
         
         shapes_meta["input"] = dataset_meta.input_shape

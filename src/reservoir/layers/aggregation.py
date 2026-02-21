@@ -24,14 +24,7 @@ class StateAggregator(Transformer):
 
     @staticmethod
     def _resolve_mode(mode: AggregationMode) -> AggregationMode:
-        if isinstance(mode, AggregationMode):
-            return mode
-        if isinstance(mode, str):
-            try:
-                return AggregationMode(mode)
-            except Exception as exc:
-                raise ValueError(f"Invalid aggregation mode '{mode}'") from exc
-        raise TypeError(f"Aggregation mode must be AggregationMode or str, got {type(mode)}.")
+        return mode
 
     @staticmethod
     def aggregate(states: JaxF64, mode: AggregationMode) -> JaxF64:

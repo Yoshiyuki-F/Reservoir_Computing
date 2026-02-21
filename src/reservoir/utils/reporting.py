@@ -116,16 +116,12 @@ def print_feature_stats(features: NpF64 | None, stage: str) -> None:
     _print_feature_stats_impl(features, stage, backend="numpy")
 
 def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE") -> None:
-    if not isinstance(train_res, dict):
-        return
     history = train_res.get("search_history")
-    if not isinstance(history, dict) or not history:
+    if not history:
         return
     best_lam = train_res.get("best_lambda")
     
-    weight_norms = train_res.get("weight_norms")
-    if not isinstance(weight_norms, dict):
-        weight_norms = {}
+    weight_norms = train_res.get("weight_norms") or {}
     
     metric_label = metric_name
 
@@ -160,7 +156,7 @@ def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE
         norm = weight_norms.get(lam)
         norm_str = f"(Norm: {norm:.5e})" if norm is not None else "(Norm: n/a)"
         marker = ""
-        if best_marker is not None and isinstance(best_marker, (int, float, str)):
+        if best_marker is not None:
              try:
                  bm_val = float(best_marker)
                  if abs(lam_val - bm_val) < 1e-12:
@@ -172,8 +168,6 @@ def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE
 
 
 def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str, learning_rate: float | None = None) -> None:
-    if not isinstance(training_logs, dict):
-        return
     loss_history = training_logs.get("loss_history")
     if not loss_history:
         return
@@ -182,7 +176,7 @@ def plot_distillation_loss(training_logs: TrainLogs, save_path: str, title: str,
     except Exception as exc:  # pragma: no cover
         print(f"Skipping distillation loss plotting due to import error: {exc}")
         return
-    loss_list = list(loss_history) if isinstance(loss_history, (list, tuple, np.ndarray)) else []
+    loss_list = list(loss_history)
     plot_loss_history(loss_list, save_path, title=title, learning_rate=learning_rate)
 
 
@@ -255,12 +249,12 @@ def plot_classification_report(
 
     # Extract lambda_norm from weight_norms for the selected lambda
     lambda_norm = None
-    if selected_lambda is not None and isinstance(results, dict):
+    if selected_lambda is not None and results is not None:
         train_res = results.get("train", {})
         weight_norms = train_res.get("weight_norms", {})
         lambda_norm = float(weight_norms.get(selected_lambda, 0.0))
 
-    metrics_test = results.get("test", {}) if isinstance(results, dict) else {}
+    metrics_test = results.get("test", {}) if results is not None else {}
     metrics_payload = {k: v for k, v in metrics_test.items()}
     if train_labels_np is None or test_labels_np is None or train_pred_np is None or test_pred_np is None:
         print("    [Reporter] Missing data for classification plot, skipping.")
@@ -283,11 +277,7 @@ def plot_classification_report(
 
 
 def _get_preprocess_label(topo_meta: ConfigDict, config: PipelineConfig | None) -> str:
-    if not isinstance(topo_meta, dict):
-        return "raw"
-    details = topo_meta.get("details")
-    if not isinstance(details, dict):
-        return "raw"
+    details = topo_meta.get("details", {})
     
     raw_label = str(details.get("preprocess", ""))
     if raw_label == "CustomRangeScaler":
@@ -331,9 +321,7 @@ def _get_projection_label(config: PipelineConfig, topo_meta: ConfigDict) -> str 
     elif proj_type == "resize":
         return f"Res{proj_units}"
     elif proj_type == "polynomial":
-        shapes = topo_meta.get("shapes", {}) if isinstance(topo_meta, dict) else {}
-        if not isinstance(shapes, dict):
-            shapes = {}
+        shapes = topo_meta.get("shapes", {})
         projected_shape = shapes.get("projected")
         poly_output = 0
         if isinstance(projected_shape, (list, tuple)) and len(projected_shape) > 0:
@@ -357,12 +345,10 @@ def _infer_filename_parts(topo_meta: ConfigDict, training_obj: TrainingConfig, m
     is_fnn = "fnn" in type_lower
     student_layers = None
     
-    if isinstance(topo_meta, dict):
-        details = topo_meta.get("details")
-        if isinstance(details, dict):
-            student_layers = details.get("student_layers")
-        topo_type = str(topo_meta.get("type", "")).lower()
-        is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
+    details = topo_meta.get("details", {})
+    student_layers = details.get("student_layers")
+    topo_type = str(topo_meta.get("type", "")).lower()
+    is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
 
     preprocess_label = _get_preprocess_label(topo_meta, config)
 
@@ -489,10 +475,9 @@ def _plot_classification_section(
     
     train_res = results.get("train", {})
     selected_lambda = None
-    if isinstance(train_res, dict):
-        lam_val = train_res.get("best_lambda")
-        if isinstance(lam_val, (float, int)):
-            selected_lambda = float(lam_val)
+    lam_val = train_res.get("best_lambda")
+    if isinstance(lam_val, (float, int)):
+        selected_lambda = float(lam_val)
     
     # Extract predictions from ResultDict and ensure Host Domain (NpF64)
     outputs = results.get("outputs") or {}

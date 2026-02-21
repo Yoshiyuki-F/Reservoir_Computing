@@ -29,10 +29,10 @@ def print_topology(meta: ConfigDict) -> None:
         return
 
     shapes_raw = meta.get("shapes", {})
-    shapes: dict[str, tuple[int, ...] | None] = shapes_raw if isinstance(shapes_raw, dict) else {}
+    shapes: dict[str, tuple[int, ...] | None] = shapes_raw
     
     details_raw = meta.get("details", {})
-    details: dict[str, str | int | tuple[int, ...] | None] = details_raw if isinstance(details_raw, dict) else {}
+    details: dict[str, str | int | tuple[int, ...] | None] = details_raw
 
     s_in = shapes.get("input")
     s_pre = shapes.get("preprocessed") or s_in
