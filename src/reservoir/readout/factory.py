@@ -7,8 +7,11 @@ from reservoir.models.config import RidgeReadoutConfig, PolyRidgeReadoutConfig, 
 from reservoir.readout.ridge import RidgeCV
 from reservoir.readout.poly_ridge import PolyRidgeReadout
 from reservoir.readout.fnn_readout import FNNReadout
-from reservoir.core.interfaces import ReadoutModule
-from reservoir.training.config import TrainingConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.training.config import TrainingConfig
+    from reservoir.core.interfaces import ReadoutModule
 
 class ReadoutFactory:
     """Builds readout modules from ReadoutConfig."""

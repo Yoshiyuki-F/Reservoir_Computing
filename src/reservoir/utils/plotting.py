@@ -5,11 +5,14 @@ Classification visualization utilities with validation support.
 from __future__ import annotations
 
 from pathlib import Path
-from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
-from reservoir.core.types import NpF64
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import NpF64
+    from collections.abc import Sequence
 
 
 def _find_project_root() -> Path:

@@ -6,8 +6,10 @@ Transformer / Readout contracts referenced throughout the codebase.
 """
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
+from typing import Protocol, runtime_checkable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
 
 
 @runtime_checkable

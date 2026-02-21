@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from beartype import beartype
-from reservoir.core.types import NpF64
 
 import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import NpF64
 
 MNIST_ROOT = Path("data/mnist")
 

@@ -39,11 +39,11 @@ class ResultReporter:
         if fit_result["closed_loop_pred"] is not None:
             # Predictions from strategies might be JaxF64, convert to NpF64 for reporting
             test_pred = to_np_f64(fit_result["closed_loop_pred"])
-            test_y_final = to_np_f64(fit_result["closed_loop_truth"])
+            to_np_f64(fit_result["closed_loop_truth"])
             results["is_closed_loop"] = True
         else:
             test_pred = to_np_f64(fit_result["test_pred"])
-            test_y_final = to_np_f64(aligned_test_y)
+            to_np_f64(aligned_test_y)
 
         # Try to use pre-calculated metrics from Strategy
         metrics: ResultDict = dict(fit_result.get("metrics", {}))

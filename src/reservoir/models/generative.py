@@ -3,7 +3,7 @@ src/reservoir/models/generative.py
 Base implementation for generative models providing closed-loop generation.
 """
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, Protocol, runtime_checkable, cast
+from typing import TypeVar, Protocol, runtime_checkable, cast
 from collections.abc import Callable
 
 from beartype import beartype
@@ -21,7 +21,7 @@ class Predictable(Protocol):
 StateT = TypeVar('StateT')
 
 @beartype
-class ClosedLoopGenerativeModel(ABC, Generic[StateT]):
+class ClosedLoopGenerativeModel[StateT](ABC):
     """
     Abstract base class for models that can generate autoregressive trajectories.
     Implements the GenerativeModel protocol methods for closed-loop generation.

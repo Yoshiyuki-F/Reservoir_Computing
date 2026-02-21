@@ -8,11 +8,14 @@ from __future__ import annotations
 from reservoir.core.identifiers import Model
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.distillation.model import DistillationModel
-from reservoir.models.presets import DistillationConfig
 from reservoir.models.config import ClassicalReservoirConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
-from reservoir.training.presets import TrainingConfig
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
+    from reservoir.training.presets import TrainingConfig
+    from reservoir.models.presets import DistillationConfig
 
 
 class DistillationFactory:

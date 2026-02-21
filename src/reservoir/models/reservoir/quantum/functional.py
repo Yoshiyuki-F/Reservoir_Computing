@@ -9,15 +9,17 @@ Feedback QRC (Murauer et al., 2025):
 """
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, TYPE_CHECKING
 from functools import partial
 
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, JaxKey
 import tensorcircuit as tc
 
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
+
+if TYPE_CHECKING:
+    from reservoir.core.types import JaxF64, JaxKey
 
 
 # --- Paper R Gate (Murauer et al., 2025 Eq.1) ---

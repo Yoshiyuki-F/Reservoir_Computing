@@ -5,15 +5,18 @@ Global entry point for model creation. Delegates to specialized factories.
 from __future__ import annotations
 
 
-from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.training.presets import TrainingConfig
 from reservoir.core.identifiers import Model
 from reservoir.models.config import ClassicalReservoirConfig, DistillationConfig, FNNConfig, QuantumReservoirConfig
-from reservoir.models.presets import PipelineConfig
 from reservoir.models.distillation.factory import DistillationFactory
 from reservoir.models.reservoir.factory import ReservoirFactory
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
+    from reservoir.models.presets import PipelineConfig
+    from reservoir.training.presets import TrainingConfig
+    from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
 class ModelFactory:
@@ -96,7 +99,6 @@ class ModelFactory:
             
             # Build adapter string and shape
             if window_size is not None:
-                adapter_type = f"TimeDelayEmbedding(K={window_size})"
                 adapter_shape = (windowed_samples, flattened_dim) if windowed_samples else (flattened_dim,)
                 structure = f"TimeDelayEmbedding(K={window_size}) -> FNN -> Output"
             else:

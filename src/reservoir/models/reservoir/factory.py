@@ -10,8 +10,11 @@ from reservoir.models.config import ClassicalReservoirConfig, QuantumReservoirCo
 from reservoir.models.presets import PipelineConfig
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.reservoir.quantum import QuantumReservoir
-from reservoir.models.reservoir.base import Reservoir
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
+    from reservoir.models.reservoir.base import Reservoir
 
 
 class ReservoirFactory:

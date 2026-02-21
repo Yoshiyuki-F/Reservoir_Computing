@@ -6,20 +6,20 @@ Adapter is selected based on FNNConfig: Flatten (default) or TimeDelayEmbedding 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from collections.abc import Sequence, Callable
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence, Callable
+    from reservoir.training.presets import TrainingConfig
+    from reservoir.core.types import JaxF64, KwargsDict, TrainLogs, EvalMetrics
     from reservoir.models.generative import Predictable
 
 from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, KwargsDict, TrainLogs, EvalMetrics
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
 from reservoir.models.generative import ClosedLoopGenerativeModel
-from reservoir.training.presets import TrainingConfig
 from reservoir.layers.adapters import Flatten, TimeDelayEmbedding
 
 
@@ -172,7 +172,6 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
             
             # Process seed through the windowed FNN to get outputs
             outputs = []
-            current_state = initial_window
             for t in range(self.window_size - 1, seq_len):
                 # Build window from input_data
                 window = input_data[:, t - self.window_size + 1:t + 1, :]  # (batch, window_size, feat)

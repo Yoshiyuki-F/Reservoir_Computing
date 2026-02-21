@@ -7,10 +7,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 
 from reservoir.core.identifiers import AggregationMode, Model
-from reservoir.core.types import ConfigDict
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
 
 # -----------------------------------------------------------------------------
 # Base Config ABCs

@@ -47,7 +47,7 @@ def print_topology(meta: ConfigDict) -> None:
     readout_label = details.get("readout")
     adapter_label = details.get("adapter") or "Skipped"
     student_layers_raw = details.get("student_layers")
-    student_layers = _fmt_layers(student_layers_raw)
+    _fmt_layers(student_layers_raw)
 
     print(f"=== Model Topology: {meta.get('type', 'UNKNOWN')} ===")
     print(f"1. Input Data      : {_fmt_dim(s_in)}")

@@ -13,13 +13,15 @@ Two modes:
 """
 from __future__ import annotations
 
-from typing import Literal
-import numpy as np
+from typing import Literal, TYPE_CHECKING
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, ConfigDict
-from collections.abc import Callable
 
 from reservoir.readout.ridge import RidgeCV
+
+if TYPE_CHECKING:
+    from reservoir.core.types import JaxF64, ConfigDict
+    import numpy as np
+    from collections.abc import Callable
 
 
 class PolyRidgeReadout(RidgeCV):

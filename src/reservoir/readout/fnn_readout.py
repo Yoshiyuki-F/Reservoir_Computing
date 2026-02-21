@@ -3,12 +3,15 @@ from __future__ import annotations
 
 
 from beartype import beartype
-from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
 
 from reservoir.core.interfaces import ReadoutModule
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.fnn import FNNModel
-from reservoir.training.config import TrainingConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.training.config import TrainingConfig
+    from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
 
 
 @beartype

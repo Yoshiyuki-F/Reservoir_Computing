@@ -7,8 +7,11 @@ import abc
 from functools import singledispatch
 
 from beartype import beartype
-from reservoir.core.types import NpF64, ConfigDict
 import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import NpF64, ConfigDict
 
 
 # --- 1. Interface Definition ---
@@ -325,7 +328,10 @@ class AffineScaler(Preprocessor):
         }
 
 
-from reservoir.models.config import PreprocessingConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.models.config import PreprocessingConfig
 
 # --- 3. Factory Logic (Dependency Injection Helper) ---
 

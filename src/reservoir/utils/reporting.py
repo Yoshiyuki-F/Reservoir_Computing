@@ -3,15 +3,18 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
 import numpy as np
 from reservoir.core.types import NpF64, ConfigDict, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict
-from reservoir.layers.preprocessing import Preprocessor
-from reservoir.core.interfaces import ReadoutModule
-from reservoir.training.config import TrainingConfig
-from reservoir.data.config import DatasetPreset
-from reservoir.models.presets import PipelineConfig
-from reservoir.models.generative import ClosedLoopGenerativeModel
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.models.generative import ClosedLoopGenerativeModel
+    from reservoir.models.presets import PipelineConfig
+    from reservoir.data.config import DatasetPreset
+    from reservoir.training.config import TrainingConfig
+    from reservoir.core.interfaces import ReadoutModule
+    from reservoir.layers.preprocessing import Preprocessor
+    from collections.abc import Sequence
 
 # --- Array Formatting Helpers ---
 def _format_cls_array(arr: NpF64 | None) -> NpF64 | None:
@@ -196,7 +199,7 @@ def plot_classification_report(
         print(f"Skipping plotting due to import error: {exc}")
         return
 
-    feature_batch_size = int(getattr(training_obj, "batch_size", 0) or 0)
+    int(getattr(training_obj, "batch_size", 0) or 0)
 
     # ---------------------------------------------------------
     # 1. Labels Preparation

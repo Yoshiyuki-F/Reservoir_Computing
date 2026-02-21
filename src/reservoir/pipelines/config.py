@@ -3,15 +3,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from reservoir.core.identifiers import Dataset
-from reservoir.core.interfaces import ReadoutModule
-from reservoir.data import SplitDataset
-from reservoir.data.config import DatasetPreset
-from reservoir.training import TrainingConfig
 
 
-from reservoir.layers.preprocessing import Preprocessor
-from reservoir.layers.projection import Projection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
+    from reservoir.layers.projection import Projection
+    from reservoir.layers.preprocessing import Preprocessor
+    from reservoir.training import TrainingConfig
+    from reservoir.data.config import DatasetPreset
+    from reservoir.data import SplitDataset
+    from reservoir.core.interfaces import ReadoutModule
+    from reservoir.core.identifiers import Dataset
 
 
 @dataclass(frozen=True)
@@ -35,8 +39,10 @@ class DatasetMetadata:
     input_shape: tuple[int, ...]
 
 
-from reservoir.models.generative import ClosedLoopGenerativeModel
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.models.generative import ClosedLoopGenerativeModel
 
 
 @dataclass(frozen=True)

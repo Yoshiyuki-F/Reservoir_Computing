@@ -4,7 +4,10 @@ Data container structures for dataset splits."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from reservoir.core.types import NpF64
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import NpF64
 
 @dataclass
 class SplitDataset:

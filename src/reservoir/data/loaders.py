@@ -3,9 +3,7 @@ Dataset loader registrations and preparation helpers."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from beartype import beartype
-from reservoir.core.types import NpF64
 
 import numpy as np
 
@@ -18,13 +16,6 @@ from reservoir.data.generators import (
     generate_lorenz96_data,
 )
 from reservoir.data.presets import get_dataset_preset
-from reservoir.data.config import (
-    SineWaveConfig,
-    MackeyGlassConfig,
-    LorenzConfig,
-    Lorenz96Config,
-    MNISTConfig,
-)
 from reservoir.core.presets import StrictRegistry
 from reservoir.training.presets import TrainingConfig, get_training_preset
 from reservoir.data.structs import SplitDataset
@@ -33,7 +24,19 @@ from reservoir.data.structs import SplitDataset
 LOADER_REGISTRY = StrictRegistry({})
 
 
-from typing import TypeVar
+from typing import TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.data.config import ChaosDatasetConfig
+    from reservoir.data.config import (
+        SineWaveConfig,
+        MackeyGlassConfig,
+        LorenzConfig,
+        Lorenz96Config,
+        MNISTConfig,
+    )
+    from reservoir.core.types import NpF64
+    from collections.abc import Callable
 F = TypeVar("F")
 
 def register_loader(dataset: Dataset) -> Callable[[F], F]:
@@ -248,7 +251,6 @@ def load_dataset_with_validation_split(
         )
 
         if has_lt_split and getattr(config, "lyapunov_time_unit", 0) > 0:
-            from reservoir.data.config import ChaosDatasetConfig
             from typing import cast
             chaos_config = cast("ChaosDatasetConfig", config)
             # LT-based splitting for chaotic datasets

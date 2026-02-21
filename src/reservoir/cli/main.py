@@ -15,7 +15,10 @@ from reservoir.utils import check_gpu_available
 from reservoir.core.identifiers import Model, Dataset
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import get_model_preset
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Unified ML Framework CLI")

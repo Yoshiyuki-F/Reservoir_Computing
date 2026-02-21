@@ -10,13 +10,16 @@ from __future__ import annotations
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
 from tqdm.auto import tqdm
 
-from reservoir.models.reservoir.classical import ClassicalReservoir
-from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.generative import ClosedLoopGenerativeModel
-from reservoir.training.presets import TrainingConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.training.presets import TrainingConfig
+    from reservoir.models.nn.fnn import FNNModel
+    from reservoir.models.reservoir.classical import ClassicalReservoir
+    from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, ConfigDict, KwargsDict
 
 
 @beartype

@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 K = TypeVar("K", bound=Enum)
 
 
-class StrictRegistry(Generic[K, T]):
+class StrictRegistry[K: Enum, T]:
     """
     V2 Strict Registry.
     Maps typed Enums (K) to Config Objects (T).

@@ -5,7 +5,7 @@ Base class for Reservoir Computing models implementing ReservoirNode protocol.
 from abc import ABC, abstractmethod
 from beartype import beartype
 from reservoir.core.types import JaxF64, ConfigDict, KwargsDict
-from typing import TypedDict, TypeVar, Generic
+from typing import TypedDict, TypeVar
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.layers.aggregation import StateAggregator
@@ -19,7 +19,7 @@ class ReservoirConfig(TypedDict):
     aggregation: str
 
 @beartype
-class Reservoir(ClosedLoopGenerativeModel, ABC, Generic[StateT]):
+class Reservoir[StateT](ClosedLoopGenerativeModel, ABC):
     """Abstract base class providing common scan-based trajectory generation."""
 
     def __init__(self, n_units: int, seed: int, leak_rate: float, aggregation_mode: AggregationMode) -> None:

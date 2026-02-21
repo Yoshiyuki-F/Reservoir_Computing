@@ -8,7 +8,10 @@ from functools import singledispatch
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import JaxF64, ConfigDict
 
 
 # --- 1. Interface Definition ---
@@ -381,7 +384,10 @@ class PCAProjection(Projection):
             "input_scaler": self.input_scaler,
         }
 
-from reservoir.models.config import ProjectionConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.models.config import ProjectionConfig
 
 # --- 3. The Factory Logic (Dependency Injection Helper) ---
 

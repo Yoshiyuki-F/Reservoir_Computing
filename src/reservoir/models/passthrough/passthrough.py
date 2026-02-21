@@ -9,11 +9,14 @@ from __future__ import annotations
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 
 from reservoir.core.identifiers import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.aggregation import StateAggregator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 
 
 @beartype

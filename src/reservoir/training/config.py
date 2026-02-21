@@ -6,7 +6,10 @@ Training configurations and Hyperparameter search spaces.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from reservoir.core.types import ConfigDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from reservoir.core.types import ConfigDict
 
 
 @dataclass(frozen=True)

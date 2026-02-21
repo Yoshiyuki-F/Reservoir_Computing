@@ -151,7 +151,7 @@ class ClassificationStrategy(ReadoutStrategy):
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         test_Z = self._flatten_3d_to_2d(test_Z, "test states")
-        ty_reshaped, vy_reshaped = train_y, val_y
+        ty_reshaped, _vy_reshaped = train_y, val_y
         
         search_history: dict[float, float] = {}
         weight_norms: dict[float, float] = {}

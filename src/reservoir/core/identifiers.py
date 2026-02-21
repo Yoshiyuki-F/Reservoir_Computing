@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import enum
 
-class Model(str, enum.Enum):
+class Model(enum.StrEnum):
     """モデルアーキテクチャの種類。"""
 
     CLASSICAL_RESERVOIR = "classical_reservoir"
@@ -27,7 +27,7 @@ class Model(str, enum.Enum):
         return self.value
 
 
-class Dataset(str, enum.Enum):
+class Dataset(enum.StrEnum):
     """データセットの種類。Values must match DATASET_REGISTRY keys exactly."""
 
     SINE_WAVE = "sine_wave"
@@ -40,7 +40,7 @@ class Dataset(str, enum.Enum):
         return self.value
 
 
-class AggregationMode(str, enum.Enum):
+class AggregationMode(enum.StrEnum):
     """State aggregation strategies for sequence-to-feature reduction."""
 
     LAST = "last"
@@ -54,7 +54,7 @@ class AggregationMode(str, enum.Enum):
         return self.value
 
 
-class Preprocessing(str, enum.Enum):
+class Preprocessing(enum.StrEnum):
     """前処理の種類（将来的な拡張も想定）。"""
 
     RAW = "raw"
@@ -66,7 +66,7 @@ class Preprocessing(str, enum.Enum):
     def __str__(self) -> str:
         return self.value
 
-class ReadOutType(str, enum.Enum):
+class ReadOutType(enum.StrEnum):
     """リードアウト層の種類。"""
 
     RidgeRegression = "ridge_regression"
