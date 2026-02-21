@@ -178,20 +178,6 @@ class StandardScalerConfig(PreprocessingConfig):
         return {"method": "standard_scaler"}
 
 
-@dataclass(frozen=True)
-class CustomRangeScalerConfig(PreprocessingConfig):
-    """Step 2 parameters for Custom Range Scaler."""
-    input_scale: float
-    centering: bool
-
-    def validate(self, context: str = "custom_range_scaler") -> CustomRangeScalerConfig:
-        if float(self.input_scale) == 0:
-            raise ValueError(f"{context}: input_scale must be non-zero.")
-        return self
-
-    def to_dict(self) -> ConfigDict:
-        return {"method": "custom_range_scaler", "input_scale": float(self.input_scale), "centering": self.centering}
-
 
 @dataclass(frozen=True)
 class MinMaxScalerConfig(PreprocessingConfig):

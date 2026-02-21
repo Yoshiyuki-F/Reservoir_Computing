@@ -17,14 +17,14 @@ from reservoir.layers.projection import (
 from reservoir.models.config import (
     PipelineConfig, 
     RandomProjectionConfig, CenterCropProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig,
-    RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig, AffineScalerConfig,
+    RawConfig, StandardScalerConfig, MinMaxScalerConfig, AffineScalerConfig,
 )
 
 # Register projection configs once at module level #TODO there is a interface for config
 register_projections(CenterCropProjectionConfig, RandomProjectionConfig, ResizeProjectionConfig, PolynomialProjectionConfig, PCAProjectionConfig)
 
 # Register preprocessor configs #TODO there is a interface for config
-register_preprocessors(RawConfig, StandardScalerConfig, CustomRangeScalerConfig, MinMaxScalerConfig, AffineScalerConfig)
+register_preprocessors(RawConfig, StandardScalerConfig, MinMaxScalerConfig, AffineScalerConfig)
 
 
 class PipelineDataManager:

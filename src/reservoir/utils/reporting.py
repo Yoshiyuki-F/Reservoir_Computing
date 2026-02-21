@@ -280,14 +280,7 @@ def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None
     details: dict = topo_meta.get("details", {})
 
     raw_label = str(details.get("preprocess", ""))
-    if raw_label == "CustomRangeScaler":
-        scale = 0.0
-        centering = False
-        if config is not None and hasattr(config, "preprocess"):
-            scale = float(getattr(config.preprocess, "input_scale", 0.0))
-            centering = bool(getattr(config.preprocess, "centering", False))
-        return f"{'T' if centering else 'F'}CRS{scale}"
-    elif raw_label == "MinMaxScaler":
+    if raw_label == "MinMaxScaler":
         f_min, f_max = 0.0, 1.0
         if config is not None and hasattr(config, "preprocess"):
             f_min = float(getattr(config.preprocess, "feature_min", 0.0))

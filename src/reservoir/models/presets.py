@@ -10,7 +10,6 @@ from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.identifiers import Model
 from reservoir.models.config import (
     StandardScalerConfig,
-    CustomRangeScalerConfig,
     MinMaxScalerConfig,
     RandomProjectionConfig,
     CenterCropProjectionConfig,
@@ -35,25 +34,6 @@ if TYPE_CHECKING:
 # Definitions
 # -----------------------------------------------------------------------------
 #---------------------------STEP 2--------------------------------------------------
-FMAX = CustomRangeScalerConfig(
-    input_scale=1.0,
-    centering=False
-)
-
-TMAX = CustomRangeScalerConfig(
-    input_scale=1.0,
-    centering=False
-)
-
-FCRS = CustomRangeScalerConfig(
-    input_scale=0.17,
-    centering=False
-)
-
-TCRS = CustomRangeScalerConfig(
-    input_scale=0.3,
-    centering=True
-)
 
 ZeroToOne = MinMaxScalerConfig(
     feature_min=0.0,
@@ -217,7 +197,6 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    # preprocess=CustomRangeScalerConfig(input_scale=1, centering=False), # a_in: R gate input scaling
     preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
