@@ -71,8 +71,10 @@ def load_mnist(config: MNISTConfig) -> SplitDataset:
     train_arr, train_labels = generate_mnist_sequence_data(config, split=config.split)
     test_arr , test_labels = generate_mnist_sequence_data(config, split="test")
 
-    assert train_arr.dtype == np.float64, f"MNIST train_arr must be float64, got {train_arr.dtype}"
-    assert test_arr.dtype == np.float64, f"MNIST test_arr must be float64, got {test_arr.dtype}"
+    if train_arr.dtype != np.float64:
+        raise ValueError(f"MNIST train_arr must be float64, got {train_arr.dtype}")
+    if test_arr.dtype != np.float64:
+        raise ValueError(f"MNIST test_arr must be float64, got {test_arr.dtype}")
 
     # Ensure (N, T, F)
     if train_arr.ndim == 2:
@@ -121,9 +123,11 @@ def load_mackey_glass(config: MackeyGlassConfig) -> tuple[NpF64, NpF64]:
 
     # 1. Generate (returns jnp arrays)
     X_gen, y_gen = generate_mackey_glass_data(config)
-    assert X_gen.dtype == np.float64, f"Mackey-Glass X_gen must be float64, got {X_gen.dtype}"
-    assert y_gen.dtype == np.float64, f"Mackey-Glass y_gen must be float64, got {y_gen.dtype}"
-    
+    if X_gen.dtype != np.float64:
+        raise ValueError(f"Mackey-Glass X_gen must be float64, got {X_gen.dtype}")
+    if y_gen.dtype != np.float64:
+        raise ValueError(f"Mackey-Glass y_gen must be float64, got {y_gen.dtype}")
+
     # 2. Reconstruct full sequence (N+1)
     # X_gen: (T, 1), y_gen: (T, 1)
     # y is X shifted by 1. full = [X[0], X[1]... X[T-1], y[T-1]]
@@ -157,8 +161,10 @@ def load_mackey_glass(config: MackeyGlassConfig) -> tuple[NpF64, NpF64]:
 def load_lorenz(config: LorenzConfig) -> tuple[NpF64, NpF64]:
     """Generate Lorenz attractor sequences."""
     X, y = generate_lorenz_data(config)
-    assert X.dtype == np.float64, f"Lorenz X must be float64, got {X.dtype}"
-    assert y.dtype == np.float64, f"Lorenz y must be float64, got {y.dtype}"
+    if X.dtype != np.float64:
+        raise ValueError(f"Lorenz X must be float64, got {X.dtype}")
+    if y.dtype != np.float64:
+        raise ValueError(f"Lorenz y must be float64, got {y.dtype}")
     # Return (T, F) so that splitting happens along the time axis (axis 0).
     # We will reshape this to (1, T, F) in load_dataset_with_validation_split.
     return X, y

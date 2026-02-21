@@ -147,8 +147,9 @@ class ClassificationStrategy(ReadoutStrategy):
         self, model: Callable, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
     ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
-        assert readout is not None, "Readout must be provided for ClassificationStrategy"
-        
+        if readout is None:
+            raise ValueError("Readout must be provided for ClassificationStrategy")
+
         tf_reshaped = self._flatten_3d_to_2d(train_Z, "train states")
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         test_Z = self._flatten_3d_to_2d(test_Z, "test states")
