@@ -85,6 +85,7 @@ class PolyRidgeReadout(RidgeCV):
         Produces: [original features] + [x_i * x_j for i < j] (no self-squared terms).
         Perfectly matches QRC Z + ZZ feature dimensionality.
         For n features → n + n*(n-1)/2 output features.
+        Sigma(1<=k<=degree, n choose k) for degree=2 → n + n*(n-1)/2. See sklearn PolynomialFeatures interaction_only=True.
         """
         n_features = X.shape[-1]
 
