@@ -6,12 +6,9 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from reservoir.core.types import NpF64
 
-if TYPE_CHECKING:
-    pass
 
 def _resolve_output_path(filename: str) -> Path:
     """Helper to resolve path relative to project root."""

@@ -13,12 +13,9 @@ import jax.numpy as jnp
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.aggregation import create_aggregator
-from typing import TYPE_CHECKING
 
 from reservoir.core.types import JaxF64, TrainLogs, TopologyMeta
 
-if TYPE_CHECKING:
-    pass
 
 
 @beartype

@@ -4,12 +4,9 @@ ABC for all readout components (Step 7).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
 from reservoir.core.types import JaxF64, ConfigDict
 
-if TYPE_CHECKING:
-    pass
 
 
 class ReadoutModule(ABC):

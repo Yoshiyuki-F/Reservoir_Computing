@@ -11,12 +11,9 @@ import jax.numpy as jnp
 
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
-from typing import TYPE_CHECKING
 
 from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 
-if TYPE_CHECKING:
-    pass
 
 
 @beartype
