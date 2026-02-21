@@ -33,7 +33,7 @@ class PassthroughModel(ClosedLoopGenerativeModel):
         self.topology_meta: TopologyMeta = {}
         self._n_units: int | None = None  # Set on first forward pass
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         """No-op: Passthrough has no trainable parameters."""
         return {}
 

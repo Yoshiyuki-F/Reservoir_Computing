@@ -277,7 +277,7 @@ def plot_classification_report(
 
 
 def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
-    details: DetailsMeta = topo_meta.get("details", {})
+    details: DetailsMeta = topo_meta.get("details")
 
     raw_label = str(details.get("preprocess", ""))
     if raw_label == "CustomRangeScaler":
@@ -342,7 +342,7 @@ def _infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig,
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower
 
-    details: DetailsMeta = topo_meta.get("details", {})
+    details: DetailsMeta = topo_meta.get("details")
     student_layers = details.get("student_layers")
     topo_type = str(topo_meta.get("type", "")).lower()
     is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type

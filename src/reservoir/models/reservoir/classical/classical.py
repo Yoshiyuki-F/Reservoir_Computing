@@ -101,7 +101,7 @@ class ClassicalReservoir(Reservoir):
 
 
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         """
         Reservoir has no trainable parameters; run forward for compatibility and return empty logs.
         """

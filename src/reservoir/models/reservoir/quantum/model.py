@@ -10,13 +10,29 @@ import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 from jaxtyping import jaxtyped
-from typing import Literal
+from typing import Literal, TypedDict
 from beartype import beartype
 
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir, ReservoirConfig
 from .backend import _ensure_tensorcircuit_initialized
 from .functional import _step_jit, _forward_jit
+
+class _QuantumData(TypedDict, total=False):
+    """Typed structure for Quantum serialization — avoids ConfigDict union explosion."""
+    n_qubits: int
+    n_layers: int
+    seed: int
+    feedback_scale: float
+    aggregation: str
+    measurement_basis: str
+    noise_type: str
+    noise_prob: float
+    readout_error: float
+    n_trajectories: int
+    use_remat: bool
+    use_reuploading: bool
+    precision: str
 
 class QuantumReservoirConfig(ReservoirConfig):
     n_qubits: int | None
@@ -311,8 +327,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
 
 
 
-    @staticmethod
-    def train(inputs: JaxF64, targets: JaxF64 | None = None, **__: KwargsDict) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         # Reservoir has no trainable parameters; arguments are unused.
         return {}
 
@@ -338,21 +353,22 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
 
     @classmethod
     def from_dict(cls, data: ConfigDict) -> QuantumReservoir:
+        d: _QuantumData = data  # type: ignore[assignment]  # ConfigDict → _QuantumData at boundary
         try:
             return cls(
-                n_qubits=int(float(str(data["n_qubits"]))),
-                n_layers=int(float(str(data["n_layers"]))),
-                seed=int(float(str(data["seed"]))),
-                feedback_scale=float(data.get("feedback_scale") or 0.0),
-                aggregation_mode=AggregationMode(str(data["aggregation"])),
-                measurement_basis=str(data["measurement_basis"]),
-                noise_type=str(data.get("noise_type", "clean")),
-                noise_prob=float(data.get("noise_prob") or 0.0),
-                readout_error=float(data.get("readout_error", 0.0)),
-                n_trajectories=int(float(str(data.get("n_trajectories", 0)))),
-                use_remat=bool(data.get("use_remat", False)),
-                use_reuploading=bool(data.get("use_reuploading", False)),
-                precision=str(data.get("precision", "complex64")),
+                n_qubits=int(d["n_qubits"]),
+                n_layers=int(d["n_layers"]),
+                seed=int(d["seed"]),
+                feedback_scale=float(d.get("feedback_scale", 0.0)),
+                aggregation_mode=AggregationMode(str(d["aggregation"])),
+                measurement_basis=d.get("measurement_basis", "Z"),  # type: ignore[arg-type]
+                noise_type=d.get("noise_type", "clean"),  # type: ignore[arg-type]
+                noise_prob=float(d.get("noise_prob", 0.0)),
+                readout_error=float(d.get("readout_error", 0.0)),
+                n_trajectories=int(d.get("n_trajectories", 0)),
+                use_remat=bool(d.get("use_remat", False)),
+                use_reuploading=bool(d.get("use_reuploading", False)),
+                precision=d.get("precision", "complex64"),  # type: ignore[arg-type]
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc

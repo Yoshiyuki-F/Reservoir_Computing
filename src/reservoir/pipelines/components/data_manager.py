@@ -58,6 +58,8 @@ class PipelineDataManager:
         """Step 1: Resolve presets and load dataset without mutating inputs later."""
         print("=== Step 1: Loading Dataset ===")
         dataset_enum, dataset_preset = self.dataset, DATASET_REGISTRY.get(self.dataset)
+        if dataset_preset is None:
+            raise ValueError(f"Unknown dataset: {dataset_enum}. Not found in DATASET_REGISTRY.")
 
         training_cfg = self.training_override or get_training_preset("standard")
         dataset_split = load_dataset_with_validation_split(
@@ -73,10 +75,10 @@ class PipelineDataManager:
 
         metadata = DatasetMetadata(
             dataset=dataset_enum,
-            dataset_name=dataset_preset.name if dataset_preset else "Unknown",
+            dataset_name=dataset_preset.name,
             preset=dataset_preset,
             training=training_cfg,
-            classification=dataset_preset.classification if dataset_preset else False,
+            classification=dataset_preset.classification,
             input_shape=input_shape,
         )
         return metadata, dataset_split

@@ -103,7 +103,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         return targets
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, params: KwargsDict | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         
@@ -136,10 +136,9 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
         # Optional: Compute final distillation MSE for logging
         distill_mse = float(student_logs.get("final_loss", 0.0))
-        logs: TrainLogs = dict(student_logs)
-        logs.setdefault("distill_mse", distill_mse)
-        logs.setdefault("final_loss", distill_mse)
-        return logs
+        student_logs.setdefault("distill_mse", distill_mse)
+        student_logs.setdefault("final_loss", distill_mse)
+        return student_logs
 
     def evaluate(self, X: JaxF64, y: JaxF64 | None = None) -> EvalMetrics:
         """
@@ -154,17 +153,15 @@ class DistillationModel(ClosedLoopGenerativeModel):
         # Delegate to student's evaluate (handles adapter and alignment internally)
         student_metrics = self.student.evaluate(X, teacher_targets)
 
-        metrics: EvalMetrics = dict(student_metrics)
-        return metrics
+        return student_metrics
 
     def get_topology_meta(self) -> TopologyMeta:
-        return (
-            dict(getattr(self, "topology_meta", {}))
-            or dict(getattr(self.student, "topology_meta", {}))
-            or dict(getattr(self.teacher, "topology_meta", {}))
-            or {}
-        )
-    
+        if self.topology_meta:
+            return self.topology_meta
+        if self.student.topology_meta:
+            return self.student.topology_meta
+        return self.teacher.topology_meta
+
     # ------------------------------------------------------------------ #
     # ClosedLoopGenerativeModel Interface                                #
     # ------------------------------------------------------------------ #

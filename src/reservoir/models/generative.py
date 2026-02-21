@@ -29,7 +29,7 @@ class ClosedLoopGenerativeModel[StateT](ABC):
 
     topology_meta: TopologyMeta
 
-    def train(self, inputs: JaxF64, targets: JaxF64 | None = None) -> TrainLogs:
+    def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4") -> TrainLogs:
         """Train the model. Default no-op for models without trainable parameters."""
         return {}
 
