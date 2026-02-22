@@ -6,9 +6,10 @@ from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, Ja
 import jax
 import jax.numpy as jnp
 from typing import cast, TYPE_CHECKING
-from tqdm import tqdm
 import numpy as np
 
+
+from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 
@@ -32,6 +33,117 @@ class DivergenceError(ValueError):
     def __init__(self, message: str, stats: dict[str, float]) -> None:
         super().__init__(message)
         self.stats: dict[str, float] = stats
+
+
+def optimize_ridge_vmap(
+    lambda_candidates: tuple[float, ...],
+    use_intercept: bool,
+    train_Z: JaxF64,
+    train_y: JaxF64,
+    val_Z: JaxF64,
+    val_y: NpF64,
+    metric_name: str,
+    inverse_fn: Callable[[NpF64], NpF64] | None = None
+) -> tuple[float, float, dict[float, float], dict[float, float], NpF64, JaxF64, dict[float, np.ndarray] | None]:
+    """
+    Common vectorized RidgeCV optimization logic using batched_compute.
+    
+    Returns:
+        best_lambda
+        best_score
+        search_history
+        weight_norms
+        best_val_pred_np (prediction for best lambda)
+        all_weights (all candidate weights)
+        residuals_history (optional, for regression analysis)
+    """
+    from typing import Callable
+    
+    # 1. Add Intercept if needed
+    if use_intercept:
+        ones_train = jnp.ones((train_Z.shape[0], 1))
+        X_train_aug = jnp.concatenate([ones_train, train_Z], axis=1)
+        ones_val = jnp.ones((val_Z.shape[0], 1))
+        val_Z_aug = jnp.concatenate([ones_val, val_Z], axis=1)
+    else:
+        X_train_aug = train_Z
+        val_Z_aug = val_Z
+
+    # 2. Precompute XtX and Xty
+    y_train_mat = train_y
+    if y_train_mat.ndim == 1:
+        y_train_mat = y_train_mat[:, None]
+
+    XtX = X_train_aug.T @ X_train_aug
+    Xty = X_train_aug.T @ y_train_mat
+    n_features = XtX.shape[0]
+    identity = jnp.eye(n_features)
+
+    # 3. Vectorized Solver
+    @jax.jit
+    def solve_ridge_vectorized(lams: JaxF64) -> JaxF64:
+        def solve_one(lam_l: float) -> JaxF64:
+            return jax.scipy.linalg.solve(XtX + lam_l * identity, Xty, assume_a="pos")
+        return jax.vmap(solve_one)(lams)
+
+    lambdas_jax = jnp.array(lambda_candidates)
+    all_weights = solve_ridge_vectorized(lambdas_jax) # (N_lam, N_feat, N_out)
+
+    # 4. Batched Prediction
+    def predict_batch_fn(weights_batch: JaxF64) -> JaxF64:
+        return jnp.einsum("sf,bfo->bso", val_Z_aug, weights_batch)
+
+    # Convert weights to numpy to pass to batched_compute (avoids beartype error)
+    all_weights_np = to_np_f64(all_weights)
+    
+    all_val_preds_np = batched_compute(
+        predict_batch_fn,
+        all_weights_np,
+        batch_size=len(lambda_candidates),
+        desc="[RidgeCV Search]"
+    )
+
+    # 5. Score on CPU
+    search_history: dict[float, float] = {}
+    weight_norms: dict[float, float] = {}
+    residuals_history: dict[float, np.ndarray] = {}
+    best_lambda = lambda_candidates[0]
+    best_score = float('inf') if metric_name.lower() in ["nmse", "mse", "rmse"] else -float('inf')
+    best_pred_idx = 0
+
+    # Determine optimization direction
+    minimize = metric_name.lower() in ["nmse", "mse", "rmse", "nrmse", "mase"]
+
+    for i, lam in enumerate(lambda_candidates):
+        lam_val = float(lam)
+        vp_np = all_val_preds_np[i]
+        
+        # Apply inverse transform if provided (for regression metrics)
+        p_eval = inverse_fn(vp_np) if inverse_fn else vp_np
+        t_eval = inverse_fn(val_y) if inverse_fn else val_y
+        
+        score = compute_score(p_eval, t_eval, metric_name)
+        search_history[lam_val] = float(score)
+        
+        w_coef = all_weights[i, 1:] if use_intercept else all_weights[i]
+        weight_norms[lam_val] = float(jnp.linalg.norm(w_coef))
+        
+        # Optional: Save residuals for analysis if using NMSE (Regression)
+        if metric_name.lower() == "nmse":
+            energy = float(np.mean(t_eval**2))
+            res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
+            residuals_history[lam_val] = res_sq
+
+        # Update Best
+        improved = (score < best_score) if minimize else (score > best_score)
+        if improved:
+            best_score = float(score)
+            best_lambda = lam_val
+            best_pred_idx = i
+            
+    best_val_pred_np = all_val_preds_np[best_pred_idx]
+    
+    return best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
 
 
 class ReadoutStrategy(ABC):
@@ -183,7 +295,7 @@ class ClassificationStrategy(ReadoutStrategy):
         from reservoir.readout.ridge import RidgeCV, RidgeRegression
         if isinstance(readout, RidgeCV):
             # Optimization loop (Moving responsibility from Model to Strategy Mapper)
-            print(f"    [Strategy] Optimizing RidgeCV over {len(readout.lambda_candidates)} candidates...")
+            print(f"    [Strategy] Optimizing RidgeCV over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
             
             # Prepare JAX inputs
             train_Z_jax = to_jax_f64(tf_reshaped)
@@ -192,61 +304,92 @@ class ClassificationStrategy(ReadoutStrategy):
                 raise ValueError("Validation data required for RidgeCV optimization")
             val_Z_jax = to_jax_f64(vf_reshaped)
 
-            for lam in tqdm(readout.lambda_candidates, desc="[RidgeCV Search]"):
-                lam_val = float(lam)
-                ridge_model = RidgeRegression(ridge_lambda=lam_val, use_intercept=readout.use_intercept)
-                ridge_model.fit(train_Z_jax, train_y_jax)
-
-                # Predict (Device) & Score (Host)
-                val_pred = ridge_model.predict(val_Z_jax)
-                score = compute_score(to_np_f64(val_pred), val_y, self.metric_name)
-                
-                search_history[lam_val] = float(score)
-                if ridge_model.coef_ is not None:
-                    weight_norms[lam_val] = float(jnp.linalg.norm(ridge_model.coef_))
-
-                if score > best_score:
-                    best_score = float(score)
-                    best_lambda = lam_val
+            # --- Use Shared Optimization Logic ---
+            best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, _ = optimize_ridge_vmap(
+                lambda_candidates=readout.lambda_candidates,
+                use_intercept=readout.use_intercept,
+                train_Z=train_Z_jax,
+                train_y=train_y_jax,
+                val_Z=val_Z_jax,
+                val_y=val_y,
+                metric_name=self.metric_name,
+                inverse_fn=None
+            )
             
             print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+            
+            # Re-instantiate best model
             readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
-            readout.best_model.fit(train_Z_jax, train_y_jax)
+            best_idx = list(readout.lambda_candidates).index(best_lambda)
+            
+            if readout.use_intercept:
+                readout.best_model.intercept_ = all_weights[best_idx, 0].ravel()
+                readout.best_model.coef_ = all_weights[best_idx, 1:]
+            else:
+                readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
+                readout.best_model.coef_ = all_weights[best_idx]
+
             print_ridge_search_results(cast("FitResultDict", {
                 "search_history": search_history,
                 "weight_norms": weight_norms,
                 "best_lambda": best_lambda,
                 "best_score": best_score,
             }), metric_name="Accuracy")
+            
+            # Reuse best validation prediction
+            val_pred_np = best_val_pred_np
+            val_pred = to_jax_f64(val_pred_np) # Keep consistent type if needed downstream, though we use np for metrics
         else:
             print("    [Runner] No hyperparameter search needed for this readout.")
             readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
+            val_pred = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
+            val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
 
         print("\n=== Step 8: Final Predictions:===")
 
-        # Calculate Predictions (Explicit domain crossing)
-        train_pred = readout.predict(to_jax_f64(train_Z))
-        val_pred = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
-        test_pred = readout.predict(to_jax_f64(test_Z)) if test_Z is not None else None
+        # Helper for batched prediction on Train/Test
+        def predict_model_batch(x_batch: JaxF64) -> JaxF64:
+            return readout.predict(x_batch)
+
+        # Train Prediction (Batched)
+        train_pred_np = batched_compute(
+            predict_model_batch,
+            train_Z,
+            batch_size=32,
+            desc="[Train Pred]"
+        )
+        train_pred = to_jax_f64(train_pred_np)
+
+        # Test Prediction (Batched)
+        test_pred = None
+        test_pred_np = None
+        if test_Z is not None:
+            test_pred_np = batched_compute(
+                predict_model_batch,
+                test_Z,
+                batch_size=32,
+                desc="[Test Pred]"
+            )
+            test_pred = to_jax_f64(test_pred_np)
 
         # Train
         if train_y is None:
             raise ValueError("train_y must not be None for ClassificationStrategy")
         metrics = {"train": {
-            self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
+            self.metric_name: compute_score(train_pred_np, train_y, self.metric_name)
         }}
         
 
         # Val
-        if val_pred is not None and val_y is not None:
+        if val_pred_np is not None and val_y is not None:
              metrics["val"] = {
-                 self.metric_name: compute_score(to_np_f64(val_pred), val_y, self.metric_name)
+                 self.metric_name: compute_score(val_pred_np, val_y, self.metric_name)
              }
              
         # Test
-        if test_pred is not None and test_y is not None:
+        if test_pred_np is not None and test_y is not None:
              metrics["test"] = {
-                 self.metric_name: compute_score(to_np_f64(test_pred), test_y, self.metric_name)
+                 self.metric_name: compute_score(test_pred_np, test_y, self.metric_name)
              }
 
         return cast("FitResultDict", {
@@ -336,59 +479,17 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  raise ValueError("Validation data required for RidgeCV optimization")
              val_X_jax = to_jax_f64(vf_reshaped)
              
-             # Add intercept if needed
-             if readout.use_intercept:
-                 ones_train = jnp.ones((X_jax.shape[0], 1))
-                 X_jax = jnp.concatenate([ones_train, X_jax], axis=1)
-                 ones_val = jnp.ones((val_X_jax.shape[0], 1))
-                 val_X_jax = jnp.concatenate([ones_val, val_X_jax], axis=1)
-
-             # Precompute XtX and Xty once
-             XtX = X_jax.T @ X_jax
-             Xty = X_jax.T @ y_jax
-             n_features = XtX.shape[0]
-             identity = jnp.eye(n_features)
-
-             @jax.jit
-             def solve_ridge_vectorized(lams: JaxF64) -> JaxF64:
-                 def solve_one(lam_l: float) -> JaxF64:
-                     return jax.scipy.linalg.solve(XtX + lam_l * identity, Xty, assume_a="pos")
-                 return jax.vmap(solve_one)(lams)
-
-             lambdas_jax = jnp.array(readout.lambda_candidates)
-             all_weights = solve_ridge_vectorized(lambdas_jax) # (N_lam, N_feat, N_out)
-             
-             # Vectorized Predict on Val set
-             all_val_preds = jnp.einsum("sf,lfo->lso", val_X_jax, all_weights)
-             all_val_preds_np = to_np_f64(all_val_preds)
-
-             search_history: dict[float, float] = {}
-             weight_norms: dict[float, float] = {}
-             residuals_history: dict[float, np.ndarray] = {}
-             best_lambda = readout.lambda_candidates[0]
-             best_score = float('inf')
-
-             for i, lam in enumerate(readout.lambda_candidates):
-                lam_val = float(lam)
-                vp_np = all_val_preds_np[i]
-                
-                p_raw = _inverse(vp_np)
-                t_raw = _inverse(val_y)
-                score = compute_score(p_raw, t_raw, "nmse")
-                
-                # Normalize residuals
-                energy = float(np.mean(t_raw**2))
-                res_sq = (p_raw.ravel() - t_raw.ravel()) ** 2 / (energy + 1e-12)
-                
-                search_history[lam_val] = float(score)
-                residuals_history[lam_val] = res_sq
-                
-                w_coef = all_weights[i, 1:] if readout.use_intercept else all_weights[i]
-                weight_norms[lam_val] = float(jnp.linalg.norm(w_coef))
-
-                if score < best_score:
-                    best_score = float(score)
-                    best_lambda = lam_val
+             # --- Use Shared Optimization Logic ---
+             best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, residuals_history = optimize_ridge_vmap(
+                lambda_candidates=readout.lambda_candidates,
+                use_intercept=readout.use_intercept,
+                train_Z=X_jax,
+                train_y=y_jax,
+                val_Z=val_X_jax,
+                val_y=val_y,
+                metric_name="nmse",
+                inverse_fn=_inverse
+             )
              
              print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
              best_idx = list(readout.lambda_candidates).index(best_lambda)
@@ -406,6 +507,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 "weight_norms": weight_norms,
                 "residuals_history": residuals_history
              }), metric_name="NMSE")
+             
+             # Reuse best validation prediction
+             val_pred_np = best_val_pred_np
+             val_pred_early = to_jax_f64(val_pred_np)
+             
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
              readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
@@ -414,38 +520,36 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              search_history = {}
              weight_norms = {}
              residuals_history = {}
+             val_pred_early = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
 
         # Display Validation Metrics (Open Loop) immediately
-        val_pred_early = None
-        if val_Z is not None:
-             val_pred_early = readout.predict(to_jax_f64(val_Z))
-             if val_y is not None:
-                 print("\n=== Validation Open Loop Metrics ===")
-                 dt = float(getattr(dataset_meta.preset.config, 'dt', 1.0))
-                 ltu = float(getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0))
-                 
-                 # _inverse is defined above inside the RidgeCV check, 
-                 # we need a version available here too or move it.
-                 # I'll define it locally for safety if not defined.
-                 scaler = frontend_ctx.preprocessor
-                 def _inv_local(arr: NpF64) -> NpF64:
-                     if scaler is None:
-                         return arr
-                     try:
-                         val = arr
-                         if val.ndim == 1:
-                             val = val.reshape(-1, 1)
-                         return scaler.inverse_transform(val).reshape(arr.shape)
-                     except (ValueError, TypeError):
-                         return arr
-                 
-                 val_y_raw = _inv_local(val_y)
-                 val_pred_raw = _inv_local(to_np_f64(val_pred_early))
-                 
-                 val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
-                 print_chaos_metrics(val_metrics_chaos)
-                 if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                     raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+        if val_pred_early is not None and val_y is not None:
+             print("\n=== Validation Open Loop Metrics ===")
+             dt = float(getattr(dataset_meta.preset.config, 'dt', 1.0))
+             ltu = float(getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0))
+             
+             # _inverse is defined above inside the RidgeCV check, 
+             # we need a version available here too or move it.
+             # I'll define it locally for safety if not defined.
+             scaler = frontend_ctx.preprocessor
+             def _inv_local(arr: NpF64) -> NpF64:
+                 if scaler is None:
+                     return arr
+                 try:
+                     val = arr
+                     if val.ndim == 1:
+                         val = val.reshape(-1, 1)
+                     return scaler.inverse_transform(val).reshape(arr.shape)
+                 except (ValueError, TypeError):
+                     return arr
+             
+             val_y_raw = _inv_local(val_y)
+             val_pred_raw = _inv_local(to_np_f64(val_pred_early))
+             
+             val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
+             print_chaos_metrics(val_metrics_chaos)
+             if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
+                 raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
         print("\n=== Step 8: Final Predictions:===")
@@ -538,14 +642,23 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 dataset_meta.preset.config, global_start, global_end, verbose=True
             )
 
-        # Calculate Predictions (Open Loop)
-        train_pred = readout.predict(to_jax_f64(train_Z))
+        # Helper for batched prediction
+        def predict_model_batch(x_batch: JaxF64) -> JaxF64:
+            return readout.predict(x_batch)
 
+        # Calculate Predictions (Open Loop) - Batched
+        train_pred_np = batched_compute(
+            predict_model_batch,
+            train_Z,
+            batch_size=32,
+            desc="[Train Pred]"
+        )
+        
         # Train
         if train_y is None:
             raise ValueError("train_y must not be None for ClosedLoopRegressionStrategy")
         metrics: dict[str, dict[str, float]] = {"train": {
-            self.metric_name: compute_score(to_np_f64(train_pred), train_y, self.metric_name)
+            self.metric_name: compute_score(train_pred_np, train_y, self.metric_name)
         }}
         
 
@@ -553,19 +666,32 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
         # Using separate predict calls ensures consistency.
         val_pred = val_pred_early
-        if val_pred is None and val_Z is not None and readout is not None:
-            val_pred = readout.predict(to_jax_f64(val_Z))
+        val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
+
+        if val_pred_np is None and val_Z is not None and readout is not None:
+             val_pred_np = batched_compute(
+                predict_model_batch,
+                val_Z,
+                batch_size=32,
+                desc="[Val Pred]"
+             )
             
-        if val_pred is not None and val_y is not None:
+        if val_pred_np is not None and val_y is not None:
             metrics["validation"] = {
-                self.metric_name: compute_score(to_np_f64(val_pred), val_y, self.metric_name)
+                self.metric_name: compute_score(val_pred_np, val_y, self.metric_name)
             }
 
         # Test
         test_pred = None
         if test_Z is not None and readout is not None:
-             test_pred = readout.predict(to_jax_f64(test_Z))
-             test_p_np = to_np_f64(test_pred)
+             # Use batched prediction for open-loop test prediction if needed for metrics
+             test_p_np = batched_compute(
+                predict_model_batch,
+                test_Z,
+                batch_size=32,
+                desc="[Test Pred]"
+             )
+             
              if test_p_np is not None and test_y is not None:
                  metrics["test"] = {
                      self.metric_name: compute_score(test_p_np, test_y, self.metric_name)

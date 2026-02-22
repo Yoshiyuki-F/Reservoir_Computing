@@ -92,5 +92,5 @@ def batched_compute(
             # 進捗更新
             pbar.update(current_batch_size)
 
-        print_feature_stats(result_array, desc+" Output")
+    print_feature_stats(result_array, desc+" Output")
     return result_array
