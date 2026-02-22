@@ -128,9 +128,9 @@ class PipelineExecutor:
                      sample_input_jax = to_jax_f64(sample_input)
                      trace = self.stack.model(sample_input_jax, return_sequences=True)
                      quantum_trace = to_np_f64(trace)
-                     print(f"    [Executor] Captured trace shape: {trace.shape}")
+                     print(f"[executor.py] Captured trace shape: {trace.shape}")
              except (ValueError, RuntimeError, TypeError) as e:
-                 print(f"    [Executor] Failed to capture quantum trace: {e}")
+                 print(f"[executor.py] Failed to capture quantum trace: {e}")
 
         from typing import cast
         return cast("ResultDict", {
@@ -150,12 +150,12 @@ class PipelineExecutor:
         projection = self.frontend_ctx.projection_layer  # May be None
         
         if window_size > 1:
-            print(f"    [Executor] Requesting Halo Padding (Window={window_size}) from Coordinator...")
+            print(f"[executor.py] Requesting Halo Padding (Window={window_size}) from Coordinator...")
         
         if projection is not None:
-            print(f"    [Executor] Fusing {type(projection).__name__} + {type(model).__name__} in batched_compute (OOM-safe)")
+            print(f"[executor.py] Fusing {type(projection).__name__} + {type(model).__name__} in batched_compute (OOM-safe)")
         else:
-            print(f"    [Executor] Running {type(model).__name__} feature extraction in batched_compute...")
+            print(f"[executor.py] Running {type(model).__name__} feature extraction in batched_compute...")
 
         # Check for Quantum Reservoir to enable state chaining
         is_quantum = "QuantumReservoir" in type(model).__name__
