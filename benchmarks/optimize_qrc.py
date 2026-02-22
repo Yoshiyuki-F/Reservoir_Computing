@@ -193,7 +193,12 @@ def make_objective(measurement_basis: str, readout_config):
             
             err_msg = str(e)
             err_msg_lower = str(e).lower()
-            if "pred std" in err_msg_lower:
+            if "nan detected" in err_msg_lower:
+                 print(f"Trial {trial.number}: FAILED (NaN) - {e}")
+                 trial.set_user_attr("status", "nan_error")
+                 trial.set_user_attr("error", err_msg)
+                 return -1.0 # Return a negative value to indicate failure
+            elif "pred std" in err_msg_lower:
                  print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
                  trial.set_user_attr("status", "diverged")
                  trial.set_user_attr("error", err_msg)

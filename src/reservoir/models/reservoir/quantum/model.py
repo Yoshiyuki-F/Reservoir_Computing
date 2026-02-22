@@ -73,7 +73,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         ## Internal/Advanced Options in JAX (not typically user-facing)
         # TODO should be in some config class or something, not here
         precision: Literal["complex64", "complex128"] = "complex128",
-        use_remat: bool = False,
+        use_remat: bool = False, # does it matter for forward since we have no trainable params? maybe for step if used standalone?
         chunk_size: int = 32,
     ) -> None:
         """Initialize Quantum Reservoir."""
