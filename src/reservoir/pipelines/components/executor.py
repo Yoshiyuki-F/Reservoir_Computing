@@ -90,11 +90,14 @@ class PipelineExecutor:
         )
 
         fit_result = strategy.fit_and_evaluate(
-            self.stack.model, self.stack.readout,
+            self.stack.model,
+            self.stack.readout,
             train_Z, val_Z, test_Z,
             train_y, val_y, test_y,
-            self.frontend_ctx, self.dataset_meta,
+            self.frontend_ctx,
+            self.dataset_meta,
             config,
+            val_final_state=val_final_info
         )
         
         # Step 8.5: Capture Quantum Trace (for Visualization)
@@ -137,7 +140,7 @@ class PipelineExecutor:
         })
 
     def _extract_all_features(self, model: ClosedLoopGenerativeModel) \
-            -> tuple[NpF64 | None, NpF64 | None, NpF64 | None, object | None]:
+            -> tuple[NpF64 | None, NpF64 | None, NpF64 | None, tuple | None]:
         """
         Orchestrate feature extraction.
         If projection_layer is deferred, fuse projection + model forward.
