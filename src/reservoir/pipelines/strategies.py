@@ -553,8 +553,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
              print_chaos_metrics(val_metrics_chaos)
              if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                 print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-                 # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+                 raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
         print("\n=== Step 8: Final Predictions:===")
@@ -614,18 +613,18 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         }
 
         if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
-            print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
-            # raise DivergenceError(
-            #     f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
-            #     stats=stats_dict,
-            # )
+            # print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
-            print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
-            # raise DivergenceError(
-            #     f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
-            #     stats=stats_dict,
-            # )
+            # print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr: NpF64 | None) -> int:
