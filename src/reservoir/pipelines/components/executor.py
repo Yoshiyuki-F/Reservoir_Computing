@@ -53,22 +53,19 @@ class PipelineExecutor:
         )
 
         # Delegate extraction (Model does work, Coordinator provides input)
-        train_Z, val_Z, test_Z = self._extract_all_features(self.stack.model)
+        train_Z, val_Z, test_Z, val_final_info = self._extract_all_features(self.stack.model)
 
         print("\n=== Step 6: Extract Features (Output) ===")
         if train_Z is not None:
-            print_feature_stats(train_Z, "6:Z:train")
             if jnp.std(train_Z) < 0.1:
                 raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
                                  "This usually indicates the Reservoir state is saturated or not responding to input.")
 
         if val_Z is not None: 
-            print_feature_stats(val_Z, "6:Z:val")
             if jnp.std(val_Z) < 0.1:
                  print(f"    [Warning] val_Z std ({jnp.std(val_Z):.4f}) is very low.")
 
         if test_Z is not None : 
-            print_feature_stats(test_Z, "6:Z:test")
             if jnp.std(test_Z) < 0.1:
                  print(f"    [Warning] test_Z std ({jnp.std(test_Z):.4f}) is very low.")
 
@@ -97,7 +94,7 @@ class PipelineExecutor:
             train_Z, val_Z, test_Z,
             train_y, val_y, test_y,
             self.frontend_ctx, self.dataset_meta,
-            config
+            config,
         )
         
         # Step 8.5: Capture Quantum Trace (for Visualization)
@@ -139,7 +136,8 @@ class PipelineExecutor:
             "quantum_trace": quantum_trace,
         })
 
-    def _extract_all_features(self, model: ClosedLoopGenerativeModel) -> tuple[NpF64 | None, ...]:
+    def _extract_all_features(self, model: ClosedLoopGenerativeModel) \
+            -> tuple[NpF64 | None, NpF64 | None, NpF64 | None, object | None]:
         """
         Orchestrate feature extraction.
         If projection_layer is deferred, fuse projection + model forward.
@@ -156,19 +154,34 @@ class PipelineExecutor:
         else:
             print(f"    [Executor] Running {type(model).__name__} feature extraction in batched_compute...")
 
+        # Check for Quantum Reservoir to enable state chaining
+        is_quantum = "QuantumReservoir" in type(model).__name__
+        current_state = None
+
         # 1. Train
         train_in = self.coordinator.get_train_inputs()
-        train_Z = self._compute_split(model, train_in, "train", batch_size, projection=projection)
+        train_Z, current_state, _ = self._compute_split(
+            model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+        )
 
         # 2. Validation
         val_in = self.coordinator.get_val_inputs(window_size)
-        val_Z = self._compute_split(model, val_in, "val", batch_size, projection=projection)
+        val_Z, current_state, val_last_output = self._compute_split(
+            model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+        )
+        val_final_state = current_state
 
         # 3. Test
         test_in = self.coordinator.get_test_inputs(window_size)
-        test_Z = self._compute_split(model, test_in, "test", batch_size, projection=projection)
+        # Test doesn't need to chain state for extraction (usually) or we might want to reset?
+        # For evaluation consistency, we usually treat test as standalone or chained from Val.
+        # But here we just extract features.
+        # If we chain, we must ensure Test follows Val immediately.
+        test_Z, _, _ = self._compute_split(
+            model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
+        )
             
-        return train_Z, val_Z, test_Z
+        return train_Z, val_Z, test_Z, (val_final_state, val_last_output)
 
     @staticmethod
     def _compute_split(
@@ -177,11 +190,49 @@ class PipelineExecutor:
         split_name: str, 
         batch_size: int,
         projection: Projection | None = None,
-    ):
+        initial_state: object | None = None,
+        return_state: bool = False
+    ) -> tuple: #TODO　型定義
         """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
         if inputs is None:
-            return None
+            return None, None, None
         
+        # Special Path for Quantum Reservoir State Chaining (Time Series Mode)
+        # QuantumReservoir forward expects (1, Time, Feat)
+        if return_state and inputs.ndim == 2:
+            inputs_jax = to_jax_f64(inputs)
+            # Reshape to (1, Time, Feat)
+            if inputs_jax.ndim == 2:
+                inputs_jax = inputs_jax[None, :, :]
+            
+            # Initialize state if not provided
+            if initial_state is None:
+                state = model.initialize_state(1)
+            else:
+                state = initial_state
+            
+            # Apply projection if exists (Fused)
+            if projection is not None:
+                inputs_jax = projection(inputs_jax) # Assuming projection handles (1, T, F) or vmap handles it
+            
+            # Run Forward (Directly, bypassing batched_compute for state access)
+            # QuantumReservoir.forward returns (final_state, stacked_outputs)
+            # Note: We must ensure we call the method that returns state.
+            # 'forward' returns state. '__call__' does not.
+            final_state, outputs_jax = model.forward(state, inputs_jax)
+            
+            # Output is (1, Time, Out) -> Flatten to (Time, Out)
+            outputs_np = to_np_f64(outputs_jax[0])
+            
+            # Get last output for loop initialization
+            last_output = outputs_jax[0, -1, :] # (Out,)
+            
+            # Log stats manually since we skipped batched_compute
+            print_feature_stats(outputs_np, f"6:Z:{split_name}")
+            
+            return outputs_np, final_state, last_output
+
+        # Standard Path
         # DistillationModel handles projection internally for its teacher, 
         # but its student (which is used during predict/extraction) takes RAW inputs.
         # Fusing projection here would cause shape mismatches in the student.
@@ -191,8 +242,8 @@ class PipelineExecutor:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
                 return model(projection(x))
-            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Step 3 and 5 Proj+Extract] {split_name}")
+            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Step 3 and 5 Proj+Extract] {split_name}"), None, None
         else:
             # No projection (already projected or no projection needed, or DistillationModel)
             fn = partial(model, split_name=None)
-            return batched_compute(fn, inputs, batch_size, desc=f"[Step 5 Extracting] {split_name}")
+            return batched_compute(fn, inputs, batch_size, desc=f"[Step 5 Extracting] {split_name}"), None, None

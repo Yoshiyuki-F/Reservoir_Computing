@@ -59,44 +59,61 @@ class ClosedLoopGenerativeModel[StateT](ABC):
 
     def generate_closed_loop(
         self,
-        seed_data: JaxF64,
+        seed_data: JaxF64 | None,
         steps: int,
         readout: Predictable | None = None,
         projection_fn: Callable[[JaxF64], JaxF64] | None = None,
-        verbose: bool = True
+        verbose: bool = True,
+        initial_state: StateT | None = None,
+        initial_output: JaxF64 | None = None,
     ) -> JaxF64:
         """
         Generate closed-loop predictions using Fast JAX Scan.
         
         Args:
-            seed_data: 2D input (Time, Features) - will be converted to 3D internally
+            seed_data: 2D input (Time, Features) for warmup. Optional if initial_state is provided.
             steps: Number of steps to generate
             readout: Optional readout layer for prediction
             projection_fn: Optional projection function
             verbose: Print progress
+            initial_state: Optional pre-computed state to skip warmup.
+            initial_output: Optional pre-computed last output to skip warmup.
             
         Returns:
             2D predictions (steps, Features)
         """
-        # Convert 2D to 3D for internal processing
-        history = seed_data
-        if history.ndim == 2:
-            history = history[None, :, :]  # (T, F) -> (1, T, F)
-        elif history.ndim == 1:
-            history = history[None, None, :]
         
-        batch_size = history.shape[0]
-        
-        if verbose:
-            print(f"    [Generative] Generating {steps} steps (Fast JAX Scan)...")
-        
-        initial_state = self.initialize_state(batch_size)
-        
-        # Apply projection to history if needed
-        history_in = projection_fn(history) if projection_fn else history
+        if initial_state is not None and initial_output is not None:
+            # Skip warmup
+            final_state = initial_state
+            last_output = initial_output
+            # Infer batch size from initial_output shape (Batch, Feat)
+            batch_size = last_output.shape[0]
+        else:
+            if seed_data is None:
+                raise ValueError("seed_data is required if initial_state/initial_output are not provided.")
+                
+            # Convert 2D to 3D for internal processing
+            history = seed_data
+            if history.ndim == 2:
+                history = history[None, :, :]  # (T, F) -> (1, T, F)
+            elif history.ndim == 1:
+                history = history[None, None, :]
+            
+            batch_size = history.shape[0]
+            
+            if verbose:
+                print(f"    [Generative] Generating {steps} steps (Fast JAX Scan)...")
+            
+            initial_state_warmup = self.initialize_state(batch_size)
+            
+            # Apply projection to history if needed
+            history_in = projection_fn(history) if projection_fn else history
 
-        print(f" Step8   [Generative] Running forward pass on seed data...")
-        final_state, history_outputs = self.forward(initial_state, history_in)
+            if verbose:
+                print(f" Step8   [Generative] Running forward pass on seed data...")
+            final_state, history_outputs = self.forward(initial_state_warmup, history_in)
+            last_output = history_outputs[:, -1, :]
 
         def predict_one(features):
             if readout is not None:
@@ -112,7 +129,6 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             return features
         
         # Use the last output from history for the first prediction
-        last_output = history_outputs[:, -1, :]  # (batch, features)
         first_prediction = predict_one(last_output)
         
 

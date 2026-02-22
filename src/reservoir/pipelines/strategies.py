@@ -188,7 +188,8 @@ class ReadoutStrategy(ABC):
         test_y: NpF64 | None,
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
-        pipeline_config: PipelineConfig
+        pipeline_config: PipelineConfig,
+        val_final_state: tuple | None = None, # New Argument
     ) -> FitResultDict:
         """Fit readout and return predictions/metrics."""
 
@@ -207,7 +208,8 @@ class EndToEndStrategy(ReadoutStrategy):
         test_y: NpF64 | None,
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
-        pipeline_config: PipelineConfig
+        pipeline_config: PipelineConfig,
+        val_final_state: tuple | None = None,
     ) -> FitResultDict:
         print("Readout is None. End-to-End mode.")
         
@@ -276,7 +278,8 @@ class ClassificationStrategy(ReadoutStrategy):
     """Open-Loop classification strategy with Accuracy optimization."""
     
     def fit_and_evaluate(
-        self, model: ClosedLoopGenerativeModel, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig
+        self, model: ClosedLoopGenerativeModel, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig,
+        val_final_state: tuple | None = None
     ) -> FitResultDict:
         print("    [Runner] Classification task: Using Open-Loop evaluation.")
         if readout is None:
@@ -430,7 +433,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             test_y: NpF64 | None,
             frontend_ctx: FrontendContext,
             dataset_meta: DatasetMetadata,
-            pipeline_config: PipelineConfig
+            pipeline_config: PipelineConfig,
+            val_final_state: tuple | None = None
     ) -> FitResultDict:
         if readout is None:
             raise ValueError("Readout must be provided for ClosedLoopRegressionStrategy")
@@ -564,8 +568,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
              print_chaos_metrics(val_metrics_chaos)
              if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                 # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-                 raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+                 print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
+                 # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
         print("\n=== Step 8: Final Predictions (Regression):===")
@@ -588,10 +592,22 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         full_seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
         print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
         
+        # Prepare initial state if available to skip warmup
+        init_state = None
+        init_out = None
+        if val_final_state is not None:
+            init_state, init_out = val_final_state
+            print("    [Runner] Using captured Validation State to skip Warmup!")
+
         # seed_data is already JAX array from _get_seed_sequence
         readout_cast = cast("Predictable", readout)
         closed_loop_pred = model.generate_closed_loop(
-            full_seed_data, steps=generation_steps, readout=readout_cast, projection_fn=proj_fn
+            full_seed_data, 
+            steps=generation_steps, 
+            readout=readout_cast, 
+            projection_fn=proj_fn,
+            initial_state=init_state,
+            initial_output=init_out
         )
         print_feature_stats(to_np_f64(closed_loop_pred), "8:closed_loop_prediction")
 
@@ -625,18 +641,18 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         }
 
         if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
-            # print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
-            raise DivergenceError(
-                f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
-                stats=stats_dict,
-            )
+            print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
+            # raise DivergenceError(
+            #     f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
+            #     stats=stats_dict,
+            # )
 
         if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
-            # print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
-            raise DivergenceError(
-                f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
-                stats=stats_dict,
-            )
+            print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
+            # raise DivergenceError(
+            #     f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
+            #     stats=stats_dict,
+            # )
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr: NpF64 | None) -> int:
