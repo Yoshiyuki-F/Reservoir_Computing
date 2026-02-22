@@ -68,10 +68,13 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         noise_prob: float,
         readout_error: float,
         n_trajectories: int, # 0 means Density Matrix (default), >0 means Monte Carlo
-        use_remat: bool,
         use_reuploading: bool,
-        precision: Literal["complex64", "complex128"],
-        chunk_size: int = 32, #TODO should be in some config class or something, not here
+
+        ## Internal/Advanced Options in JAX (not typically user-facing)
+        # TODO should be in some config class or something, not here
+        precision: Literal["complex64", "complex128"] = "complex128",
+        use_remat: bool = False,
+        chunk_size: int = 32,
     ) -> None:
         """Initialize Quantum Reservoir."""
         # Ensure TC backend and patches are applied (lazy, idempotent)
@@ -349,9 +352,9 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             "noise_prob": float(self.noise_prob),
             "readout_error": float(self.readout_error),
             "n_trajectories": int(self.n_trajectories),
-            "use_remat": bool(self.use_remat),
             "use_reuploading": bool(self.use_reuploading),
             "precision": str(self.precision),
+            "use_remat": bool(self.use_remat),
             "chunk_size": int(self.chunk_size),
         }
 
@@ -370,9 +373,9 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
                 noise_prob=float(d.get("noise_prob", 0.0)),
                 readout_error=float(d.get("readout_error", 0.0)),
                 n_trajectories=int(d.get("n_trajectories", 0)),
-                use_remat=bool(d.get("use_remat", False)),
                 use_reuploading=bool(d.get("use_reuploading", False)),
                 precision=d.get("precision", "complex64"),  # type: ignore[arg-type]
+                use_remat=bool(d.get("use_remat", False)),
                 chunk_size=int(d.get("chunk_size", 32)),
             )
         except KeyError as exc:

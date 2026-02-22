@@ -33,9 +33,7 @@ def run_benchmark():
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
-        use_remat=False,
         use_reuploading=False,
-        precision="complex64"
     )
     
     # Pre-compile

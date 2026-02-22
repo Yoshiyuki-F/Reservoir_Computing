@@ -178,9 +178,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     noise_prob=0.0,
     readout_error=0.0,
     n_trajectories=0,
-    use_remat=False,
     use_reuploading=True,
-    precision="complex64",
 )
 
 # -----------------------------------------------------------------------------
@@ -200,22 +198,21 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
+    # preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
+    preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
         n_qubits=16,
         n_layers=3,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
-        feedback_scale=2.0040817003461666,    # a_fb: R gate feedback scaling (paper default)
+        feedback_scale=0.9026439783686384,    # a_fb: R gate feedback scaling (paper default)
         measurement_basis="Z+ZZ",
         noise_type="clean",
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
-        use_remat=False,
         use_reuploading=True,
-        precision="complex128",
     ),
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )

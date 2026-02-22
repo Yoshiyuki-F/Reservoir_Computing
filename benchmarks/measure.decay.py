@@ -19,9 +19,7 @@ def measure_circuit_attenuation():
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
-        use_remat=False,
         use_reuploading=True,  # 現在の設定
-        precision="complex64"
     )
 
     print("--- Circuit Attenuation Test ---")

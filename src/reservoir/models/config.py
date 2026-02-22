@@ -448,9 +448,7 @@ class QuantumReservoirConfig(ModelConfig):
     noise_prob: float          # Probability of noise (0.0 to 1.0)
     readout_error: float     # Readout error probability (0.0 to 1.0)
     n_trajectories: int      # Number of trajectories for Monte Carlo simulation (0 = Density Matrix)
-    use_remat: bool          # Use gradient checkpointing (rematerialization)
     use_reuploading: bool    # Use data re-uploading strategy
-    precision: Literal["complex64", "complex128"]
     n_qubits: int | None = None   # Number of qubits (None = infer from Step 3)
 
     def validate(self, context: str = "quantum_reservoir") -> QuantumReservoirConfig:
@@ -469,9 +467,6 @@ class QuantumReservoirConfig(ModelConfig):
             raise ValueError(f"{prefix}readout_error must be in [0, 1].")
         if int(self.n_trajectories) < 0:
              raise ValueError(f"{prefix}n_trajectories must be non-negative.")
-        valid_precisions = ("complex64", "complex128")
-        if self.precision not in valid_precisions:
-            raise ValueError(f"{prefix}precision must be one of {valid_precisions}.")
         return self
 
     def to_dict(self) -> ConfigDict:
@@ -486,9 +481,7 @@ class QuantumReservoirConfig(ModelConfig):
             "noise_prob": float(self.noise_prob),
             "readout_error": float(self.readout_error),
             "n_trajectories": int(self.n_trajectories),
-            "use_remat": bool(self.use_remat),
             "use_reuploading": bool(self.use_reuploading),
-            "precision": str(self.precision),
         }
 
 

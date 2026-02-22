@@ -239,8 +239,6 @@ def _step_logic(
          m_t = z_t[:n_qubits]  (measurement → next feedback)
          No leak rate blending. Memory is carried solely through R gate feedback.
     """
-    # Polymorphic State Unpacking
-    rng_key = None
     # Trust the type system: state is tuple[JaxF64, JaxF64 | None] per annotation
     state_vec, rng_key = state
 
@@ -363,9 +361,8 @@ def _forward_jit(
     * T (16600): 424.7s
    * 128: 428.8s
    * 64: 419.7s
-   * 32: 412.3s (最速)
+   * 32: 412.3s 417.9868 420.4176
    * 16: 413.5s
-
     """
     
     # --- Double Scan Optimization (Chunking) ---
@@ -390,7 +387,7 @@ def _forward_jit(
     inputs_chunked = inputs_padded.reshape(num_chunks, chunk_size, *inputs_time_major.shape[1:])
     
     # Outer Scan Function (Process one chunk using cached kernel)
-    def scan_chunk_wrapper(carry, chunk_in):
+    def scan_chunk_wrapper(carry, chunk_in) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
         return _chunk_scan_jit(
             carry, chunk_in,
             reservoir_params, measurement_matrix,
@@ -401,10 +398,9 @@ def _forward_jit(
     # Outer Scan (Process all chunks)
     import time
     start_time = time.time()
-    print(f"[Timer] Starting Outer Scan (Chunks={num_chunks}, Size={chunk_size})...")
+    print(f"[Timer] Starting _forward_jit outer scan (Chunks={num_chunks}, Size={chunk_size}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
     final_carry, stacked_outputs_chunked = jax.lax.scan(scan_chunk_wrapper, state_init, inputs_chunked)
-    elapsed = time.time() - start_time
-    print(f"[Timer] Outer Scan finished in {elapsed:.4f} seconds.")
+    print(f"[Timer] _forward_jit outer scan finished in {time.time() - start_time:.4f} seconds.")
     
     # Reshape Output
     output_shape = stacked_outputs_chunked.shape

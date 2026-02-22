@@ -58,9 +58,7 @@ class ReservoirFactory:
                 noise_prob=model.noise_prob,
                 readout_error=model.readout_error,
                 n_trajectories=model.n_trajectories,
-                use_remat=model.use_remat,
                 use_reuploading=model.use_reuploading,
-                precision=model.precision,
             )
         else:
             raise TypeError(f"ReservoirFactory requires Classical or Quantum config, got {type(model)}.")
