@@ -32,8 +32,8 @@ class Evaluator:
         if verbose:
             print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
 
-        dt = getattr(dataset_config, 'dt', 1.0)
-        ltu = getattr(dataset_config, 'lyapunov_time_unit', 1.0)
+        dt = float(getattr(dataset_config, 'dt', 1.0))
+        ltu = float(getattr(dataset_config, 'lyapunov_time_unit', 1.0))
 
         metrics = calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu)
         if verbose:

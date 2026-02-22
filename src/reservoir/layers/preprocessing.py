@@ -82,7 +82,7 @@ class StandardScaler(Preprocessor):
         if not isinstance(X, np.ndarray):
             raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
         
-        arr = X
+        arr = X.copy()
         if self.mean_ is not None:
             arr -= self.mean_
         if self.scale_ is not None:
@@ -93,7 +93,7 @@ class StandardScaler(Preprocessor):
         if not isinstance(X, np.ndarray):
             raise TypeError(f"StandardScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
             
-        arr = X
+        arr = X.copy()
         if self.scale_ is not None:
             arr *= self.scale_
         if self.mean_ is not None:
@@ -141,9 +141,9 @@ class MinMaxScaler(Preprocessor):
 
     def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
-            raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            raise TypeError(f"MinMaxScaler requires numpy.ndarray, got {type(X)}")
             
-        arr = X
+        arr = X.copy()
         # 1. Scale to [0, 1]
         if self.min_ is not None and self.range_ is not None:
             arr -= self.min_
@@ -158,9 +158,9 @@ class MinMaxScaler(Preprocessor):
 
     def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
-            raise TypeError(f"MinMaxScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            raise TypeError(f"MinMaxScaler requires numpy.ndarray, got {type(X)}")
             
-        arr = X
+        arr = X.copy()
         # 1. Reverse Scale to [0, 1]
         scale = self.feature_max - self.feature_min
         if scale != 0:
@@ -219,22 +219,22 @@ class AffineScaler(Preprocessor):
 
     def transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
-            raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            raise TypeError(f"AffineScaler requires numpy.ndarray, got {type(X)}")
         
-        arr = X
+        arr = X.copy()
         arr *= self.input_scale
         arr += self.shift
         return arr
 
     def inverse_transform(self, X: NpF64) -> NpF64:
         if not isinstance(X, np.ndarray):
-            raise TypeError(f"AffineScaler requires numpy.ndarray for in-place optimization, got {type(X)}")
+            raise TypeError(f"AffineScaler requires numpy.ndarray, got {type(X)}")
             
         # Avoid division by zero
         if self.input_scale == 0:
             return X
             
-        arr = X
+        arr = X.copy()
         arr -= self.shift
         arr /= self.input_scale
         return arr

@@ -40,7 +40,9 @@ def batched_compute(
     if inputs.ndim == 2:
         inputs_jax = to_jax_f64(inputs)
         result_jax = fn(inputs_jax)
-        return to_np_f64(result_jax)  # Transfer to CPU
+        result_np = to_np_f64(result_jax)  # Transfer to CPU
+        print_feature_stats(result_np, desc+" Output")
+        return result_np
     
     # 3D input (N, T, F) - Classification batching
     n_samples = inputs.shape[0]

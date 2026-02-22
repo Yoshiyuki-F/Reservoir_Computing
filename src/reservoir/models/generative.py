@@ -91,7 +91,11 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             print(f"    [Generative] Generating {steps} steps (Fast JAX Scan)...")
         
         initial_state = self.initialize_state(batch_size)
-        final_state, history_outputs = self.forward(initial_state, history)
+        
+        # Apply projection to history if needed
+        history_in = projection_fn(history) if projection_fn else history
+        
+        final_state, history_outputs = self.forward(initial_state, history_in)
         
         def predict_one(features):
             if readout is not None:
