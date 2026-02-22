@@ -139,14 +139,14 @@ def load_mackey_glass(config: MackeyGlassConfig) -> tuple[NpF64, NpF64]:
     step = getattr(config, "downsample", 1)
     if step > 1:
         seq = seq[::step]
-        print(f"    [Dataset] Applied downsampling: step={step}")
+        print(f"[loader.py] Applied downsampling: step={step}")
 
     # 4. Normalize (Disabled: Pipeline handles preprocessing)
 
     # 5. Naive MSE Baseline
     # "Naive MSE = mean((y[1:] - y[:-1])**2)"
     naive_loss = np.mean((seq[1:] - seq[:-1]) ** 2)
-    print(f"    [Dataset] Naive Prediction MSE (Baseline): {naive_loss:.6f}")
+    print(f"[loader.py] Naive Prediction MSE (Baseline): {naive_loss:.6f}")
     
     # 6. Re-create X, y
     X_new = seq[:-1].reshape(-1, 1)
@@ -208,7 +208,7 @@ def load_dataset_with_validation_split(
     if loader is None:
         raise ValueError(f"No loader registered for dataset '{dataset_enum}'.")
 
-    print(f"Loading dataset: {dataset_enum.value}...")
+    print(f"[loader] Loading dataset: {dataset_enum.value}...")
     dataset = loader(preset.config)
 
     # val is needed for both tasks
@@ -283,7 +283,7 @@ def load_dataset_with_validation_split(
             val_X, val_y = X[train_count:train_count + val_count], y[train_count:train_count + val_count]
             test_X, test_y = X[train_count + val_count:train_count + val_count + test_count], y[train_count + val_count:train_count + val_count + test_count]
             
-            print(f"    [Dataset] LT-based split: train={train_count} ({chaos_config.train_lt} LT), "
+            print(f"[loader.py] LT-based split: train={train_count} ({chaos_config.train_lt} LT), "
                   f"val={val_count} ({chaos_config.val_lt} LT), test={test_count} ({chaos_config.test_lt} LT)")
         else:
             # Percentage-based splitting (original logic)

@@ -398,9 +398,9 @@ def _forward_jit(
     # Outer Scan (Process all chunks)
     import time
     start_time = time.time()
-    print(f"[Timer] Starting _forward_jit outer scan (Chunks={num_chunks}, Size={chunk_size}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
+    print(f"[functional.py] Starting _forward_jit outer scan (Chunks={num_chunks}, Size={chunk_size}, T={T}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
     final_carry, stacked_outputs_chunked = jax.lax.scan(scan_chunk_wrapper, state_init, inputs_chunked)
-    print(f"[Timer] _forward_jit outer scan finished in {time.time() - start_time:.4f} seconds.")
+    print(f"[functional.py] _forward_jit outer scan finished in {time.time() - start_time:.4f} seconds.")
     
     # Reshape Output
     output_shape = stacked_outputs_chunked.shape

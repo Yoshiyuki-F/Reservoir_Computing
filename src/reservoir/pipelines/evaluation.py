@@ -30,7 +30,7 @@ class Evaluator:
         truth_raw = scaler.inverse_transform(truth_np.reshape(-1, shape_truth[-1])).reshape(shape_truth)
 
         if verbose:
-            print(f"\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
+            print(f"[evaluation.py]\n[Closed-Loop Metrics] (Global Steps {global_start} -> {global_end})")
 
         dt = float(getattr(dataset_config, 'dt', 1.0))
         ltu = float(getattr(dataset_config, 'lyapunov_time_unit', 1.0))

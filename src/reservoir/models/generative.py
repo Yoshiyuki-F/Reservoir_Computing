@@ -144,9 +144,9 @@ class ClosedLoopGenerativeModel[StateT](ABC):
         # Initial carry: (state, prediction, step_counter)
         init_carry = (final_state, first_prediction, 0)
 
-        print(f" Step8   [Generative] Starting compiling and loop...")
+        print(f"[Generative] Step8 Starting compiling and loop...")
         _, predictions = jax.lax.scan(scan_step, init_carry, None, length=steps)
-        print(f" Step8   [Generative] Finished generating.")
+        print(f"[Generative] Step8 Finished generating.")
 
         # predictions is (steps, batch, features) -> (batch, steps, features)
         predictions = jnp.swapaxes(predictions, 0, 1)

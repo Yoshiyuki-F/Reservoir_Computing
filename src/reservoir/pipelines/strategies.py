@@ -143,7 +143,7 @@ def optimize_ridge_vmap(
             
     best_val_pred_np = all_val_preds_np[best_pred_idx]
     
-    print(f"DEBUG: optimize_ridge_vmap best_idx={best_pred_idx}, best_score={best_score}")
+    print(f"[strategy.py] optimize_ridge_vmap best_idx={best_pred_idx}, best_score={best_score}")
     print_feature_stats(best_val_pred_np, "DEBUG:best_val_pred_np")
     
     return best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
@@ -162,7 +162,7 @@ class ReadoutStrategy(ABC):
         if arr is None:
             return None
         if arr.ndim == 3:
-            print(f"    [Runner] Flattening 3D {label} {arr.shape} -> 2D")
+            print(f"[strategy.py] Flattening 3D {label} {arr.shape} -> 2D")
             return arr.reshape(arr.shape[0], -1)
         return arr
 

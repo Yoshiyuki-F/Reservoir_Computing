@@ -72,7 +72,7 @@ class TimeDelayEmbedding(Adapter):
     Transforms (Batch, Time, Feat) -> (Batch * (Time - Window + 1), Window * Feat).
     """
     def __init__(self, window_size: int = 10) -> None:
-        print("\n=== Step 4: Adapter ===")
+        print("\n=== Step 4: [Adapter.py] ===")
         self.window_size = window_size
 
     def fit(self) -> TimeDelayEmbedding:

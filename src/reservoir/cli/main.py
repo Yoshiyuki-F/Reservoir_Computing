@@ -40,7 +40,7 @@ def main() -> None:
         try:
             check_gpu_available()
         except RuntimeError as exc:
-            print(f"Warning: GPU check failed ({exc}). Continuing...")
+            print(f"[main] Warning: GPU check failed ({exc}). Continuing...")
 
     # Build Config (strict preset + dataset only)
     model_enum = Model(args.model)
@@ -54,15 +54,15 @@ def main() -> None:
         
     training_config = get_training_preset(training_preset_name)
 
-    print(f"[Unified] Running {pipeline_config.name} pipeline on {dataset.name}...")
-    print(f"With training preset: '{training_config.name}'")
+    print(f"[main] Running {pipeline_config.name} pipeline on {dataset.name}...")
+    print(f"[main] With training preset: '{training_config.name}'")
     print("\n=== Configuration ===")
-    print(f"Pipeline    : {pipeline_config.name}")
-    print(f"Description : {pipeline_config.description}")
-    print(f"Dataset     : {dataset.name}")
-    print(f"Model Class : {type(pipeline_config.model).__name__}")
+    print(f"[main] Pipeline    : {pipeline_config.name}")
+    print(f"[main] Description : {pipeline_config.description}")
+    print(f"[main] Dataset     : {dataset.name}")
+    print(f"[main] Model Class : {type(pipeline_config.model).__name__}")
     if pipeline_config.readout:
-        print(f"Readout Class: {type(pipeline_config.readout).__name__}")
+        print(f"[main] Readout Class: {type(pipeline_config.readout).__name__}")
     
     import json
     def print_section(name: str, data: ConfigDict):

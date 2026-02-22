@@ -134,9 +134,9 @@ class PipelineDataManager:
         input_dim_for_factory = input_dim
 
         if projection_config is None:
-            print("\n=== Step 3: Projection (Skipped) ===")
+            print("[datamanager.py) \n=== Step 3: Projection (Skipped) ===")
         else:
-            print("\n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
+            print("[datamanager.py) \n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
             
             # Use Factory pattern (DI)
             projection_layer = create_projection(

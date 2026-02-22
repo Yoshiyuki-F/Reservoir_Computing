@@ -145,7 +145,7 @@ class BaseFlaxModel(BaseModel, ABC):
         sample_input = inputs[:1]
 
         if self._state is None:
-            print("    [JAX] Initializing parameters...")
+            print("[nn.base.py] Initializing parameters...")
             self._state = self._init_train_state(init_key, sample_input, num_train_steps)
 
         # JIT function
@@ -157,7 +157,7 @@ class BaseFlaxModel(BaseModel, ABC):
         loss_history: list[float] = []
         limit = num_batches * self.batch_size
 
-        print(f"    [JAX] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
+        print(f"[nn.base.py] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
         pbar = tqdm(range(self.epochs), desc="[Train]", unit="ep")
 
         for _ in pbar:

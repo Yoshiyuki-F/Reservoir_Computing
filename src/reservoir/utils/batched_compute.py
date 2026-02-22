@@ -40,7 +40,7 @@ def batched_compute(
     if inputs.ndim == 2:
         inputs_jax = to_jax_f64(inputs)
 
-        print(f"{desc} TimeSeries Processing Compile started...")
+        print(f"[batched_compute.py] {desc} TimeSeries Processing Compile started...")
         result_jax = fn(inputs_jax)
         result_np = to_np_f64(result_jax)  # Transfer to CPU
         print_feature_stats(result_np, desc+" Output")
