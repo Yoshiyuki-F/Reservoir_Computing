@@ -144,7 +144,7 @@ def optimize_ridge_vmap(
     best_val_pred_np = all_val_preds_np[best_pred_idx]
     
     print(f"[strategy.py] optimize_ridge_vmap best_idx={best_pred_idx}, best_score={best_score}")
-    print_feature_stats(best_val_pred_np, "DEBUG:best_val_pred_np")
+    print_feature_stats(best_val_pred_np, "[strategy.py] :best_val_pred_np")
     
     return best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
 
@@ -281,7 +281,7 @@ class ClassificationStrategy(ReadoutStrategy):
         self, model: ClosedLoopGenerativeModel, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig,
         val_final_state: tuple | None = None
     ) -> FitResultDict:
-        print("    [Runner] Classification task: Using Open-Loop evaluation.")
+        print("[strategies.py] Classification task: Using Open-Loop evaluation.")
         if readout is None:
             raise ValueError("Readout must be provided for ClassificationStrategy")
 
@@ -301,7 +301,7 @@ class ClassificationStrategy(ReadoutStrategy):
         from reservoir.readout.ridge import RidgeCV, RidgeRegression
         if isinstance(readout, RidgeCV):
             # Optimization loop (Moving responsibility from Model to Strategy Mapper)
-            print(f"    [Strategy] Optimizing RidgeCV over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
+            print(f"[strategies.py] Optimizing RidgeCV over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
             
             # Prepare JAX inputs
             train_Z_jax = to_jax_f64(tf_reshaped)
@@ -327,7 +327,7 @@ class ClassificationStrategy(ReadoutStrategy):
                 inverse_fn=None
             )
             
-            print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+            print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
             
             # Re-instantiate best model
             readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
@@ -351,7 +351,7 @@ class ClassificationStrategy(ReadoutStrategy):
             val_pred_np = best_val_pred_np
             val_pred = to_jax_f64(val_pred_np) # Keep consistent type if needed downstream, though we use np for metrics
         else:
-            print("    [Runner] No hyperparameter search needed for this readout.")
+            print("[strategies.py] No hyperparameter search needed for this readout.")
             readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
             val_pred = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
             val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
@@ -479,7 +479,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  except (ValueError, TypeError):
                      return arr
 
-             print(f"    [Strategy] Optimizing RidgeCV (NMSE) over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
+             print(f"[strategies.py] Optimizing RidgeCV (NMSE) over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
              
              # Prepare JAX inputs
              X_jax = to_jax_f64(tf_reshaped)
@@ -508,7 +508,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 inverse_fn=_inverse
              )
              
-             print(f"    [Strategy] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+             print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
              best_idx = list(readout.lambda_candidates).index(best_lambda)
              readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
              if readout.use_intercept:
@@ -527,10 +527,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              
              # Reuse best validation prediction
              val_pred_np = best_val_pred_np
-             print_feature_stats(val_pred_np, "DEBUG:reused_val_pred_np")
-             
+
         else:
-             print("    [Runner] No hyperparameter search needed for this readout.")
+             print("[strategies.py] No hyperparameter search needed for this readout.")
              readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
              best_lambda = None
              best_score = None
@@ -590,14 +589,14 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             generation_steps = 0
         
         full_seed_data = self._get_seed_sequence(processed.train_X, processed.val_X)
-        print(f"    [Runner] Full Closed-Loop Test: Generating {generation_steps} steps.")
+        print(f"[strategies.py] Full Closed-Loop Test: Generating {generation_steps} steps.")
         
         # Prepare initial state if available to skip warmup
         init_state = None
         init_out = None
         if val_final_state is not None:
             init_state, init_out = val_final_state
-            print("    [Runner] Using captured Validation State to skip Warmup!")
+            print("[strategies.py] Using captured Validation State to skip Warmup!")
 
         # seed_data is already JAX array from _get_seed_sequence
         readout_cast = cast("Predictable", readout)

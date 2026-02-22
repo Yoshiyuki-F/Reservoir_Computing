@@ -176,10 +176,7 @@ class PipelineExecutor:
 
         # 3. Test
         test_in = self.coordinator.get_test_inputs(window_size)
-        # Test doesn't need to chain state for extraction (usually) or we might want to reset?
-        # For evaluation consistency, we usually treat test as standalone or chained from Val.
-        # But here we just extract features.
-        # If we chain, we must ensure Test follows Val immediately.
+        # TODO why needed for regression task?
         test_Z, _, _ = self._compute_split(
             model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
         )

@@ -103,7 +103,7 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             batch_size = history.shape[0]
             
             if verbose:
-                print(f"    [Generative] Generating {steps} steps (Fast JAX Scan)...")
+                print(f"[generative.py] Generating {steps} steps (Fast JAX Scan)...")
             
             initial_state_warmup = self.initialize_state(batch_size)
             
@@ -111,7 +111,7 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             history_in = projection_fn(history) if projection_fn else history
 
             if verbose:
-                print(f" Step8   [Generative] Running forward pass on seed data...")
+                print(f"[generative.py] Step8  Running forward pass on seed data...")
             final_state, history_outputs = self.forward(initial_state_warmup, history_in)
             last_output = history_outputs[:, -1, :]
 
@@ -144,9 +144,9 @@ class ClosedLoopGenerativeModel[StateT](ABC):
         # Initial carry: (state, prediction, step_counter)
         init_carry = (final_state, first_prediction, 0)
 
-        print(f"[Generative] Step8 Starting compiling and loop...")
+        print(f"[generative.py] Step8 Starting compiling and loop...")
         _, predictions = jax.lax.scan(scan_step, init_carry, None, length=steps)
-        print(f"[Generative] Step8 Finished generating.")
+        print(f"[generative.py] Step8 Finished generating.")
 
         # predictions is (steps, batch, features) -> (batch, steps, features)
         predictions = jnp.swapaxes(predictions, 0, 1)
