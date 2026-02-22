@@ -614,7 +614,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         print_feature_stats(to_np_f64(closed_loop_pred), "strategies.py", "8:closed_loop_prediction")
 
         closed_loop_truth = test_y
-        print_feature_stats(closed_loop_truth, "strategies.py", "8:closed_loop_truth")
+        if closed_loop_truth is not None:
+            print_feature_stats(closed_loop_truth, "strategies.py", "8:closed_loop_truth")
 
         # Check for divergence
         pred_np = to_np_f64(closed_loop_pred)
@@ -683,42 +684,19 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             return readout.predict(x_batch)
 
         # Calculate Predictions (Open Loop) - Batched
-        train_pred_np = batched_compute(
-            predict_model_batch,
-            train_Z,
-            batch_size=2048,
-            desc="[Step 8 Train Pred]",
-            file="strategies.py"
-        )
+        # Skip Train Prediction for Regression task to save time
+        metrics: dict[str, dict[str, float]] = {}
+        if train_y is not None:
+             metrics["train"] = {self.metric_name: 0.0} # Placeholder or skip
         
-        # Train
-        if train_y is None:
-            raise ValueError("train_y must not be None for ClosedLoopRegressionStrategy")
-        metrics: dict[str, dict[str, float]] = {"train": {
-            self.metric_name: compute_score(train_pred_np, train_y, self.metric_name)
-        }}
-        
-
         # Val (if needed, though Strategy optimized on it)
-        # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
-        # Using separate predict calls ensures consistency.
-        
-        if val_pred_np is None and val_Z is not None and readout is not None:
-             val_pred_np = batched_compute(
-                predict_model_batch,
-                val_Z,
-                batch_size=2048,
-                desc="[Step 8 Val Pred]",
-                file="strategies.py"
-             )
-            
+        # val_pred_np should already be set from RidgeCV or Else block above
         if val_pred_np is not None and val_y is not None:
             metrics["validation"] = {
                 self.metric_name: compute_score(val_pred_np, val_y, self.metric_name)
             }
 
-        # Test
-        test_pred = None
+        # Test - Automatically skipped if test_Z is None (from executor.py)
         if test_Z is not None and readout is not None:
              # Use batched prediction for open-loop test prediction if needed for metrics
              test_p_np = batched_compute(

@@ -76,7 +76,14 @@ class PipelineExecutor:
         print("\n=== Step 6.5: Target Alignment (Auto-Align) ===")
         train_y = self.coordinator.align_targets(train_Z, "train")
         val_y = self.coordinator.align_targets(val_Z, "val")
-        test_y = self.coordinator.align_targets(test_Z, "test")
+        
+        # If test_Z was skipped, test_y still needs to be aligned to the test set length
+        if test_Z is not None:
+            test_y = self.coordinator.align_targets(test_Z, "test")
+        else:
+            # Fallback: test_y should match the length of the processed test_X
+            test_y = self.frontend_ctx.processed_split.test_y
+            print(f"    [Executor] Using raw test_y (Length: {len(test_y) if test_y is not None else 0})")
 
         # Step 7: Fit Readout (Strategy Pattern)
         readout_name = type(self.stack.readout).__name__ if self.stack.readout else "None"
@@ -175,11 +182,14 @@ class PipelineExecutor:
         val_final_state = current_state
 
         # 3. Test
-        test_in = self.coordinator.get_test_inputs(window_size)
-        # TODO why needed for regression task?
-        test_Z, _, _ = self._compute_split(
-            model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
-        )
+        test_Z = None
+        if self.dataset_meta.classification:
+            test_in = self.coordinator.get_test_inputs(window_size)
+            test_Z, _, _ = self._compute_split(
+                model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
+            )
+        else:
+            print("    [Executor] Skipping Test feature extraction for Regression task (Closed-loop will be used).")
             
         return train_Z, val_Z, test_Z, (val_final_state, val_last_output)
 
