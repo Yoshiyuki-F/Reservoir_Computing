@@ -94,9 +94,10 @@ class ClosedLoopGenerativeModel[StateT](ABC):
         
         # Apply projection to history if needed
         history_in = projection_fn(history) if projection_fn else history
-        
+
+        print(f" Step8   [Generative] Running forward pass on seed data...")
         final_state, history_outputs = self.forward(initial_state, history_in)
-        
+
         def predict_one(features):
             if readout is not None:
                 # Readout expects features in correct shape
@@ -122,29 +123,15 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             h_next, output = self.step(h_prev, x_proj)
             y_next = predict_one(output)
             
-            # Periodic Stats Logging (Every 50 steps)
-            def log_stats(args: tuple[int, JaxF64, StateT, JaxF64]) -> None:
-                st_idx, x, h, y = args
-                h_cast = h
-                jax.debug.print("--- Step {i} ---", i=st_idx)
-                jax.debug.print("Loop:Input - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
-                jax.debug.print("Loop:State - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h_cast), s=jnp.std(h_cast), mn=jnp.min(h_cast), mx=jnp.max(h_cast))
-                jax.debug.print("Loop:Pred  - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(y), s=jnp.std(y), mn=jnp.min(y), mx=jnp.max(y))
-
-            # Conditional Execution
-            jax.lax.cond(
-                step_idx % 800 == 0,
-                log_stats,
-                lambda _: None,
-                (step_idx, x_raw, h_next, y_next)
-            )
-            
             return (h_next, y_next, step_idx + 1), y_next
         
         # Initial carry: (state, prediction, step_counter)
         init_carry = (final_state, first_prediction, 0)
+
+        print(f" Step8   [Generative] Starting compiling and loop...")
         _, predictions = jax.lax.scan(scan_step, init_carry, None, length=steps)
-        
+        print(f" Step8   [Generative] Finished generating.")
+
         # predictions is (steps, batch, features) -> (batch, steps, features)
         predictions = jnp.swapaxes(predictions, 0, 1)
         

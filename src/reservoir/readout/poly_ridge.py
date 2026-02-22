@@ -95,6 +95,10 @@ class PolyRidgeReadout(RidgeCV):
 
         return jnp.concatenate([X, cross_terms], axis=-1)
 
+    def map_features(self, X: JaxF64) -> JaxF64:
+        """Public interface for feature expansion (used by strategies)."""
+        return self._expand_features(X)
+
     # ------------------------------------------------------------------
     # Overridden ReadoutModule interface
     # ------------------------------------------------------------------

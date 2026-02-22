@@ -18,7 +18,7 @@ def batched_compute(
     fn: Callable[[JaxF64], JaxF64],
     inputs: NpF64,
     batch_size: int,
-    desc: str = "[Batched]",
+    desc: str,
 ) -> NpF64:
     """
     データセット全体を一括でGPUに載せるとOOMになるため、
@@ -39,6 +39,8 @@ def batched_compute(
     # Check ndim on inputs (works for both np and jnp)
     if inputs.ndim == 2:
         inputs_jax = to_jax_f64(inputs)
+
+        print(f"{desc} TimeSeries Processing Compile started...")
         result_jax = fn(inputs_jax)
         result_np = to_np_f64(result_jax)  # Transfer to CPU
         print_feature_stats(result_np, desc+" Output")

@@ -100,7 +100,7 @@ def optimize_ridge_vmap(
         predict_batch_fn,
         all_weights_np,
         batch_size=len(lambda_candidates),
-        desc="[RidgeCV Search]"
+        desc="[Step 7 RidgeCV Search]"
     )
 
     # 5. Score on CPU
@@ -307,6 +307,11 @@ class ClassificationStrategy(ReadoutStrategy):
                 raise ValueError("Validation data required for RidgeCV optimization")
             val_Z_jax = to_jax_f64(vf_reshaped)
 
+            # Feature Expansion (PolyRidge)
+            if hasattr(readout, "map_features"):
+                train_Z_jax = readout.map_features(train_Z_jax)
+                val_Z_jax = readout.map_features(val_Z_jax)
+
             # --- Use Shared Optimization Logic ---
             best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, _ = optimize_ridge_vmap(
                 lambda_candidates=readout.lambda_candidates,
@@ -359,7 +364,7 @@ class ClassificationStrategy(ReadoutStrategy):
             predict_model_batch,
             train_Z,
             batch_size=32,
-            desc="[Train Pred]"
+            desc="[Step 8 Train Pred]"
         )
         train_pred = to_jax_f64(train_pred_np)
 
@@ -371,7 +376,7 @@ class ClassificationStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=32,
-                desc="[Test Pred]"
+                desc="[Step 8 Test Pred]"
             )
             test_pred = to_jax_f64(test_pred_np)
 
@@ -481,6 +486,11 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              if vf_reshaped is None or val_y is None:
                  raise ValueError("Validation data required for RidgeCV optimization")
              val_X_jax = to_jax_f64(vf_reshaped)
+             
+             # Feature Expansion (PolyRidge)
+             if hasattr(readout, "map_features"):
+                 X_jax = readout.map_features(X_jax)
+                 val_X_jax = readout.map_features(val_X_jax)
              
              # --- Use Shared Optimization Logic ---
              best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, residuals_history = optimize_ridge_vmap(
@@ -658,8 +668,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         train_pred_np = batched_compute(
             predict_model_batch,
             train_Z,
-            batch_size=32,
-            desc="[Train Pred]"
+            batch_size=2048,
+            desc="[Step 8 Train Pred]"
         )
         
         # Train
@@ -679,7 +689,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 predict_model_batch,
                 val_Z,
                 batch_size=2048,
-                desc="[Val Pred]"
+                desc="[Step 8 Val Pred]"
              )
             
         if val_pred_np is not None and val_y is not None:
@@ -695,7 +705,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=2048,
-                desc="[Test Pred]"
+                desc="[Step 8 Test Pred]"
              )
              
              if test_p_np is not None and test_y is not None:

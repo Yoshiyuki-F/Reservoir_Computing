@@ -2,7 +2,7 @@
 from functools import partial
 
 import jax.numpy as jnp
-from reservoir.core.types import NpF64, JaxF64, to_jax_f64
+from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
@@ -127,7 +127,7 @@ class PipelineExecutor:
                      # Convert to JAX array to satisfy strictly typed model
                      sample_input_jax = to_jax_f64(sample_input)
                      trace = self.stack.model(sample_input_jax, return_sequences=True)
-                     quantum_trace = trace
+                     quantum_trace = to_np_f64(trace)
                      print(f"    [Executor] Captured trace shape: {trace.shape}")
              except (ValueError, RuntimeError, TypeError) as e:
                  print(f"    [Executor] Failed to capture quantum trace: {e}")
@@ -153,6 +153,8 @@ class PipelineExecutor:
         
         if projection is not None:
             print(f"    [Executor] Fusing {type(projection).__name__} + {type(model).__name__} in batched_compute (OOM-safe)")
+        else:
+            print(f"    [Executor] Running {type(model).__name__} feature extraction in batched_compute...")
 
         # 1. Train
         train_in = self.coordinator.get_train_inputs()
@@ -189,8 +191,8 @@ class PipelineExecutor:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
                 return model(projection(x))
-            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Proj+Extract] {split_name}")
+            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Step 3 and 5 Proj+Extract] {split_name}")
         else:
             # No projection (already projected or no projection needed, or DistillationModel)
             fn = partial(model, split_name=None)
-            return batched_compute(fn, inputs, batch_size, desc=f"[Extracting] {split_name}")
+            return batched_compute(fn, inputs, batch_size, desc=f"[Step 5 Extracting] {split_name}")

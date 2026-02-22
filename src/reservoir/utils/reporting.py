@@ -575,7 +575,7 @@ def _plot_quantum_section(results: ResultDict, topo_meta: TopologyMeta, training
             filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
             dynamics_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_quantum_dynamics.png"
 
-            trace_np = to_np_f64(quantum_trace) if quantum_trace is not None else None
+            trace_np = quantum_trace
             feature_names = None
             if model_obj is not None and hasattr(model_obj, "get_observable_names"):
                     feature_names = model_obj.get_observable_names()
