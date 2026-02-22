@@ -125,7 +125,7 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             # Periodic Stats Logging (Every 50 steps)
             def log_stats(args: tuple[int, JaxF64, StateT, JaxF64]) -> None:
                 st_idx, x, h, y = args
-                h_cast = cast('JaxF64', h)
+                h_cast = h
                 jax.debug.print("--- Step {i} ---", i=st_idx)
                 jax.debug.print("Loop:Input - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(x), s=jnp.std(x), mn=jnp.min(x), mx=jnp.max(x))
                 jax.debug.print("Loop:State - mean={m:.4f} std={s:.4f} min={mn:.4f} max={mx:.4f}", m=jnp.mean(h_cast), s=jnp.std(h_cast), mn=jnp.min(h_cast), mx=jnp.max(h_cast))

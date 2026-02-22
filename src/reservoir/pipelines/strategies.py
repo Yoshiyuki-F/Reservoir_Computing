@@ -348,7 +348,7 @@ class ClassificationStrategy(ReadoutStrategy):
             val_pred = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
             val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
 
-        print("\n=== Step 8: Final Predictions:===")
+        print("\n=== Step 8: Final Predictions (Classification):===")
 
         # Helper for batched prediction on Train/Test
         def predict_model_batch(x_batch: JaxF64) -> JaxF64:
@@ -514,7 +514,6 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              # Reuse best validation prediction
              val_pred_np = best_val_pred_np
              print_feature_stats(val_pred_np, "DEBUG:reused_val_pred_np")
-             val_pred_early = to_jax_f64(val_pred_np)
              
         else:
              print("    [Runner] No hyperparameter search needed for this readout.")
@@ -524,10 +523,12 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              search_history = {}
              weight_norms = {}
              residuals_history = {}
-             val_pred_early = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
+             
+             val_pred_jax = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
+             val_pred_np = to_np_f64(val_pred_jax) if val_pred_jax is not None else None
 
         # Display Validation Metrics (Open Loop) immediately
-        if val_pred_early is not None and val_y is not None:
+        if val_pred_np is not None and val_y is not None:
              print("\n=== Validation Open Loop Metrics ===")
              dt = float(getattr(dataset_meta.preset.config, 'dt', 1.0))
              ltu = float(getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0))
@@ -548,15 +549,16 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                      return arr
              
              val_y_raw = _inv_local(val_y)
-             val_pred_raw = _inv_local(to_np_f64(val_pred_early))
+             val_pred_raw = _inv_local(val_pred_np)
              
              val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
              print_chaos_metrics(val_metrics_chaos)
              if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
+                 # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
                  raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
-        print("\n=== Step 8: Final Predictions:===")
+        print("\n=== Step 8: Final Predictions (Regression):===")
         closed_loop_pred = None
         closed_loop_truth = None
         chaos_results = None
@@ -671,14 +673,12 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         # Val (if needed, though Strategy optimized on it)
         # Note: Strategy optimization loop computed best_score, but we can recompute or use it. 
         # Using separate predict calls ensures consistency.
-        val_pred = val_pred_early
-        val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
-
+        
         if val_pred_np is None and val_Z is not None and readout is not None:
              val_pred_np = batched_compute(
                 predict_model_batch,
                 val_Z,
-                batch_size=32,
+                batch_size=2048,
                 desc="[Val Pred]"
              )
             
@@ -694,7 +694,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              test_p_np = batched_compute(
                 predict_model_batch,
                 test_Z,
-                batch_size=32,
+                batch_size=2048,
                 desc="[Test Pred]"
              )
              

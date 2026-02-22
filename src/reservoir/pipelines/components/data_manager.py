@@ -126,76 +126,44 @@ class PipelineDataManager:
         
         # Use full 3D shape
         preprocessed_shape = train_X.shape
+        input_dim = int(preprocessed_shape[-1])
 
-        print("\n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
         projection_config = self.config.projection
+        projection_layer = None
+        projected_shape = None
+        input_dim_for_factory = input_dim
 
         if projection_config is None:
-            processed_split = SplitDataset(
-                train_X=train_X,
-                train_y=data_split.train_y,
-                test_X=test_X,
-                test_y=data_split.test_y,
-                val_X=val_X,
-                val_y=data_split.val_y,
-            )
-            input_shape_for_meta = preprocessed_shape
-            input_dim_for_factory = int(preprocessed_shape[-1])
-            self._log_dataset_stats(processed_split, "3")
+            print("\n=== Step 3: Projection (Skipped) ===")
+        else:
+            print("\n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
             
-            return FrontendContext(
-                processed_split=processed_split,
-                preprocessor=preprocessor,
-                preprocessed_shape=preprocessed_shape,
-                projected_shape=None,
-                input_shape_for_meta=input_shape_for_meta,
-                input_dim_for_factory=input_dim_for_factory,
+            # Use Factory pattern (DI)
+            projection_layer = create_projection(
+                projection_config, 
+                input_dim=input_dim
             )
+            
+            # Fit PCA if applicable
+            if hasattr(projection_layer, 'fit'):
+                print(f"Fitting {type(projection_layer).__name__} on training data...")
+                projection_layer.fit(to_jax_f64(train_X))
+            
+            # DEFERRED PROJECTION
+            projected_output_dim = int(projection_layer.output_dim)
+            projected_shape = train_X.shape[:-1] + (projected_output_dim,)
+            input_dim_for_factory = projected_output_dim
 
-        
-        # Use Factory pattern (DI)
-        projection = create_projection(
-            projection_config, 
-            input_dim=int(preprocessed_shape[-1])
-        )
-        
-        # Fit PCA if applicable
-        if hasattr(projection, 'fit'):
-            print(f"Fitting {type(projection).__name__} on training data...")
-            projection.fit(to_jax_f64(train_X))
-        
-        # ==========================================
-        # DEFERRED PROJECTION (OOM Prevention)
-        # ==========================================
-        # Do NOT materialize the projected arrays here.
-        # For MNIST with n_units=1200: (54000, 28, 1200) float64 = 14.5 GB
-        # Instead, keep the preprocessed arrays (~0.44 GB) and store the
-        # projection layer. The executor will fuse projection + model forward
-        # inside batched_compute, so the projected tensor only exists
-        # ephemerally on GPU per batch.
-
-        projected_output_dim = int(projection.output_dim)
-        projected_shape = train_X.shape[:-1] + (projected_output_dim,)
-
-        print(f"    [Deferred] Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
-
-        processed_split = SplitDataset(
-            train_X=train_X,
-            train_y=data_split.train_y,
-            test_X=test_X,
-            test_y=data_split.test_y,
-            val_X=val_X,
-            val_y=data_split.val_y,
-        )
+            print(f"    [Deferred] Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
 
         return FrontendContext(
-            processed_split=processed_split,
+            processed_split=preprocessed_split,
             preprocessor=preprocessor,
             preprocessed_shape=preprocessed_shape,
             projected_shape=projected_shape,
-            input_shape_for_meta=projected_shape,
-            input_dim_for_factory=projected_output_dim,
-            projection_layer=projection,
+            input_shape_for_meta=projected_shape if projected_shape else preprocessed_shape,
+            input_dim_for_factory=input_dim_for_factory,
+            projection_layer=projection_layer,
         )
 
     def apply_adapter(self, frontend_ctx: FrontendContext, adapter: Callable) -> FrontendContext:
