@@ -87,7 +87,7 @@ class PipelineDataManager:
         """
         Step 2 Apply preprocessing.
         """
-        print("\n=== Step 2: Preprocessing ===")
+        print("[datamanager.py] === Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
         if preprocessing_config is not None:
             print(f"[data_manager.py] {preprocessing_config}")
@@ -133,9 +133,9 @@ class PipelineDataManager:
         input_dim_for_factory = input_dim
 
         if projection_config is None:
-            print("[datamanager.py) \n=== Step 3: Projection (Skipped) ===")
+            print("[datamanager.py] === Step 3: Projection (Skipped) ===")
         else:
-            print("[datamanager.py) \n=== Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
+            print("[datamanager.py] === Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
             
             # Use Factory pattern (DI)
             projection_layer = create_projection(
@@ -145,7 +145,7 @@ class PipelineDataManager:
             
             # Fit PCA if applicable
             if hasattr(projection_layer, 'fit'):
-                print(f"Fitting {type(projection_layer).__name__} on training data...")
+                print(f"[datamanager.py] Fitting {type(projection_layer).__name__} on training data...")
                 projection_layer.fit(to_jax_f64(train_X))
             
             # DEFERRED PROJECTION
@@ -153,7 +153,7 @@ class PipelineDataManager:
             projected_shape = train_X.shape[:-1] + (projected_output_dim,)
             input_dim_for_factory = projected_output_dim
 
-            print(f"    [Deferred] Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
+            print(f"[datamanager.py]  Projection will be fused with model forward (saves ~{train_X.shape[0] * train_X.shape[1] * projected_output_dim * 8 / 1e9:.1f} GB RAM)")
 
         return FrontendContext(
             processed_split=preprocessed_split,
@@ -170,7 +170,7 @@ class PipelineDataManager:
         Step 4: Apply adapter (e.g., TimeDelayEmbedding) to all splits.
         This is called by the model builder after creating the model with adapter.
         """
-        print("\n=== Step 4: Adapter ===")
+        print("[datamanager.py] === Step 4: Adapter ===")
         
         if adapter is None or not callable(adapter):
             return frontend_ctx
