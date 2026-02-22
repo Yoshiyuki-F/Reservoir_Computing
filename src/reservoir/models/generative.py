@@ -147,9 +147,11 @@ class ClosedLoopGenerativeModel[StateT](ABC):
         # Initial carry: (state, prediction, step_counter)
         init_carry = (final_state, first_prediction, 0)
 
-        print(f"[generative.py] Step8 Starting compiling and loop...")
+        import time
+        start_time = time.time()
+        print(f"[generative.py] Step 8 jax scan step ...at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
         _, scan_out = jax.lax.scan(scan_step, init_carry, None, length=steps)
-        print(f"[generative.py] Step8 Finished generating.")
+        print(f"[generative.py] Step 8 jax scan step Finished generating in {time.time() - start_time:.4f} seconds.")
 
         if return_history:
             predictions, history_states = scan_out

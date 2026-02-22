@@ -117,28 +117,29 @@ class PipelineExecutor:
                      # Use history from closed-loop generation (no re-computation needed)
                      quantum_trace = to_np_f64(fit_result["closed_loop_history"])
                      print(f"    [Executor] Using captured closed-loop history: {quantum_trace.shape}")
-                 test_data = self.frontend_ctx.processed_split.test_X
-                 if test_data is None:
-                     test_data = self.frontend_ctx.processed_split.train_X
+                 else:
+                     test_data = self.frontend_ctx.processed_split.test_X
+                     if test_data is None:
+                         test_data = self.frontend_ctx.processed_split.train_X
+                         
+                     sample_input = None
+                     if test_data is not None and len(test_data) > 0:
+                          # Heuristic: If 2D (Batch, Feat), treat as sequence of length min(100, N)
+                          if test_data.ndim == 2:
+                               # Use full sequence for visualization as requested
+                               sample_input = test_data[None, :, :]
+                          # If 3D (Batch, Time, Feat), take first sample -> (1, T, F)
+                          elif test_data.ndim == 3:
+                               sample_input = test_data[0:1]
                      
-                 sample_input = None
-                 if test_data is not None and len(test_data) > 0:
-                      # Heuristic: If 2D (Batch, Feat), treat as sequence of length min(100, N)
-                      if test_data.ndim == 2:
-                           # Use full sequence for visualization as requested
-                           sample_input = test_data[None, :, :]
-                      # If 3D (Batch, Time, Feat), take first sample -> (1, T, F)
-                      elif test_data.ndim == 3:
-                           sample_input = test_data[0:1]
-                 
-                 if sample_input is not None:
-                     # Force return_sequences=True to get time evolution
-                     # Use batch_size=1
-                     # Convert to JAX array to satisfy strictly typed model
-                     sample_input_jax = to_jax_f64(sample_input)
-                     trace = self.stack.model(sample_input_jax, return_sequences=True)
-                     quantum_trace = to_np_f64(trace)
-                     print(f"[executor.py] Captured trace shape: {trace.shape}")
+                     if sample_input is not None:
+                         # Force return_sequences=True to get time evolution
+                         # Use batch_size=1
+                         # Convert to JAX array to satisfy strictly typed model
+                         sample_input_jax = to_jax_f64(sample_input)
+                         trace = self.stack.model(sample_input_jax, return_sequences=True)
+                         quantum_trace = to_np_f64(trace)
+                         print(f"[executor.py] Captured trace shape: {trace.shape}")
              except (ValueError, RuntimeError, TypeError) as e:
                  print(f"[executor.py] Failed to capture quantum trace: {e}")
 
