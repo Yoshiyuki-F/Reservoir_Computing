@@ -90,7 +90,7 @@ class PipelineDataManager:
         print("\n=== Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
         if preprocessing_config is not None:
-            print(f"    [Config] {preprocessing_config}")
+            print(f"[data_manager.py] {preprocessing_config}")
         
         # Factory dispatch on config type
         preprocessor = create_preprocessor(preprocessing_config)
@@ -111,7 +111,6 @@ class PipelineDataManager:
                 
             # For Regression, targets (y) should also be scaled if they share the domain (Auto-Regression)
             if not (self.metadata.classification if self.metadata else False):
-                 print(f"    [Preprocessing] {preprocessing_config} Applying transforms to targets (y) for REGRESSION task.")
                  # Note: use transform to reuse fitted parameters
                  if data_split.train_y is not None:
                      data_split = replace(data_split, train_y=preprocessor.transform(data_split.train_y))
