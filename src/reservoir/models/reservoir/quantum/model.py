@@ -71,6 +71,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         use_remat: bool,
         use_reuploading: bool,
         precision: Literal["complex64", "complex128"],
+        chunk_size: int = 32, #TODO should be in some config class or something, not here
     ) -> None:
         """Initialize Quantum Reservoir."""
         # Ensure TC backend and patches are applied (lazy, idempotent)
@@ -112,6 +113,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         self.use_reuploading = use_reuploading
         self.precision = precision
         self.feedback_scale = float(feedback_scale)  # a_fb: R gate feedback scaling
+        self.chunk_size = int(chunk_size)
 
         self._rng = jax.random.key(seed)
         
@@ -267,7 +269,8 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             self.noise_type,
             self.noise_prob,
             self.use_remat,
-            self.use_reuploading
+            self.use_reuploading,
+            self.chunk_size
         )
         
         # --- Ensemble Aggregation ---
@@ -349,6 +352,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             "use_remat": bool(self.use_remat),
             "use_reuploading": bool(self.use_reuploading),
             "precision": str(self.precision),
+            "chunk_size": int(self.chunk_size),
         }
 
     @classmethod
@@ -369,6 +373,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
                 use_remat=bool(d.get("use_remat", False)),
                 use_reuploading=bool(d.get("use_reuploading", False)),
                 precision=d.get("precision", "complex64"),  # type: ignore[arg-type]
+                chunk_size=int(d.get("chunk_size", 32)),
             )
         except KeyError as exc:
             raise KeyError(f"Missing required quantum reservoir parameter '{exc.args[0]}'") from exc

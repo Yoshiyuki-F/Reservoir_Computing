@@ -353,27 +353,29 @@ def _forward_jit(
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
-    use_reuploading: bool
+    use_reuploading: bool,
+    chunk_size: int
 ) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
     """
     Forward pass execution using Double Scan strategy.
     Orchestrates padding/reshaping in Python/Eager JAX, then calls cached kernel.
+    * T (16600): 424.7s
+   * 128: 428.8s
+   * 64: 419.7s
+   * 32: 412.3s (最速)
+   * 16: 413.5s
+
     """
     
     # --- Double Scan Optimization (Chunking) ---
-
     T = inputs_time_major.shape[0]
-
-    CHUNK_SIZE = 64
-    #  * T: 424.6693s    128: 428.8250 s  * 64: 419.7301 s
-
-
+    
     # Calculate padding
-    remainder = T % CHUNK_SIZE
+    remainder = T % chunk_size
     if remainder == 0:
         pad_len = 0
     else:
-        pad_len = CHUNK_SIZE - remainder
+        pad_len = chunk_size - remainder
         
     # Pad inputs (Time axis is 0)
     if pad_len > 0:
@@ -382,9 +384,9 @@ def _forward_jit(
     else:
         inputs_padded = inputs_time_major
         
-    # Reshape to (Num_Chunks, Chunk_Size, Batch, Feat)
-    num_chunks = inputs_padded.shape[0] // CHUNK_SIZE
-    inputs_chunked = inputs_padded.reshape(num_chunks, CHUNK_SIZE, *inputs_time_major.shape[1:])
+    # Reshape to (Num_Chunks, chunk_size, Batch, Feat)
+    num_chunks = inputs_padded.shape[0] // chunk_size
+    inputs_chunked = inputs_padded.reshape(num_chunks, chunk_size, *inputs_time_major.shape[1:])
     
     # Outer Scan Function (Process one chunk using cached kernel)
     def scan_chunk_wrapper(carry, chunk_in):
@@ -395,16 +397,14 @@ def _forward_jit(
             noise_type, noise_prob, use_remat, use_reuploading
         )
 
-
     # Outer Scan (Process all chunks)
-    # jax.lax.scan compiles the outer loop logic (which is just function calls) very quickly.
     import time
     start_time = time.time()
-    print(f"[Timer] Starting Outer Scan (Chunks={num_chunks}, Size={CHUNK_SIZE})　at {start_time}...")
+    print(f"[Timer] Starting Outer Scan (Chunks={num_chunks}, Size={chunk_size})...")
     final_carry, stacked_outputs_chunked = jax.lax.scan(scan_chunk_wrapper, state_init, inputs_chunked)
     elapsed = time.time() - start_time
     print(f"[Timer] Outer Scan finished in {elapsed:.4f} seconds.")
-
+    
     # Reshape Output
     output_shape = stacked_outputs_chunked.shape
     stacked_outputs_padded = stacked_outputs_chunked.reshape(-1, *output_shape[2:])
