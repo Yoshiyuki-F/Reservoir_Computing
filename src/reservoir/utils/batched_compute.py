@@ -19,6 +19,7 @@ def batched_compute(
     inputs: NpF64,
     batch_size: int,
     desc: str,
+    file: str,
 ) -> NpF64:
     """
     データセット全体を一括でGPUに載せるとOOMになるため、
@@ -43,7 +44,7 @@ def batched_compute(
         print(f"[batched_compute.py] {desc} TimeSeries Processing Compile started...")
         result_jax = fn(inputs_jax)
         result_np = to_np_f64(result_jax)  # Transfer to CPU
-        print_feature_stats(result_np, desc+" Output")
+        print_feature_stats(result_np, "batched_compute.py", desc+" Output")
         return result_np
     
     # 3D input (N, T, F) - Classification batching
@@ -96,5 +97,5 @@ def batched_compute(
             # 進捗更新
             pbar.update(current_batch_size)
 
-    print_feature_stats(result_array, "[batched_compute.py]" + desc+" Output")
+    print_feature_stats(result_array, f"batched_compute.py + {file}",  desc+" Output")
     return result_array

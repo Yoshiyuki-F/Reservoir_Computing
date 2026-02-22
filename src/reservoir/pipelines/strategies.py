@@ -100,7 +100,8 @@ def optimize_ridge_vmap(
         predict_batch_fn,
         all_weights_np,
         batch_size=len(lambda_candidates),
-        desc="[Step 7 RidgeCV Search]"
+        desc="[Step 7 RidgeCV Search]",
+        file="strategies.py"
     )
 
     # 5. Score on CPU
@@ -144,7 +145,7 @@ def optimize_ridge_vmap(
     best_val_pred_np = all_val_preds_np[best_pred_idx]
     
     print(f"[strategy.py] optimize_ridge_vmap best_idx={best_pred_idx}, best_score={best_score}")
-    print_feature_stats(best_val_pred_np, "[strategy.py] :best_val_pred_np")
+    print_feature_stats(best_val_pred_np, "strategies.py",":best_val_pred_np")
     
     return best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
 
@@ -255,7 +256,7 @@ class EndToEndStrategy(ReadoutStrategy):
                 pred_std = float(np.std(closed_loop_pred))
                 _check_closed_loop_divergence(pred_std, threshold=50)
 
-                print_feature_stats(to_np_f64(closed_loop_pred), "8:fnn_closed_loop_prediction")
+                print_feature_stats(to_np_f64(closed_loop_pred), "strategies.py", "8:fnn_closed_loop_prediction")
 
                 global_start = processed.train_X.shape[1] + (processed.val_X.shape[1] if processed.val_X is not None else 0)
                 global_end = global_start + generation_steps
@@ -367,7 +368,8 @@ class ClassificationStrategy(ReadoutStrategy):
             predict_model_batch,
             train_Z,
             batch_size=32,
-            desc="[Step 8 Train Pred]"
+            desc="[Step 8 Train Pred]",
+            file="strategies.py"
         )
         train_pred = to_jax_f64(train_pred_np)
 
@@ -379,7 +381,8 @@ class ClassificationStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=32,
-                desc="[Step 8 Test Pred]"
+                desc="[Step 8 Test Pred]",
+                file="strategies.py"
             )
             test_pred = to_jax_f64(test_pred_np)
 
@@ -608,10 +611,10 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             initial_state=init_state,
             initial_output=init_out
         )
-        print_feature_stats(to_np_f64(closed_loop_pred), "8:closed_loop_prediction")
+        print_feature_stats(to_np_f64(closed_loop_pred), "strategies.py", "8:closed_loop_prediction")
 
         closed_loop_truth = test_y
-        print_feature_stats(closed_loop_truth, "8:closed_loop_truth")
+        print_feature_stats(closed_loop_truth, "strategies.py", "8:closed_loop_truth")
 
         # Check for divergence
         pred_np = to_np_f64(closed_loop_pred)
@@ -684,7 +687,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             predict_model_batch,
             train_Z,
             batch_size=2048,
-            desc="[Step 8 Train Pred]"
+            desc="[Step 8 Train Pred]",
+            file="strategies.py"
         )
         
         # Train
@@ -704,7 +708,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 predict_model_batch,
                 val_Z,
                 batch_size=2048,
-                desc="[Step 8 Val Pred]"
+                desc="[Step 8 Val Pred]",
+                file="strategies.py"
              )
             
         if val_pred_np is not None and val_y is not None:
@@ -720,7 +725,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=2048,
-                desc="[Step 8 Test Pred]"
+                desc="[Step 8 Test Pred]",
+                file="strategies.py"
              )
              
              if test_p_np is not None and test_y is not None:

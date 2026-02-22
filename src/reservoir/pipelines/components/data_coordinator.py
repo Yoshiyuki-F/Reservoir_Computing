@@ -79,13 +79,13 @@ class DataCoordinator:
         if len_t > len_f:
             diff = len_t - len_f
             aligned = targets[diff:]
-            print_feature_stats(aligned, f"6.5:Aligned:y:{split} (Trimmed {diff})")
+            print_feature_stats(aligned, "data_coordinator.py","6.5:Aligned:y:{split} (Trimmed {diff})")
             return aligned
         elif len_t < len_f:
             # This is weird but we warn
             print(f"    [DataCoordinator] WARNING: Features ({len_f}) > Targets ({len_t}) for {split}. No alignment.")
-            print_feature_stats(targets, f"6.5:Aligned:y:{split} (Mismatch)")
+            print_feature_stats(targets, "data_coordinator.py",f"6.5:Aligned:y:{split} (Mismatch)")
             return targets
         else:
-            print_feature_stats(targets, f"6.5:Aligned:y:{split}")
+            print_feature_stats(targets, "data_coordinator.py",f"6.5:Aligned:y:{split}")
             return targets

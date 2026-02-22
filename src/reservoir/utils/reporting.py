@@ -83,7 +83,7 @@ def print_chaos_metrics(metrics: EvalMetrics, header: str | None = None) -> None
 
 # --- Logging / Printing ---
 
-def print_feature_stats(features: NpF64, stage: str, backend: str = "numpy") -> None:
+def print_feature_stats(features: NpF64, file:str, stage: str, backend: str = "numpy") -> None:
     """Internal implementation handling concrete numpy arrays."""
     # 基本統計量
     stats = {
@@ -97,7 +97,7 @@ def print_feature_stats(features: NpF64, stage: str, backend: str = "numpy") -> 
     }
 
     print(
-        f"[FeatureStats:{stage}] dtype={stats['dtype']}, shape={stats['shape']}, "
+        f"[{file} FeatureStats:{stage}] dtype={stats['dtype']}, shape={stats['shape']}, "
         f"mean={stats['mean']:.4f}, std={stats['std']:.4f}, "
         f"min={stats['min']:.4f}, max={stats['max']:.4f}, nans={stats['nans']}"
     )

@@ -56,7 +56,7 @@ class StateAggregator(ABC):
             raise ValueError(f"Aggregation output must be 2D, got {result.shape}")
 
         if log_label is not None:
-            print_feature_stats(to_np_f64(result), log_label)
+            print_feature_stats(to_np_f64(result), "aggregation.py", log_label)
         return result
 
     def fit_transform(self, features: JaxF64) -> JaxF64:

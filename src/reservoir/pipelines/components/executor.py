@@ -228,7 +228,7 @@ class PipelineExecutor:
             last_output = outputs_jax[0, -1, :] # (Out,)
             
             # Log stats manually since we skipped batched_compute
-            print_feature_stats(outputs_np, f"6:Z:{split_name}")
+            print_feature_stats(outputs_np, "executor.py",f"6:Z:{split_name}")
             
             return outputs_np, final_state, last_output
 
@@ -242,8 +242,20 @@ class PipelineExecutor:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
                 return model(projection(x))
-            return batched_compute(fused_fn, inputs, batch_size, desc=f"[Step 3 and 5 Proj+Extract] {split_name}"), None, None
+            return batched_compute(
+                fused_fn,
+                inputs,
+                batch_size,
+                desc=f"[Step 3 and 5 Proj+Extract] {split_name}",
+                file="executor.py"
+            ), None, None
         else:
             # No projection (already projected or no projection needed, or DistillationModel)
             fn = partial(model, split_name=None)
-            return batched_compute(fn, inputs, batch_size, desc=f"[Step 5 Extracting] {split_name}"), None, None
+            return batched_compute(
+                fn,
+                inputs,
+                batch_size,
+                desc=f"[Step 5 Extracting] {split_name}",
+                file="executor.py"
+            ), None, None

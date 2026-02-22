@@ -56,7 +56,7 @@ class PipelineDataManager:
 
     def _load_dataset(self) -> tuple[DatasetMetadata, SplitDataset]:
         """Step 1: Resolve presets and load dataset without mutating inputs later."""
-        print("=== Step 1: Loading Dataset ===")
+        print("\n[data_manager.py] === Step 1: Loading Dataset ===")
         dataset_enum, dataset_preset = self.dataset, DATASET_REGISTRY.get(self.dataset)
         if dataset_preset is None:
             raise ValueError(f"Unknown dataset: {dataset_enum}. Not found in DATASET_REGISTRY.")
@@ -87,7 +87,7 @@ class PipelineDataManager:
         """
         Step 2 Apply preprocessing.
         """
-        print("[datamanager.py] === Step 2: Preprocessing ===")
+        print("\n[datamanager.py] === Step 2: Preprocessing ===")
         preprocessing_config = self.config.preprocess
         if preprocessing_config is not None:
             print(f"[data_manager.py] {preprocessing_config}")
@@ -133,9 +133,9 @@ class PipelineDataManager:
         input_dim_for_factory = input_dim
 
         if projection_config is None:
-            print("[datamanager.py] === Step 3: Projection (Skipped) ===")
+            print("\n[datamanager.py] === Step 3: Projection (Skipped) ===")
         else:
-            print("[datamanager.py] === Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
+            print("\n[datamanager.py] === Step 3+5+6: Projection + Model + Feature Extraction (Fused) ===")
             
             # Use Factory pattern (DI)
             projection_layer = create_projection(
@@ -212,16 +212,16 @@ class PipelineDataManager:
     @staticmethod
     def _log_dataset_stats(dataset: SplitDataset, stage: str):
         """Centralized stats logging."""
-        print_feature_stats(dataset.train_X, f"{stage}:X:train")
+        print_feature_stats(dataset.train_X, "data_manager.py", "{stage}:X:train")
         if dataset.train_y is not None:
-             print_feature_stats(dataset.train_y, f"{stage}:y:train")
+             print_feature_stats(dataset.train_y,"data_manager.py",  f"{stage}:y:train")
              
         if dataset.val_X is not None:
-            print_feature_stats(dataset.val_X, f"{stage}:X:val")
+            print_feature_stats(dataset.val_X,"data_manager.py",  f"{stage}:X:val")
             if dataset.val_y is not None:
-                print_feature_stats(dataset.val_y, f"{stage}:y:val")
+                print_feature_stats(dataset.val_y,"data_manager.py",  f"{stage}:y:val")
                 
         if dataset.test_X is not None:
-            print_feature_stats(dataset.test_X, f"{stage}:X:test")
+            print_feature_stats(dataset.test_X,"data_manager.py",  f"{stage}:X:test")
             if dataset.test_y is not None:
-                print_feature_stats(dataset.test_y, f"{stage}:y:test")
+                print_feature_stats(dataset.test_y,"data_manager.py",  f"{stage}:y:test")

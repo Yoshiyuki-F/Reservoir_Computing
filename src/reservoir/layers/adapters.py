@@ -54,14 +54,14 @@ class Flatten(Adapter):
             result = X.flatten()
 
         if log_label is not None:
-            print_feature_stats(to_np_f64(result), log_label)
+            print_feature_stats(to_np_f64(result), "adapter.py", log_label)
 
         return result
 
     def align_targets(self, targets: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
         """No alignment needed for Flatten adapter."""
         if log_label is not None:
-            print_feature_stats(to_np_f64(targets), log_label)
+            print_feature_stats(to_np_f64(targets),"adapter.py",  log_label)
         return targets
 
 
@@ -106,7 +106,7 @@ class TimeDelayEmbedding(Adapter):
             X_embedded = X_embedded.reshape(-1, X_embedded.shape[-1])
 
         if log_label is not None:
-            print_feature_stats(to_np_f64(X_embedded), log_label)
+            print_feature_stats(to_np_f64(X_embedded), "adapter.py", log_label)
 
         return X_embedded
 
@@ -117,13 +117,13 @@ class TimeDelayEmbedding(Adapter):
         if targets.ndim == 2:
             result = targets[W-1:, :]
             if log_label is not None:
-                print_feature_stats(to_np_f64(result), f"{log_label} (Time-Trimmed)")
+                print_feature_stats(to_np_f64(result), "adapter.py", f"{log_label} (Time-Trimmed)")
             return result
         # 3D (N, T, Out) -> (N, T - W + 1, Out) -> (N * T', Out)
         aligned = targets[:, W-1:, :]
         reshaped = aligned.reshape(-1, aligned.shape[-1])
         if log_label is not None:
-            print_feature_stats(to_np_f64(reshaped), f"{log_label} (Time-Trimmed)")
+            print_feature_stats(to_np_f64(reshaped), "adapter.py", f"{log_label} (Time-Trimmed)")
         return reshaped
 
     def __call__(self, X: JaxF64, flatten_batch: bool = True, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
