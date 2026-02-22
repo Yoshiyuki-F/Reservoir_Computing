@@ -113,7 +113,10 @@ class PipelineExecutor:
         if hasattr(self.stack.model, "n_qubits") and hasattr(self.stack.model, "measurement_basis"):
              print("\n=== Step 8.5: Capturing Quantum Dynamics Trace ===")
              try:
-                 # Take first test sample or train sample
+                 if fit_result.get("closed_loop_history") is not None:
+                     # Use history from closed-loop generation (no re-computation needed)
+                     quantum_trace = to_np_f64(fit_result["closed_loop_history"])
+                     print(f"    [Executor] Using captured closed-loop history: {quantum_trace.shape}")
                  test_data = self.frontend_ctx.processed_split.test_X
                  if test_data is None:
                      test_data = self.frontend_ctx.processed_split.train_X

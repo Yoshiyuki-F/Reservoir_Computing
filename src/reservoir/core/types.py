@@ -135,6 +135,7 @@ class FitResultDict(TypedDict, total=False):
     weight_norms: dict[float, float]
     residuals_history: dict[float, NpF64] | None
     closed_loop_pred: JaxF64 | None
+    closed_loop_history: JaxF64 | None
     closed_loop_truth: JaxF64 | None
     chaos_results: dict[str, float] | None
     outputs: dict[str, JaxF64 | None]

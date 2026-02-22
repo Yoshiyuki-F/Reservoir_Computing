@@ -43,7 +43,8 @@ def optimize_ridge_vmap(
     val_Z: JaxF64,
     val_y: NpF64,
     metric_name: str,
-    inverse_fn: Callable[[NpF64], NpF64] | None = None
+    batch_size: int,
+    inverse_fn: Callable[[NpF64], NpF64] | None = None,
 ) -> tuple[float, float, dict[float, float], dict[float, float], NpF64, JaxF64, dict[float, np.ndarray] | None]:
     """
     Common vectorized RidgeCV optimization logic using batched_compute.
@@ -99,7 +100,7 @@ def optimize_ridge_vmap(
     all_val_preds_np = batched_compute(
         predict_batch_fn,
         all_weights_np,
-        batch_size=len(lambda_candidates),
+        batch_size=batch_size, 
         desc="[Step 7 RidgeCV Search]",
         file="strategies.py"
     )
@@ -317,6 +318,7 @@ class ClassificationStrategy(ReadoutStrategy):
                 val_Z_jax = readout.map_features(val_Z_jax)
 
             # --- Use Shared Optimization Logic ---
+            batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
             best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, _ = optimize_ridge_vmap(
                 lambda_candidates=readout.lambda_candidates,
                 use_intercept=readout.use_intercept,
@@ -325,7 +327,8 @@ class ClassificationStrategy(ReadoutStrategy):
                 val_Z=val_Z_jax,
                 val_y=val_y,
                 metric_name=self.metric_name,
-                inverse_fn=None
+                inverse_fn=None,
+                batch_size=batch_size_cfg
             )
             
             print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
@@ -500,6 +503,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  val_X_jax = readout.map_features(val_X_jax)
              
              # --- Use Shared Optimization Logic ---
+             batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
              best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, residuals_history = optimize_ridge_vmap(
                 lambda_candidates=readout.lambda_candidates,
                 use_intercept=readout.use_intercept,
@@ -508,7 +512,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 val_Z=val_X_jax,
                 val_y=val_y,
                 metric_name="nmse",
-                inverse_fn=_inverse
+                inverse_fn=_inverse,
+                batch_size=batch_size_cfg
              )
              
              print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
@@ -570,8 +575,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
              val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
              print_chaos_metrics(val_metrics_chaos)
              if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                 print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-                 # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+                 # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
+                 raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
         # Test Generation
         print("\n=== Step 8: Final Predictions (Regression):===")
@@ -603,13 +608,14 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # seed_data is already JAX array from _get_seed_sequence
         readout_cast = cast("Predictable", readout)
-        closed_loop_pred = model.generate_closed_loop(
+        closed_loop_pred, closed_loop_hist = model.generate_closed_loop(
             full_seed_data, 
             steps=generation_steps, 
             readout=readout_cast, 
             projection_fn=proj_fn,
             initial_state=init_state,
-            initial_output=init_out
+            initial_output=init_out,
+            return_history=True
         )
         print_feature_stats(to_np_f64(closed_loop_pred), "strategies.py", "8:closed_loop_prediction")
 
@@ -644,18 +650,18 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         }
 
         if pred_std > threshold * truth_std or truth_std > threshold * pred_std:
-            print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
-            # raise DivergenceError(
-            #     f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
-            #     stats=stats_dict,
-            # )
+            # print(f"    [Warning] Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)")
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred STD={pred_std:.2f} > {threshold}x Truth STD={truth_std:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         if pred_max > threshold + truth_max or truth_max > threshold + pred_max:
-            print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
-            # raise DivergenceError(
-            #     f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
-            #     stats=stats_dict,
-            # )
+            # print(f"    [Warning] Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)")
+            raise DivergenceError(
+                f"Closed-loop prediction diverged! Pred Max={pred_max:.2f} > {threshold}x Truth Max={truth_max:.2f} (or collapsed)",
+                stats=stats_dict,
+            )
 
         # Calculate global_start based on dimensions
         def get_time_steps(arr: NpF64 | None) -> int:
@@ -723,6 +729,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             "weight_norms": weight_norms,
             "residuals_history": residuals_history if 'residuals_history' in locals() else None,
             "closed_loop_pred": closed_loop_pred,
+            "closed_loop_history": closed_loop_hist,
             "closed_loop_truth": closed_loop_truth,
             "chaos_results": {**(chaos_results or {}), **(stats_dict or {})}, # Merge stats
         })

@@ -19,7 +19,7 @@ Usage:
     uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_full
 
     # Custom trial count
-    uv run python benchmarks/optimize_qrc.py --n-trials 10
+    uv run python benchmarks/optimize_qrc.py --trials 1000
 
 Visualization:
     uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
@@ -114,12 +114,12 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing =============================
-        # input_scale = trial.suggest_float("input_scale", 0.5, 2 * np.pi / (1.3283 - 0.4015))
-        # input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
+        input_scale = trial.suggest_float("input_scale", 0.5, 2 * np.pi / (1.3283 - 0.4015))
+        input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
 
         # AffineScaler parameters
-        input_scale = trial.suggest_float("input_scale", 3,4)
-        input_shift = trial.suggest_float("input_shift", -3, -1)
+        # input_scale = trial.suggest_float("input_scale", 3,4)
+        # input_shift = trial.suggest_float("input_shift", -3, -1)
 
         # ======================== Reservoir ==================================
         feedback_scale = trial.suggest_float("feedback_scale", 0.5, 3.0)
@@ -216,7 +216,7 @@ def make_objective(measurement_basis: str, readout_config):
 
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{scaler_type}_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}"
+    study_name = f"qrc_vpt_{scaler_type}_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 

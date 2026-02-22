@@ -66,7 +66,8 @@ class ClosedLoopGenerativeModel[StateT](ABC):
         verbose: bool = True,
         initial_state: StateT | None = None,
         initial_output: JaxF64 | None = None,
-    ) -> JaxF64:
+        return_history: bool = False,
+    ) -> JaxF64 | tuple[JaxF64, JaxF64]:
         """
         Generate closed-loop predictions using Fast JAX Scan.
         
@@ -78,9 +79,10 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             verbose: Print progress
             initial_state: Optional pre-computed state to skip warmup.
             initial_output: Optional pre-computed last output to skip warmup.
+            return_history: If True, returns (predictions, reservoir_history)
             
         Returns:
-            2D predictions (steps, Features)
+            2D predictions (steps, Features) OR (predictions, history)
         """
         
         if initial_state is not None and initial_output is not None:
@@ -139,19 +141,28 @@ class ClosedLoopGenerativeModel[StateT](ABC):
             h_next, output = self.step(h_prev, x_proj)
             y_next = predict_one(output)
             
-            return (h_next, y_next, step_idx + 1), y_next
+            accum = (y_next, output) if return_history else y_next
+            return (h_next, y_next, step_idx + 1), accum
         
         # Initial carry: (state, prediction, step_counter)
         init_carry = (final_state, first_prediction, 0)
 
         print(f"[generative.py] Step8 Starting compiling and loop...")
-        _, predictions = jax.lax.scan(scan_step, init_carry, None, length=steps)
+        _, scan_out = jax.lax.scan(scan_step, init_carry, None, length=steps)
         print(f"[generative.py] Step8 Finished generating.")
 
-        # predictions is (steps, batch, features) -> (batch, steps, features)
-        predictions = jnp.swapaxes(predictions, 0, 1)
-        
-        # Return 2D (steps, features) for single batch
-        if batch_size == 1:
-            return predictions[0]
-        return predictions
+        if return_history:
+            predictions, history_states = scan_out
+            # swap axes: (steps, batch, features) -> (batch, steps, features)
+            predictions = jnp.swapaxes(predictions, 0, 1)
+            history_states = jnp.swapaxes(history_states, 0, 1)
+            
+            if batch_size == 1:
+                return predictions[0], history_states[0]
+            return predictions, history_states
+        else:
+            predictions = scan_out
+            predictions = jnp.swapaxes(predictions, 0, 1)
+            if batch_size == 1:
+                return predictions[0]
+            return predictions
