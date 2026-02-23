@@ -105,6 +105,7 @@ class PipelineExecutor:
             self.frontend_ctx,
             self.dataset_meta,
             config,
+            topo_meta=self.stack.topo_meta,
             val_final_state=val_final_info
         )
         
