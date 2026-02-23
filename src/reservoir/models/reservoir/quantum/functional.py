@@ -358,7 +358,7 @@ def _forward_jit(
     Forward pass execution using Double Scan strategy.
     Orchestrates padding/reshaping in Python/Eager JAX, then calls cached kernel.
     for 16 qubits
-    * T (16600): 424.7s
+    * T (16600): 424.7s 400s
    * 128: 428.8s
    * 64: 419.7s
    * 32: 412.3s 417.9868 420.4176

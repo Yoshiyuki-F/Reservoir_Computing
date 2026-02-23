@@ -622,9 +622,9 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
                 # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
                 raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
-            if float(val_metrics_chaos.get("nmse", 0.0)) > 5e-5:
+            if float(val_metrics_chaos.get("nmse", 0.0)) > 1e-5:
                 # print(f"    [Warning] Validation NMSE too high: {val_metrics_chaos.get('nmse'):.4f} (Threshold: 1.0)")
-                raise ValueError(f"Validation NMSE too high: {val_metrics_chaos.get('nmse'):.4f}")
+                raise ValueError(f"Validation NMSE too high: {val_metrics_chaos.get('nmse'):.10f}")
 
         # Test Generation ===============================================================================================================================
         print("\n=== Step 8: Final Predictions (Regression):===")
