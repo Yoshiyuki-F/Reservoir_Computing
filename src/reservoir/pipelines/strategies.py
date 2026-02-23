@@ -10,7 +10,12 @@ import numpy as np
 
 
 from reservoir.utils.batched_compute import batched_compute
-from reservoir.utils.reporting import print_ridge_search_results, print_feature_stats, print_chaos_metrics
+from reservoir.utils.reporting import (
+    print_ridge_search_results, 
+    print_feature_stats, 
+    print_chaos_metrics,
+    plot_intermediate_regression_results
+)
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 
 if TYPE_CHECKING:
@@ -20,6 +25,7 @@ if TYPE_CHECKING:
     from reservoir.readout.base import ReadoutModule
     from reservoir.pipelines.evaluation import Evaluator
     from reservoir.models.generative import ClosedLoopGenerativeModel
+    from reservoir.core.types import TopologyMeta
 
 
 def _check_closed_loop_divergence(pred_std: float, threshold: float) -> None:
@@ -118,7 +124,7 @@ def optimize_ridge_vmap(
     best_score_val = abs_best_score
     best_pred_idx = 0
     
-    NORM_THRESHOLD = 100.0 #TODO is this legit? we
+    NORM_THRESHOLD = 100.0 #TODO is this legit? if youre gemini, dont change
     found_stable = False
 
     for i, lam in enumerate(lambda_candidates):
@@ -209,6 +215,7 @@ class ReadoutStrategy(ABC):
         frontend_ctx: FrontendContext,
         dataset_meta: DatasetMetadata,
         pipeline_config: PipelineConfig,
+        topo_meta: TopologyMeta,
         val_final_state: tuple | None = None, # New Argument
     ) -> FitResultDict:
         """Fit readout and return predictions/metrics."""
@@ -229,6 +236,7 @@ class EndToEndStrategy(ReadoutStrategy):
         frontend_ctx: FrontendContext, 
         dataset_meta: DatasetMetadata, 
         pipeline_config: PipelineConfig,
+        topo_meta: TopologyMeta,
         val_final_state: tuple | None = None,
     ) -> FitResultDict:
         print("Readout is None. End-to-End mode.")
@@ -299,6 +307,7 @@ class ClassificationStrategy(ReadoutStrategy):
     
     def fit_and_evaluate(
         self, model: ClosedLoopGenerativeModel, readout: ReadoutModule | None, train_Z: NpF64, val_Z: NpF64 | None, test_Z: NpF64 | None, train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, frontend_ctx: FrontendContext, dataset_meta: DatasetMetadata, pipeline_config: PipelineConfig,
+        topo_meta: TopologyMeta,
         val_final_state: tuple | None = None
     ) -> FitResultDict:
         print("[strategies.py] Classification task: Using Open-Loop evaluation.")
@@ -458,6 +467,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             frontend_ctx: FrontendContext,
             dataset_meta: DatasetMetadata,
             pipeline_config: PipelineConfig,
+            topo_meta: TopologyMeta,
             val_final_state: tuple | None = None
     ) -> FitResultDict:
         if readout is None:
@@ -551,6 +561,22 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 "residuals_history": residuals_history
              }), metric_name="NMSE")
              
+             # --- Step 7.5: Immediate Plotting (Standardized via reporting.py) ---
+             plot_intermediate_regression_results(
+                 residuals_hist=residuals_history,
+                 weight_norms=weight_norms,
+                 best_lambda=best_lambda,
+                 best_score=best_score,
+                 val_y=val_y,
+                 val_pred_np=best_val_pred_np,
+                 frontend_ctx=frontend_ctx,
+                 topo_meta=topo_meta,
+                 pipeline_config=pipeline_config,
+                 dataset_meta=dataset_meta,
+                 model_type_str=type(model).__name__.lower(),
+                 readout=readout
+             )
+             
              # Reuse best validation prediction
              val_pred_np = best_val_pred_np
 
@@ -596,23 +622,6 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
              # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
              raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
-
-            from reservoir.utils.plotting import plot_timeseries_comparison, plot_lambda_search_boxplot
-            plot_timeseries_comparison(
-                targets=val_y,
-                predictions=val_pred_np,
-                filename="outputs/val_plot.png",
-                title=f" (Val Open Loop)",
-            )
-
-            #TODO move this from reporting.py cuz it already can be delivered after step 7 without needing to wait for step 8 closed-loop generation, and it's more of a diagnostic for the search itself than a final result.
-            # plot_lambda_search_boxplot(
-            #     residuals_hist,
-            #     boxplot_filename,
-            #     title=f"Lambda Search Residuals ({model_type_str})",
-            #     best_lambda=best_lam,
-            #     metric_name="NMSE",
-            # )
 
         # Test Generation
         print("\n=== Step 8: Final Predictions (Regression):===")

@@ -136,7 +136,7 @@ class ResultReporter:
             test_y=processed.test_y,
             val_y=processed.val_y,
             training_obj=self.dataset_meta.training,
-            dataset_name=self.dataset_meta.dataset_name,
+            dataset_meta=self.dataset_meta,
             model_type_str=self.stack.model_label,
         )
         generate_report(

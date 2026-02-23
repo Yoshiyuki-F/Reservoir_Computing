@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from reservoir.training.config import TrainingConfig
     from reservoir.readout.base import ReadoutModule
     from reservoir.layers.preprocessing import Preprocessor
+    from reservoir.pipelines.config import FrontendContext, DatasetMetadata
     from collections.abc import Sequence
 
 # --- Array Formatting Helpers ---
@@ -176,7 +177,7 @@ def plot_classification_report(
     val_y: NpF64 | None,
     filename: str,
     model_type_str: str,
-    dataset_name: str,
+    dataset_meta: DatasetMetadata,
     results: ResultDict,
     training_obj: TrainingConfig,
     train_pred: NpF64 | None = None,
@@ -266,7 +267,7 @@ def plot_classification_report(
     )
 
 
-def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
+def get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
     details: dict = topo_meta.get("details", {})
     
     # Use config object class name if available (more reliable)
@@ -290,7 +291,7 @@ def _get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None
     return raw_label if raw_label else "raw"
 
 
-def _get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> str | None:
+def get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> str | None:
     if not hasattr(config, 'projection') or config.projection is None:
         return None
     
@@ -326,7 +327,7 @@ def _get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> st
     return None
 
 
-def _infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
+def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
     type_lower = str(model_type_str).lower()
     is_fnn = "fnn" in type_lower
 
@@ -335,7 +336,7 @@ def _infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig,
     topo_type = str(topo_meta.get("type", "")).lower()
     is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
 
-    preprocess_label = _get_preprocess_label(topo_meta, config)
+    preprocess_label = get_preprocess_label(topo_meta, config)
 
     # Append feedback_scale to model_type_str for quantum models
     if config is not None:
@@ -371,7 +372,7 @@ def _infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig,
 
     # Projection marker
     if config is not None:
-        proj_lbl = _get_projection_label(config, topo_meta)
+        proj_lbl = get_projection_label(config, topo_meta)
         if proj_lbl:
             filename_parts.append(proj_lbl)
 
@@ -410,7 +411,7 @@ def generate_report(
     test_y: NpF64 | None,
     val_y: NpF64 | None,
     training_obj: TrainingConfig,
-    dataset_name: str,
+    dataset_meta: DatasetMetadata,
     model_type_str: str,
     classification: bool = False,
     # preprocessors removed
@@ -422,40 +423,42 @@ def generate_report(
     Delegates specific plotting tasks to specialized functions.
     """
     # 1. Common: Distillation Loss (if available)
-    _plot_distillation_section(results, topo_meta, training_obj, model_type_str, readout, config, dataset_name)
+    _plot_distillation_section(results, topo_meta, training_obj, model_type_str, readout, config, dataset_meta)
 
     # 2. Main Task Plots (Classification vs Regression using MSE)
     metric = "accuracy" if classification else "mse"
     
     if classification:
         _plot_classification_section(
-            results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+            results, config, topo_meta, training_obj, dataset_meta, model_type_str, readout,
             train_y, test_y, val_y
         )
     else:
         _plot_regression_section(
-            results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
+            results, config, topo_meta, training_obj, dataset_meta, model_type_str, readout,
             train_y, val_y, test_y, dataset_preset
         )
 
     # 3. Quantum Dynamics (if available)
-    _plot_quantum_section(results, topo_meta, training_obj, dataset_name, model_type_str, readout, config, model_obj)
+    _plot_quantum_section(results, topo_meta, training_obj, dataset_meta, model_type_str, readout, config, model_obj)
 
 
-def _plot_distillation_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, dataset_name: str) -> None:
+def _plot_distillation_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, dataset_meta: DatasetMetadata) -> None:
     training_logs = results.get("training_logs")
     if training_logs is not None:
-        filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+        dataset_name = dataset_meta.dataset_name
+        filename_parts = infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
         loss_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_loss.png"
         lr = float(getattr(training_obj, 'learning_rate', 0.0))
         plot_distillation_loss(training_logs, loss_filename, title=f"{model_type_str.upper()} Distillation Loss", learning_rate=lr if lr > 0 else None)
 
 
 def _plot_classification_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_meta: DatasetMetadata, model_type_str: str, readout: ReadoutModule | None,
     train_y: NpF64 | None, test_y: NpF64 | None, val_y: NpF64 | None
 ) -> None:
-    filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+    dataset_name = dataset_meta.dataset_name
+    filename_parts = infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     confusion_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_confusion.png"
     
     train_res = results.get("train", {})
@@ -500,10 +503,11 @@ def _plot_classification_section(
 
 
 def _plot_regression_section(
-    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None,
+    results: ResultDict, config: PipelineConfig, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_meta: DatasetMetadata, model_type_str: str, readout: ReadoutModule | None,
     train_y: NpF64 | None, val_y: NpF64 | None, test_y: NpF64 | None, dataset_preset: DatasetPreset | None
 ) -> None:
-    filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+    dataset_name = dataset_meta.dataset_name
+    filename_parts = infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
     prediction_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_prediction.png"
     
     test_results = results.get("test")
@@ -547,37 +551,78 @@ def _plot_regression_section(
             lyapunov_time_unit=ltu,
         )
 
-    # New: Lambda Search BoxPlot
-    residuals_hist = results.get("residuals_history")
-    if residuals_hist:
-        try:
-             from reservoir.utils.plotting import plot_lambda_search_boxplot
-             boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
-             train_res = results.get("train") or {}
-             
-             # Extract lambda and weight_norms
-             lam_val = train_res.get("best_lambda")
-             best_lam = float(str(lam_val)) if lam_val is not None else None
-             weight_norms = train_res.get("weight_norms")
-             
-             plot_lambda_search_boxplot(
-                 residuals_hist, boxplot_filename,
-                 title=f"Lambda Search Residuals ({model_type_str})",
-                 best_lambda=best_lam,
-                 metric_name="NMSE",
-                 weight_norms=weight_norms
-             )
-        except ImportError:
-             pass
+    # Note: Lambda Search BoxPlot is now handled in strategies.py (Step 7.5)
 
 
-def _plot_quantum_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_name: str, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, model_obj: ClosedLoopGenerativeModel | None) -> None:
+def plot_intermediate_regression_results(
+    residuals_hist: dict[float, np.ndarray] | None,
+    weight_norms: dict[float, float] | None,
+    best_lambda: float | None,
+    best_score: float,
+    val_y: NpF64 | None,
+    val_pred_np: NpF64 | None,
+    frontend_ctx: FrontendContext,
+    topo_meta: TopologyMeta,
+    pipeline_config: PipelineConfig,
+    dataset_meta: DatasetMetadata,
+    model_type_str: str,
+    readout: ReadoutModule | None
+) -> None:
+    """Standardized intermediate plotting for Step 7 (Validation phase)."""
+    try:
+        from reservoir.utils.plotting import plot_lambda_search_boxplot, plot_timeseries_comparison
+        
+        training_obj = dataset_meta.training
+        dataset_name = dataset_meta.dataset_name
+        filename_parts = infer_filename_parts(topo_meta, training_obj, model_type_str, readout, pipeline_config)
+        
+        # 1. Lambda Search BoxPlot
+        if residuals_hist:
+            boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
+            plot_lambda_search_boxplot(
+                residuals_hist, boxplot_filename,
+                title=f"Step 7: Lambda Search Residuals ({model_type_str})",
+                best_lambda=best_lambda,
+                metric_name="NMSE",
+                weight_norms=weight_norms
+            )
+
+        # 2. Validation Prediction Plot (Open-Loop)
+        if val_pred_np is not None and val_y is not None:
+            val_plot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_val_prediction.png"
+            
+            # Unscale for plotting if possible
+            scaler = frontend_ctx.preprocessor
+            def _inv(arr: NpF64) -> NpF64:
+                if scaler is None: return arr
+                try:
+                    v = arr.reshape(-1, 1) if arr.ndim == 1 else arr
+                    return scaler.inverse_transform(v).reshape(arr.shape)
+                except: return arr
+
+            val_y_raw = _inv(val_y)
+            val_p_raw = _inv(val_pred_np)
+            
+            best_norm = weight_norms.get(best_lambda, 0.0) if weight_norms and best_lambda is not None else 0.0
+            
+            plot_timeseries_comparison(
+                targets=val_y_raw,
+                predictions=val_p_raw,
+                filename=val_plot_filename,
+                title=f"Step 7: Val Open-Loop (NMSE: {best_score:.2e}, ||w||: {best_norm:.2e})"
+            )
+    except Exception as e:
+        print(f"    [Warning] Intermediate plotting failed in reporting.py: {e}")
+
+
+def _plot_quantum_section(results: ResultDict, topo_meta: TopologyMeta, training_obj: TrainingConfig, dataset_meta: DatasetMetadata, model_type_str: str, readout: ReadoutModule | None, config: PipelineConfig, model_obj: ClosedLoopGenerativeModel | None) -> None:
     quantum_trace = results.get("quantum_trace")
     if quantum_trace is not None:
         try:
             from reservoir.utils.quantum_plotting import plot_qubit_dynamics
 
-            filename_parts = _infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
+            dataset_name = dataset_meta.dataset_name
+            filename_parts = infer_filename_parts(topo_meta, training_obj, model_type_str, readout, config)
             dynamics_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_quantum_dynamics.png"
 
             trace_np = quantum_trace
