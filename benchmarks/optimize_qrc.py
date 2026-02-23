@@ -64,8 +64,8 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 
 
 def build_config(
-        input_scale: float,
-        input_shift: float,
+        feature_min: float,
+        feature_max: float,
         feedback_scale: float,
         use_reuploading: bool,
         *,
@@ -75,16 +75,16 @@ def build_config(
     """
     Build a PipelineConfig with dynamically updated parameters.
     
-    input_scale/shift is applied via AffineScalerConfig (preprocessing).
+    feature_min/max is applied via MinMaxScalerConfig (preprocessing).
     projection is None (Step 3 skipped).
     """
-    from reservoir.models.config import AffineScalerConfig
+    from reservoir.models.config import MinMaxScalerConfig
     base = TIME_QUANTUM_RESERVOIR_PRESET
 
-    # Update preprocessing (AffineScaler)
-    new_preprocess = AffineScalerConfig(
-        input_scale=input_scale, 
-        shift=input_shift,
+    # Update preprocessing (MinMaxScaler)
+    new_preprocess = MinMaxScalerConfig(
+        feature_min=feature_min, 
+        feature_max=feature_max,
     )
 
     # Update model (feedback_scale, measurement_basis)
@@ -114,25 +114,25 @@ def make_objective(measurement_basis: str, readout_config):
         """
         # === 1. Suggest Parameters ===
 
-        # ======================== Preprocessing =============================
-        input_scale = trial.suggest_float("input_scale", 0.5, 2 * np.pi / (1.3283 - 0.4015))
-        input_shift = trial.suggest_float("input_shift", -np.pi, np.pi)
+        # ======================== Preprocessing (MinMax) ====================
+        # Typical range for rotation angles is [-pi, pi]
+        gap = 0.1
+        feature_min = trial.suggest_float("feature_min", - np.pi, np.pi - gap)
+        # Ensure max > min with a reasonable gap
+        max_delta = np.pi - feature_min
+        delta = trial.suggest_float("delta", gap, max_delta)
 
-        # AffineScaler parameters
-        # input_scale = trial.suggest_float("input_scale", 3,4)
-        # input_shift = trial.suggest_float("input_shift", -3, -1)
+        feature_max = feature_min + delta
 
         # ======================== Reservoir ==================================
         feedback_scale = trial.suggest_float("feedback_scale", 0.5, 3.0)
-        # feedback_scale = trial.suggest_float("feedback_scale", 2.0040817003461666, 2.0040817003461666)
-
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
         # === 2. Build Config ===
         config = build_config(
-            input_scale,
-            input_shift,
+            feature_min,
+            feature_max,
             feedback_scale,
             use_reuploading,
             measurement_basis=measurement_basis,
@@ -175,12 +175,12 @@ def make_objective(measurement_basis: str, readout_config):
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(in_s={input_scale:.3f}, in_sh={input_shift:.3f}, fb={feedback_scale:.3f})")
+                      f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
                 trial.set_user_attr("status", "failed")
                 return -1.0  # Return a negative value to indicate failure
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(in_s={input_scale:.3f}, in_sh={input_shift:.3f}, fb={feedback_scale:.3f})")
+                  f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
 
@@ -275,8 +275,8 @@ def main():
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
     
-    # Updated scaler tag for AffineScaler
-    scaler_tag = "affine"
+    # Updated scaler tag for MinMaxScaler
+    scaler_tag = "minmax"
 
     study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag)
 

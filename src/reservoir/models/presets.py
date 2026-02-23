@@ -199,7 +199,8 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     # preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
-    preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
+    # preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
+    preprocess=MinMaxScalerConfig(feature_min=-2.9993344594335642, feature_max=3.7304601073752943),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
         n_qubits=16,
@@ -249,15 +250,15 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=RandomProjectionConfig(
         n_units=100,
-        input_scale=1.1900256705783303,
-        input_connectivity=0.16412483680491705,
-        bias_scale=1,
+        input_scale=0.5021672479393327,
+        input_connectivity=0.48415316598538416,
+        bias_scale=1.2287247970196717,
         seed=1,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=1.2275524643139968,
-        leak_rate= 0.4176226904512959,
-        rc_connectivity=0.6014914261660489,
+        spectral_radius=1.190314226578602,
+        leak_rate= 0.28133317330437824,
+        rc_connectivity=0.5421776698098623,
         seed=42,
         aggregation=AggregationMode.SEQUENCE,
     ),
