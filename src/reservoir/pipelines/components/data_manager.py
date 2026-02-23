@@ -65,7 +65,6 @@ class PipelineDataManager:
         dataset_split = load_dataset_with_validation_split(
             self.dataset,
             training_cfg,
-            require_3d=True,
         )
 
         self._log_dataset_stats(dataset_split, "1")
@@ -212,7 +211,7 @@ class PipelineDataManager:
     @staticmethod
     def _log_dataset_stats(dataset: SplitDataset, stage: str):
         """Centralized stats logging."""
-        print_feature_stats(dataset.train_X, "data_manager.py", "{stage}:X:train")
+        print_feature_stats(dataset.train_X, "data_manager.py", f"{stage}:X:train")
         if dataset.train_y is not None:
              print_feature_stats(dataset.train_y,"data_manager.py",  f"{stage}:y:train")
              

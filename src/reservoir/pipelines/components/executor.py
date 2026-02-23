@@ -1,4 +1,4 @@
-
+# /home/yoshi/PycharmProjects/Reservoir/src/reservoir/pipelines/components/executor.py
 from functools import partial
 
 import jax.numpy as jnp
@@ -52,10 +52,10 @@ class PipelineExecutor:
             projection_layer=projection,
         )
 
+
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z, val_final_info = self._extract_all_features(self.stack.model)
 
-        print("\n=== Step 6: Extract Features (Output) ===")
         if train_Z is not None:
             if jnp.std(train_Z) < 0.1:
                 raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
@@ -156,6 +156,9 @@ class PipelineExecutor:
         Orchestrate feature extraction.
         If projection_layer is deferred, fuse projection + model forward.
         """
+
+        print("\n[executor.py] === Step 5: Extract Features (Output) ===")
+
         window_size = getattr(model, 'input_window_size', 0)
         batch_size = self.dataset_meta.training.batch_size
         projection = self.frontend_ctx.projection_layer  # May be None
@@ -172,13 +175,24 @@ class PipelineExecutor:
         is_quantum = "QuantumReservoir" in type(model).__name__
         current_state = None
 
-        # 1. Train
         train_in = self.coordinator.get_train_inputs()
+        warmup_len = len(train_in) // 2
+        warmup_in = train_in[:warmup_len] #50LT??
+
+        _, current_state, _ = self._compute_split(
+            model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+        )
+
+        print_feature_stats(current_state, "executor.py", "5:Z:warmup_state")
+        # 1. Train
         train_Z, current_state, _ = self._compute_split(
             model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
         )
 
         # 2. Validation
+        # current_state = None
+        # print(f"     [warning] TODO this is temporally how it was working before, but we experiment with state chaining across splits in the future.")
+
         val_in = self.coordinator.get_val_inputs(window_size)
         val_Z, current_state, val_last_output = self._compute_split(
             model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
@@ -242,7 +256,7 @@ class PipelineExecutor:
             last_output = outputs_jax[0, -1, :] # (Out,)
             
             # Log stats manually since we skipped batched_compute
-            print_feature_stats(outputs_np, "executor.py",f"6:Z:{split_name}")
+            print_feature_stats(outputs_np, "executor.py",f"5:Z:{split_name}")
             
             return outputs_np, final_state, last_output
 

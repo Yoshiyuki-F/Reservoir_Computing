@@ -193,7 +193,6 @@ def load_lorenz96(config: Lorenz96Config) -> tuple[NpF64, NpF64]:
 def load_dataset_with_validation_split(
     dataset_enum: Dataset,
     training_cfg: TrainingConfig | None = None,
-    require_3d: bool = True,
 ) -> SplitDataset:
     """
     Load dataset via registry, apply task-specific preprocessing, and split into train/val/test.
