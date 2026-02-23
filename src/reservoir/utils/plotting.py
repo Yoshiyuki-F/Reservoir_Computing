@@ -281,6 +281,7 @@ def plot_lambda_search_boxplot(
     title: str = "Lambda Search: Residuals Distribution",
     best_lambda: float | None = None,
     metric_name: str = "NMSE",
+    weight_norms: dict[float, float] | None = None,
 ) -> None:
     """
     Plot boxplot of per-sample squared errors for each lambda.
@@ -299,7 +300,14 @@ def plot_lambda_search_boxplot(
         res = residuals_history[lam]
         res = res[np.isfinite(res)]
         data.append(res)
-        labels.append(f"{lam:.1e}")
+        
+        # Create label with Lambda and optionally Weight Norm
+        lam_label = f"{lam:.1e}"
+        if weight_norms and lam in weight_norms:
+            norm_val = weight_norms[lam]
+            lam_label += f"\n{norm_val:.1e}"
+        labels.append(lam_label)
+        
         if best_lambda is not None and abs(lam - best_lambda) < 1e-15:
             best_idx = i + 1  # boxplot uses 1-based indexing
 

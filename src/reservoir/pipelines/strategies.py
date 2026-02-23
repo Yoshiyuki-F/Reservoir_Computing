@@ -109,12 +109,17 @@ def optimize_ridge_vmap(
     search_history: dict[float, float] = {}
     weight_norms: dict[float, float] = {}
     residuals_history: dict[float, np.ndarray] = {}
-    best_lambda = lambda_candidates[0]
-    best_score = float('inf') if metric_name.lower() in ["nmse", "mse", "rmse"] else -float('inf')
-    best_pred_idx = 0
-
+    
     # Determine optimization direction
     minimize = metric_name.lower() in ["nmse", "mse", "rmse", "nrmse", "mase"]
+    
+    abs_best_score = float('inf') if minimize else -float('inf')
+    best_lambda = lambda_candidates[0]
+    best_score_val = abs_best_score
+    best_pred_idx = 0
+    
+    NORM_THRESHOLD = 100.0 #TODO is this legit? we
+    found_stable = False
 
     for i, lam in enumerate(lambda_candidates):
         lam_val = float(lam)
@@ -127,8 +132,9 @@ def optimize_ridge_vmap(
         score = compute_score(p_eval, t_eval, metric_name)
         search_history[lam_val] = float(score)
         
-        w_coef = all_weights[i, 1:] if use_intercept else all_weights[i]
-        weight_norms[lam_val] = float(jnp.linalg.norm(w_coef))
+        w_coef = all_weights_np[i, 1:] if use_intercept else all_weights_np[i]
+        norm = float(jnp.linalg.norm(w_coef))
+        weight_norms[lam_val] = norm
         
         # Optional: Save residuals for analysis if using NMSE (Regression)
         if metric_name.lower() == "nmse":
@@ -136,19 +142,31 @@ def optimize_ridge_vmap(
             res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
             residuals_history[lam_val] = res_sq
 
-        # Update Best
-        improved = (score < best_score) if minimize else (score > best_score)
-        if improved:
-            best_score = float(score)
-            best_lambda = lam_val
-            best_pred_idx = i
+        # Robust argmin with Stability Constraint (Norm <= 1000)
+        if norm <= NORM_THRESHOLD:
+            is_better = (score < abs_best_score) if minimize else (score > abs_best_score)
+            if is_better:
+                abs_best_score = score
+                best_lambda = lam_val
+                best_score_val = score
+                best_pred_idx = i
+                found_stable = True
+                
+    # Fallback if no candidate met the norm threshold
+    if not found_stable:
+        # Pick the largest lambda (last index) as it generally has the smallest norm
+        best_pred_idx = len(lambda_candidates) - 1
+        best_lambda = float(lambda_candidates[best_pred_idx])
+        best_score_val = search_history[best_lambda]
+        abs_best_score = best_score_val
+        print(f"    [Warning] No RidgeCV candidate met the Norm <= {NORM_THRESHOLD} threshold! Falling back to max lambda {best_lambda:.2e} (Norm: {weight_norms[best_lambda]:.2f})")
             
     best_val_pred_np = all_val_preds_np[best_pred_idx]
     
-    print(f"[strategy.py] optimize_ridge_vmap best_idx={best_pred_idx}, best_score={best_score}")
+    print(f"[strategy.py] optimize_ridge_vmap best_idx={best_pred_idx}, best_lambda={best_lambda:.2e}, score={best_score_val:.8e} (abs_min_stable={abs_best_score:.8e})")
     print_feature_stats(best_val_pred_np, "strategies.py",":best_val_pred_np")
     
-    return best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
+    return best_lambda, best_score_val, search_history, weight_norms, best_val_pred_np, all_weights, (residuals_history if residuals_history else None)
 
 
 class ReadoutStrategy(ABC):

@@ -144,7 +144,7 @@ def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE
             label = "Val VPT"
             
         norm = weight_norms.get(lam)
-        norm_str = f"(Norm: {norm:.5e})" if norm is not None else "(Norm: n/a)"
+        norm_str = f"(Norm: {norm})" if norm is not None else "(Norm: n/a)"
         marker = ""
         if best_marker is not None:
              try:
@@ -153,7 +153,7 @@ def print_ridge_search_results(train_res: FitResultDict, metric_name: str = "MSE
                      marker = " <= best"
              except (ValueError, TypeError):
                  pass
-        print(f"   λ = {lam_val:.2e} : {label} = {score_disp:.10f} {norm_str}{marker}")
+        print(f"   λ = {lam_val:.2e} : {label} = {score_disp:.6e} {norm_str}{marker}")
     print("=" * 40 + "\n")
 
 
@@ -547,20 +547,25 @@ def _plot_regression_section(
             lyapunov_time_unit=ltu,
         )
 
-    # TODO should be removed to strategies.py
+    # New: Lambda Search BoxPlot
     residuals_hist = results.get("residuals_history")
     if residuals_hist:
         try:
              from reservoir.utils.plotting import plot_lambda_search_boxplot
              boxplot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_lambda_boxplot.png"
              train_res = results.get("train") or {}
+             
+             # Extract lambda and weight_norms
              lam_val = train_res.get("best_lambda")
              best_lam = float(str(lam_val)) if lam_val is not None else None
+             weight_norms = train_res.get("weight_norms")
+             
              plot_lambda_search_boxplot(
                  residuals_hist, boxplot_filename,
                  title=f"Lambda Search Residuals ({model_type_str})",
                  best_lambda=best_lam,
                  metric_name="NMSE",
+                 weight_norms=weight_norms
              )
         except ImportError:
              pass
