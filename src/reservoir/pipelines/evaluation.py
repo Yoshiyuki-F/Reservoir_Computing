@@ -35,7 +35,12 @@ class Evaluator:
         dt = float(getattr(dataset_config, 'dt', 1.0))
         ltu = float(getattr(dataset_config, 'lyapunov_time_unit', 1.0))
 
-        metrics = calculate_chaos_metrics(truth_raw, pred_raw, dt=dt, lyapunov_time_unit=ltu)
+        # Flatten to 2D (Time, Features) for metric calculation
+        # If shape was (1, T, F), it becomes (T, F). If (T, F), stays (T, F).
+        pred_raw_2d = pred_raw.reshape(-1, shape_pred[-1])
+        truth_raw_2d = truth_raw.reshape(-1, shape_truth[-1])
+
+        metrics = calculate_chaos_metrics(truth_raw_2d, pred_raw_2d, dt=dt, lyapunov_time_unit=ltu)
         if verbose:
             print_chaos_metrics(metrics)
         return metrics

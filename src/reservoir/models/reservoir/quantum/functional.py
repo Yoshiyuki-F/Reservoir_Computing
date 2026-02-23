@@ -367,7 +367,11 @@ def _forward_jit(
     
     # --- Double Scan Optimization (Chunking) ---
     T = inputs_time_major.shape[0]
-    
+
+    print("warning chunk size is fixed to T for now to avoid recompilation. Adjusting chunk_size to T.")
+    chunk_size = T
+
+
     # Calculate padding
     remainder = T % chunk_size
     if remainder == 0:

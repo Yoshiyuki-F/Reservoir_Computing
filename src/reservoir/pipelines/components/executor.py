@@ -14,6 +14,7 @@ from reservoir.pipelines.components.data_coordinator import DataCoordinator
 from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
 from reservoir.models.distillation.model import DistillationModel
+from reservoir.models.reservoir.base import Reservoir
 from reservoir.core.types import ResultDict
 
 
@@ -171,8 +172,8 @@ class PipelineExecutor:
         else:
             print(f"[executor.py] Running {type(model).__name__} feature extraction in batched_compute...")
 
-        # Check for Quantum Reservoir to enable state chaining
-        is_quantum = "QuantumReservoir" in type(model).__name__
+        # Check if model is a Reservoir to enable state chaining
+        is_stateful = isinstance(model, Reservoir)
         current_state = None
 
         train_in = self.coordinator.get_train_inputs()
@@ -180,20 +181,24 @@ class PipelineExecutor:
         warmup_in = train_in[:warmup_len] #50LT??
 
         _, current_state, _ = self._compute_split(
-            model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+            model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
 
         # 1. Train
         train_Z, current_state, _ = self._compute_split(
-            model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+            model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
 
         # 2. Validation
         val_in = self.coordinator.get_val_inputs(window_size)
         val_Z, current_state, val_last_output = self._compute_split(
-            model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
+            model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
         val_final_state = current_state
+
+        if is_stateful:
+             state_stat = "Captured" if val_final_state is not None else "None"
+             print(f"    [Executor] Reservoir State Chaining: {state_stat}")
 
         # 3. Test
         test_Z = None
@@ -248,8 +253,8 @@ class PipelineExecutor:
             # Output is (1, Time, Out) -> Flatten to (Time, Out)
             outputs_np = to_np_f64(outputs_jax[0])
             
-            # Get last output for loop initialization
-            last_output = outputs_jax[0, -1, :] # (Out,)
+            # Get last output for loop initialization - Keep Batch Dim (1, Out)
+            last_output = outputs_jax[:, -1, :] 
             
             # Log stats manually since we skipped batched_compute
             print_feature_stats(outputs_np, "executor.py",f"5:Z:{split_name}")
