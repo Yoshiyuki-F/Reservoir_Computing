@@ -594,8 +594,8 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
             print_chaos_metrics(val_metrics_chaos)
             if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-             print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-             # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+             # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
+             raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
 
             from reservoir.utils.plotting import plot_timeseries_comparison, plot_lambda_search_boxplot
             plot_timeseries_comparison(
