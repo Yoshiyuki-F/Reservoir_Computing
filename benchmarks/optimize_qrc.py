@@ -19,10 +19,10 @@ Usage:
     uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_full
 
     # Custom trial count
-    uv run python benchmarks/optimize_qrc.py --trials 1000
+uv run python benchmarks/optimize_qrc.py --trials 1000
 
 Visualization:
-    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
+uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
 """
 
 import argparse
