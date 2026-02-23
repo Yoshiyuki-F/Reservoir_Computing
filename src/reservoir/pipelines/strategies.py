@@ -550,33 +550,51 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Display Validation Metrics (Open Loop) immediately
         if val_pred_np is not None and val_y is not None:
-             print("\n=== Validation Open Loop Metrics ===")
-             dt = float(getattr(dataset_meta.preset.config, 'dt', 1.0))
-             ltu = float(getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0))
-             
-             # _inverse is defined above inside the RidgeCV check, 
-             # we need a version available here too or move it.
-             # I'll define it locally for safety if not defined.
-             scaler = frontend_ctx.preprocessor
-             def _inv_local(arr: NpF64) -> NpF64:
-                 if scaler is None:
-                     return arr
-                 try:
-                     val = arr
-                     if val.ndim == 1:
-                         val = val.reshape(-1, 1)
-                     return scaler.inverse_transform(val).reshape(arr.shape)
-                 except (ValueError, TypeError):
-                     return arr
-             
-             val_y_raw = _inv_local(val_y)
-             val_pred_raw = _inv_local(val_pred_np)
-             
-             val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
-             print_chaos_metrics(val_metrics_chaos)
-             if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                 print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-                 # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+
+            print("\n=== Validation Open Loop Metrics ===")
+            dt = float(getattr(dataset_meta.preset.config, 'dt', 1.0))
+            ltu = float(getattr(dataset_meta.preset.config, 'lyapunov_time_unit', 1.0))
+
+            # _inverse is defined above inside the RidgeCV check,
+            # we need a version available here too or move it.
+            # I'll define it locally for safety if not defined.
+            scaler = frontend_ctx.preprocessor
+            def _inv_local(arr: NpF64) -> NpF64:
+             if scaler is None:
+                 return arr
+             try:
+                 val = arr
+                 if val.ndim == 1:
+                     val = val.reshape(-1, 1)
+                 return scaler.inverse_transform(val).reshape(arr.shape)
+             except (ValueError, TypeError):
+                 return arr
+
+            val_y_raw = _inv_local(val_y)
+            val_pred_raw = _inv_local(val_pred_np)
+
+            val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
+            print_chaos_metrics(val_metrics_chaos)
+            if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
+             print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
+             # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+
+            from reservoir.utils.plotting import plot_timeseries_comparison, plot_lambda_search_boxplot
+            plot_timeseries_comparison(
+                targets=val_y,
+                predictions=val_pred_np,
+                filename="outputs/val_plot.png",
+                title=f" (Val Open Loop)",
+            )
+
+            #TODO move this from reporting.py cuz it already can be delivered after step 7 without needing to wait for step 8 closed-loop generation, and it's more of a diagnostic for the search itself than a final result.
+            # plot_lambda_search_boxplot(
+            #     residuals_hist,
+            #     boxplot_filename,
+            #     title=f"Lambda Search Residuals ({model_type_str})",
+            #     best_lambda=best_lam,
+            #     metric_name="NMSE",
+            # )
 
         # Test Generation
         print("\n=== Step 8: Final Predictions (Regression):===")

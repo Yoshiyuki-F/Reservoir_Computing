@@ -4,7 +4,7 @@ Reporting utilities for post-run analysis: metrics, logging, and file outputs Dr
 from __future__ import annotations
 
 import numpy as np
-from reservoir.core.types import NpF64, ResultDict, TrainLogs, EvalMetrics, to_np_f64, FitResultDict, TopologyMeta
+from reservoir.core.types import NpF64, ResultDict, TrainLogs, EvalMetrics, FitResultDict, TopologyMeta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -432,7 +432,7 @@ def generate_report(
             results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
             train_y, test_y, val_y
         )
-    elif metric == "mse":
+    else:
         _plot_regression_section(
             results, config, topo_meta, training_obj, dataset_name, model_type_str, readout,
             train_y, val_y, test_y, dataset_preset
@@ -547,7 +547,7 @@ def _plot_regression_section(
             lyapunov_time_unit=ltu,
         )
 
-    # New: Lambda Search BoxPlot
+    # TODO should be removed to strategies.py
     residuals_hist = results.get("residuals_history")
     if residuals_hist:
         try:

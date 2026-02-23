@@ -183,16 +183,12 @@ class PipelineExecutor:
             model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
         )
 
-        print_feature_stats(current_state, "executor.py", "5:Z:warmup_state")
         # 1. Train
         train_Z, current_state, _ = self._compute_split(
             model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
         )
 
         # 2. Validation
-        # current_state = None
-        # print(f"     [warning] TODO this is temporally how it was working before, but we experiment with state chaining across splits in the future.")
-
         val_in = self.coordinator.get_val_inputs(window_size)
         val_Z, current_state, val_last_output = self._compute_split(
             model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_quantum
@@ -220,7 +216,7 @@ class PipelineExecutor:
         projection: Projection | None = None,
         initial_state: object | None = None,
         return_state: bool = False
-    ) -> tuple: #TODO　型定義
+    ) -> tuple: #TODO　型定義 urgent!
         """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
         if inputs is None:
             return None, None, None
