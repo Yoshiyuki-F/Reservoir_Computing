@@ -33,6 +33,7 @@ from pathlib import Path
 import numpy as np
 import optuna
 
+from reservoir.utils import check_gpu_available  # noqa: E402
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import (
     TIME_QUANTUM_RESERVOIR_PRESET,
@@ -241,6 +242,11 @@ def main():
     parser.add_argument("--storage", type=str, default=None,
                         help="Override Optuna storage URL")
     args = parser.parse_args()
+
+    try:
+        check_gpu_available()
+    except RuntimeError as exc:
+        raise ValueError(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # --- Resolve variant from args or preset defaults ---
     base = TIME_QUANTUM_RESERVOIR_PRESET

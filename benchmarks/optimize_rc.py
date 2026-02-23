@@ -11,10 +11,10 @@ Optimizes:
 Target Preset: TIME_CLASSICAL_RESERVOIR_PRESET
 
 Usage:
-    uv run python benchmarks/optimize_rc.py
-    uv run python benchmarks/optimize_rc.py --n-trials 100
+uv run python benchmarks/optimize_rc.py
+uv run python benchmarks/optimize_rc.py --n-trials 100
 Visualization:
-    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
+uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
 """
 
 import argparse
@@ -29,6 +29,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from reservoir.pipelines import run_pipeline  # noqa: E402
+from reservoir.utils import check_gpu_available  # noqa: E402
 from reservoir.models.presets import (  # noqa: E402
     TIME_CLASSICAL_RESERVOIR_PRESET,
     DEFAULT_RIDGE_READOUT,
@@ -216,7 +217,7 @@ def derive_names(readout_key: str, dataset_name: str):
         proj_tag = type(proj).__name__.replace("Config", "")
 
     # Study Name: optimize_rc_{Dataset}_{Preprocess}_{Projection}_{Readout}
-    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}"
+    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai"
     db_name = "optimize_rc.db" # Shared DB for RC optimization
     
     return study_name, db_name
@@ -237,6 +238,11 @@ def main():
     parser.add_argument("--storage", type=str, default=None,
                         help="Override Optuna storage URL")
     args = parser.parse_args()
+
+    try:
+        check_gpu_available()
+    except RuntimeError as exc:
+        raise ValueError(f"Warning: GPU check failed ({exc}). Continuing...")
 
     # --- Dataset ---
     dataset_name = args.dataset
