@@ -52,11 +52,8 @@ class ClassicalReservoir(Reservoir):
         return jnp.zeros((batch_size, self.n_units))
 
     def step(self, state: JaxF64, inputs: JaxF64) -> tuple[JaxF64, JaxF64]:
-        # 論文の式:   (1 - a) * state + tanh(...)
 
-        # 論文 Eq(7) 通りの実装 Li-ESN
         # next_state = (1.0 - self.leak_rate) * state + jnp.tanh(inputs + jnp.dot(state, self.W))
-        
         # Jaeger (2007) Standard Li-ESN
         next_state = (1.0 - self.leak_rate) * state + self.leak_rate * jnp.tanh(inputs + jnp.dot(state, self.W))
 

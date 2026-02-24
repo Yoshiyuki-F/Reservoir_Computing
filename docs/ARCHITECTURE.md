@@ -9,12 +9,12 @@ Examples: MNIST [54000, 28, 28], MackeyGlass [1, 16600, 1]
 
 2. Preprocessing - [N, Time, Features] => [N, Time, Features]
 Role: Stateless data scaling or polynomial features.
-Examples: StandardScaler, MaxScaler.
+Examples: StandardScaler, MinMaxScaler. 
 
 3. Input Projection(Feature Control) - [N, Time, Features] => [N, Time, Hidden]
 Role: Mapping input space to a high-dimensional hidden space using a Matrix (e.g., $28 * 100$). 
 This happens before the branching into Reservoir or FNN paths.
-Examples: Random Projection (W_in), Learned Linear Layer.
+Examples: Random Projection (W_in), PCA, CropCenter, Resize
 
 ### 4-6. Branching Processes: Teacher vs. Student
 

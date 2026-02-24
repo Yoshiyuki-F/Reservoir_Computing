@@ -142,11 +142,16 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
     preprocess=ZeroToOne,
-    projection=RP,
+    projection=PCA,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
-    readout=DEFAULT_RIDGE_READOUT
+    readout=PolyRidgeReadoutConfig(
+        use_intercept=False,
+        lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
+        degree=2,
+        mode="interaction_only",
+    )
 )
 
 

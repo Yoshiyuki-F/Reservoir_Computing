@@ -512,7 +512,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
     use_intercept: bool
     lambda_candidates: tuple[float, ...] | None
     degree: int
-    mode: Literal["full", "square_only"]
+    mode: Literal["full", "square_only", "interaction_only"]
 
     def validate(self, context: str = "polyridgereadout") -> PolyRidgeReadoutConfig:
         if self.lambda_candidates is not None:
@@ -520,8 +520,8 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
                 raise ValueError(f"{context}: lambda_candidates must contain only positive values.")
         if int(self.degree) < 2:
             raise ValueError(f"{context}: degree must be >= 2.")
-        if self.mode not in ("full", "square_only"):
-            raise ValueError(f"{context}: mode must be 'full' or 'square_only', got '{self.mode}'.")
+        if self.mode not in ("full", "square_only", "interaction_only"):
+            raise ValueError(f"{context}: mode must be 'full' or 'square_only' 'interaction_only' , got '{self.mode}'.")
         return self
 
     def to_dict(self) -> ConfigDict:

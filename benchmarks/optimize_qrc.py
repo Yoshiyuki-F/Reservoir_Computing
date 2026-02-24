@@ -117,7 +117,9 @@ def make_objective(measurement_basis: str, readout_config):
         # ======================== Preprocessing (MinMax) ====================
         # Typical range for rotation angles is [-pi, pi]
         gap = 0.1
-        feature_min = trial.suggest_float("feature_min", - np.pi, np.pi - gap)
+        # feature_min = trial.suggest_float("feature_min", - np.pi, np.pi - gap)
+        feature_min = trial.suggest_float("feature_min", 0,0)
+
         # Ensure max > min with a reasonable gap
         max_delta = np.pi - feature_min
         delta = trial.suggest_float("delta", gap, max_delta)
@@ -221,7 +223,7 @@ def make_objective(measurement_basis: str, readout_config):
 
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{scaler_type}_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai"
+    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
