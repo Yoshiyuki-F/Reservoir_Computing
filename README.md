@@ -9,7 +9,7 @@ A JAX-based Reservoir Computing implementation designed for high-performance num
 - **Multiple Architectures**:
     - Classical Reservoir
     - Feedforward Neural Network (FNN)
-    - Distillation Models (FNN/RNN from Reservoir)
+    - Distillation Models (FNN from Reservoir)
     - PassThrough Models (no train. just read out)
     - Quantum Reservoirs (Gate-based)
 - **Flexible Data Handling**: Built-in support for synthetic datasets (Lorenz, Mackey-Glass) and MNIST.
