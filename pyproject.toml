@@ -40,9 +40,6 @@ dependencies = [
 ]
 
 
-[tool.uv]
-dev-dependencies = []
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -68,7 +65,7 @@ torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
 
 [tool.pyrefly]
-project-includes = ["**/*.py*"]
+project-includes = ["src"]
 
 # ==========================================
 # 1. 基本の厳格化（ユーザー設定済）

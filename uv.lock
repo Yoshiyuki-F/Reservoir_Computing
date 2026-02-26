@@ -1393,9 +1393,6 @@ requires-dist = [
     { name = "tqdm" },
 ]
 
-[package.metadata.requires-dev]
-dev = []
-
 [[package]]
 name = "rich"
 version = "14.3.3"

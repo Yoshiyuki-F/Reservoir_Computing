@@ -105,4 +105,5 @@ The most efficient path for high-qubit simulation ($N \geq 14$) in JAX is not ma
 
 
 Q16 T=8300
-246.3215s
+246.3215s 
+kai4 - 234.0121s
