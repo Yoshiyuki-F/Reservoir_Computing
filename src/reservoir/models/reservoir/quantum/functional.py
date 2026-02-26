@@ -1,20 +1,18 @@
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/reservoir/quantum/functional.py
 Pure functional implementation of Quantum Reservoir logic.
-Optimized for JAX JIT compilation.
-
-Feedback QRC (Murauer et al., 2025):
-  - Input and feedback are injected via separate R gates (no additive mixing)
-  - State is reset each step; memory is carried only via measurement feedback
-  - R_{i,j}(θ) = CX_{ij} RZ_j(θ) CX_{ij} RX_j(θ) RX_i(θ)
+Final High-Performance Engine: Static Pre-computation + Brickwork Parallelization.
+Optimized for complex128 precision.
 """
 from __future__ import annotations
 
 from typing import cast, TYPE_CHECKING
 from functools import partial
+import os
 
 import jax
 import jax.numpy as jnp
 import tensorcircuit as tc
+import time
 
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
 
@@ -22,412 +20,155 @@ if TYPE_CHECKING:
     from reservoir.core.types import JaxF64, JaxKey
 
 
-# --- Paper R Gate (Murauer et al., 2025 Eq.1) ---
+# --- Performance Optimization Helpers ---
 
-def _apply_paper_R_gate(c, i: int, j: int, val, scaling: float):
-    """
-    論文 Eq.(1) の R_{i,j}(theta) ゲート.
-    R_{i,j}(θ) = CX_{ij} · RZ_j(θ) · CX_{ij} · RX_j(θ) · RX_i(θ)
-    適用順序は右から左: RX_i → RX_j → CX → RZ_j → CX
-    """
-    theta = val * scaling
-    c.rx(i, theta=theta)
-    c.rx(j, theta=theta)
-    c.cnot(i, j)
-    c.rz(j, theta=theta)
-    c.cnot(i, j)
-
-
-# --- Encoding Helpers ---
-
-def _apply_input_encoding(c, input_val: JaxF64, n_qubits: int):
-    """
-    Apply multi-dimensional input encoding to all qubits.
-    Repeats dimensions if input_dim < n_qubits.
-    """
-    input_dim = input_val.shape[0]
-    for i in range(n_qubits):
-        val = input_val[i % input_dim]
-        if n_qubits >= 2:
-            _apply_paper_R_gate(c, i, (i + 1) % n_qubits, val, 1.0)
-        else:
-            c.rx(i, theta=val)
+def _get_paper_R_unitary(theta: JaxF64) -> JaxF64:
+    """Compute fused 4x4 unitary for the Paper R gate (vmap safe)."""
+    c = jnp.cos(theta / 2.0); isin = 1.0j * jnp.sin(theta / 2.0)
+    e_neg = jnp.exp(-1.0j * theta / 2.0); e_pos = jnp.exp(1.0j * theta / 2.0)
+    cx = jnp.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]], dtype=jnp.complex128)
+    
+    rx = jnp.stack([jnp.stack([c, -isin], axis=-1), jnp.stack([-isin, c], axis=-1)], axis=-2)
+    rz = jnp.stack([
+        jnp.stack([e_neg, jnp.zeros_like(theta, dtype=jnp.complex128)], axis=-1),
+        jnp.stack([jnp.zeros_like(theta, dtype=jnp.complex128), e_pos], axis=-1)
+    ], axis=-2)
+    
+    rx_2q = jnp.kron(rx, rx); rz_2q = jnp.kron(jnp.eye(2, dtype=jnp.complex128), rz)
+    m = jnp.matmul(cx, rx_2q); m = jnp.matmul(rz_2q, m); m = jnp.matmul(cx, m)
+    
+    from .backend import _ensure_tensorcircuit_initialized
+    _ensure_tensorcircuit_initialized()
+    return tc.backend.convert_to_tensor(m)
 
 
-def _apply_feedback_encoding(c, feedback_val: JaxF64, n_qubits: int, feedback_scale: float):
-    """
-    Apply feedback encoding (measurement results from previous step) to all qubits.
-    """
-    if n_qubits >= 2:
-        for i in range(n_qubits):
-            target = i
-            control = (i + 1) % n_qubits
-            _apply_paper_R_gate(c, control, target, feedback_val[i], feedback_scale)
-    else:
-        c.rx(0, theta=feedback_val[0] * feedback_scale)
+def _get_fused_rotation_matrix(params: JaxF64) -> JaxF64:
+    """Fuse RX, RY, RZ rotations into a single 2x2 unitary matrix."""
+    tx, ty, tz = params[0], params[1], params[2]
+    def rot_x(p): c = jnp.cos(p/2); s = -1.0j*jnp.sin(p/2); return jnp.stack([jnp.stack([c, s], axis=-1), jnp.stack([s, c], axis=-1)], axis=-2)
+    def rot_y(p): c = jnp.cos(p/2); s = jnp.sin(p/2); return jnp.stack([jnp.stack([c, -s], axis=-1), jnp.stack([s, c], axis=-1)], axis=-2)
+    def rot_z(p): 
+        en = jnp.exp(-1.0j*p/2); ep = jnp.exp(1.0j*p/2); z = jnp.zeros_like(p, dtype=jnp.complex128)
+        return jnp.stack([jnp.stack([en, z], axis=-1), jnp.stack([z, ep], axis=-1)], axis=-2)
+    m = jnp.matmul(rot_z(tz), jnp.matmul(rot_y(ty), rot_x(tx)))
+    from .backend import _ensure_tensorcircuit_initialized
+    _ensure_tensorcircuit_initialized()
+    return tc.backend.convert_to_tensor(m)
 
 
-# --- Pure Logic Functions (No JIT Decoration) ---
+# --- Core Step Logic ---
 
 def _make_circuit_logic(
-    input_val: JaxF64,       # 現在の入力 u_t (size: n_qubits)
-    feedback_val: JaxF64,    # 前回の測定値 m_{t-1} (size: n_qubits)
-    params: JaxF64,
+    input_unitaries: JaxF64, # (N, 4, 4)
+    feedback_val: JaxF64,
+    params: JaxF64,          # (L, N, 2, 2)
     n_qubits: int,
-    feedback_scale: float,        # a_fb: R gate feedback scaling
-
+    feedback_scale: float,
     noise_type: str,
     noise_prob: float,
     use_remat: bool,
     use_reuploading: bool,
     rng_key: JaxKey | None = None
 ) -> JaxF64:
-    """
-    Core circuit construction logic with Feedback QRC architecture.
-
-    Architecture (Murauer et al., 2025):
-      1. Input Projection: R gate with s_k (pre-scaled by MinMaxScaler)
-      2. Feedback Projection: N R gates with a_fb * m_{k-1}^j
-      3. Reservoir Dynamics: HEA layers (CNOT ladder + random rotations)
-      4. Measurement: probability vector
-
-    Compilation time is O(1) with respect to depth via jax.lax.scan.
-    """
+    tc.set_backend("jax")
     is_noisy = (noise_type != "clean")
     is_mc = rng_key is not None
 
-    # --- 1. Input + Feedback Projection (R gates) ---
-    c_enc = tc.Circuit(n_qubits)
+    fb_unitaries = jax.vmap(_get_paper_R_unitary)(feedback_val * feedback_scale)
 
-    # Input Projection: R gate with pre-scaled value (a_in applied by MinMaxScaler)
-    _apply_input_encoding(c_enc, input_val, n_qubits)
+    c = tc.Circuit(n_qubits)
+    # Encoding: Input then Feedback (sequential applied to same pairs)
+    for i in range(n_qubits):
+        c.unitary(i, (i + 1) % n_qubits, unitary=input_unitaries[i])
+        c.unitary((i + 1) % n_qubits, i, unitary=fb_unitaries[i])
 
-    # Feedback Projection: Apply N R gates, one per qubit
-    # Each qubit's previous measurement result is injected via its own R gate
-    _apply_feedback_encoding(c_enc, feedback_val, n_qubits, feedback_scale)
+    state = c.state()
+    if is_noisy and state.ndim == 1: state = jnp.outer(state, jnp.conj(state))
 
-    # Initial State
-    state = c_enc.state()
-
-    # scanに入力する形状を確定させる
-    if is_noisy:
-        if state.ndim == 1:
-            state = jnp.outer(state, jnp.conj(state))
-        # ここで確実に (2^N, 2^N) であることを保証
-
-
-    # --- 2. Dynamics (Layer Scanned) ---
-    def layer_step(carry_state, layer_params):
-        # Context for MC
+    def layer_step(carry_state, layer_rotation_unitaries):
         current_key = None
-        
-        if is_mc:
-            state_vec, current_key = carry_state
-            # In MC mode, we use pure state circuit even if noisy (noise is manual)
-            c = tc.Circuit(n_qubits, inputs=state_vec)
-        elif is_noisy:
-            c = tc.DMCircuit(n_qubits, inputs=carry_state)
-        else:
-            c = tc.Circuit(n_qubits, inputs=carry_state)
+        if is_mc: state_vec, current_key = carry_state; lc = tc.Circuit(n_qubits, inputs=state_vec)
+        elif is_noisy: lc = tc.DMCircuit(n_qubits, inputs=carry_state)
+        else: lc = tc.Circuit(n_qubits, inputs=carry_state)
 
-        # Decoherence -  nothing with 1-3p, Px with p, Py with p, Pz with p
-        # to simulate NISQ inaccuracy
-        def apply_noise_in_layer(indices):
+        def apply_noise(indices):
             nonlocal current_key
-            if not is_noisy:
-                return
-            
-            for target_idx in indices:
+            if not is_noisy: return
+            for idx in indices:
                 if is_mc:
-                    # Monte Carlo Noise Injection (Depolarizing)
-                    if current_key is None:
-                         continue
-                         
-                    k1, current_key = jax.random.split(current_key)
-                    r = jax.random.uniform(k1)
-                    
-                    p = noise_prob
-                    
+                    if current_key is None: continue
+                    k1, current_key = jax.random.split(current_key); r = jax.random.uniform(k1)
                     gate_idx = jnp.zeros((), dtype=jnp.int32)
-                    gate_idx = jax.lax.select(r < 3*p, jnp.array(3, dtype=jnp.int32), gate_idx) # Z
-                    gate_idx = jax.lax.select(r < 2*p, jnp.array(2, dtype=jnp.int32), gate_idx) # Y
-                    gate_idx = jax.lax.select(r < p, jnp.array(1, dtype=jnp.int32), gate_idx)   # X
-                    
-                    def get_mat_i(_): return I_MAT
-                    def get_mat_x(_): return X_MAT
-                    def get_mat_y(_): return Y_MAT
-                    def get_mat_z(_): return Z_MAT
-                    
-                    mat = jax.lax.switch(gate_idx, [get_mat_i, get_mat_x, get_mat_y, get_mat_z], None)
-                    c.unitary(target_idx, unitary=mat, name="mc_noise")
+                    gate_idx = jax.lax.select(r < 3*noise_prob, jnp.array(3), gate_idx)
+                    gate_idx = jax.lax.select(r < 2*noise_prob, jnp.array(2), gate_idx)
+                    gate_idx = jax.lax.select(r < noise_prob, jnp.array(1), gate_idx)
+                    mat = jax.lax.switch(gate_idx, [lambda _: I_MAT, lambda _: X_MAT, lambda _: Y_MAT, lambda _: Z_MAT], None)
+                    lc.unitary(idx, unitary=mat)
                 else:
-                    # Density Matrix Noise
-                    if noise_type == "depolarizing":
-                        c.depolarizing(target_idx, px=noise_prob, py=noise_prob, pz=noise_prob)
-                    elif noise_type == "damping":
-                        c.amplitude_damping(target_idx, gamma=noise_prob)
+                    if noise_type == "depolarizing": lc.depolarizing(idx, px=noise_prob, py=noise_prob, pz=noise_prob)
+                    elif noise_type == "damping": lc.amplitude_damping(idx, gamma=noise_prob)
 
-        # === [A] Re-uploading (Optional) ===
         if use_reuploading:
-            # Re-inject pre-scaled input via R gate (a_in already applied by MinMaxScaler)
-            _apply_input_encoding(c, input_val, n_qubits)
-            for idx in range(n_qubits):
-                apply_noise_in_layer([idx])
+            for i in range(n_qubits): lc.unitary(i, (i + 1) % n_qubits, unitary=input_unitaries[i])
+            for idx in range(n_qubits): apply_noise([idx])
 
-        # === [B] CNOT Ladder ===
-        for j in range(n_qubits - 1):
-            c.cnot(j, j + 1)
-            apply_noise_in_layer([j, j + 1])
+        # Brickwork Entanglement
+        for j in range(0, n_qubits - 1, 2): lc.cnot(j, j + 1); apply_noise([j, j + 1])
+        for j in range(1, n_qubits - 1, 2): lc.cnot(j, j + 1); apply_noise([j, j + 1])
+        for k in range(n_qubits): lc.unitary(k, unitary=layer_rotation_unitaries[k]); apply_noise([k])
+        for j in range(1, n_qubits - 1, 2): lc.cnot(j, j + 1); apply_noise([j, j + 1])
+        for j in range(0, n_qubits - 1, 2): lc.cnot(j, j + 1); apply_noise([j, j + 1])
             
-        # === [C] Random Rotations ===
-        for k in range(n_qubits):
-            c.rx(k, theta=layer_params[k, 0])
-            apply_noise_in_layer([k])
-            
-            c.ry(k, theta=layer_params[k, 1])
-            apply_noise_in_layer([k])
-            
-            c.rz(k, theta=layer_params[k, 2])
-            apply_noise_in_layer([k])
-            
-        # === [D] Reverse Ladder ===
-        for q_idx in range(n_qubits - 2, -1, -1):
-            c.cnot(q_idx, q_idx + 1)
-            apply_noise_in_layer([q_idx, q_idx + 1])
-            
-        new_state = c.state()
-        
-        if is_mc:
-            return (new_state, current_key), None
-        return new_state, None
+        new_state = lc.state()
+        return (new_state, current_key) if is_mc else new_state, None
 
-    if use_remat:
-        layer_step = jax.checkpoint(layer_step)
-
-    # Scan over layers
-    if rng_key is not None:
-        init_carry = (state, rng_key)
-    else:
-        init_carry = state
-        
-    final_carry, _ = jax.lax.scan(layer_step, init_carry, params)
+    if use_remat: layer_step = jax.checkpoint(layer_step)
+    final_carry, _ = jax.lax.scan(layer_step, (state, rng_key) if is_mc else state, params)
+    final_state = final_carry[0] if is_mc else final_carry
     
-    # Unpack Logic
-    if rng_key is not None:
-        final_state, final_key = final_carry
-    else:
-        final_state = final_carry
-    
-    # --- 3. Measurement ---
-    if is_noisy and not is_mc:
-        # final_state is Density Matrix (2^N, 2^N)
-        # Probabilities are diagonal elements.
-        probs = jnp.real(jnp.diag(cast("JaxF64", final_state)))
-        return probs
-    else:
-        # Pure State (Clean or MC)
-        # final_state is Vector (2^N,)
-        return jnp.abs(cast("JaxF64", final_state)) ** 2
+    if is_noisy and not is_mc: probs = jnp.real(jnp.diag(cast("JaxF64", final_state)))
+    else: probs = jnp.abs(cast("JaxF64", final_state)) ** 2
+    return probs / (jnp.sum(probs) + 1e-12)
 
 
-def _step_logic(
-    state: tuple[JaxF64, JaxF64 | None],
-    input_slice: JaxF64,
-    reservoir_params: JaxF64,
-    measurement_matrix: JaxF64,
-    n_qubits: int,
-    feedback_scale: float,
-    noise_type: str,
-    noise_prob: float,
-    use_remat: bool,
-    use_reuploading: bool
-) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
-    """
-    Core step logic - Feedback QRC (Murauer et al., 2025).
-    
-    Feedback QRC Equation:
-      1. Circuit Phase (Input + Feedback via separate R gates):
-         p_t = |Circuit(R_in(s_k), R_fb(m_{k-1}), U_res)|²
-         
-      2. Measurement Phase:
-         z_t = M @ p_t   (expectation values)
-         
-      3. State Update (Resetting):
-         m_t = z_t[:n_qubits]  (measurement → next feedback)
-         No leak rate blending. Memory is carried solely through R gate feedback.
-    """
-    # Trust the type system: state is tuple[JaxF64, JaxF64 | None] per annotation
+def _step_logic(state, step_input_unitaries, reservoir_params, measurement_matrix, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading):
     state_vec, rng_key = state
-
-    # Prepare RNG for this step and next step
-    step_key = None
-    next_key = None
-    if rng_key is not None:
-        step_key, next_key = jax.random.split(rng_key)
-
-    # === Phase 1+2: Circuit Execution (Input & Feedback via separate R gates) ===
-    probs = _make_circuit_logic(
-        input_val=input_slice,
-        feedback_val=state_vec,      # 前回の測定値がフィードバック
-        params=reservoir_params,
-        n_qubits=n_qubits,
-        feedback_scale=feedback_scale,
-        noise_type=noise_type,
-        noise_prob=noise_prob,
-        use_remat=use_remat,
-        use_reuploading=use_reuploading,
-        rng_key=step_key
-    )
-    
-    # Vectorized Measurement: z_t = M @ p
+    step_key = None; next_key = None
+    if rng_key is not None: step_key, next_key = jax.random.split(rng_key)
+    probs = _make_circuit_logic(step_input_unitaries, state_vec, reservoir_params, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading, step_key)
     output = jnp.dot(measurement_matrix, probs)
+    return (output[:n_qubits], next_key), output
+
+
+# --- Public API Wrappers ---
+
+@partial(jax.jit, static_argnames=["n_qubits", "noise_type", "use_remat", "use_reuploading"])
+def _step_jit(state, input_slice, reservoir_params, measurement_matrix, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading):
+    input_unitaries = jax.vmap(_get_paper_R_unitary)(input_slice[jnp.arange(n_qubits) % input_slice.shape[0]])
+    return _step_logic(state, input_unitaries, reservoir_params, measurement_matrix, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading)
+
+@partial(jax.jit, static_argnames=["n_qubits", "noise_type", "use_remat", "use_reuploading"])
+def _chunk_scan_jit(state_carry, chunk_input_unitaries, reservoir_params, measurement_matrix, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading):
+    step_func = partial(_step_logic, reservoir_params=reservoir_params, measurement_matrix=measurement_matrix, n_qubits=n_qubits, feedback_scale=feedback_scale, noise_type=noise_type, noise_prob=noise_prob, use_remat=use_remat, use_reuploading=use_reuploading)
     
-    # === Phase 3: State Update (Resetting) ===
-    # No leak rate blending. Measurement result directly becomes next feedback.
-    next_state_vec = output[:n_qubits]
+    in_axs = (0, 0) if chunk_input_unitaries.ndim == 5 else (0, None)
+    return jax.lax.scan(jax.vmap(step_func, in_axes=in_axs), state_carry, chunk_input_unitaries)
 
-    if next_key is not None:
-        return (next_state_vec, cast("JaxF64", next_key)), output
-        
-    return (next_state_vec, None), output
-
-
-# --- JIT Compiled Wrappers ---
-
-@partial(jax.jit, static_argnames=[
-    "n_qubits", "noise_type", "use_remat", "use_reuploading"
-])
-def _step_jit(
-    state: tuple[JaxF64, JaxF64 | None],
-    input_slice: JaxF64,
-    reservoir_params: JaxF64,
-    measurement_matrix: JaxF64,
-    n_qubits: int,
-    feedback_scale: float,
-    noise_type: str,
-    noise_prob: float,
-    use_remat: bool,
-    use_reuploading: bool
-) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
-    """
-    Standalone JIT wrapper for single step execution.
-    """
-    return _step_logic(
-        state, input_slice, reservoir_params, measurement_matrix,
-        n_qubits, feedback_scale,
-        noise_type, noise_prob, use_remat, use_reuploading
-    )
-
-@partial(jax.jit, static_argnames=[
-    "n_qubits", "noise_type", "use_remat", "use_reuploading"
-])
-def _chunk_scan_jit(
-    state_carry: tuple[JaxF64, JaxF64 | None],
-    chunk_input: JaxF64,
-    reservoir_params: JaxF64,
-    measurement_matrix: JaxF64,
-    n_qubits: int,
-    feedback_scale: float,
-    noise_type: str,
-    noise_prob: float,
-    use_remat: bool,
-    use_reuploading: bool
-) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
-    """
-    Fixed-size inner scan kernel (Chunk Size 128).
-    This function is JIT-compiled ONCE and cached.
-    """
-    # Partial binding for static/broadcasted args
-    step_func = partial(
-        _step_logic,
-        reservoir_params=reservoir_params,
-        measurement_matrix=measurement_matrix,
-        n_qubits=n_qubits,
-        feedback_scale=feedback_scale,
-        noise_type=noise_type,
-        noise_prob=noise_prob,
-        use_remat=use_remat,
-        use_reuploading=use_reuploading
-    )
-    # Vmap over the batch dimension
-    step_vmapped = jax.vmap(step_func, in_axes=(0, 0))
+def _forward_jit(state_init, inputs_time_major, reservoir_params, measurement_matrix, n_qubits, feedback_scale, noise_type, noise_prob, use_remat, use_reuploading, chunk_size):
+    T, B, D = inputs_time_major.shape
+    def get_step_unitaries(u_vec): return jax.vmap(_get_paper_R_unitary)(u_vec[jnp.arange(n_qubits) % D])
     
-    # Inner Scan (128 steps)
-    return jax.lax.scan(step_vmapped, state_carry, chunk_input)
-
-
-# Note: Removed @jax.jit decorator to handle variable length sequence without recompilation.
-# The heavy lifting is done by _chunk_scan_jit which is cached.
-def _forward_jit(
-    state_init: tuple[JaxF64, JaxF64 | None],
-    inputs_time_major: JaxF64,
-    reservoir_params: JaxF64,
-    measurement_matrix: JaxF64,
-    n_qubits: int,
-    feedback_scale: float,
-    noise_type: str,
-    noise_prob: float,
-    use_remat: bool,
-    use_reuploading: bool,
-    chunk_size: int
-) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
-    """
-    Forward pass execution using Double Scan strategy.
-    Orchestrates padding/reshaping in Python/Eager JAX, then calls cached kernel.
-    for 16 qubits
-    * T (16600): 424.7s 400s
-   * 128: 428.8s
-   * 64: 419.7s
-   * 32: 412.3s 417.9868 420.4176
-   * 16: 413.5s
-    """
-    
-    # --- Double Scan Optimization (Chunking) ---
-    T = inputs_time_major.shape[0]
-
-    print("warning chunk size is fixed to T for now to avoid recompilation. Adjusting chunk_size to T.")
-    chunk_size = T
-
-
-    # Calculate padding
-    remainder = T % chunk_size
-    if remainder == 0:
-        pad_len = 0
-    else:
-        pad_len = chunk_size - remainder
-        
-    # Pad inputs (Time axis is 0)
-    if pad_len > 0:
-        padding = jnp.zeros((pad_len, *inputs_time_major.shape[1:]), dtype=inputs_time_major.dtype)
-        inputs_padded = jnp.concatenate([inputs_time_major, padding], axis=0)
-    else:
-        inputs_padded = inputs_time_major
-        
-    # Reshape to (Num_Chunks, chunk_size, Batch, Feat)
-    num_chunks = inputs_padded.shape[0] // chunk_size
-    inputs_chunked = inputs_padded.reshape(num_chunks, chunk_size, *inputs_time_major.shape[1:])
-    
-    # Outer Scan Function (Process one chunk using cached kernel)
-    def scan_chunk_wrapper(carry, chunk_in) -> tuple[tuple[JaxF64, JaxF64 | None], JaxF64]:
-        return _chunk_scan_jit(
-            carry, chunk_in,
-            reservoir_params, measurement_matrix,
-            n_qubits, feedback_scale,
-            noise_type, noise_prob, use_remat, use_reuploading
-        )
-
-    # Outer Scan (Process all chunks)
-    import time
     start_time = time.time()
-    print(f"[functional.py] Starting _forward_jit outer scan (Chunks={num_chunks}, Size={chunk_size}, T={T}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
-    final_carry, stacked_outputs_chunked = jax.lax.scan(scan_chunk_wrapper, state_init, inputs_chunked)
-    print(f"[functional.py] _forward_jit outer scan finished in {time.time() - start_time:.4f} seconds.")
+    # 1. Pre-compute all unitaries for the entire sequence (Time, Batch, N, 4, 4)
+    all_input_unitaries = jax.vmap(jax.vmap(get_step_unitaries))(inputs_time_major)
     
-    # Reshape Output
-    output_shape = stacked_outputs_chunked.shape
-    stacked_outputs_padded = stacked_outputs_chunked.reshape(-1, *output_shape[2:])
+    # 2. Execute full sequence in one shot (No chunking boilerplate)
+    print(f"[functional.py] Starting _forward_jit execution (T={T}, Batch={B}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}...")
+    final_carry, stacked_outputs = _chunk_scan_jit(
+        state_init, all_input_unitaries, 
+        reservoir_params, measurement_matrix, 
+        n_qubits, feedback_scale, use_reuploading
+    )
+    print(f"[functional.py] _forward_jit execution finished in {time.time() - start_time:.4f} seconds.")
     
-    # Slice back to original length
-    stacked_outputs = stacked_outputs_padded[:T]
-    
-    return final_carry, stacked_outputs
+    return final_carry, stacked_outputs.reshape(T, B, -1)

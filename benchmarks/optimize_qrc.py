@@ -1,39 +1,23 @@
 #!/usr/bin/env python3
 """
 Optuna Hyperparameter Search for Quantum Reservoir Computing.
-
-Optimizes input_scale (projection & R-gate) and feedback_scale for Mackey-Glass prediction,
-maximizing VPT (Valid Prediction Time).
-
-Supports separate studies for different measurement_basis / readout combinations:
-
-Usage:
-    # Default (uses preset's measurement_basis + readout)
-    uv run python benchmarks/optimize_qrc.py
-
-    # Specific readout: ridge / poly_full / poly_square
-    uv run python benchmarks/optimize_qrc.py --readout poly_full
-    uv run python benchmarks/optimize_qrc.py --readout poly_square
-
-    # Z+ZZ measurement basis with poly_full readout
-    uv run python benchmarks/optimize_qrc.py --measurement-basis Z+ZZ --readout poly_full
-
-    # Custom trial count
-uv run python benchmarks/optimize_qrc.py --trials 1000
-
-Visualization:
-uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
 """
+import os
+# Force 64-bit precision before ANY other imports
+os.environ["JAX_ENABLE_X64"] = "True"
 
 import argparse
 import dataclasses
 import math
 from pathlib import Path
 
+import jax
+jax.config.update("jax_enable_x64", True)
+
 import numpy as np
 import optuna
 
-from reservoir.utils import check_gpu_available  # noqa: E402
+from reservoir.utils import check_gpu_available
 from reservoir.pipelines import run_pipeline
 from reservoir.models.presets import (
     TIME_QUANTUM_RESERVOIR_PRESET,
@@ -225,7 +209,7 @@ def make_objective(measurement_basis: str, readout_config):
 
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai2"
+    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai3"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 

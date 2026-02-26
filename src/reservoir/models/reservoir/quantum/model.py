@@ -16,7 +16,7 @@ from beartype import beartype
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir, ReservoirConfig
 from .backend import _ensure_tensorcircuit_initialized
-from .functional import _step_jit, _forward_jit
+from .functional import _step_jit, _forward_jit, _get_fused_rotation_matrix
 
 class _QuantumData(TypedDict, total=False):
     """Typed structure for Quantum serialization — avoids ConfigDict union explosion."""
@@ -125,13 +125,20 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         self._measurement_matrix = self._compute_measurement_matrix_vectorized()
 
     def _init_fixed_parameters(self) -> None:
-        """Initialize fixed random parameters."""
-        self.reservoir_params = jax.random.uniform(
+        """Initialize fixed random parameters and pre-compute unitaries."""
+        # 1. Initialize raw rotation angles (Layer, Qubit, 3)
+        raw_params = jax.random.uniform(
             self._rng,
             minval=0.0,
             maxval=2 * jnp.pi,
             shape=(self.n_layers, self.n_qubits, 3)
         )
+        
+        # 2. Pre-compute fused rotation matrices (Layer, Qubit, 2, 2)
+        # We vmap over both layers and qubits
+        v_get_matrix = jax.vmap(jax.vmap(_get_fused_rotation_matrix))
+        self.reservoir_params = v_get_matrix(raw_params)
+        
         self.initial_state_vector = jnp.zeros(self.n_qubits, dtype=jnp.float_)
 
     def _compute_measurement_matrix_vectorized(self) -> JaxF64:

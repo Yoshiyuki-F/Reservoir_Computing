@@ -10,26 +10,20 @@ import tensorcircuit as tc
 # --- Lazy Initialization for Safety & Isolation ---
 _TC_INITIALIZED = False
 
-def _ensure_tensorcircuit_initialized(precision: str = "complex64") -> None:
+def _ensure_tensorcircuit_initialized(precision: str = "complex128") -> None:
     """
-    Lazily configure TensorCircuit and patch Numpy.
-    Ensures global side effects only happen when QuantumReservoir is verified to be used.
+    Lazily configure TensorCircuit and patch JAX.
     """
     global _TC_INITIALIZED
     
-    # Remove local x64 toggle - rely on global init in __init__.py
+    # 1. Enforce x64 for complex128
     if precision == "complex128":
-        # Double check, but don't toggle if already set globally
-        if not getattr(jax.config, "jax_enable_x64", False):
-             jax.config.update("jax_enable_x64", True)
+        jax.config.update("jax_enable_x64", True)
 
     if _TC_INITIALIZED:
-        if precision != getattr(tc, "dtypestr", "complex64"):
-            tc.set_dtype(precision)
         return
 
-    # Configure TensorCircuit
-    # Localize backend setting to avoid affecting other modules on import
+    # 2. Set backend and dtype
     tc.set_backend("jax")
     tc.set_dtype(precision)
 
