@@ -57,22 +57,6 @@ class PipelineExecutor:
         # Delegate extraction (Model does work, Coordinator provides input)
         train_Z, val_Z, test_Z, val_final_info = self._extract_all_features(self.stack.model)
 
-        if train_Z is not None:
-            if jnp.std(train_Z) < 0.1:
-                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
-                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
-
-        if val_Z is not None: 
-            if jnp.std(val_Z) < 0.1:
-                 print(f"    [Warning] val_Z std ({jnp.std(val_Z):.4f}) is very low.")
-
-        if test_Z is not None : 
-            if jnp.std(test_Z) < 0.1:
-                 print(f"    [Warning] test_Z std ({jnp.std(test_Z):.4f}) is very low.")
-
-        if train_Z is None:
-             raise ValueError("train_Z is None. Execution aborted.")
-
         # Step 6.5: Target Alignment (Delegate to Coordinator)
         print("\n=== Step 6.5: Target Alignment (Auto-Align) ===")
         train_y = self.coordinator.align_targets(train_Z, "train")
@@ -190,11 +174,21 @@ class PipelineExecutor:
             model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
 
+        if train_Z is not None:
+            if jnp.std(train_Z) < 0.1:
+                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
+                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
+
         # 2. Validation
         val_in = self.coordinator.get_val_inputs(window_size)
         val_Z, current_state, val_last_output = self._compute_split(
             model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
+
+        if val_Z is not None:
+            if jnp.std(val_Z) < 0.1:
+                 print(f"    [Warning] val_Z std ({jnp.std(val_Z):.4f}) is very low.")
+
         val_final_state = current_state
 
         if is_stateful:
@@ -208,6 +202,11 @@ class PipelineExecutor:
             test_Z, _, _ = self._compute_split(
                 model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
             )
+
+            if test_Z is not None:
+                if jnp.std(test_Z) < 0.1:
+                    print(f"    [Warning] test_Z std ({jnp.std(test_Z):.4f}) is very low.")
+
         else:
             print("    [Executor] Skipping Test feature extraction for Regression task (Closed-loop will be used).")
             
