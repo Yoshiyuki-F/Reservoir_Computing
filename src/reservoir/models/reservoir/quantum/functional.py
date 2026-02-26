@@ -38,6 +38,35 @@ def _apply_paper_R_gate(c, i: int, j: int, val, scaling: float):
     c.cnot(i, j)
 
 
+# --- Encoding Helpers ---
+
+def _apply_input_encoding(c, input_val: JaxF64, n_qubits: int):
+    """
+    Apply multi-dimensional input encoding to all qubits.
+    Repeats dimensions if input_dim < n_qubits.
+    """
+    input_dim = input_val.shape[0]
+    for i in range(n_qubits):
+        val = input_val[i % input_dim]
+        if n_qubits >= 2:
+            _apply_paper_R_gate(c, i, (i + 1) % n_qubits, val, 1.0)
+        else:
+            c.rx(i, theta=val)
+
+
+def _apply_feedback_encoding(c, feedback_val: JaxF64, n_qubits: int, feedback_scale: float):
+    """
+    Apply feedback encoding (measurement results from previous step) to all qubits.
+    """
+    if n_qubits >= 2:
+        for i in range(n_qubits):
+            target = i
+            control = (i + 1) % n_qubits
+            _apply_paper_R_gate(c, control, target, feedback_val[i], feedback_scale)
+    else:
+        c.rx(0, theta=feedback_val[0] * feedback_scale)
+
+
 # --- Pure Logic Functions (No JIT Decoration) ---
 
 def _make_circuit_logic(
@@ -71,23 +100,11 @@ def _make_circuit_logic(
     c_enc = tc.Circuit(n_qubits)
 
     # Input Projection: R gate with pre-scaled value (a_in applied by MinMaxScaler)
-    input_dim = input_val.shape[0]
-    for i in range(n_qubits):
-        val = input_val[i % input_dim]
-        if n_qubits >= 2:
-            _apply_paper_R_gate(c_enc, i, (i + 1) % n_qubits, val, 1.0)
-        else:
-            c_enc.rx(i, theta=val)
+    _apply_input_encoding(c_enc, input_val, n_qubits)
 
     # Feedback Projection: Apply N R gates, one per qubit
     # Each qubit's previous measurement result is injected via its own R gate
-    if n_qubits >= 2:
-        for i in range(n_qubits):
-            target = i
-            control = (i + 1) % n_qubits
-            _apply_paper_R_gate(c_enc, control, target, feedback_val[i], feedback_scale)
-    else:
-        c_enc.rx(0, theta=feedback_val[0] * feedback_scale)
+    _apply_feedback_encoding(c_enc, feedback_val, n_qubits, feedback_scale)
 
     # Initial State
     state = c_enc.state()
@@ -153,13 +170,7 @@ def _make_circuit_logic(
         # === [A] Re-uploading (Optional) ===
         if use_reuploading:
             # Re-inject pre-scaled input via R gate (a_in already applied by MinMaxScaler)
-            input_dim = input_val.shape[0]
-            for i in range(n_qubits):
-                val = input_val[i % input_dim]
-                if n_qubits >= 2:
-                    _apply_paper_R_gate(c, i, (i + 1) % n_qubits, val, 1.0)
-                else:
-                    c.rx(i, theta=val)
+            _apply_input_encoding(c, input_val, n_qubits)
             for idx in range(n_qubits):
                 apply_noise_in_layer([idx])
 
