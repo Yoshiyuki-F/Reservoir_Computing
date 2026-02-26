@@ -71,10 +71,13 @@ def _make_circuit_logic(
     c_enc = tc.Circuit(n_qubits)
 
     # Input Projection: R gate with pre-scaled value (a_in applied by MinMaxScaler)
-    if n_qubits >= 2:
-        _apply_paper_R_gate(c_enc, 0, 1, input_val[0], 1.0)
-    else:
-        c_enc.rx(0, theta=input_val[0])
+    input_dim = input_val.shape[0]
+    for i in range(n_qubits):
+        val = input_val[i % input_dim]
+        if n_qubits >= 2:
+            _apply_paper_R_gate(c_enc, i, (i + 1) % n_qubits, val, 1.0)
+        else:
+            c_enc.rx(i, theta=val)
 
     # Feedback Projection: Apply N R gates, one per qubit
     # Each qubit's previous measurement result is injected via its own R gate
@@ -150,10 +153,13 @@ def _make_circuit_logic(
         # === [A] Re-uploading (Optional) ===
         if use_reuploading:
             # Re-inject pre-scaled input via R gate (a_in already applied by MinMaxScaler)
-            if n_qubits >= 2:
-                _apply_paper_R_gate(c, 0, 1, input_val[0], 1.0)
-            else:
-                c.rx(0, theta=input_val[0])
+            input_dim = input_val.shape[0]
+            for i in range(n_qubits):
+                val = input_val[i % input_dim]
+                if n_qubits >= 2:
+                    _apply_paper_R_gate(c, i, (i + 1) % n_qubits, val, 1.0)
+                else:
+                    c.rx(i, theta=val)
             for idx in range(n_qubits):
                 apply_noise_in_layer([idx])
 

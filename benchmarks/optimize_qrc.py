@@ -122,13 +122,13 @@ def make_objective(measurement_basis: str, readout_config):
 
         # Ensure max > min with a reasonable gap
         # max_delta = np.pi - feature_min
-        # delta = trial.suggest_float("delta", gap, max_delta)
+        delta = trial.suggest_float("delta", gap, max_delta)
 
-        delta = trial.suggest_float("delta", 0.2, 0.8)
+        # delta = trial.suggest_float("delta", 0.2, 0.8)
         feature_max = feature_min + delta
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 2.1, 2.4)
+        feedback_scale = trial.suggest_float("feedback_scale", 0, 3)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
@@ -224,7 +224,7 @@ def make_objective(measurement_basis: str, readout_config):
 
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai"
+    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai2"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
