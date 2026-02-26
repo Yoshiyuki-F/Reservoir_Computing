@@ -121,7 +121,7 @@ def make_objective(measurement_basis: str, readout_config):
         feature_min = trial.suggest_float("feature_min", 0,0)
 
         # Ensure max > min with a reasonable gap
-        # max_delta = np.pi - feature_min
+        max_delta = np.pi - feature_min
         delta = trial.suggest_float("delta", gap, max_delta)
 
         # delta = trial.suggest_float("delta", 0.2, 0.8)
@@ -201,16 +201,17 @@ def make_objective(measurement_basis: str, readout_config):
                  trial.set_user_attr("status", "nan_error")
                  trial.set_user_attr("error", err_msg)
                  return -1.0 # Return a negative value to indicate failure
-            elif "pred std" in err_msg_lower:
-                 print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
-                 trial.set_user_attr("status", "diverged")
+            elif "validation nmse too high" in err_msg_lower:
+                 try:
+                     # Extract nmse from message: "Validation NMSE too high: 0.0002358972"
+                     nmse_val = float(err_msg.split(":")[-1].strip())
+                 except (ValueError, IndexError):
+                     nmse_val = 1.0
+                 print(f"Trial {trial.number}: FAILED (NMSE high) - {e}")
+                 trial.set_user_attr("status", "failed_nmse")
+                 trial.set_user_attr("nmse", nmse_val)
                  trial.set_user_attr("error", err_msg)
-                 return -0.5 # Return a "close but failed" value
-            elif "pred max" in err_msg_lower:
-                 print(f"Trial {trial.number}: DIVERGED (VPT~0) - {e}")
-                 trial.set_user_attr("status", "diverged")
-                 trial.set_user_attr("error", err_msg)
-                 return -0.4 # Return a "close but failed" value WITH MAX MIN
+                 return -nmse_val
             else:
                  print(f"Trial {trial.number}: EXCEPTION (VPT=0) - {e}")
                  trial.set_user_attr("status", "exception")
