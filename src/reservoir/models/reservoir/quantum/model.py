@@ -279,8 +279,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             self.noise_type,
             self.noise_prob,
             self.use_remat,
-            self.use_reuploading,
-            self.chunk_size
+            self.use_reuploading
         )
         
         # --- Ensemble Aggregation ---

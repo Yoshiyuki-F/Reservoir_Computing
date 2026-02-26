@@ -1,7 +1,15 @@
 import jax
+
+# Enable 64-bit precision for complex128 before importing jax.numpy
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 from reservoir.models.reservoir.quantum.functional import _make_circuit_logic, _get_paper_R_unitary
 import tensorcircuit as tc
+
+# Set dtype and backend globally for tests
+tc.set_dtype("complex128")
+tc.set_backend("jax")
 
 def get_valid_unitaries(shape):
     # To avoid tc errors, let's just make identity matrices

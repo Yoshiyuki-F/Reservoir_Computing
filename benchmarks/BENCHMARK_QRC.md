@@ -38,6 +38,19 @@ Attempted to push beyond the high-level `tc.Circuit` API to reach the physical s
 2. **Low-level Backend Bypass:**
    - Finding: JIT-compiled `tc.Circuit` objects are nearly as fast as raw backend calls because XLA eliminates the class overhead during compilation.
 
+### Phase 6: Domain-Specific Constraints & Rejected Optimizations
+- **Hypothesis:** Bypassing feedback logic when `feedback_scale == 0` and removing the backward CNOT ladder to prevent cross-layer entanglement collapse.
+- **Finding:** This architecture strictly enforces `use_reuploading = True` and always uses feedback (`feedback_scale > 0`). Because reuploading unitaries are injected between layers, the backward and forward CNOTs do not cancel each other out.
+- **Conclusion:** **Rejected**. Zero-feedback bypass is a dead code path, and modifying the CNOT ladder would alter the intended entanglement topology unnecessarily.
+
+### Phase 7: Deep Unrolling & Unitary Fusion (Feedback-Heavy Scenarios)
+- **Optimization 1: Analytical Paper R Gate:** The `_get_paper_R_unitary` function originally relied on dynamic `jnp.kron` and `jnp.matmul` operations to construct the $4 \times 4$ Paper R matrix. This was replaced with a hardcoded, analytically derived $4 \times 4$ matrix composed directly from $\cos(\theta/2)$ and $\sin(\theta/2)$.
+  - **Effect:** Completely eliminated expensive runtime matrix multiplications and tensor Kronecker products.
+- **Optimization 2: Input and Feedback Fusion:** In the encoding step, the input unitary $U_{in}$ on $(i, (i+1)\%N)$ and feedback unitary $U_{fb}$ on $((i+1)\%N, i)$ were previously applied to the state vector sequentially as two separate operations.
+  - **Method:** Used matrix index swapping to align the target qubits and pre-multiplied them into a single fused unitary ($U_{fused} = U_{fb\_swapped} \cdot U_{in}$).
+  - **Effect:** Halved the number of heavy $4 \times 4$ state-vector applications during the encoding phase.
+- **Result:** Improved the batched JIT compilation execution time from ~29.38 ms/step down to ~28.90 ms/step, while also resolving implicit type-casting warnings.
+
 ## 3. Final Benchmarks (N=14 Qubits, 10 Layers, complex128)
 
 | Engine Version | Step Time (ms) | Speedup | Status |
@@ -53,7 +66,22 @@ Attempted to push beyond the high-level `tc.Circuit` API to reach the physical s
 - **Architecture:** TensorCircuit-based state evolution with dual-layer Brickwork entanglement.
 - **Stability:** **Strict Normalization** enforced to maintain $1.0$ probability sum across long sequences.
 
-## 4. Engineering Conclusion
+## 4. Verification & Testing
+To ensure the correctness and performance of the optimized QRC engine, the following commands should be executed after any modifications:
+
+**1. Functional Correctness:**
+Validates the probability normalizations and mathematical integrity of the quantum logic:
+```bash
+uv run pytest tests/unit/test_quantum_functional.py
+```
+
+**2. Performance Benchmarking:**
+Measures the JIT-compiled execution speed (ms/step) to verify that performance targets are met:
+```bash
+uv run python benchmarks/measure_quantum_logic.py
+```
+
+## 5. Engineering Conclusion
 The most efficient path for high-qubit simulation ($N \geq 14$) in JAX is not manual tensor manipulation, but **highly optimized domain-specific frameworks (TensorCircuit)** combined with **static parameter pre-computation** and **parallel circuit structures (Brickwork)**.
 
 ---
