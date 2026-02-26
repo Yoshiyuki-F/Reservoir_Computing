@@ -28,7 +28,16 @@ def benchmark_quantum_circuit():
         def body(carry, _):
             # _make_circuit_logic(iu, fv, p, n_qubits, 1.0, use_reuploading=True)
             res = _make_circuit_logic(
-                iu, fv, p, n_qubits, 1.0, True
+                input_unitaries=iu,
+                feedback_val=fv,
+                params=p,
+                n_qubits=n_qubits,
+                feedback_scale=1.0,
+                noise_type="clean",
+                noise_prob=0.0,
+                use_remat=False,
+                use_reuploading=True,
+                rng_key=None
             )
             return carry, res
         return jax.lax.scan(body, None, jnp.arange(100))

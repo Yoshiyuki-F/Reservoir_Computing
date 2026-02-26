@@ -1,15 +1,26 @@
 import jax
 import jax.numpy as jnp
-from reservoir.models.reservoir.quantum.functional import _make_circuit_logic
+from reservoir.models.reservoir.quantum.functional import _make_circuit_logic, _get_paper_R_unitary
+import tensorcircuit as tc
+
+def get_valid_unitaries(shape):
+    # To avoid tc errors, let's just make identity matrices
+    L, n_qubits, _, _ = shape
+    I = jnp.eye(2, dtype=jnp.complex128)
+    return jnp.tile(I, (L, n_qubits, 1, 1))
 
 def test_make_circuit_logic_runs():
+    tc.set_backend("jax")
     n_qubits = 4
     input_val = jnp.array([0.5, -0.2]) # 2D input
     feedback_val = jnp.array([0.1, 0.2, 0.3, 0.4])
-    params = jax.random.uniform(jax.random.key(0), (2, n_qubits, 3)) # 2 layers
+    params = get_valid_unitaries((2, n_qubits, 2, 2)) # 2 layers
     
+    input_slice = input_val[jnp.arange(n_qubits) % input_val.shape[0]]
+    input_unitaries = jax.vmap(_get_paper_R_unitary)(input_slice)
+
     probs = _make_circuit_logic(
-        input_val=input_val,
+        input_unitaries=input_unitaries,
         feedback_val=feedback_val,
         params=params,
         n_qubits=n_qubits,
@@ -27,13 +38,17 @@ def test_make_circuit_logic_runs():
     print("Test passed successfully!")
 
 def test_make_circuit_logic_clean_no_reup():
+    tc.set_backend("jax")
     n_qubits = 2
     input_val = jnp.array([0.5])
     feedback_val = jnp.array([0.1, 0.2])
-    params = jax.random.uniform(jax.random.key(0), (1, n_qubits, 3)) # 1 layer
+    params = get_valid_unitaries((1, n_qubits, 2, 2))
     
+    input_slice = input_val[jnp.arange(n_qubits) % input_val.shape[0]]
+    input_unitaries = jax.vmap(_get_paper_R_unitary)(input_slice)
+
     probs = _make_circuit_logic(
-        input_val=input_val,
+        input_unitaries=input_unitaries,
         feedback_val=feedback_val,
         params=params,
         n_qubits=n_qubits,
