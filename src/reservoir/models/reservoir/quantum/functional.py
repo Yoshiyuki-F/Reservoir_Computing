@@ -36,7 +36,7 @@ def _get_paper_R_unitary(theta: JaxF64) -> JaxF64:
     s2 = s * s
     cs = c * s
 
-    m = jnp.stack(
+    return jnp.stack(
         [
             jnp.stack([zm * c2, zm * cs, zm * cs, zm * s2], axis=-1),
             jnp.stack([zp * cs, zp * c2, zp * s2, zp * cs], axis=-1),
@@ -46,10 +46,6 @@ def _get_paper_R_unitary(theta: JaxF64) -> JaxF64:
         axis=-2,
     )
 
-    from .backend import _ensure_tensorcircuit_initialized
-
-    _ensure_tensorcircuit_initialized()
-    return tc.backend.convert_to_tensor(m)
 
 
 def _get_fused_rotation_matrix(params: JaxF64) -> JaxF64:
@@ -78,11 +74,7 @@ def _get_fused_rotation_matrix(params: JaxF64) -> JaxF64:
             [jnp.stack([en, z], axis=-1), jnp.stack([z, ep], axis=-1)], axis=-2
         )
 
-    m = jnp.matmul(rot_z(tz), jnp.matmul(rot_y(ty), rot_x(tx)))
-    from .backend import _ensure_tensorcircuit_initialized
-
-    _ensure_tensorcircuit_initialized()
-    return tc.backend.convert_to_tensor(m)
+    return jnp.matmul(rot_z(tz), jnp.matmul(rot_y(ty), rot_x(tx)))
 
 
 # --- Core Step Logic ---

@@ -165,9 +165,15 @@ class PipelineExecutor:
         warmup_len = len(train_in) // 2
         warmup_in = train_in[:warmup_len] #50LT??
 
-        _, current_state, _ = self._compute_split(
+        warmup_X, current_state, _ = self._compute_split(
             model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
+
+        if warmup_X is not None:
+            if jnp.std(warmup_X) < 0.1:
+                raise ValueError(f"Feature collapse detected! warmup_X std ({jnp.std(warmup_X):.4f}) < 0.1. "
+                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
+        del warmup_X
 
         # 1. Train
         train_Z, current_state, _ = self._compute_split(
