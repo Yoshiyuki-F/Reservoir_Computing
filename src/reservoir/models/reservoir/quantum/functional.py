@@ -6,7 +6,7 @@ Optimized for complex128 precision.
 
 from __future__ import annotations
 
-from typing import cast, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING, Optional
 from functools import partial
 
 import jax
@@ -107,8 +107,8 @@ def _make_circuit_logic(
 
     c = tc.Circuit(n_qubits)
     # Encoding: Fused Input + Feedback (applied to same pairs)
-    for i in range(n_qubits):
-        c.unitary(i, (i + 1) % n_qubits, unitary=fused_unitaries[i])
+    for q_i in range(n_qubits):
+        c.unitary(q_i, (q_i + 1) % n_qubits, unitary=fused_unitaries[q_i])  # type: ignore
 
     state = c.state()
     if is_noisy and state.ndim == 1:
@@ -124,29 +124,30 @@ def _make_circuit_logic(
         else:
             lc = tc.Circuit(n_qubits, inputs=carry_state)
 
-        def apply_noise(indices):
+        def apply_noise(noise_indices):
             nonlocal current_key
             if not is_noisy:
                 return
             
+            r_array: Optional[jax.Array] = None
             if is_mc:
-                if current_key is None:
-                    return
+                assert current_key is not None, "current_key must be initialized for MC noise"
                 # Vectorized PRNG split: generate all random numbers for this batch of indices at once
-                k1, current_key = jax.random.split(current_key)
-                r_array = jax.random.uniform(k1, shape=(len(indices),))
+                k1, current_key = jax.random.split(cast(jax.Array, current_key))
+                r_array = jax.random.uniform(k1, shape=(len(noise_indices),))
                 
-            for i, idx in enumerate(indices):
+            for enum_i, target_idx in enumerate(noise_indices):
                 if is_mc:
-                    r = r_array[i]
+                    assert r_array is not None, "r_array must be initialized for MC noise"
+                    r = r_array[enum_i]  # type: ignore
                     gate_idx = jnp.zeros((), dtype=jnp.int32)
                     gate_idx = jax.lax.select(
-                        r < 3 * noise_prob, jnp.array(3), gate_idx
+                        jnp.array(r < 3 * noise_prob, dtype=bool), jnp.array(3), gate_idx
                     )
                     gate_idx = jax.lax.select(
-                        r < 2 * noise_prob, jnp.array(2), gate_idx
+                        jnp.array(r < 2 * noise_prob, dtype=bool), jnp.array(2), gate_idx
                     )
-                    gate_idx = jax.lax.select(r < noise_prob, jnp.array(1), gate_idx)
+                    gate_idx = jax.lax.select(jnp.array(r < noise_prob, dtype=bool), jnp.array(1), gate_idx)
                     mat = jax.lax.switch(
                         gate_idx,
                         [
@@ -157,38 +158,38 @@ def _make_circuit_logic(
                         ],
                         None,
                     )
-                    lc.unitary(idx, unitary=mat)
+                    lc.unitary(target_idx, unitary=mat)  # type: ignore
                 else:
                     if noise_type == "depolarizing":
-                        lc.depolarizing(
-                            idx, px=noise_prob, py=noise_prob, pz=noise_prob
+                        lc.depolarizing(  # type: ignore
+                            target_idx, px=noise_prob, py=noise_prob, pz=noise_prob
                         )
                     elif noise_type == "damping":
-                        lc.amplitude_damping(idx, gamma=noise_prob)
+                        lc.amplitude_damping(target_idx, gamma=noise_prob)  # type: ignore
 
         if use_reuploading:
-            for q_idx in range(n_qubits):
-                lc.unitary(
-                    q_idx, (q_idx + 1) % n_qubits, unitary=input_unitaries[q_idx]
+            for enc_q_idx in range(n_qubits):
+                lc.unitary(  # type: ignore
+                    enc_q_idx, (enc_q_idx + 1) % n_qubits, unitary=input_unitaries[enc_q_idx]
                 )
-            for idx in range(n_qubits):
-                apply_noise([idx])
+            for noise_q_idx in range(n_qubits):
+                apply_noise([noise_q_idx])
 
         # Brickwork Entanglement
         for j in range(0, n_qubits - 1, 2):
-            lc.cnot(j, j + 1)
+            lc.cnot(j, j + 1)  # type: ignore
             apply_noise([j, j + 1])
         for j in range(1, n_qubits - 1, 2):
-            lc.cnot(j, j + 1)
+            lc.cnot(j, j + 1)  # type: ignore
             apply_noise([j, j + 1])
         for k in range(n_qubits):
-            lc.unitary(k, unitary=layer_rotation_unitaries[k])
+            lc.unitary(k, unitary=layer_rotation_unitaries[k])  # type: ignore
             apply_noise([k])
         for j in range(1, n_qubits - 1, 2):
-            lc.cnot(j, j + 1)
+            lc.cnot(j, j + 1)  # type: ignore
             apply_noise([j, j + 1])
         for j in range(0, n_qubits - 1, 2):
-            lc.cnot(j, j + 1)
+            lc.cnot(j, j + 1)  # type: ignore
             apply_noise([j, j + 1])
 
         new_state = lc.state()
