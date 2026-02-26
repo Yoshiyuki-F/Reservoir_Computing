@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
 """
 Optuna Hyperparameter Search for Quantum Reservoir Computing.
+Usage:
+uv run python benchmarks/optimize_qrc.py
+uv run python benchmarks/optimize_qrc.py --trials 100
+Visualization:
+uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_qrc_nonetype.db
 """
 import os
 # Force 64-bit precision before ANY other imports
