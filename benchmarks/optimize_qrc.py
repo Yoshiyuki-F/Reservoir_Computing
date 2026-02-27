@@ -113,12 +113,14 @@ def make_objective(measurement_basis: str, readout_config):
 
         # Ensure max > min with a reasonable gap
         max_delta = np.pi - feature_min
-        delta = trial.suggest_float("delta", gap, max_delta)
+        # delta = trial.suggest_float("delta", gap, max_delta)
+        delta = trial.suggest_float("delta", 0, 0.4)
+
         feature_max = feature_min + delta
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0, np.pi)
-        leak_rate = trial.suggest_float("leak_rate", 0.05, 1.0)
+        feedback_scale = trial.suggest_float("feedback_scale", 2, 4)
+        leak_rate = trial.suggest_float("leak_rate", 0, 0.2)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
