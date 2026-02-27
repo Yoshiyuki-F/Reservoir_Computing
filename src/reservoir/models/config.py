@@ -443,6 +443,7 @@ class QuantumReservoirConfig(ModelConfig):
     seed: int                        # Random seed for fixed parameters
     aggregation: AggregationMode     # How to aggregate time steps
     feedback_scale: float     # a_fb: R gate feedback scaling. 0.0 = no feedback
+    leak_rate: float          # Leaky integrator rate for feedback memory (0, 1]
     measurement_basis: Literal["Z", "ZZ", "Z+ZZ"]
     noise_type: Literal["clean", "depolarizing", "damping"]
     noise_prob: float          # Probability of noise (0.0 to 1.0)
@@ -465,6 +466,8 @@ class QuantumReservoirConfig(ModelConfig):
             raise ValueError(f"{prefix}measurement_basis must be one of {valid_bases}.")
         if float(self.readout_error) < 0.0 or float(self.readout_error) > 1.0:
             raise ValueError(f"{prefix}readout_error must be in [0, 1].")
+        if not (0.0 < float(self.leak_rate) <= 1.0):
+            raise ValueError(f"{prefix}leak_rate must be in (0, 1].")
         if int(self.n_trajectories) < 0:
              raise ValueError(f"{prefix}n_trajectories must be non-negative.")
         return self
@@ -475,6 +478,7 @@ class QuantumReservoirConfig(ModelConfig):
             "n_layers": int(self.n_layers),
             "seed": int(self.seed),
             "feedback_scale": float(self.feedback_scale),
+            "leak_rate": float(self.leak_rate),
             "aggregation": self.aggregation.value,
             "measurement_basis": str(self.measurement_basis),
             "noise_type": str(self.noise_type),

@@ -63,6 +63,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         seed: int,
         aggregation_mode: AggregationMode,
         feedback_scale: float,     # a_fb: R gate feedback scaling
+        leak_rate: float,          # Leaky integrator rate for feedback memory
         measurement_basis: Literal["Z", "ZZ", "Z+ZZ"],
         noise_type: Literal["clean", "depolarizing", "damping"],
         noise_prob: float,
@@ -101,8 +102,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         else:
             output_dim = n_qubits
         
-        # Feedback QRC: leak_rate fixed to 1.0 (no Li-ESN blending) TODO take lr from reservoir out
-        super().__init__(n_units=output_dim, seed=seed, leak_rate=1.0, aggregation_mode=aggregation_mode)
+        super().__init__(n_units=output_dim, seed=seed, leak_rate=leak_rate, aggregation_mode=aggregation_mode)
         
         self.n_qubits = n_qubits
         self.n_layers = n_layers
@@ -221,6 +221,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             measurement_matrix=self._measurement_matrix,
             n_qubits=self.n_qubits,
             feedback_scale=self.feedback_scale,
+            leak_rate=self.leak_rate,
             noise_type=self.noise_type,
             noise_prob=self.noise_prob,
             use_remat=self.use_remat,
@@ -276,6 +277,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
             self._measurement_matrix,
             self.n_qubits,
             self.feedback_scale,
+            self.leak_rate,
             self.noise_type,
             self.noise_prob,
             self.use_remat,
@@ -373,6 +375,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
                 n_layers=int(d["n_layers"]),
                 seed=int(d["seed"]),
                 feedback_scale=float(d.get("feedback_scale", 0.0)),
+                leak_rate=float(d.get("leak_rate", 1.0)),
                 aggregation_mode=AggregationMode(str(d["aggregation"])),
                 measurement_basis=d.get("measurement_basis", "Z"),  # type: ignore[arg-type]
                 noise_type=d.get("noise_type", "clean"),  # type: ignore[arg-type]

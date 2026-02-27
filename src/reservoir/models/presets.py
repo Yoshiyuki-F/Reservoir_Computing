@@ -178,6 +178,7 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     seed=41,
     aggregation=AggregationMode.MEAN,
     feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
+    leak_rate=1.0,         # No leaky integration (backward compatible)
     measurement_basis="Z+ZZ",
     noise_type="clean",
     noise_prob=0.0,
@@ -213,6 +214,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=0.9026439783686384,    # a_fb: R gate feedback scaling (paper default)
+        leak_rate=1.0,         # Leaky integrator rate (tunable by optimizer)
         measurement_basis="Z+ZZ",
         noise_type="clean",
         noise_prob=0.0,

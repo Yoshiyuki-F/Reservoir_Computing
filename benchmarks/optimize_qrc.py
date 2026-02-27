@@ -55,6 +55,7 @@ def build_config(
         feature_min: float,
         feature_max: float,
         feedback_scale: float,
+        leak_rate: float,
         use_reuploading: bool,
         *,
         measurement_basis: str,
@@ -75,10 +76,11 @@ def build_config(
         feature_max=feature_max,
     )
 
-    # Update model (feedback_scale, measurement_basis)
+    # Update model (feedback_scale, leak_rate, measurement_basis)
     new_model = dataclasses.replace(
         base.model,
         feedback_scale=feedback_scale,
+        leak_rate=leak_rate,
         measurement_basis=measurement_basis,
         use_reuploading=use_reuploading,
     )
@@ -105,18 +107,16 @@ def make_objective(measurement_basis: str, readout_config):
         # ======================== Preprocessing (MinMax) ====================
         # Typical range for rotation angles is [-pi, pi]
         gap = 0.1
-        # feature_min = trial.suggest_float("feature_min", - np.pi, np.pi - gap)
-        feature_min = trial.suggest_float("feature_min", 0,0)
+        feature_min = trial.suggest_float("feature_min", -np.pi, np.pi - gap)
 
         # Ensure max > min with a reasonable gap
         max_delta = np.pi - feature_min
-        # delta = trial.suggest_float("delta", gap, max_delta)
-
-        delta = trial.suggest_float("delta", 0, 0.5)
+        delta = trial.suggest_float("delta", gap, max_delta)
         feature_max = feature_min + delta
 
         # ======================== Reservoir ==================================
         feedback_scale = trial.suggest_float("feedback_scale", 0, 1)
+        leak_rate = trial.suggest_float("leak_rate", 0.05, 1.0)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
@@ -125,6 +125,7 @@ def make_objective(measurement_basis: str, readout_config):
             feature_min,
             feature_max,
             feedback_scale,
+            leak_rate,
             use_reuploading,
             measurement_basis=measurement_basis,
             readout_config=readout_config,
