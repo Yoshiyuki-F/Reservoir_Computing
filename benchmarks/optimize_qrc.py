@@ -23,6 +23,7 @@ import optuna
 
 from reservoir.utils import check_gpu_available
 from reservoir.pipelines import run_pipeline
+from reservoir.pipelines.strategies import DivergenceError
 from reservoir.models.presets import (
     TIME_QUANTUM_RESERVOIR_PRESET,
     DEFAULT_RIDGE_READOUT,
@@ -177,15 +178,27 @@ def make_objective(measurement_basis: str, readout_config):
 
             trial.set_user_attr("status", "success")
 
-        except (ValueError, RuntimeError) as e:
-            # Try to retrieve stats if attached to exception (from strategies.py)
+        except DivergenceError as e:
+            # Retrieve stats attached to DivergenceError (from strategies.py)
             if hasattr(e, "stats") and isinstance(e.stats, dict):
                 print(f"    [Divergence Stats] {e.stats}")
                 for key, val in e.stats.items():
                     trial.set_user_attr(key, float(val))
             
+            print(f"Trial {trial.number}: FAILED (Diverged) - {e}")
+            trial.set_user_attr("status", "diverged")
+            trial.set_user_attr("error", str(e))
+            return -0.2 # Specific negative value for divergence
+
+        except (ValueError, RuntimeError) as e:
+            # Fallback stats retrieval
+            if hasattr(e, "stats") and isinstance(e.stats, dict):
+                print(f"    [Exception Stats] {e.stats}")
+                for key, val in e.stats.items():
+                    trial.set_user_attr(key, float(val))
+            
             err_msg = str(e)
-            err_msg_lower = str(e).lower()
+            err_msg_lower = err_msg.lower()
             if "nan detected" in err_msg_lower:
                  print(f"Trial {trial.number}: FAILED (NaN) - {e}")
                  trial.set_user_attr("status", "nan_error")
