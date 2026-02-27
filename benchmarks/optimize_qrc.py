@@ -110,13 +110,13 @@ def make_objective(measurement_basis: str, readout_config):
 
         # Ensure max > min with a reasonable gap
         max_delta = np.pi - feature_min
-        delta = trial.suggest_float("delta", gap, max_delta)
+        # delta = trial.suggest_float("delta", gap, max_delta)
 
-        # delta = trial.suggest_float("delta", 0.2, 0.8)
+        delta = trial.suggest_float("delta", 0, 0.5)
         feature_max = feature_min + delta
 
         # ======================== Reservoir ==================================
-        feedback_scale = trial.suggest_float("feedback_scale", 0, 3)
+        feedback_scale = trial.suggest_float("feedback_scale", 0, 1)
         use_reuploading = trial.suggest_categorical("use_reuploading", [True])
 
 
@@ -188,7 +188,7 @@ def make_objective(measurement_basis: str, readout_config):
                  print(f"Trial {trial.number}: FAILED (NaN) - {e}")
                  trial.set_user_attr("status", "nan_error")
                  trial.set_user_attr("error", err_msg)
-                 return -1.0 # Return a negative value to indicate failure
+                 return -0.5 # Return a negative value to indicate failure
             elif "validation nmse too high" in err_msg_lower:
                  try:
                      # Extract nmse from message: "Validation NMSE too high: 0.0002358972"
