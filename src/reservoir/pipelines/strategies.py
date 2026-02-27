@@ -573,7 +573,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                  topo_meta=topo_meta,
                  pipeline_config=pipeline_config,
                  dataset_meta=dataset_meta,
-                 model_type_str=type(model).__name__.lower(),
+                 model_type_str=str(pipeline_config.model_type.value),
                  readout=readout
              )
              

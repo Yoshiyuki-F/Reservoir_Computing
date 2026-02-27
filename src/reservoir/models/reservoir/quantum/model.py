@@ -406,6 +406,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
     def __repr__(self) -> str:
         return (
             f"QuantumReservoir(tc_backend, n_qubits={self.n_qubits}, n_layers={self.n_layers}, "
+            f"lr{self.leak_rate:.4f}_f{self.feedback_scale:.4f}, "
             f"measurement={self.measurement_basis}, "
             f"noise={self.noise_type}({self.noise_prob}), ro_err={self.readout_error}, mc={self.n_trajectories}, "
             f"remat={self.use_remat}, reup={self.use_reuploading}, {self.precision})"
