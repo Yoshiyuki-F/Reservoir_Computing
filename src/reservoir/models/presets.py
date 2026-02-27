@@ -206,7 +206,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     # preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
     # preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
-    preprocess=MinMaxScalerConfig(feature_min=-2.9993344594335642, feature_max=3.7304601073752943),
+    preprocess=MinMaxScalerConfig(feature_min=0, feature_max=3.7304601073752943),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
         n_qubits=10,
@@ -220,7 +220,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
-        use_reuploading=True,
+        use_reuploading=False,
     ),
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )

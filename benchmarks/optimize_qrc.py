@@ -55,6 +55,7 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 def build_config(
         feature_min: float,
         feature_max: float,
+        n_layers: int,
         feedback_scale: float,
         leak_rate: float,
         use_reuploading: bool,
@@ -80,6 +81,7 @@ def build_config(
     # Update model (feedback_scale, leak_rate, measurement_basis)
     new_model = dataclasses.replace(
         base.model,
+        n_layers=n_layers,
         feedback_scale=feedback_scale,
         leak_rate=leak_rate,
         measurement_basis=measurement_basis,
@@ -95,7 +97,7 @@ def build_config(
     )
 
 
-def make_objective(measurement_basis: str, readout_config):
+def make_objective(measurement_basis: str, readout_config, use_reuploading: bool, base_feature_min: float):
     """Factory that returns an Optuna objective closed over the study variant."""
 
     def objective(trial: optuna.Trial) -> float:
@@ -106,28 +108,19 @@ def make_objective(measurement_basis: str, readout_config):
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing (MinMax) ====================
-        # Typical range for rotation angles is [-pi, pi]
-        gap = 0.1
-        # feature_min = trial.suggest_float("feature_min", -np.pi, np.pi - gap)
-        feature_min:float = 0.0
 
-        # Ensure max > min with a reasonable gap
-        max_delta = np.pi - feature_min
-        # delta = trial.suggest_float("delta", gap, max_delta)
-        delta = trial.suggest_float("delta", 0, 4)
-
-        feature_max = feature_min + delta
+        feature_max = trial.suggest_float("delta", 0, 4)
 
         # ======================== Reservoir ==================================
+        n_layers = trial.suggest_int("n_layers", 1, 5)
         feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
-        use_reuploading = trial.suggest_categorical("use_reuploading", [True])
-
 
         # === 2. Build Config ===
         config = build_config(
-            feature_min,
+            base_feature_min,
             feature_max,
+            n_layers,
             feedback_scale,
             leak_rate,
             use_reuploading,
@@ -171,12 +164,12 @@ def make_objective(measurement_basis: str, readout_config):
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
+                      f"(min={base_feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
                 trial.set_user_attr("status", "failed")
                 return -1.0  # Return a negative value to indicate failure
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
+                  f"(min={base_feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
 
@@ -228,9 +221,10 @@ def make_objective(measurement_basis: str, readout_config):
     return objective
 
 
-def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str):
+def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str, use_reuploading: bool):
     """Derive DB filename and study name from the variant combination."""
-    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_kai5"
+    reupload_str = "reupTrue" if use_reuploading else "reupFalse"
+    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai5"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
@@ -268,6 +262,12 @@ def main():
     # Qubits
     n_qubits = base.model.n_qubits
 
+    # Re-uploading
+    use_reuploading = base.model.use_reuploading
+
+    # Preprocessing
+    base_feature_min = base.preprocess.feature_min
+
     # Readout
     if args.readout is not None:
         readout_key = args.readout
@@ -283,11 +283,11 @@ def main():
     # --- Derive study / DB names ---
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
-    
+
     # Updated scaler tag for MinMaxScaler
     scaler_tag = "minmax"
 
-    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag)
+    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag, use_reuploading)
 
     if args.study_name is not None:
         study_name = args.study_name
@@ -313,12 +313,13 @@ def main():
     print(f"  Trials           : {args.trials}")
     print(f"  Measurement Basis: {measurement_basis}")
     print(f"  Readout          : {readout_key}")
+    print(f"  Re-uploading     : {use_reuploading}")
+    print(f"  Feature Min      : {base_feature_min}")
     print("=" * 60)
 
     # --- Run ---
-    objective_fn = make_objective(measurement_basis, readout_config)
+    objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, base_feature_min)
     study.optimize(objective_fn, n_trials=args.trials)
-
     # --- Report ---
     print("\n" + "=" * 60)
     print("=== BEST PARAMETERS ===")
