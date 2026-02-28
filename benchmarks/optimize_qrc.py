@@ -224,7 +224,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str, use_reuploading: bool):
     """Derive DB filename and study name from the variant combination."""
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
-    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai5"
+    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai6"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 

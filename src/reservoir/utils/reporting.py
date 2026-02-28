@@ -348,11 +348,19 @@ def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, 
                 n_qubits = getattr(model_cfg, "n_qubits", None)
                 if n_qubits is None and hasattr(config, "projection") and config.projection:
                     n_qubits = getattr(config.projection, "n_units", None)
-                q_str = f"q{n_qubits}" if n_qubits is not None else "q?"
-                basis = str(getattr(model_cfg, "measurement_basis", "Z"))
+
+                n_layers = getattr(model_cfg, "n_layers", None)
+                l_str = f"_l{n_layers}" if n_layers is not None else ""
                 
-                # Naming conversion: q{n}_lr{lr}_f{f}
-                lr_str = ""
+                use_reup = getattr(model_cfg, "use_reuploading", None)
+                reup_str = ""
+                if use_reup is not None:
+                    reup_str = "_reupT" if use_reup else "_reupF"
+
+                q_str = f"q{n_qubits}{l_str}{reup_str}" if n_qubits is not None else f"q?{l_str}{reup_str}"
+                basis = str(getattr(model_cfg, "measurement_basis", "Z"))
+
+                # Naming conversion: q{n}_l{l}_lr{lr}_f{f}                lr_str = ""
                 if has_leak:
                     lr_val = float(getattr(model_cfg, 'leak_rate', 1.0))
                     lr_str = f"_lr{lr_val:.4f}"
