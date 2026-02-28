@@ -258,7 +258,7 @@ def plot_classification_report(
         test_predictions=test_pred_np,
         val_labels=val_labels_np,
         val_predictions=val_pred_np,
-        title=f"{model_type_str.upper()} on {dataset_name}",
+        title=f"{model_type_str.upper()} on {dataset_meta.dataset_name}",
         filename=filename,
         metrics_info=metrics_payload,
         best_lambda=selected_lambda,
@@ -498,7 +498,7 @@ def _plot_classification_section(
         val_y=val_y,
         filename=confusion_filename,
         model_type_str=model_type_str,
-        dataset_name=dataset_name,
+        dataset_meta=dataset_meta,
         # metric removed
         selected_lambda=selected_lambda,
         results=results,

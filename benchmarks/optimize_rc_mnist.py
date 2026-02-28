@@ -12,10 +12,10 @@ Optimizes:
 Target Preset: CLASSICAL_RESERVOIR_PRESET (Classification)
 
 Usage:
-    uv run python benchmarks/optimize_rc_mnist.py
-    uv run python benchmarks/optimize_rc_mnist.py --n-trials 100
+uv run python benchmarks/optimize_rc_mnist.py
+uv run python benchmarks/optimize_rc_mnist.py --n-trials 100
 Visualization:
-    uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
+uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc.db
 """
 
 import argparse
@@ -133,11 +133,12 @@ def make_objective(readout_config, dataset_enum: Dataset):
         feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
         feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
 
-        # Projection
-        input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
+        #=======Projection======================================================================
+
+        input_scale = trial.suggest_float("input_scale", 0.1, 2.0)
         # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
-        input_connectivity = trial.suggest_float("input_connectivity", 0.05, 1.0)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.0, 1.0)
         # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
 
         bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
@@ -145,18 +146,15 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
 
         # Reservoir
-        # spectral_radius = trial.suggest_float("spectral_radius", 1.0, 2.0)
-        spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
+        spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.0)
+        # spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
 
-        # leak_rate = trial.suggest_float("leak_rate", 0.1, 1.0)
-        leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
+        leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
+        # leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
 
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.1, 1.0)
-        rc_connectivity = trial.suggest_float("rc_connectivity",  0.46,  0.46)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.0, 1.0)
+        # rc_connectivity = trial.suggest_float("rc_connectivity",  0.46,  0.46)
 
-        # Readout Alpha (Logic to override preset lambda candidates if we want to optimize single alpha)
-        # For now, we rely on RidgeReadoutConfig's list of candidates which are scanned automatically via CV/LOO.
-        # But we could optimize other readout params here if needed.
 
         # === 2. Build Config ===
         config = build_config(
