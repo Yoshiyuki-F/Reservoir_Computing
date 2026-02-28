@@ -220,7 +220,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         noise_prob=0.0,
         readout_error=0.0,
         n_trajectories=0,
-        use_reuploading=False,
+        use_reuploading=True,
     ),
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )
