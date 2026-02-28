@@ -97,7 +97,7 @@ def build_config(
     )
 
 
-def make_objective(measurement_basis: str, readout_config, use_reuploading: bool, base_feature_min: float):
+def make_objective(measurement_basis: str, readout_config, use_reuploading: bool, base_feature_min: float, dataset_enum: Dataset):
     """Factory that returns an Optuna objective closed over the study variant."""
 
     def objective(trial: optuna.Trial) -> float:
@@ -140,7 +140,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # === 3. Run Pipeline ===
         try:
-            results: dict[str] = run_pipeline(config, Dataset.MACKEY_GLASS)
+            results: dict[str] = run_pipeline(config, dataset_enum)
 
             # === 4. Extract Metrics ===
             test_results = results.get("test", {})
@@ -231,10 +231,11 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
     return objective
 
 
-def derive_names(measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str, use_reuploading: bool):
+def derive_names(dataset_enum: Dataset, measurement_basis: str, readout_key: str, proj_type: str, n_qubits: int, scaler_type: str, use_reuploading: bool):
     """Derive DB filename and study name from the variant combination."""
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
-    study_name = f"qrc_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai6"
+    dataset_str = dataset_enum.value
+    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai6"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
@@ -243,6 +244,9 @@ def main():
     parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search")
     parser.add_argument("--trials", type=int, default=500,
                         help="Number of optimization trials (default: 500)")
+    parser.add_argument("--dataset", type=str, default="lorenz",
+                        choices=["mackey_glass", "lorenz", "lorenz96"],
+                        help="Dataset to optimize on (default: mackey_glass)")
     parser.add_argument("--measurement-basis", type=str, default=None,
                         choices=list(VALID_BASES),
                         help="Measurement basis (default: from preset)")
@@ -259,6 +263,17 @@ def main():
         check_gpu_available()
     except RuntimeError as exc:
         raise ValueError(f"Warning: GPU check failed ({exc}). Continuing...")
+
+    # --- Dataset ---
+    dataset_name = args.dataset
+    if dataset_name == "mackey_glass":
+        dataset_enum = Dataset.MACKEY_GLASS
+    elif dataset_name == "lorenz":
+        dataset_enum = Dataset.LORENZ
+    elif dataset_name == "lorenz96":
+        dataset_enum = Dataset.LORENZ96
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
     # --- Resolve variant from args or preset defaults ---
     base = TIME_QUANTUM_RESERVOIR_PRESET
@@ -297,7 +312,7 @@ def main():
     # Updated scaler tag for MinMaxScaler
     scaler_tag = "minmax"
 
-    study_name, db_name = derive_names(measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag, use_reuploading)
+    study_name, db_name = derive_names(dataset_enum, measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag, use_reuploading)
 
     if args.study_name is not None:
         study_name = args.study_name
@@ -320,6 +335,7 @@ def main():
     print("=" * 60)
     print(f"  Study            : {study_name}")
     print(f"  Storage          : {storage}")
+    print(f"  Dataset          : {dataset_name}")
     print(f"  Trials           : {args.trials}")
     print(f"  Measurement Basis: {measurement_basis}")
     print(f"  Readout          : {readout_key}")
@@ -328,7 +344,7 @@ def main():
     print("=" * 60)
 
     # --- Run ---
-    objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, base_feature_min)
+    objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, base_feature_min, dataset_enum)
     study.optimize(objective_fn, n_trials=args.trials)
     # --- Report ---
     print("\n" + "=" * 60)
