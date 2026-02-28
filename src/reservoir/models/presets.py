@@ -48,9 +48,12 @@ MinusOneToOne = MinMaxScalerConfig(
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
     n_units=100,
-    input_scale=1.0,
-    input_connectivity=0.11458754901458218,
-    bias_scale= 0.8295811429210161,
+    # input_scale=1.0, #100
+    input_scale=0.3478958243673553,  # 1200
+    # input_connectivity=0.11458754901458218, #100
+    input_connectivity=0.32024990697532185, # 1200
+    # bias_scale=0.8295811429210161, #100
+    bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
@@ -99,9 +102,15 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 # Dynamics Definitions
 # -----------------------------------------------------------------------------
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    spectral_radius=1.45,
-    leak_rate= 0.66,
-    rc_connectivity=0.457758485877939,
+    # spectral_radius=1.45, #100
+    spectral_radius= 1.4707341636189577,  # 1200
+
+    # leak_rate= 0.66, #100
+    leak_rate= 0.5078438853580478, #1200
+
+    # rc_connectivity=0.457758485877939, #100
+    rc_connectivity=0.0760855941265183,  # 1200
+
     seed=42,
     aggregation=AggregationMode.MTS,
 )
@@ -114,8 +123,10 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=MinMaxScalerConfig(
-        feature_min=-0.07768410112268466,
-        feature_max=0.08160917176536134,
+        # feature_min=-0.07768410112268466, #100
+        feature_min=-0.6754946253854848,  # 1200
+        # feature_max=0.08160917176536134, #100
+        feature_max=0.8288112006441126,  # 1200
     ),
     projection=RP,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
@@ -204,8 +215,6 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    # preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
-    # preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
     preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
