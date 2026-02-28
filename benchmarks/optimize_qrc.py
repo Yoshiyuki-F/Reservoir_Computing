@@ -109,11 +109,11 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # ======================== Preprocessing (MinMax) ====================
 
-        feature_max = trial.suggest_float("delta", 0, 4)
+        feature_max = trial.suggest_float("delta", 0, 2)
 
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 1, 5)
-        feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
+        n_layers = trial.suggest_int("n_layers", 1, 10)
+        feedback_scale = trial.suggest_float("feedback_scale", 1.5, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
 
         # === 2. Build Config ===
