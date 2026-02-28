@@ -10,19 +10,7 @@ from pathlib import Path
 from reservoir.core.types import NpF64
 
 
-def _resolve_output_path(filename: str) -> Path:
-    """Helper to resolve path relative to project root."""
-    # Assuming project root structure
-    path = Path(filename)
-    if path.is_absolute():
-        return path
-        
-    # Naive search for root or use cwd
-    # For now, just assume CWD or outputs/
-    cwd = Path.cwd()
-    if (cwd / "outputs").exists():
-        return cwd / "outputs" / path
-    return cwd / path
+from reservoir.utils.plotting import _resolve_output_path
 
 
 def plot_qubit_dynamics(
