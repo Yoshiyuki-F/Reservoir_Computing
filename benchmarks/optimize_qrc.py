@@ -114,7 +114,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
 
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 3, 7)
+        n_layers = trial.suggest_int("n_layers", 1, 10)
         # n_layers = trial.suggest_int("n_layers", 7, 7) #T
         # n_layers = trial.suggest_int("n_layers", 5, 5) #F
         #
@@ -122,7 +122,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # feedback_scale = trial.suggest_float("feedback_scale", 3.288848187732551, 3.288848187732551) #T
         # feedback_scale = trial.suggest_float("feedback_scale", 2.4272583655991578, 2.4272583655991578) #F
         #
-        leak_rate = trial.suggest_float("leak_rate", 0.05, 0.5)
+        leak_rate = trial.suggest_float("leak_rate", 0.05, 1)
         # leak_rate = trial.suggest_float("leak_rate",  0.11967302052818608,  0.11967302052818608) #T
         # leak_rate = trial.suggest_float("leak_rate",  0.23260873230871418,  0.23260873230871418) #F
 

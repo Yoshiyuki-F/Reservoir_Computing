@@ -206,15 +206,15 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
     # preprocess=AffineScalerConfig(input_scale=max_input_scaler/0.9268, shift=-0.4015*max_input_scaler/0.9268),
     # preprocess=AffineScalerConfig(input_scale=3.7304601073752943, shift=-2.9993344594335642),
-    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=3.7304601073752943),
+    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=6,
-        n_layers=3,
+        n_qubits=5,
+        n_layers=7,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
-        feedback_scale=0.9026439783686384,    # a_fb: R gate feedback scaling (paper default)
-        leak_rate=1.0,         # Leaky integrator rate (tunable by optimizer)
+        feedback_scale=3.288848187732551,    # a_fb: R gate feedback scaling (paper default)
+        leak_rate=0.11967302052818608,         # Leaky integrator rate (tunable by optimizer)
         measurement_basis="Z+ZZ",
         noise_type="clean",
         noise_prob=0.0,
