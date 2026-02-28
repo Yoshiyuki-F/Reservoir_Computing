@@ -47,7 +47,7 @@ MinusOneToOne = MinMaxScalerConfig(
 
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
-    n_units=1200,
+    n_units=100,
     input_scale=1.0,
     input_connectivity=0.11458754901458218,
     bias_scale= 0.8295811429210161,
@@ -103,7 +103,7 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     leak_rate= 0.66,
     rc_connectivity=0.457758485877939,
     seed=42,
-    aggregation=AggregationMode.MEAN,
+    aggregation=AggregationMode.MTS,
 )
 
 

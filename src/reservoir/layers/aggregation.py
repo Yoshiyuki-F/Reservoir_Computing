@@ -153,7 +153,7 @@ class MeanAggregator(StateAggregator):
 
 @beartype
 class LastMeanAggregator(StateAggregator):
-    """Concatenate last state and mean state (also used for MTS)."""
+    """Concatenate last state and mean state."""
 
     def __init__(self, mode: AggregationMode = AggregationMode.LAST_MEAN) -> None:
         super().__init__(mode)
@@ -172,6 +172,38 @@ class LastMeanAggregator(StateAggregator):
     def get_output_dim(self, n_units: int, n_steps: int) -> int:
         _validate_positive(n_units, n_steps)
         return n_units * 2
+
+
+@beartype
+class MTSAggregator(StateAggregator):
+    """Mixed Three States (MTS): join states at 1/3, 2/3, and the last step."""
+
+    def __init__(self) -> None:
+        super().__init__(AggregationMode.MTS)
+
+    def _aggregate(self, states: JaxF64) -> JaxF64:
+        time_axis = 1 if states.ndim == 3 else 0
+        n_steps = states.shape[time_axis]
+        
+        idx1 = n_steps // 3
+        idx2 = (2 * n_steps) // 3
+        idx3 = -1
+        
+        if states.ndim == 3:
+            s1 = states[:, idx1, :]
+            s2 = states[:, idx2, :]
+            s3 = states[:, idx3, :]
+            return jnp.concatenate([s1, s2, s3], axis=1)
+        if states.ndim == 2:
+            s1 = states[idx1:idx1+1, :]
+            s2 = states[idx2:idx2+1, :]
+            s3 = states[idx3:, :]
+            return jnp.concatenate([s1, s2, s3], axis=1)
+        raise ValueError(f"Unsupported shape {states.shape}")
+
+    def get_output_dim(self, n_units: int, n_steps: int) -> int:
+        _validate_positive(n_units, n_steps)
+        return n_units * 3
 
 
 @beartype
@@ -232,7 +264,7 @@ _REGISTRY: dict[AggregationMode, type[StateAggregator]] = {
     AggregationMode.LAST: LastAggregator,
     AggregationMode.MEAN: MeanAggregator,
     AggregationMode.LAST_MEAN: LastMeanAggregator,
-    AggregationMode.MTS: LastMeanAggregator,  # MTS uses same logic as LAST_MEAN
+    AggregationMode.MTS: MTSAggregator,
     AggregationMode.CONCAT: ConcatAggregator,
     AggregationMode.SEQUENCE: SequenceAggregator,
 }
@@ -247,7 +279,7 @@ def create_aggregator(mode: AggregationMode) -> StateAggregator:
     if mode is AggregationMode.LAST_MEAN:
         return LastMeanAggregator(mode=AggregationMode.LAST_MEAN)
     if mode is AggregationMode.MTS:
-        return LastMeanAggregator(mode=AggregationMode.MTS)
+        return MTSAggregator()
     if mode is AggregationMode.CONCAT:
         return ConcatAggregator()
     if mode is AggregationMode.SEQUENCE:
@@ -268,6 +300,7 @@ __all__ = [
     "LastAggregator",
     "MeanAggregator",
     "LastMeanAggregator",
+    "MTSAggregator",
     "ConcatAggregator",
     "SequenceAggregator",
     "create_aggregator",

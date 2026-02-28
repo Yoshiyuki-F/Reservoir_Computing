@@ -338,6 +338,13 @@ def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, 
 
     preprocess_label = get_preprocess_label(topo_meta, config)
 
+    # Aggregation marker - append right after model type
+    if config is not None:
+        model_cfg = getattr(config, 'model', None)
+        if hasattr(model_cfg, 'aggregation') and model_cfg.aggregation is not None:
+            agg_val = model_cfg.aggregation.value if hasattr(model_cfg.aggregation, 'value') else str(model_cfg.aggregation)
+            model_type_str = f"{model_type_str}_{agg_val.upper()}"
+
     # Append feedback_scale to model_type_str for quantum models
     if config is not None:
         model_cfg = getattr(config, 'model', None)
