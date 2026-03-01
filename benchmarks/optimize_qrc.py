@@ -97,7 +97,7 @@ def build_config(
     )
 
 
-def make_objective(measurement_basis: str, readout_config, use_reuploading: bool, base_feature_min: float, dataset_enum: Dataset):
+def make_objective(measurement_basis: str, readout_config, use_reuploading: bool, dataset_enum: Dataset):
     """Factory that returns an Optuna objective closed over the study variant."""
 
     def objective(trial: optuna.Trial) -> float:
@@ -108,27 +108,28 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing (MinMax) ====================
-        feature_max = trial.suggest_float("delta", 0, 1)
+        feature_min = trial.suggest_float("feature_min", -np.pi, 0.0)
+        feature_max = trial.suggest_float("feature_max", 0.0, np.pi)
         # feature_max = trial.suggest_float("delta", 0.04387396511208059, 0.04387396511208059) #MG-T
         # feature_max = trial.suggest_float("delta", 0.6516478039657447, 0.6516478039657447) #MG-F
 
 
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 1, 1)
+        n_layers = trial.suggest_int("n_layers", 5, 10)
         # n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
         # n_layers = trial.suggest_int("n_layers", 5, 5) #MG-F
         #
-        feedback_scale = trial.suggest_float("feedback_scale", 2, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
+        feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
         # feedback_scale = trial.suggest_float("feedback_scale", 3.288848187732551, 3.288848187732551) #MG-T
         # feedback_scale = trial.suggest_float("feedback_scale", 2.4272583655991578, 2.4272583655991578) #MG-F
         #
-        leak_rate = trial.suggest_float("leak_rate", 0.05, 1)
+        leak_rate = trial.suggest_float("leak_rate", 0, 1)
         # leak_rate = trial.suggest_float("leak_rate",  0.11967302052818608,  0.11967302052818608) #MG-T
         # leak_rate = trial.suggest_float("leak_rate",  0.23260873230871418,  0.23260873230871418) #MG-F
 
         # === 2. Build Config ===
         config = build_config(
-            base_feature_min,
+            feature_min,
             feature_max,
             n_layers,
             feedback_scale,
@@ -174,12 +175,13 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) "
-                      f"(min={base_feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
+                      f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
                 trial.set_user_attr("status", "failed")
                 return -1.0  # Return a negative value to indicate failure
 
+
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, Var={var_ratio:.3f} "
-                  f"(min={base_feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
+                  f"(min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f})")
 
             trial.set_user_attr("status", "success")
 
@@ -235,7 +237,7 @@ def derive_names(dataset_enum: Dataset, measurement_basis: str, readout_key: str
     """Derive DB filename and study name from the variant combination."""
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
     dataset_str = dataset_enum.value
-    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai6"
+    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai7"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
@@ -244,7 +246,7 @@ def main():
     parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search")
     parser.add_argument("--trials", type=int, default=500,
                         help="Number of optimization trials (default: 500)")
-    parser.add_argument("--dataset", type=str, default="lorenz",
+    parser.add_argument("--dataset", type=str, default="mackey_glass",
                         choices=["mackey_glass", "lorenz", "lorenz96"],
                         help="Dataset to optimize on (default: mackey_glass)")
     parser.add_argument("--measurement-basis", type=str, default=None,
@@ -291,7 +293,7 @@ def main():
     use_reuploading = base.model.use_reuploading
 
     # Preprocessing
-    base_feature_min = base.preprocess.feature_min
+    # feature_min is tuned dynamically now
 
     # Readout
     if args.readout is not None:
@@ -340,11 +342,10 @@ def main():
     print(f"  Measurement Basis: {measurement_basis}")
     print(f"  Readout          : {readout_key}")
     print(f"  Re-uploading     : {use_reuploading}")
-    print(f"  Feature Min      : {base_feature_min}")
     print("=" * 60)
 
     # --- Run ---
-    objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, base_feature_min, dataset_enum)
+    objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, dataset_enum)
     study.optimize(objective_fn, n_trials=args.trials)
     # --- Report ---
     print("\n" + "=" * 60)
