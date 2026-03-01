@@ -243,7 +243,7 @@ def derive_names(readout_key: str, dataset_name: str):
         proj_tag = type(proj).__name__.replace("Config", "")
 
     # Study Name: optimize_rc_{Dataset}_{Preprocess}_{Projection}_{Readout}
-    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai"
+    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai2"
     db_name = "optimize_rc.db" # Shared DB for RC optimization
     
     return study_name, db_name
