@@ -131,8 +131,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
         # === 1. Suggest Parameters ===
         
         # Preprocess
-        feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
-        feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
+        feature_min = trial.suggest_float("feature_min", -4.0, 0.0)
+        feature_max = trial.suggest_float("feature_max", 0.0, 4.0)
 
         # Projection
         input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
