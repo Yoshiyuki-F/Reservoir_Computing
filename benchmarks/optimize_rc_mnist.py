@@ -146,14 +146,14 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
 
         # Reservoir
-        spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.0)
+        spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.5)
         # spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
 
         leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
         # leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
 
         rc_connectivity = trial.suggest_float("rc_connectivity", 0.0, 1.0)
-        # rc_connectivity = trial.suggest_float("rc_connectivity",  0.46,  0.46)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.6784641706491135,  0.6784641706491135)
 
 
         # === 2. Build Config ===
@@ -253,7 +253,7 @@ def derive_names(readout_key: str, dataset_name: str):
         proj_tag = type(proj).__name__.replace("Config", "")
 
     # Study Name: optimize_rc_{Dataset}_{Preprocess}_{Projection}_{Readout}
-    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}"
+    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai"
     db_name = "optimize_rc.db" # Shared DB for RC optimization
     
     return study_name, db_name

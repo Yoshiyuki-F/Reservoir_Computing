@@ -112,7 +112,7 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
-    aggregation=AggregationMode.MTS,
+    aggregation=AggregationMode.MEAN,
 )
 
 
