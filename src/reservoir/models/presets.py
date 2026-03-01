@@ -241,7 +241,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 
 TIME_PROJECTION = RandomProjectionConfig(
-    n_units=400,
+    n_units=64,
     input_scale=0.1,
     input_connectivity=1.0,
     bias_scale=0.1,
@@ -263,9 +263,9 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=StandardScalerConfig(),
+    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
     projection=RandomProjectionConfig(
-        n_units=100,
+        n_units=64,
         input_scale=0.5021672479393327,
         input_connectivity=0.48415316598538416,
         bias_scale=1.2287247970196717,

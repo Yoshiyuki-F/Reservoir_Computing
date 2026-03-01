@@ -31,6 +31,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from reservoir.pipelines import run_pipeline  # noqa: E402
+from reservoir.pipelines.strategies import DivergenceError  # noqa: E402
 from reservoir.utils import check_gpu_available  # noqa: E402
 from reservoir.models.presets import (  # noqa: E402
     TIME_CLASSICAL_RESERVOIR_PRESET,
@@ -193,26 +194,52 @@ def make_objective(readout_config, dataset_enum: Dataset):
             if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                 print(f"Trial {trial.number}: FAILED (VPT=0) λ={best_lambda}")
                 trial.set_user_attr("status", "failed")
-                return 0.0
+                return -1.0
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, MSE={chaos.get('mse',0):.5f}, λ={best_lambda:.2e} "
                   f"(min={feature_min:.2f}, max={feature_max:.2f}, in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
 
-        except ValueError as e:
-            if "diverged" in str(e).lower():
-                print(f"Trial {trial.number}: FAILED (Diverged) - {e}")
-                trial.set_user_attr("status", "diverged")
-                return 0.0
+        except DivergenceError as e:
+            if hasattr(e, "stats") and isinstance(e.stats, dict):
+                print(f"    [Divergence Stats] {e.stats}")
+                for key, val in e.stats.items():
+                    trial.set_user_attr(key, float(val))
+            
+            print(f"Trial {trial.number}: FAILED (Diverged) - {e}")
+            trial.set_user_attr("status", "diverged")
+            trial.set_user_attr("error", str(e))
+            return -0.2
+
+        except (ValueError, RuntimeError) as e:
+            if hasattr(e, "stats") and isinstance(e.stats, dict):
+                print(f"    [Exception Stats] {e.stats}")
+                for key, val in e.stats.items():
+                    trial.set_user_attr(key, float(val))
+            
+            err_msg = str(e)
+            err_msg_lower = err_msg.lower()
+            if "nan detected" in err_msg_lower:
+                 print(f"Trial {trial.number}: FAILED (NaN) - {e}")
+                 trial.set_user_attr("status", "nan_error")
+                 trial.set_user_attr("error", err_msg)
+                 return -0.5
+            elif "validation nmse too high" in err_msg_lower:
+                 try:
+                     nmse_val = float(err_msg.split(":")[-1].strip())
+                 except (ValueError, IndexError):
+                     nmse_val = 1.0
+                 print(f"Trial {trial.number}: FAILED (NMSE high) - {e}")
+                 trial.set_user_attr("status", "failed_nmse")
+                 trial.set_user_attr("nmse", nmse_val)
+                 trial.set_user_attr("error", err_msg)
+                 return -nmse_val
             else:
-                print(f"Trial {trial.number}: EXCEPTION (ValueError) - {e}")
-                trial.set_user_attr("status", "exception")
-                return 0.0
-        except RuntimeError as e:
-            print(f"Trial {trial.number}: EXCEPTION - {e}")
-            trial.set_user_attr("status", "exception")
-            return 0.0
+                 print(f"Trial {trial.number}: EXCEPTION - {e}")
+                 trial.set_user_attr("status", "exception")
+                 trial.set_user_attr("error", err_msg)
+                 return -1.0
         else:
             return vpt_lt
 
