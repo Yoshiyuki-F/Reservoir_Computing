@@ -4,7 +4,7 @@ Usage:
 uv run python benchmarks/optimize_qrc.py
 uv run python benchmarks/optimize_qrc.py --trials 100
 Visualization:
-uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_qrc_nonetype.db
+uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
 """
 import os
 # Force 64-bit precision before ANY other imports
@@ -108,19 +108,22 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # === 1. Suggest Parameters ===
 
         # ======================== Preprocessing (MinMax) ====================
-        feature_min = trial.suggest_float("feature_min", -np.pi, 0.0)
-        feature_max = trial.suggest_float("feature_max", 0.0, np.pi)
-        # feature_max = trial.suggest_float("delta", 0.04387396511208059, 0.04387396511208059) #MG-T
+        # feature_min = trial.suggest_float("feature_min", -np.pi, 0.0)
+        # feature_max = trial.suggest_float("feature_max", 0.0, np.pi)
+        feature_min = trial.suggest_float("feature_min",  -9.735743764947846e-05,  -9.735743764947846e-05) #MG-T
+        feature_max = trial.suggest_float("feature_max", 0.0, 0.15)
+        # feature_max = trial.suggest_float("feature_max", 0.04387396511208059, 0.04387396511208059)
+
+
+
         # feature_max = trial.suggest_float("delta", 0.6516478039657447, 0.6516478039657447) #MG-F
-
-
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 5, 10)
-        # n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
+        # n_layers = trial.suggest_int("n_layers", 5, 10)
+        n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
         # n_layers = trial.suggest_int("n_layers", 5, 5) #MG-F
         #
-        feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
-        # feedback_scale = trial.suggest_float("feedback_scale", 3.288848187732551, 3.288848187732551) #MG-T
+        # feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
+        feedback_scale = trial.suggest_float("feedback_scale", 2, 3.288848187732551) #MG-T
         # feedback_scale = trial.suggest_float("feedback_scale", 2.4272583655991578, 2.4272583655991578) #MG-F
         #
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
