@@ -210,7 +210,6 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT,
 )
 
-max_input_scaler = 3.314782572029597
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
@@ -218,7 +217,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=11,
+        n_qubits=6,
         n_layers=7,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
@@ -265,11 +264,11 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
     projection=RandomProjectionConfig(
-        n_units=64,
+        n_units=1024,
         input_scale=0.5021672479393327,
         input_connectivity=0.48415316598538416,
         bias_scale=1.2287247970196717,
-        seed=1,
+        seed=42,
     ),
     model=ClassicalReservoirConfig(
         spectral_radius=1.190314226578602,
