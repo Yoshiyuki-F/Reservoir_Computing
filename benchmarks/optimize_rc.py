@@ -134,23 +134,24 @@ def make_objective(readout_config, dataset_enum: Dataset):
         feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
 
         # Projection
-        input_scale = trial.suggest_float("input_scale", 0.5, 1.5)
-        input_connectivity = trial.suggest_float("input_connectivity", 0.10, 1)
-        bias_scale = trial.suggest_float("bias_scale", 0, 4)
+        input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
+        # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
-        # input_scale = trial.suggest_float("input_scale", 1.1884772080222152, 1.1884772080222152)
-        # input_connectivity = trial.suggest_float("input_connectivity", 0.1747698900055272, 0.1747698900055272)
-        # bias_scale = trial.suggest_float("bias_scale", 1.0127913899099061, 1.0127913899099061)
+        input_connectivity = trial.suggest_float("input_connectivity", 0.0, 1.0)
+        # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
+
+        bias_scale = trial.suggest_float("bias_scale", 0.0, 1.0)
+        # bias_scale = trial.suggest_float("bias_scale", 0.6664704836440828, 0.6664704836440828)
 
         # Reservoir
+        spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.5)
+        # spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
 
-        spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.0)
-        leak_rate = trial.suggest_float("leak_rate", 0, 1)
-        rc_connectivity = trial.suggest_float("rc_connectivity", 0.3, 1)
+        leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
+        # leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
 
-        # spectral_radius = trial.suggest_float("spectral_radius", 1.616, 1.616)
-        # leak_rate = trial.suggest_float("leak_rate", 0.41971952528445494, 0.41971952528445494)
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.677, 0.677)
+        rc_connectivity = trial.suggest_float("rc_connectivity", 0.0, 1.0)
+        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.6784641706491135,  0.6784641706491135)
 
 
         # === 2. Build Config ===
