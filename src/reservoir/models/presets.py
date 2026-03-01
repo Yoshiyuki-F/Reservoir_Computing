@@ -47,7 +47,7 @@ MinusOneToOne = MinMaxScalerConfig(
 
 #---------------------------STEP 3--------------------------------------------------
 RP = RandomProjectionConfig(
-    n_units=100,
+    n_units=64,
     # input_scale=1.0, #100
     input_scale=0.3478958243673553,  # 1200
     # input_connectivity=0.11458754901458218, #100

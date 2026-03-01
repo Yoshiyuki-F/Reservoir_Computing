@@ -3,6 +3,8 @@
 Optuna Hyperparameter Search for Classical Reservoir Computing.
 
 Optimizes:
+- Preprocess feature_min
+- Preprocess feature_max
 - Projection input_scale
 - Reservoir spectral_radius
 - Reservoir leak_rate
@@ -35,6 +37,7 @@ from reservoir.models.presets import (  # noqa: E402
     DEFAULT_RIDGE_READOUT,
 )
 from reservoir.models.config import (  # noqa: E402
+    MinMaxScalerConfig,
     PolyRidgeReadoutConfig,
     RandomProjectionConfig,
 )
@@ -58,6 +61,8 @@ READOUT_MAP = {
 
 
 def build_config(
+        feature_min: float,
+        feature_max: float,
         input_scale: float,
         input_connectivity: float,
         bias_scale: float,
@@ -70,6 +75,16 @@ def build_config(
     Build a PipelineConfig with dynamically updated parameters.
     """
     base = TIME_CLASSICAL_RESERVOIR_PRESET
+
+    # Update Preprocess (MinMaxScaler)
+    if isinstance(base.preprocess, MinMaxScalerConfig):
+        new_prep = dataclasses.replace(
+            base.preprocess,
+            feature_min=feature_min,
+            feature_max=feature_max,
+        )
+    else:
+        new_prep = base.preprocess
 
     # Update Projection (input_scale)
     # Ensure base projection is RandomProjectionConfig
@@ -95,6 +110,7 @@ def build_config(
     # Construct final config
     return dataclasses.replace(
         base,
+        preprocess=new_prep,
         projection=new_proj,
         model=new_model,
         readout=readout_config,
@@ -113,6 +129,10 @@ def make_objective(readout_config, dataset_enum: Dataset):
         
         # === 1. Suggest Parameters ===
         
+        # Preprocess
+        feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
+        feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
+
         # Projection
         input_scale = trial.suggest_float("input_scale", 0.5, 1.5)
         input_connectivity = trial.suggest_float("input_connectivity", 0.10, 1)
@@ -135,6 +155,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # === 2. Build Config ===
         config = build_config(
+            feature_min=feature_min,
+            feature_max=feature_max,
             input_scale=input_scale,
             input_connectivity=input_connectivity,
             bias_scale=bias_scale,
@@ -173,7 +195,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
                 return 0.0
 
             print(f"Trial {trial.number}: VPT={vpt_lt:.2f} LT, MSE={chaos.get('mse',0):.5f}, λ={best_lambda:.2e} "
-                  f"(in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
+                  f"(min={feature_min:.2f}, max={feature_max:.2f}, in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
 
@@ -208,6 +230,10 @@ def derive_names(readout_key: str, dataset_name: str):
         prep_tag = "MinMaX"
     else:
         prep_tag = preprocess_name
+
+    # Custom MinMax tag
+    if isinstance(base.preprocess, MinMaxScalerConfig):
+        prep_tag = f"MinMax"
 
     # Projection
     proj = base.projection

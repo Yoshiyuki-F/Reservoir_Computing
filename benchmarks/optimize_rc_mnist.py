@@ -135,13 +135,13 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         #=======Projection======================================================================
 
-        input_scale = trial.suggest_float("input_scale", 0.1, 2.0)
+        input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
         # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
         input_connectivity = trial.suggest_float("input_connectivity", 0.0, 1.0)
         # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
 
-        bias_scale = trial.suggest_float("bias_scale", 0.0, 2.0)
+        bias_scale = trial.suggest_float("bias_scale", 0.0, 1.0)
         # bias_scale = trial.suggest_float("bias_scale", 0.6664704836440828, 0.6664704836440828)
 
 
