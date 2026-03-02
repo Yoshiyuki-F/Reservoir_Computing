@@ -123,7 +123,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # n_layers = trial.suggest_int("n_layers", 5, 5) #MG-F
         #
         # feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
-        feedback_scale = trial.suggest_float("feedback_scale", 1.5, 3.288848187732551) #MG-T
+        feedback_scale = trial.suggest_float("feedback_scale", 0, 3.288848187732551) #MG-T
         # feedback_scale = trial.suggest_float("feedback_scale", np.pi, np.pi) #MG-T
 
         # feedback_scale = trial.suggest_float("feedback_scale", 2.4272583655991578, 2.4272583655991578) #MG-F
