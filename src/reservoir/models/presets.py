@@ -210,7 +210,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=StandardScalerConfig(),
     projection=BoundedAffinePCAConfig(
-        n_units=4,
+        n_units=6,
         scale=(max - min) / 2,
         relative_shift=(max + min) / (2 - max + min),
     ),

@@ -210,15 +210,12 @@ def derive_names(dataset_name: str, measurement_basis: str, readout_key: str, n_
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
     
     base = QUANTUM_RESERVOIR_PRESET
-    # Projection
-    proj = base.projection
-    n_units = int(getattr(proj, 'n_units', 0))
-    proj_tag = f"BAPCA{n_units}"
+    
+    # Use labels directly from config objects
+    proj_tag = getattr(base.projection, "label", "proj")
+    scaler_tag = getattr(base.preprocess, "label", "raw")
 
-    # Preprocessing from preset
-    scaler_tag = type(base.preprocess).__name__.replace("Config", "").lower()
-
-    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai4"
+    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai2"
     db_name = "optimize_qrc_mnist.db"
     return study_name, db_name
 
