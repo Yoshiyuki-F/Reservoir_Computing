@@ -1,10 +1,12 @@
-import math
-import numpy as np
+
+
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/presets.py
 Central registry for model presets.
 SSOT: all default hyperparameters live in these dataclasses.
 """
 from __future__ import annotations
+import math
+import numpy as np
 
 
 from reservoir.layers.aggregation import AggregationMode
