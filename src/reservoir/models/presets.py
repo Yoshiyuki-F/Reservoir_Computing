@@ -213,7 +213,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         relative_shift = (max + min) / (2 - max + min)
     ), # max + min = -0.06771035796
     projection=PCAProjectionConfig(
-        n_units=6,
+        n_units=10,
         input_scaler = 1,
     ),
     model=QuantumReservoirConfig(
