@@ -109,21 +109,23 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # ======================== Preprocessing (MinMax) ====================
         # feature_min = trial.suggest_float("feature_min", -np.pi, 0.0)
-        # feature_max = trial.suggest_float("feature_max", 0.0, np.pi)
+        feature_max = trial.suggest_float("feature_max", 0.0, np.pi)
         feature_min = trial.suggest_float("feature_min",  -9.735743764947846e-05,  -9.735743764947846e-05) #MG-T
-        feature_max = trial.suggest_float("feature_max", 0.0, 0.15)
+        # feature_max = trial.suggest_float("feature_max", 0.0, 0.15)
         # feature_max = trial.suggest_float("feature_max", 0.04387396511208059, 0.04387396511208059)
 
 
 
         # feature_max = trial.suggest_float("delta", 0.6516478039657447, 0.6516478039657447) #MG-F
         # ======================== Reservoir ==================================
-        # n_layers = trial.suggest_int("n_layers", 5, 10)
-        n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
+        n_layers = trial.suggest_int("n_layers", 1, 3)
+        # n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
         # n_layers = trial.suggest_int("n_layers", 5, 5) #MG-F
         #
         # feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5) #theoretically can be just till np.pi, but we see divergence beyond 3.5 in practice
-        feedback_scale = trial.suggest_float("feedback_scale", 2, 3.288848187732551) #MG-T
+        feedback_scale = trial.suggest_float("feedback_scale", 1.5, 3.288848187732551) #MG-T
+        # feedback_scale = trial.suggest_float("feedback_scale", np.pi, np.pi) #MG-T
+
         # feedback_scale = trial.suggest_float("feedback_scale", 2.4272583655991578, 2.4272583655991578) #MG-F
         #
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
@@ -240,7 +242,7 @@ def derive_names(dataset_enum: Dataset, measurement_basis: str, readout_key: str
     """Derive DB filename and study name from the variant combination."""
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
     dataset_str = dataset_enum.value
-    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai7"
+    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai7_1"
     db_name = f"optuna_qrc_{proj_type}.db"          # one DB per projection type
     return study_name, db_name
 
