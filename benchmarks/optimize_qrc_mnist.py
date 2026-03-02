@@ -211,9 +211,11 @@ def derive_names(dataset_name: str, measurement_basis: str, readout_key: str, n_
     
     base = QUANTUM_RESERVOIR_PRESET
     
-    # Use labels directly from config objects
-    proj_tag = getattr(base.projection, "label", "proj")
-    scaler_tag = getattr(base.preprocess, "label", "raw")
+    # Projection type (do not use exact label here as we are tuning it!)
+    n_units = int(getattr(base.projection, 'n_units', 0))
+    proj_tag = f"BAPCA{n_units}"
+    
+    scaler_tag = getattr(base.preprocess, "label", "raw").lower()
 
     study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai2"
     db_name = "optimize_qrc_mnist.db"
