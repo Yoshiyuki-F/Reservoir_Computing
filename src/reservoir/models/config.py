@@ -165,6 +165,10 @@ class RawConfig(PreprocessingConfig):
     def to_dict(self) -> ConfigDict:
         return {"method": "raw"}
 
+    @property
+    def label(self) -> str:
+        return "raw"
+
 
 @dataclass(frozen=True)
 class StandardScalerConfig(PreprocessingConfig):
@@ -176,6 +180,10 @@ class StandardScalerConfig(PreprocessingConfig):
 
     def to_dict(self) -> ConfigDict:
         return {"method": "standard_scaler"}
+
+    @property
+    def label(self) -> str:
+        return "StandardScaler"
 
 
 
@@ -199,6 +207,10 @@ class MinMaxScalerConfig(PreprocessingConfig):
             "feature_max": float(self.feature_max),
         }
 
+    @property
+    def label(self) -> str:
+        return f"Min{float(self.feature_min):.2f}Max{float(self.feature_max):.2f}"
+
 @dataclass(frozen=True)
 class AffineScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Affine Scaler (y = X * scale + shift)."""
@@ -211,6 +223,10 @@ class AffineScalerConfig(PreprocessingConfig):
 
     def to_dict(self) -> ConfigDict:
         return {"method": "affine_scaler", "scale": float(self.input_scale), "shift": float(self.shift)}
+
+    @property
+    def label(self) -> str:
+        return f"Affine_a{float(self.input_scale):.2f}_b{float(self.shift):.2f}"
 
 
 @dataclass(frozen=True)
@@ -237,6 +253,12 @@ class BoundedAffineScalerConfig(PreprocessingConfig):
             "scale": float(self.scale),
             "relative_shift": float(self.relative_shift),
         }
+
+    @property
+    def label(self) -> str:
+        s, rs = float(self.scale), float(self.relative_shift)
+        shift = rs * (1.0 - s)
+        return f"Min{-s + shift:.2f}Max{s + shift:.2f}"
 
 
 @dataclass(frozen=True)
@@ -270,6 +292,10 @@ class RandomProjectionConfig(ProjectionConfig):
             "seed": int(self.seed),
         }
 
+    @property
+    def label(self) -> str:
+        return f"RP{int(self.n_units)}_is{float(self.input_scale):.2f}_c{float(self.input_connectivity):.2f}_bs{float(self.bias_scale):.2f}"
+
 @dataclass(frozen=True)
 class CenterCropProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Center Crop Projection (3D input only)."""
@@ -286,6 +312,10 @@ class CenterCropProjectionConfig(ProjectionConfig):
             "type": "center_crop",
             "n_units": int(self.n_units),
         }
+
+    @property
+    def label(self) -> str:
+        return f"CCP{int(self.n_units)}"
 
 
 @dataclass(frozen=True)
@@ -305,6 +335,10 @@ class ResizeProjectionConfig(ProjectionConfig):
             "n_units": int(self.n_units),
         }
 
+    @property
+    def label(self) -> str:
+        return f"Res{int(self.n_units)}"
+
 @dataclass(frozen=True)
 class PolynomialProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Polynomial Projection (feature expansion)."""
@@ -319,19 +353,19 @@ class PolynomialProjectionConfig(ProjectionConfig):
     def to_dict(self) -> ConfigDict:
         return {"type": "polynomial", "degree": int(self.degree), "include_bias": self.include_bias}
 
+    @property
+    def label(self) -> str:
+        return f"Poly_d{int(self.degree)}"
+
 
 @dataclass(frozen=True)
 class PCAProjectionConfig(ProjectionConfig):
     """Step 3 parameters for PCA Projection (dimensionality reduction).
     
-    Note: PCA assumes StandardScaler preprocessing (zero mean, unit variance).
-    
     Args:
         n_units: Number of principal components to keep.
-        input_scaler: Scalar to multiply output after projection.
     """
     n_units: int
-    input_scaler: float
 
     def validate(self, context: str = "pca_projection") -> PCAProjectionConfig:
         if self.n_units is None or int(self.n_units) < 1:
@@ -339,7 +373,52 @@ class PCAProjectionConfig(ProjectionConfig):
         return self
 
     def to_dict(self) -> ConfigDict:
-        return {"type": "pca", "n_units": int(self.n_units), "input_scaler": float(self.input_scaler)}
+        return {"type": "pca", "n_units": int(self.n_units)}
+
+    @property
+    def label(self) -> str:
+        return f"PCA{int(self.n_units)}"
+
+
+@dataclass(frozen=True)
+class BoundedAffinePCAConfig(ProjectionConfig):
+    """Step 3 parameters for PCA + BoundedAffine Projection.
+
+    PCA → MinMax[-1,1] → Affine(scale, relative_shift * (1 - scale)).
+    Guarantees output ∈ [-1, 1].
+
+    Args:
+        n_units: Number of principal components.
+        scale: Contraction factor in (0, 1].
+        relative_shift: Shift proportion in [-1, 1].
+    """
+    n_units: int
+    scale: float
+    relative_shift: float
+
+    def validate(self, context: str = "bounded_affine_pca") -> BoundedAffinePCAConfig:
+        prefix = f"{context}: "
+        if self.n_units is None or int(self.n_units) < 1:
+            raise ValueError(f"{prefix}n_units must be >=1.")
+        if not (0.0 < float(self.scale) <= 1.0):
+            raise ValueError(f"{prefix}scale must be in (0, 1].")
+        if not (-1.0 <= float(self.relative_shift) <= 1.0):
+            raise ValueError(f"{prefix}relative_shift must be in [-1, 1].")
+        return self
+
+    def to_dict(self) -> ConfigDict:
+        return {
+            "type": "bounded_affine_pca",
+            "n_units": int(self.n_units),
+            "scale": float(self.scale),
+            "relative_shift": float(self.relative_shift),
+        }
+
+    @property
+    def label(self) -> str:
+        s, rs = float(self.scale), float(self.relative_shift)
+        shift = rs * (1.0 - s)
+        return f"BAPCA{int(self.n_units)}_Min{-s + shift:.2f}Max{s + shift:.2f}"
 
 
 @dataclass(frozen=True)
@@ -375,6 +454,10 @@ class ClassicalReservoirConfig(ModelConfig):
             "aggregation": self.aggregation.value,
         }
 
+    @property
+    def label(self) -> str:
+        return f"ESN_sr{float(self.spectral_radius):.2f}_lr{float(self.leak_rate):.2f}"
+
 @dataclass(frozen=True)
 class DistillationConfig(ModelConfig):
     """Configuration for distilling reservoir dynamics into a Student FNN."""
@@ -401,6 +484,11 @@ class DistillationConfig(ModelConfig):
         if any(width < 0 for width in self.student.hidden_layers):
             raise ValueError(f"{prefix}student.hidden_layers values must be non negative.")
         return self
+
+    @property
+    def label(self) -> str:
+        layers = "x".join(str(w) for w in (self.student.hidden_layers or ()))
+        return f"Distill_{layers}"
 
 
 @dataclass(frozen=True)
@@ -429,6 +517,12 @@ class FNNConfig(ModelConfig):
             raise ValueError(f"{prefix}window_size must be >= 1.")
         return self
 
+    @property
+    def label(self) -> str:
+        layers = "x".join(str(w) for w in (self.hidden_layers or ()))
+        w = f"_w{int(self.window_size)}" if self.window_size is not None else ""
+        return f"FNN_{layers}{w}"
+
 
 
 
@@ -449,6 +543,10 @@ class PassthroughConfig(ModelConfig):
         return {
             "aggregation": self.aggregation.value,
         }
+
+    @property
+    def label(self) -> str:
+        return "Passthrough"
 
 
 @dataclass(frozen=True)
@@ -514,6 +612,14 @@ class QuantumReservoirConfig(ModelConfig):
             "use_reuploading": bool(self.use_reuploading),
         }
 
+    @property
+    def label(self) -> str:
+        # Original format: _{measurement_basis}_q{n_qubits}_l{n_layers}{reup}_lr{leak_rate:.4f}_f{feedback_scale:.4f}
+        # Note: n_qubits might be None, handled in reporting.py
+        q = f"q{int(self.n_qubits)}" if self.n_qubits is not None else "q?"
+        reup = "_reupT" if self.use_reuploading else "_reupF"
+        return f"{self.measurement_basis}_{q}_l{int(self.n_layers)}{reup}_lr{float(self.leak_rate):.4f}_f{float(self.feedback_scale):.4f}"
+
 
 @dataclass(frozen=True)
 class RidgeReadoutConfig(ReadoutConfig):
@@ -532,6 +638,10 @@ class RidgeReadoutConfig(ReadoutConfig):
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
+
+    @property
+    def label(self) -> str:
+        return "Ridge"
 
 
 
@@ -560,6 +670,10 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
 
+    @property
+    def label(self) -> str:
+        return f"PolyRidge_d{int(self.degree)}_{self.mode}"
+
 
 @dataclass(frozen=True)
 class FNNReadoutConfig(ReadoutConfig):
@@ -572,6 +686,11 @@ class FNNReadoutConfig(ReadoutConfig):
 
     def to_dict(self) -> ConfigDict:
         return {"hidden_layers": tuple(self.hidden_layers or ())}
+
+    @property
+    def label(self) -> str:
+        layers = "x".join(str(w) for w in (self.hidden_layers or ()))
+        return f"FNNReadout_{layers}"
 
 
 

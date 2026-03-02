@@ -50,6 +50,11 @@ class Preprocessor(abc.ABC):
         """Alias for transform."""
         return self.transform(X)
 
+    @property
+    def label(self) -> str:
+        """Short label for filenames."""
+        return type(self).__name__
+
 
 # --- 2. Concrete Implementations ---
 
@@ -104,6 +109,10 @@ class StandardScaler(Preprocessor):
         return {
             "type": "standard_scaler",
         }
+
+    @property
+    def label(self) -> str:
+        return "StandardScaler"
 
 
 @beartype
@@ -181,6 +190,10 @@ class MinMaxScaler(Preprocessor):
             "feature_max": self.feature_max,
         }
 
+    @property
+    def label(self) -> str:
+        return f"Min{self.feature_min:.2f}Max{self.feature_max:.2f}"
+
 
 @beartype
 class IdentityPreprocessor(Preprocessor):
@@ -199,7 +212,9 @@ class IdentityPreprocessor(Preprocessor):
     def to_dict(self) -> ConfigDict:
         return {"type": "identity"}
 
-
+    @property
+    def label(self) -> str:
+        return "identity"
 
 
 @beartype
@@ -245,6 +260,10 @@ class AffineScaler(Preprocessor):
             "input_scale": self.input_scale,
             "shift": self.shift,
         }
+
+    @property
+    def label(self) -> str:
+        return f"Affine_a{self.input_scale:.2f}_b{self.shift:.2f}"
 
 
 @beartype
@@ -307,6 +326,12 @@ class BoundedAffineScaler(Preprocessor):
             "scale": self.scale,
             "relative_shift": self.relative_shift,
         }
+
+    @property
+    def label(self) -> str:
+        f_min = -self.scale + self._shift
+        f_max = self.scale + self._shift
+        return f"Min{f_min:.2f}Max{f_max:.2f}"
 
 
 if TYPE_CHECKING:

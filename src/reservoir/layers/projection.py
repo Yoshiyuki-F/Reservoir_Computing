@@ -53,6 +53,11 @@ class Projection(abc.ABC):
     def to_dict(self) -> ConfigDict:
         """Serialize configuration parameters."""
 
+    @property
+    def label(self) -> str:
+        """Short label for filenames."""
+        return f"{type(self).__name__}{self._output_dim}"
+
 
 # --- 2. Concrete Implementations ---
 
@@ -121,6 +126,10 @@ class RandomProjection(Projection):
             "bias_scale": self.bias_scale,
             "seed": self.seed,
         }
+
+    @property
+    def label(self) -> str:
+        return f"RP{self._output_dim}_is{self.input_scale:.2f}_c{self.connectivity:.2f}_bs{self.bias_scale:.2f}"
 
 
 @beartype
@@ -207,6 +216,10 @@ class CoherentDriveProjection(Projection):
             "seed": self.seed,
         }
 
+    @property
+    def label(self) -> str:
+        return f"CDP{self._output_dim}"
+
 
 @beartype
 class CenterCropProjection(Projection):
@@ -239,6 +252,10 @@ class CenterCropProjection(Projection):
             "output_dim": self.output_dim,
             "crop_range": (self.start_idx, self.end_idx),
         }
+
+    @property
+    def label(self) -> str:
+        return f"CCP{self._output_dim}"
 
 
 @beartype
@@ -275,6 +292,10 @@ class ResizeProjection(Projection):
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
         }
+
+    @property
+    def label(self) -> str:
+        return f"Res{self._output_dim}"
 
 
 @beartype
@@ -317,6 +338,10 @@ class PolynomialProjection(Projection):
             "include_bias": self.include_bias,
         }
 
+    @property
+    def label(self) -> str:
+        return f"Poly{self._output_dim}"
+
 
 @beartype
 class PCAProjection(Projection):
@@ -325,23 +350,20 @@ class PCAProjection(Projection):
     Reduces dimensionality by projecting onto top n_units principal components.
     Requires fit() to be called with training data before use.
     
-    Pre-condition: Input data must be preprocessed with StandardScaler (zero mean, unit variance).
-    This class assumes data is already centered and skips mean computation for efficiency.
+    Pre-condition: Input data should be preprocessed (e.g. StandardScaler or MinMax).
     
     Args:
         input_dim: Input feature dimension.
         n_units: Number of principal components to keep.
-        input_scaler: Optional scalar to multiply output after projection.
     """
 
-    def __init__(self, input_dim: int, n_units: int, input_scaler: float = 1.0) -> None:
+    def __init__(self, input_dim: int, n_units: int) -> None:
         if n_units > input_dim:
             raise ValueError(
                 f"PCAProjection: n_units ({n_units}) cannot exceed input_dim ({input_dim})"
             )
         super().__init__(input_dim, n_units)
         self.n_units = n_units
-        self.input_scaler = float(input_scaler)
         self._components: JaxF64 | None = None  # (n_units, input_dim)
         self._fitted = False
 
@@ -349,15 +371,12 @@ class PCAProjection(Projection):
         """
         Fit PCA on training data.
         X shape: (Time, Features) or (Batch, Time, Features)
-        
-        Note: Assumes input is already zero-mean (from StandardScaler).
         """
         # Flatten to 2D if 3D
         if X.ndim == 3:
             X = X.reshape(-1, X.shape[-1])  # (Batch*Time, Features)
         
         # Compute covariance directly: Sigma = X.T @ X / (N-1)
-        # (mean is already 0 from StandardScaler, no need for jnp.cov overhead)
         n_samples = X.shape[0]
         cov = jnp.dot(X.T, X) / (n_samples - 1)
         eigenvalues, eigenvectors = jnp.linalg.eigh(cov)
@@ -372,17 +391,101 @@ class PCAProjection(Projection):
         if not self._fitted or self._components is None:
             raise RuntimeError("PCAProjection: fit() must be called before projection")
         
-        # Direct projection (no centering needed - data is already zero-mean)
-        projected = jnp.dot(inputs, self._components.T)
-        return projected * self.input_scaler
+        # Direct projection (no scaling)
+        return jnp.dot(inputs, self._components.T)
 
     def to_dict(self) -> ConfigDict:
         return {
             "type": "pca",
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
-            "input_scaler": self.input_scaler,
         }
+
+    @property
+    def label(self) -> str:
+        return f"PCA{self.n_units}"
+
+
+@beartype
+class BoundedAffinePCA(PCAProjection):
+    """PCA projection followed by MinMax[-1,1] normalization and bounded affine transform.
+
+    Guarantees output ∈ [-1, 1] for any (scale, relative_shift) combination.
+
+    Pipeline:
+        1. PCA projection (inherited from PCAProjection)
+        2. MinMax normalization of PCA output to [-1, 1] (using training min/max)
+        3. Bounded affine: y = scale * x_norm + shift
+           where shift = relative_shift * (1 - scale)
+
+    Parameters
+    ----------
+    input_dim : int
+        Input feature dimension.
+    n_units : int
+        Number of principal components.
+    scale : float
+        Contraction factor in (0, 1].
+    relative_shift : float
+        Shift proportion in [-1, 1].
+    """
+
+    def __init__(self, input_dim: int, n_units: int, scale: float, relative_shift: float) -> None:
+        super().__init__(input_dim, n_units)
+        self.scale = float(scale)
+        self.relative_shift = float(relative_shift)
+        self._shift = self.relative_shift * (1.0 - self.scale)
+        # Min/max from training PCA output (per component)
+        self._pca_min: JaxF64 | None = None
+        self._pca_max: JaxF64 | None = None
+
+    def fit(self, X: JaxF64) -> BoundedAffinePCA:
+        """Fit PCA, then compute per-component min/max of PCA output on training data."""
+        super().fit(X)
+
+        # Project training data through PCA (no affine yet)
+        pca_out = jnp.dot(X.reshape(-1, X.shape[-1]), self._components.T)  # type: ignore[union-attr]
+
+        # Per-component min/max for normalization
+        self._pca_min = jnp.min(pca_out, axis=0)  # (n_units,)
+        self._pca_max = jnp.max(pca_out, axis=0)  # (n_units,)
+
+        # Avoid division by zero for constant components
+        range_ = self._pca_max - self._pca_min
+        self._pca_max = jnp.where(range_ < 1e-12, self._pca_min + 1.0, self._pca_max)
+
+        return self
+
+    def _project(self, inputs: JaxF64) -> JaxF64:
+        if not self._fitted or self._components is None:
+            raise RuntimeError("BoundedAffinePCA: fit() must be called before projection")
+        if self._pca_min is None or self._pca_max is None:
+            raise RuntimeError("BoundedAffinePCA: fit() must be called before projection")
+
+        # 1. PCA projection (no scaling)
+        pca_out = jnp.dot(inputs, self._components.T)
+
+        # 2. MinMax normalize to [-1, 1] per component
+        range_ = self._pca_max - self._pca_min
+        x_norm = 2.0 * (pca_out - self._pca_min) / range_ - 1.0
+
+        # 3. Bounded affine: y = scale * x_norm + shift
+        return self.scale * x_norm + self._shift
+
+    def to_dict(self) -> ConfigDict:
+        return {
+            "type": "bounded_affine_pca",
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+            "scale": self.scale,
+            "relative_shift": self.relative_shift,
+        }
+
+    @property
+    def label(self) -> str:
+        f_min = -self.scale + self._shift
+        f_max = self.scale + self._shift
+        return f"BAPCA{self.n_units}_Min{f_min:.2f}Max{f_max:.2f}"
 
 if TYPE_CHECKING:
     from reservoir.models.config import ProjectionConfig
@@ -404,6 +507,7 @@ def register_projections(
     PolynomialProjectionConfigClass: type | None = None,
     PCAProjectionConfigClass: type | None = None,
     CoherentDriveConfigClass: type | None = None,
+    BoundedAffinePCAConfigClass: type | None = None,
 ):
     """
     Call this function once to register the handlers.
@@ -449,7 +553,6 @@ def register_projections(
             return PCAProjection(
                 input_dim=int(input_dim),
                 n_units=int(config.n_units),
-                input_scaler=float(config.input_scaler),
             )
 
 
@@ -465,6 +568,16 @@ def register_projections(
                 bias_scale=float(config.bias_scale),
             )
 
+    if BoundedAffinePCAConfigClass is not None:
+        @create_projection.register(BoundedAffinePCAConfigClass)
+        def _(config, input_dim: int) -> BoundedAffinePCA:
+            return BoundedAffinePCA(
+                input_dim=int(input_dim),
+                n_units=int(config.n_units),
+                scale=float(config.scale),
+                relative_shift=float(config.relative_shift),
+            )
+
 
 __all__ = [
     "Projection",
@@ -473,6 +586,7 @@ __all__ = [
     "ResizeProjection",
     "PolynomialProjection",
     "PCAProjection",
+    "BoundedAffinePCA",
     "CoherentDriveProjection",
     "create_projection",
     "register_projections"

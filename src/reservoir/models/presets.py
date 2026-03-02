@@ -14,6 +14,7 @@ from reservoir.models.config import (
     RandomProjectionConfig,
     CenterCropProjectionConfig,
     PCAProjectionConfig,
+    BoundedAffinePCAConfig,
     ClassicalReservoirConfig,
     DistillationConfig,
     FNNConfig,
@@ -75,7 +76,6 @@ POLY = PolynomialProjectionConfig(
 
 PCA = PCAProjectionConfig(
     n_units=16,
-    input_scaler = 0.08, # 0.05 67 0.07 68.6 0.08 68.77 0.09 68.29 0.1 68.32 0.15 65.4 0.2 64.4 0.3 62.9% 0.4 61% 0.8 56%
 )
 
 #-----------------------------STEP 7-------------------------------------------------------
@@ -208,13 +208,11 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=BoundedAffineScalerConfig(
-        scale= (max - min) / 2,
-        relative_shift = (max + min) / (2 - max + min)
-    ), # max + min = -0.06771035796
-    projection=PCAProjectionConfig(
-        n_units=10,
-        input_scaler = 1,
+    preprocess=StandardScalerConfig(),
+    projection=BoundedAffinePCAConfig(
+        n_units=4,
+        scale=(max - min) / 2,
+        relative_shift=(max + min) / (2 - max + min),
     ),
     model=QuantumReservoirConfig(
         n_layers=1,

@@ -3,8 +3,7 @@
 Optuna Hyperparameter Search for Quantum Reservoir Computing on MNIST.
 
 Optimizes:
-- Preprocess (scale, relative_shift via BoundedAffineScaler)
-- Projection PCA input_scaler
+- Projection: BoundedAffinePCA (scale, relative_shift)
 - Quantum Reservoir (n_layers, feedback_scale, leak_rate)
 - Readout (Ridge/Poly)
 
@@ -39,8 +38,7 @@ from reservoir.models.presets import (
     DEFAULT_RIDGE_READOUT,
 )
 from reservoir.models.config import (
-    BoundedAffineScalerConfig,
-    PCAProjectionConfig,
+    BoundedAffinePCAConfig,
     PolyRidgeReadoutConfig,
 )
 from reservoir.data.identifiers import Dataset
@@ -66,7 +64,6 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 def build_config(
         scale: float,
         relative_shift: float,
-        input_scaler: float,
         n_layers: int,
         feedback_scale: float,
         leak_rate: float,
@@ -76,23 +73,19 @@ def build_config(
 ):
     """
     Build a PipelineConfig with dynamically updated parameters.
+    Preprocessing from preset (StandardScaler).
+    Projection: BoundedAffinePCA (scale, relative_shift).
     """
     base = QUANTUM_RESERVOIR_PRESET
 
-    # Update Preprocess (BoundedAffineScaler: MinMax[-1,1] → Affine)
-    new_prep = BoundedAffineScalerConfig(
+    # Update Projection (BoundedAffinePCA with tuned scale/relative_shift)
+    base_proj = base.projection
+    n_units = int(getattr(base_proj, 'n_units', 6))
+    new_proj = BoundedAffinePCAConfig(
+        n_units=n_units,
         scale=scale,
         relative_shift=relative_shift,
     )
-
-    # Update Projection (PCA input_scaler)
-    if isinstance(base.projection, PCAProjectionConfig):
-        new_proj = dataclasses.replace(
-            base.projection,
-            input_scaler=input_scaler
-        )
-    else:
-        new_proj = base.projection
 
     # Update Reservoir (n_layers, feedback_scale, leak_rate, measurement_basis)
     new_model = dataclasses.replace(
@@ -104,10 +97,9 @@ def build_config(
         use_reuploading=use_reuploading,
     )
 
-    # Construct final config
+    # Construct final config (preprocess from preset)
     return dataclasses.replace(
         base,
-        preprocess=new_prep,
         projection=new_proj,
         model=new_model,
         readout=readout_config,
@@ -125,12 +117,9 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # === 1. Suggest Parameters ===
 
-        # Preprocess (BoundedAffineScaler)
+        # Projection (BoundedAffinePCA — controls QC input range)
         scale = trial.suggest_float("scale", 0.00000001, 1.0)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
-
-        # Projection
-        input_scaler = trial.suggest_float("input_scaler", 1.00, 1.0)
 
         # Reservoir
         n_layers = trial.suggest_int("n_layers", 1, 1)
@@ -141,7 +130,6 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         config = build_config(
             scale=scale,
             relative_shift=relative_shift,
-            input_scaler=input_scaler,
             n_layers=n_layers,
             feedback_scale=feedback_scale,
             leak_rate=leak_rate,
@@ -176,8 +164,8 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
                 trial.set_user_attr("status", "low_acc")
 
             print(f"Trial {trial.number}: Acc={accuracy:.4f}, λ={best_lambda} "
-                  f"(scale={scale:.2f}, rel_shift={relative_shift:.2f}, pca_scale={input_scaler:.2f}, "
-                  f"L={n_layers}, fb={feedback_scale:.2f}, lr={leak_rate:.2f})")
+                  f"(scale={scale:.4f}, shift={relative_shift:.4f}, "
+                  f"L={n_layers}, fb={feedback_scale:.4f}, lr={leak_rate:.4f})")
 
             trial.set_user_attr("status", "success")
 
@@ -224,15 +212,13 @@ def derive_names(dataset_name: str, measurement_basis: str, readout_key: str, n_
     base = QUANTUM_RESERVOIR_PRESET
     # Projection
     proj = base.projection
-    if isinstance(proj, PCAProjectionConfig):
-        proj_tag = f"PCA{proj.n_units}"
-    else:
-        proj_tag = type(proj).__name__.replace("Config", "")
+    n_units = int(getattr(proj, 'n_units', 0))
+    proj_tag = f"BAPCA{n_units}"
 
-    # Updated scaler tag for BoundedAffineScaler
-    scaler_tag = "bounded_affine"
+    # Preprocessing from preset
+    scaler_tag = type(base.preprocess).__name__.replace("Config", "").lower()
 
-    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai2"
+    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai4"
     db_name = "optimize_qrc_mnist.db"
     return study_name, db_name
 

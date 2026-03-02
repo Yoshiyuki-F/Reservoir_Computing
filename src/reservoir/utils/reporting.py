@@ -268,150 +268,79 @@ def plot_classification_report(
 
 
 def get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None) -> str:
-    details: dict = topo_meta.get("details", {})
-    
-    # Use config object class name if available (more reliable)
-    raw_label = str(details.get("preprocess", ""))
-    if config is not None and hasattr(config, "preprocess"):
-        raw_label = type(config.preprocess).__name__.replace("Config", "")
+    # Use config.preprocess.label (single source of truth)
+    if config is not None and hasattr(config, "preprocess") and hasattr(config.preprocess, "label"):
+        return config.preprocess.label
 
-    if raw_label == "MinMaxScaler":
-        f_min, f_max = 0.0, 1.0
-        if config is not None and hasattr(config, "preprocess"):
-            f_min = float(getattr(config.preprocess, "feature_min", 0.0))
-            f_max = float(getattr(config.preprocess, "feature_max", 1.0))
-        return f"Min{f_min:.2f}Max{f_max:.2f}"
-    elif raw_label == "BoundedAffineScaler":
-        # Compute effective output range: y = scale * x_norm + shift
-        # where x_norm ∈ [-1, 1] and shift = relative_shift * (1 - scale)
-        scale = 1.0
-        relative_shift = 0.0
-        if config is not None and hasattr(config, "preprocess"):
-            scale = float(getattr(config.preprocess, "scale", 1.0))
-            relative_shift = float(getattr(config.preprocess, "relative_shift", 0.0))
-        shift = relative_shift * (1.0 - scale)
-        f_min = -scale + shift
-        f_max = scale + shift
-        return f"Min{f_min:.2f}Max{f_max:.2f}"
-    elif raw_label == "AffineScaler":
-        input_scale, shift = 1.0, 0.0
-        if config is not None and hasattr(config, "preprocess"):
-            input_scale = float(getattr(config.preprocess, "input_scale", 1.0))
-            shift = float(getattr(config.preprocess, "shift", 0.0))
-        return f"Affine_a{input_scale:.2f}_b{shift:.2f}"
-    
+    # Fallback for legacy topo_meta
+    details: dict = topo_meta.get("details", {})
+    raw_label = str(details.get("preprocess", ""))
     return raw_label if raw_label else "raw"
 
 
 def get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> str | None:
     if not hasattr(config, 'projection') or config.projection is None:
         return None
-    
-    proj_config = config.projection
-    # Use class name instead of .type attribute (which doesn't exist on all configs)
-    proj_type_name = type(proj_config).__name__.lower()
-    proj_units = int(getattr(proj_config, "n_units", 0))
-    
-    if "random" in proj_type_name:
-        input_scale = float(getattr(proj_config, "input_scale", 0.0))
-        input_conn = float(getattr(proj_config, "input_connectivity", 0.0))
-        bias_scale = float(getattr(proj_config, "bias_scale", 0.0))
-        return f"RP{proj_units}_is{input_scale:.2f}_c{input_conn:.2f}_bs{bias_scale:.2f}"
-    elif "center_crop" in proj_type_name:
-        return f"CCP{proj_units}"
-    elif "resize" in proj_type_name:
-        return f"Res{proj_units}"
-    elif "polynomial" in proj_type_name:
-        shapes = topo_meta.get("shapes", {})
-        projected_shape = shapes.get("projected")
-        poly_output = 0
-        if projected_shape and len(projected_shape) > 0:
-            poly_output = int(projected_shape[-1])
-        return f"Poly{poly_output}"
-    elif "pca" in proj_type_name:
-        return f"PCA{proj_units}"
-    elif "angle_embedding" in proj_type_name:
-        freq = float(getattr(proj_config, "frequency", 0.0))
-        phase = float(getattr(proj_config, "phase_offset", 0.0))
-        return f"AEP{proj_units}f{freq}p{phase}"
-    elif proj_units:
-        return f"Proj{proj_units}"
-    return None
+
+    # Use config.projection.label (single source of truth)
+    if hasattr(config.projection, "label"):
+        return config.projection.label
+
+    # Fallback
+    return type(config.projection).__name__.replace("Config", "")
 
 
 def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
-    type_lower = str(model_type_str).lower()
-    is_fnn = "fnn" in type_lower
+    # 1. Model Type & Parameters
+    if config is not None and hasattr(config, 'model') and config.model is not None and hasattr(config.model, 'label'):
+        # Get base label from config
+        model_lbl = config.model.label
 
-    details: dict = topo_meta.get("details", {})
-    student_layers = details.get("student_layers")
-    topo_type = str(topo_meta.get("type", "")).lower()
-    is_fnn = is_fnn or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
+        # If n_qubits was omitted in QRC config, pull it from projection
+        if "q?" in model_lbl and hasattr(config, "projection") and config.projection:
+            n_qubits = getattr(config.projection, "n_units", None)
+            if n_qubits is not None:
+                model_lbl = model_lbl.replace("q?", f"q{n_qubits}")
 
+        # The original code prepended model_type_str (e.g. quantum_reservoir)
+        # and appended aggregation mode
+        agg = getattr(config.model, "aggregation", None)
+        agg_str = f"_{agg.value.upper()}" if agg else ""
+        
+        # Avoid prepending model_type_str if the label already starts with it or a variant
+        if model_lbl.startswith("ESN") or model_lbl.startswith("Passthrough") or model_lbl.startswith("FNN_") or model_lbl.startswith("Distill_"):
+            model_str = f"{model_type_str}_{model_lbl}{agg_str}"
+        else:
+            # QRC model label starts with q_str now, so prepend model_type_str
+            model_str = f"{model_type_str}_{model_lbl}{agg_str}"
+    else:
+        # Fallback
+        model_str = str(model_type_str)
+
+    filename_parts: list[str] = [model_str]
+
+    # 2. Preprocessing
     preprocess_label = get_preprocess_label(topo_meta, config)
+    filename_parts.append(preprocess_label)
 
-    # Aggregation marker - append right after model type
-    if config is not None:
-        model_cfg = getattr(config, 'model', None)
-        if hasattr(model_cfg, 'aggregation') and model_cfg.aggregation is not None:
-            agg_val = model_cfg.aggregation.value if hasattr(model_cfg.aggregation, 'value') else str(model_cfg.aggregation)
-            model_type_str = f"{model_type_str}_{agg_val.upper()}"
-
-    # Append feedback_scale to model_type_str for quantum models
-    if config is not None:
-        model_cfg = getattr(config, 'model', None)
-        if model_cfg:
-            has_feedback = hasattr(model_cfg, 'feedback_scale') and model_cfg.feedback_scale is not None
-            has_leak = hasattr(model_cfg, 'leak_rate') and model_cfg.leak_rate is not None
-            if has_feedback:
-                n_qubits = getattr(model_cfg, "n_qubits", None)
-                if n_qubits is None and hasattr(config, "projection") and config.projection:
-                    n_qubits = getattr(config.projection, "n_units", None)
-
-                n_layers = getattr(model_cfg, "n_layers", None)
-                l_str = f"_l{n_layers}" if n_layers is not None else ""
-                
-                use_reup = getattr(model_cfg, "use_reuploading", None)
-                reup_str = ""
-                if use_reup is not None:
-                    reup_str = "_reupT" if use_reup else "_reupF"
-
-                q_str = f"q{n_qubits}{l_str}{reup_str}" if n_qubits is not None else f"q?{l_str}{reup_str}"
-                basis = str(getattr(model_cfg, "measurement_basis", "Z"))
-
-                # Naming conversion: q{n}_l{l}_lr{lr}_f{f}                lr_str = ""
-                if has_leak:
-                    lr_val = float(getattr(model_cfg, 'leak_rate', 1.0))
-                    lr_str = f"_lr{lr_val:.4f}"
-                
-                model_type_str = f"{model_type_str}_{q_str}{lr_str}_f{float(model_cfg.feedback_scale):.4f}_{basis}"
-            elif has_leak:
-                sr = getattr(model_cfg, 'spectral_radius', None)
-                lr = float(getattr(model_cfg, 'leak_rate', 1.0))
-                rc_conn = getattr(model_cfg, 'rc_connectivity', None)
-                tag = f"_sr{float(sr):.2f}" if sr is not None else ""
-                tag += f"_lr{lr:.2f}"
-                tag += f"_rc{float(rc_conn):.2f}" if rc_conn is not None else ""
-                model_type_str = f"{model_type_str}{tag}"
-
-    filename_parts: list[str] = [model_type_str, preprocess_label]
-
-    # Window Size marker (for WindowsFNN/TDE)
-    if config is not None:
-        model_cfg = getattr(config, 'model', None)
-        if hasattr(model_cfg, 'window_size') and model_cfg.window_size is not None:
-             filename_parts.append(f"k{int(model_cfg.window_size)}")
-        elif hasattr(model_cfg, 'student') and hasattr(model_cfg.student, 'window_size') and model_cfg.student.window_size is not None:
-             filename_parts.append(f"k{int(model_cfg.student.window_size)}")
-
-    # Projection marker
+    # 3. Projection
     if config is not None:
         proj_lbl = get_projection_label(config, topo_meta)
         if proj_lbl:
             filename_parts.append(proj_lbl)
 
-    # Readout type suffix
-    if readout is not None:
+    # 4. Readout
+    if config is not None and hasattr(config, 'readout') and config.readout is not None and hasattr(config.readout, 'label'):
+        readout_lbl = config.readout.label
+        if hasattr(config.readout, 'hidden_layers') and config.readout.hidden_layers:
+            lr = float(getattr(training_obj, 'learning_rate', 0.0)) if training_obj else 0.0
+            if lr > 0:
+                filename_parts.append(f"{readout_lbl}_LR{lr:.0e}")
+            else:
+                filename_parts.append(readout_lbl)
+        else:
+            filename_parts.append(readout_lbl)
+    elif readout is not None:
         readout_type = type(readout).__name__
         if hasattr(readout, 'hidden_layers') and readout.hidden_layers:
             layers_str = "-".join(str(int(v)) for v in readout.hidden_layers)
@@ -423,14 +352,12 @@ def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, 
         else:
             filename_parts.append(f"{readout_type}RO")
 
-    # NN marker
-    if is_fnn:
-        layers_list = student_layers or []
-        layers = tuple(int(v) for v in layers_list if v is not None)
-        if layers:
-            filename_parts.append(f"nn{'-'.join(str(int(v)) for v in layers)}")
-        else:
-            filename_parts.append("nn0")
+    # 5. NN Epochs marker
+    type_lower = str(model_type_str).lower()
+    topo_type = str(topo_meta.get("type", "")).lower()
+    is_fnn = "fnn" in type_lower or "fnn" in topo_type or "rnn" in topo_type or "nn" in topo_type
+    
+    if is_fnn and training_obj:
         filename_parts.append(f"epochs{int(getattr(training_obj, 'epochs', 0) or 0)}")
         
     return filename_parts
