@@ -400,8 +400,6 @@ class BoundedAffinePCAConfig(ProjectionConfig):
         prefix = f"{context}: "
         if self.n_units is None or int(self.n_units) < 1:
             raise ValueError(f"{prefix}n_units must be >=1.")
-        if not (0.0 < float(self.scale) <= 1.0):
-            raise ValueError(f"{prefix}scale must be in (0, 1].")
         if not (-1.0 <= float(self.relative_shift) <= 1.0):
             raise ValueError(f"{prefix}relative_shift must be in [-1, 1].")
         return self

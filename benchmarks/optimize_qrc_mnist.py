@@ -118,7 +118,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # === 1. Suggest Parameters ===
 
         # Projection (BoundedAffinePCA — controls QC input range)
-        scale = trial.suggest_float("scale", 0.00000001, 1.0)
+        scale = trial.suggest_float("scale", 0.00000001, np.pi)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
 
         # Reservoir
@@ -217,7 +217,7 @@ def derive_names(dataset_name: str, measurement_basis: str, readout_key: str, n_
     
     scaler_tag = getattr(base.preprocess, "label", "raw").lower()
 
-    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai2"
+    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai3"
     db_name = "optimize_qrc_mnist.db"
     return study_name, db_name
 
