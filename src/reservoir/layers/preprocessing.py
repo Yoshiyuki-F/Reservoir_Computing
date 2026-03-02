@@ -247,6 +247,60 @@ class AffineScaler(Preprocessor):
         }
 
 
+@beartype
+class BoundedAffineScaler(Preprocessor):
+    """MinMax[-1,1] followed by a bounded affine transformation.
+
+    Guarantees output ∈ [-1, 1] for any (scale, relative_shift) pair.
+
+    Parameters
+    ----------
+    scale : float
+        Contraction factor in (0, 1].
+    relative_shift : float
+        Shift proportion in [-1, 1].  The actual shift is
+        ``relative_shift * (1 - scale)`` so the affine image can never
+        exceed [-1, 1].
+
+    Math
+    ----
+    x_norm = MinMax(X, feature_min=-1, feature_max=1)
+    shift  = relative_shift * (1 - scale)
+    y      = scale * x_norm + shift        # ∈ [-1, 1] always
+    """
+
+    def __init__(self, scale: float, relative_shift: float):
+        self.scale = scale
+        self.relative_shift = relative_shift
+        # Compute the actual shift from the relative parameter
+        self._shift = relative_shift * (1.0 - scale)
+
+        # Internal stages: reuse existing implementations
+        self._minmax = MinMaxScaler(feature_min=-1.0, feature_max=1.0)
+        self._affine = AffineScaler(input_scale=scale, shift=self._shift)
+
+    def fit(self, X: NpF64) -> BoundedAffineScaler:
+        self._minmax.fit(X)
+        # AffineScaler.fit is a no-op (stateless), but call for API consistency
+        self._affine.fit(X)
+        return self
+
+    def transform(self, X: NpF64) -> NpF64:
+        arr = self._minmax.transform(X)
+        return self._affine.transform(arr)
+
+    def inverse_transform(self, X: NpF64) -> NpF64:
+        arr = self._affine.inverse_transform(X)
+        return self._minmax.inverse_transform(arr)
+
+    def to_dict(self) -> ConfigDict:
+        return {
+            "type": "bounded_affine_scaler",
+            "scale": self.scale,
+            "relative_shift": self.relative_shift,
+        }
+
+
 if TYPE_CHECKING:
     from reservoir.models.config import PreprocessingConfig
 
@@ -266,6 +320,7 @@ def register_preprocessors(
     StandardScalerConfigClass: type,
     MinMaxScalerConfigClass: type | None = None,
     AffineScalerConfigClass: type | None = None,
+    BoundedAffineScalerConfigClass: type | None = None,
 ):
     """
     Register config classes with the factory.
@@ -290,12 +345,18 @@ def register_preprocessors(
         def _(config) -> Preprocessor:
             return AffineScaler(input_scale=config.input_scale, shift=config.shift)
 
+    if BoundedAffineScalerConfigClass is not None:
+        @create_preprocessor.register(BoundedAffineScalerConfigClass)
+        def _(config) -> Preprocessor:
+            return BoundedAffineScaler(scale=config.scale, relative_shift=config.relative_shift)
+
 
 __all__ = [
     "Preprocessor",
     "StandardScaler",
     "MinMaxScaler",
     "AffineScaler",
+    "BoundedAffineScaler",
     "IdentityPreprocessor",
     "create_preprocessor",
     "register_preprocessors",

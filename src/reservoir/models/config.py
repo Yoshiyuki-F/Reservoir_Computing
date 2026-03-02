@@ -214,6 +214,32 @@ class AffineScalerConfig(PreprocessingConfig):
 
 
 @dataclass(frozen=True)
+class BoundedAffineScalerConfig(PreprocessingConfig):
+    """Step 2 parameters for Bounded Affine Scaler.
+
+    MinMax[-1,1] → Affine with shift = relative_shift * (1 - scale).
+    Guarantees output ∈ [-1, 1] for any parameter combination.
+    """
+    scale: float            # Contraction factor in (0, 1]
+    relative_shift: float   # Shift proportion in [-1, 1]
+
+    def validate(self, context: str = "bounded_affine_scaler") -> BoundedAffineScalerConfig:
+        prefix = f"{context}: "
+        if not (0.0 < float(self.scale) <= 1.0):
+            raise ValueError(f"{prefix}scale must be in (0, 1].")
+        if not (-1.0 <= float(self.relative_shift) <= 1.0):
+            raise ValueError(f"{prefix}relative_shift must be in [-1, 1].")
+        return self
+
+    def to_dict(self) -> ConfigDict:
+        return {
+            "method": "bounded_affine_scaler",
+            "scale": float(self.scale),
+            "relative_shift": float(self.relative_shift),
+        }
+
+
+@dataclass(frozen=True)
 class RandomProjectionConfig(ProjectionConfig):
     """Step 3 parameters for Random Projection."""
     n_units: int

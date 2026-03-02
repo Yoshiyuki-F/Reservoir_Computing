@@ -281,6 +281,18 @@ def get_preprocess_label(topo_meta: TopologyMeta, config: PipelineConfig | None)
             f_min = float(getattr(config.preprocess, "feature_min", 0.0))
             f_max = float(getattr(config.preprocess, "feature_max", 1.0))
         return f"Min{f_min:.2f}Max{f_max:.2f}"
+    elif raw_label == "BoundedAffineScaler":
+        # Compute effective output range: y = scale * x_norm + shift
+        # where x_norm ∈ [-1, 1] and shift = relative_shift * (1 - scale)
+        scale = 1.0
+        relative_shift = 0.0
+        if config is not None and hasattr(config, "preprocess"):
+            scale = float(getattr(config.preprocess, "scale", 1.0))
+            relative_shift = float(getattr(config.preprocess, "relative_shift", 0.0))
+        shift = relative_shift * (1.0 - scale)
+        f_min = -scale + shift
+        f_max = scale + shift
+        return f"Min{f_min:.2f}Max{f_max:.2f}"
     elif raw_label == "AffineScaler":
         input_scale, shift = 1.0, 0.0
         if config is not None and hasattr(config, "preprocess"):
