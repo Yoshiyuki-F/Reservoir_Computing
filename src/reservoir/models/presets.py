@@ -19,7 +19,8 @@ from reservoir.models.config import (
     FNNConfig,
     PipelineConfig,
     RidgeReadoutConfig, FNNReadoutConfig, PassthroughConfig, PolyRidgeReadoutConfig,
-    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AffineScalerConfig
+    QuantumReservoirConfig, ResizeProjectionConfig, PolynomialProjectionConfig, AffineScalerConfig,
+    BoundedAffineScalerConfig
 )
 from reservoir.data.presets import get_dataset_preset 
 from typing import TYPE_CHECKING
@@ -202,16 +203,32 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
 """
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mnist
 """
+min, max= -0.23541677149636459, 0.1677064135326006
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
+    preprocess=BoundedAffineScalerConfig(
+        scale= (max - min) / 2,
+        relative_shift = (max + min) / (2 - max + min)
+    ), # max + min = -0.06771035796
     projection=PCAProjectionConfig(
         n_units=6,
-        input_scaler = 0.08,
+        input_scaler = 1,
     ),
-    model=QUANTUM_RESERVOIR_DYNAMICS,
+    model=QuantumReservoirConfig(
+        n_layers=1,
+        seed=41,
+        aggregation=AggregationMode.MEAN,
+        feedback_scale=1.158966855826672,    # a_fb=0.0 means no feedback (pure feedforward mode)
+        leak_rate=0.6845053452479826,         # No leaky integration (backward compatible)
+        measurement_basis="Z+ZZ",
+        noise_type="clean",
+        noise_prob=0.0,
+        readout_error=0.0,
+        n_trajectories=0,
+        use_reuploading=True,
+    ),
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 

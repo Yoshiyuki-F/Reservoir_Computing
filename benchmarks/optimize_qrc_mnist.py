@@ -232,7 +232,7 @@ def derive_names(dataset_name: str, measurement_basis: str, readout_key: str, n_
     # Updated scaler tag for BoundedAffineScaler
     scaler_tag = "bounded_affine"
 
-    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai1"
+    study_name = f"qrc_{dataset_name}_{scaler_tag}_{proj_tag}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_kai2"
     db_name = "optimize_qrc_mnist.db"
     return study_name, db_name
 

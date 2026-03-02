@@ -267,6 +267,14 @@ class BoundedAffineScaler(Preprocessor):
     x_norm = MinMax(X, feature_min=-1, feature_max=1)
     shift  = relative_shift * (1 - scale)
     y      = scale * x_norm + shift        # ∈ [-1, 1] always
+
+    min = scale * (-1) + shift = -scale + relative_shift * (1 - scale)
+    max = scale * (1) + shift = scale + relative_shift * (1 - scale)
+
+
+    scale = (max - min) / 2
+    relative_shift = (max + min) / (2 × (1 - scale))
+                    = (max + min) / (2 - max + min)
     """
 
     def __init__(self, scale: float, relative_shift: float):
