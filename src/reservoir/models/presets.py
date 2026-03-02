@@ -198,16 +198,21 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     use_reuploading=True,
 )
 
-# -----------------------------------------------------------------------------
-
+### -----------------------------------------------------------------------------
+"""
+uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mnist
+"""
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
-    preprocess=ZeroToOne,
-    projection=PCA,
+    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
+    projection=PCAProjectionConfig(
+        n_units=6,
+        input_scaler = 0.08,
+    ),
     model=QUANTUM_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT,
+    readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(

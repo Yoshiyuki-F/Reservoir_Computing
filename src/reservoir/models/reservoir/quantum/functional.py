@@ -12,7 +12,6 @@ from functools import partial, lru_cache
 import jax
 import jax.numpy as jnp
 import tensorcircuit as tc
-import time
 
 from .backend import I_MAT, X_MAT, Y_MAT, Z_MAT
 
@@ -354,14 +353,10 @@ def _forward_jit(
         offsets = _get_qubit_offsets(n_qubits)
         return jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
 
-    start_time = time.time()
     # 1. Pre-compute all unitaries for the entire sequence (Time, Batch, N, 4, 4)
     all_input_unitaries = jax.vmap(jax.vmap(get_step_unitaries))(inputs_time_major)
 
     # 2. Execute full sequence in one shot (No chunking boilerplate)
-    print(
-        f"[functional.py] Starting _forward_jit execution (T={T}, Batch={B}) at {time.strftime('%H:%M:%S', time.localtime(start_time))}..."
-    )
     final_carry, stacked_outputs = _chunk_scan_jit(
         state_init,
         all_input_unitaries,
@@ -374,9 +369,6 @@ def _forward_jit(
         noise_prob,
         use_remat,
         use_reuploading,
-    )
-    print(
-        f"[functional.py] _forward_jit execution finished in {time.time() - start_time:.4f} seconds."
     )
 
     return final_carry, stacked_outputs.reshape(T, B, -1)

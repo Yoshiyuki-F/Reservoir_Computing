@@ -3,6 +3,7 @@ utils/batched_compute.py
 GPU OOMを防ぐためのバッチ処理ユーティリティ。
 """
 
+import time
 from collections.abc import Callable
 from beartype import beartype
 from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
@@ -42,8 +43,11 @@ def batched_compute(
         inputs_jax = to_jax_f64(inputs)
 
         print(f"[batched_compute.py] {desc} TimeSeries Processing Compile started...")
+        t0 = time.time()
         result_jax = fn(inputs_jax)
         result_np = to_np_f64(result_jax)  # Transfer to CPU
+        elapsed = time.time() - t0
+        print(f"[batched_compute.py] {desc} TimeSeries Processing finished in {elapsed:.4f} seconds.")
         print_feature_stats(result_np, "batched_compute.py", desc+" Output")
         return result_np
     
