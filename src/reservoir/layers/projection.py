@@ -408,15 +408,15 @@ class PCAProjection(Projection):
 
 @beartype
 class BoundedAffinePCA(PCAProjection):
-    """PCA projection followed by MinMax[-1,1] normalization and bounded affine transform.
+    """PCA projection followed by MinMax[-1, 1] normalization and bounded affine transform.
 
-    Guarantees output ∈ [-1, 1] for any (scale, relative_shift) combination.
+    Guarantees output ∈ [-bound, bound] for any (scale, relative_shift) combination.
 
     Pipeline:
         1. PCA projection (inherited from PCAProjection)
         2. MinMax normalization of PCA output to [-1, 1] (using training min/max)
-        3. Bounded affine: y = scale * x_norm + shift
-           where shift = relative_shift * (1 - scale)
+        3. Bounded affine: y = (x_norm * bound * scale) + shift
+           where shift = relative_shift * bound * (1 - scale)
 
     Parameters
     ----------
@@ -428,13 +428,16 @@ class BoundedAffinePCA(PCAProjection):
         Contraction factor in (0, 1].
     relative_shift : float
         Shift proportion in [-1, 1].
+    bound : float
+        Maximum absolute boundary limit.
     """
 
-    def __init__(self, input_dim: int, n_units: int, scale: float, relative_shift: float) -> None:
+    def __init__(self, input_dim: int, n_units: int, scale: float, relative_shift: float, bound: float = 1.0) -> None:
         super().__init__(input_dim, n_units)
         self.scale = float(scale)
         self.relative_shift = float(relative_shift)
-        self._shift = self.relative_shift * (1.0 - self.scale)
+        self.bound = float(bound)
+        self._shift = self.relative_shift * self.bound * (1.0 - self.scale)
         # Min/max from training PCA output (per component)
         self._pca_min: JaxF64 | None = None
         self._pca_max: JaxF64 | None = None
@@ -469,8 +472,8 @@ class BoundedAffinePCA(PCAProjection):
         range_ = self._pca_max - self._pca_min
         x_norm = 2.0 * (pca_out - self._pca_min) / range_ - 1.0
 
-        # 3. Bounded affine: y = scale * x_norm + shift
-        return self.scale * x_norm + self._shift
+        # 3. Bounded affine: y = (x_norm * bound * scale) + shift
+        return (x_norm * self.bound * self.scale) + self._shift
 
     def to_dict(self) -> ConfigDict:
         return {
@@ -479,12 +482,13 @@ class BoundedAffinePCA(PCAProjection):
             "output_dim": self.output_dim,
             "scale": self.scale,
             "relative_shift": self.relative_shift,
+            "bound": self.bound,
         }
 
     @property
     def label(self) -> str:
-        f_min = -self.scale + self._shift
-        f_max = self.scale + self._shift
+        f_min = - (self.bound * self.scale) + self._shift
+        f_max = (self.bound * self.scale) + self._shift
         return f"BAPCA{self.n_units}_Min{f_min:.2f}Max{f_max:.2f}"
 
 if TYPE_CHECKING:
@@ -576,6 +580,7 @@ def register_projections(
                 n_units=int(config.n_units),
                 scale=float(config.scale),
                 relative_shift=float(config.relative_shift),
+                bound=float(config.bound),
             )
 
 

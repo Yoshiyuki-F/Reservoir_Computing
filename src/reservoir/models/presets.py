@@ -1,10 +1,11 @@
+import math
+import numpy as np
 """/home/yoshi/PycharmProjects/Reservoir/src/reservoir/models/presets.py
 Central registry for model presets.
 SSOT: all default hyperparameters live in these dataclasses.
 """
 from __future__ import annotations
 
-import numpy as np
 
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.identifiers import Model
@@ -211,8 +212,9 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=BoundedAffinePCAConfig(
         n_units=6,
-        scale=(max - min) / 2,
-        relative_shift=(max + min) / (2 - max + min),
+        scale=1.0,
+        relative_shift=0.0,
+        bound=math.pi,
     ),
     model=QuantumReservoirConfig(
         n_layers=1,

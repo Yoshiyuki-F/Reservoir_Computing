@@ -384,24 +384,30 @@ class PCAProjectionConfig(ProjectionConfig):
 class BoundedAffinePCAConfig(ProjectionConfig):
     """Step 3 parameters for PCA + BoundedAffine Projection.
 
-    PCA → MinMax[-1,1] → Affine(scale, relative_shift * (1 - scale)).
-    Guarantees output ∈ [-1, 1].
+    PCA → MinMax[-1,1] → Affine scaled to [-bound, bound].
+    Guarantees output ∈ [-bound, bound] for any valid parameter combination.
 
     Args:
         n_units: Number of principal components.
         scale: Contraction factor in (0, 1].
         relative_shift: Shift proportion in [-1, 1].
+        bound: Absolute maximum boundary.
     """
     n_units: int
     scale: float
     relative_shift: float
+    bound: float = 1.0
 
     def validate(self, context: str = "bounded_affine_pca") -> BoundedAffinePCAConfig:
         prefix = f"{context}: "
         if self.n_units is None or int(self.n_units) < 1:
             raise ValueError(f"{prefix}n_units must be >=1.")
+        if not (0.0 < float(self.scale) <= 1.0):
+            raise ValueError(f"{prefix}scale must be in (0, 1].")
         if not (-1.0 <= float(self.relative_shift) <= 1.0):
             raise ValueError(f"{prefix}relative_shift must be in [-1, 1].")
+        if float(self.bound) <= 0.0:
+            raise ValueError(f"{prefix}bound must be > 0.")
         return self
 
     def to_dict(self) -> ConfigDict:
@@ -410,13 +416,14 @@ class BoundedAffinePCAConfig(ProjectionConfig):
             "n_units": int(self.n_units),
             "scale": float(self.scale),
             "relative_shift": float(self.relative_shift),
+            "bound": float(self.bound),
         }
 
     @property
     def label(self) -> str:
-        s, rs = float(self.scale), float(self.relative_shift)
-        shift = rs * (1.0 - s)
-        return f"BAPCA{int(self.n_units)}_Min{-s + shift:.2f}Max{s + shift:.2f}"
+        s, rs, b = float(self.scale), float(self.relative_shift), float(self.bound)
+        shift = rs * b * (1.0 - s)
+        return f"BAPCA{int(self.n_units)}_Min{-s*b + shift:.2f}Max{s*b + shift:.2f}"
 
 
 @dataclass(frozen=True)

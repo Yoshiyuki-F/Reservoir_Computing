@@ -78,13 +78,14 @@ def build_config(
     """
     base = QUANTUM_RESERVOIR_PRESET
 
-    # Update Projection (BoundedAffinePCA with tuned scale/relative_shift)
+    # Update Projection (BoundedAffinePCA with tuned scale/relative_shift locked to bound=np.pi)
     base_proj = base.projection
     n_units = int(getattr(base_proj, 'n_units', 6))
     new_proj = BoundedAffinePCAConfig(
         n_units=n_units,
         scale=scale,
         relative_shift=relative_shift,
+        bound=np.pi,
     )
 
     # Update Reservoir (n_layers, feedback_scale, leak_rate, measurement_basis)
@@ -118,7 +119,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # === 1. Suggest Parameters ===
 
         # Projection (BoundedAffinePCA — controls QC input range)
-        scale = trial.suggest_float("scale", 0.00000001, np.pi)
+        scale = trial.suggest_float("scale", 0.00000001, 1.0)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
 
         # Reservoir
