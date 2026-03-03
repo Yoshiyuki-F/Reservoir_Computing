@@ -2,18 +2,15 @@
 from functools import partial
 
 import jax.numpy as jnp
-from reservoir.core.types import NpF64, JaxF64, to_jax_f64, to_np_f64
+from reservoir.core.types import NpF64, to_jax_f64, to_np_f64
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.models.presets import PipelineConfig
 from reservoir.pipelines.config import DatasetMetadata, FrontendContext, ModelStack
-from reservoir.layers.projection import Projection
 from reservoir.pipelines.evaluation import Evaluator
 from reservoir.pipelines.strategies import ReadoutStrategyFactory
 from reservoir.pipelines.components.data_coordinator import DataCoordinator
-from reservoir.utils.batched_compute import batched_compute
 from reservoir.utils.reporting import print_feature_stats
-from reservoir.models.distillation.model import DistillationModel
 from reservoir.models.reservoir.base import Reservoir
 from reservoir.core.types import ResultDict
 
@@ -139,37 +136,52 @@ class PipelineExecutor:
     def _extract_all_features(self, model: ClosedLoopGenerativeModel) \
             -> tuple[NpF64 | None, NpF64 | None, NpF64 | None, tuple | None]:
         """
-        Orchestrate feature extraction.
-        If projection_layer is deferred, fuse projection + model forward.
+        Orchestrate feature extraction using DataLoader.
         """
 
         window_size = getattr(model, 'input_window_size', 0)
         batch_size = self.dataset_meta.training.batch_size
         projection = self.frontend_ctx.projection_layer  # May be None
         
-        if window_size > 1:
-            print(f"[executor.py] Requesting Halo Padding (Window={window_size}) from Coordinator...")
-        
-        if projection is not None:
-            print(f"[executor.py] Fusing {type(projection).__name__} + {type(model).__name__} in batched_compute (OOM-safe)")
-        else:
-            print(f"[executor.py] Running {type(model).__name__} feature extraction in batched_compute...")
-
-        # Check if model is a Reservoir to enable state chaining
         is_stateful = isinstance(model, Reservoir)
-        current_state = None
-
-        train_in = self.coordinator.get_train_inputs()
         
+        def process_split(split_name: str, initial_state: object = None, return_state: bool = False):
+            loader = self.coordinator.get_eval_dataloader(split_name, batch_size, window_size, projection)
+            if loader is None or loader.num_samples == 0:
+                return None, None, None
+
+            if return_state and hasattr(loader, "X") and loader.X is not None and loader.X.ndim == 2:
+                # Stateful recurrent generation requires entire sequence at once
+                for b_x, _ in loader:
+                    inputs_jax = b_x[None, :, :]
+                    state = initial_state if initial_state is not None else model.initialize_state(1)
+                    final_state, outputs_jax = model.forward(state, inputs_jax)
+                    outputs_np = to_np_f64(outputs_jax[0])
+                    last_output = outputs_jax[:, -1, :] 
+                    print_feature_stats(outputs_np, "executor.py", f"5.5:Z:{split_name}")
+                    return outputs_np, final_state, last_output
+
+            # Standard Path using generator
+            import numpy as np
+            from tqdm.auto import tqdm
+            all_outputs = []
+            
+            pbar = tqdm(total=loader.num_samples, desc=f"Extracting {split_name}", unit="samples")
+            for b_x, _ in loader:
+                b_out = model(b_x)
+                all_outputs.append(to_np_f64(b_out))
+                pbar.update(b_x.shape[0])
+            pbar.close()
+            
+            outputs_np = np.concatenate(all_outputs, axis=0) if all_outputs else None
+            if outputs_np is not None:
+                print_feature_stats(outputs_np, "executor.py", f"5.5:Z:{split_name}")
+            return outputs_np, None, None
+
+        current_state = None
         warmup_X = None
         if is_stateful:
-            warmup_len = len(train_in) // 2
-            warmup_in = train_in[:warmup_len] #50LT??
-
-            warmup_X, current_state, _ = self._compute_split(
-                model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
-            )
-
+            warmup_X, current_state, _ = process_split("warmup", initial_state=current_state, return_state=is_stateful)
             if warmup_X is not None:
                 if jnp.std(warmup_X) < 0.1 and not self.dataset_meta.classification:
                     raise ValueError(f"Feature collapse detected! warmup_X std ({jnp.std(warmup_X):.4f}) < 0.1. "
@@ -177,15 +189,10 @@ class PipelineExecutor:
             del warmup_X
 
         # 1. Train
-        train_Z, current_state, _ = self._compute_split(
-            model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
-        )
+        train_Z, current_state, _ = process_split("train", initial_state=current_state, return_state=is_stateful)
 
         # 2. Validation
-        val_in = self.coordinator.get_val_inputs(window_size)
-        val_Z, current_state, val_last_output = self._compute_split(
-            model, val_in, "val", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
-        )
+        val_Z, current_state, val_last_output = process_split("val", initial_state=current_state, return_state=is_stateful)
 
         if val_Z is not None:
             if jnp.std(val_Z) < 0.1:
@@ -200,90 +207,12 @@ class PipelineExecutor:
         # 3. Test
         test_Z = None
         if self.dataset_meta.classification:
-            test_in = self.coordinator.get_test_inputs(window_size)
-            test_Z, _, _ = self._compute_split(
-                model, test_in, "test", batch_size, projection=projection, initial_state=None, return_state=False
-            )
+            test_Z, _, _ = process_split("test", initial_state=None, return_state=False)
 
             if test_Z is not None:
                 if jnp.std(test_Z) < 0.1:
                     print(f"    [Warning] test_Z std ({jnp.std(test_Z):.4f}) is very low.")
-
         else:
             print("    [Executor] Skipping Test feature extraction for Regression task (Closed-loop will be used).")
             
         return train_Z, val_Z, test_Z, (val_final_state, val_last_output)
-
-    @staticmethod
-    def _compute_split(
-        model: ClosedLoopGenerativeModel, 
-        inputs: NpF64 | None, 
-        split_name: str, 
-        batch_size: int,
-        projection: Projection | None = None,
-        initial_state: object | None = None,
-        return_state: bool = False
-    ) -> tuple: #TODO　型定義 urgent!
-        """Helper to run batched computation. If projection is deferred, fuse it with model forward."""
-        if inputs is None:
-            return None, None, None
-        
-        # Special Path for Quantum Reservoir State Chaining (Time Series Mode)
-        # QuantumReservoir forward expects (1, Time, Feat)
-        if return_state and inputs.ndim == 2:
-            inputs_jax = to_jax_f64(inputs)
-            # Reshape to (1, Time, Feat)
-            if inputs_jax.ndim == 2:
-                inputs_jax = inputs_jax[None, :, :]
-            
-            # Initialize state if not provided
-            if initial_state is None:
-                state = model.initialize_state(1)
-            else:
-                state = initial_state
-            
-            # Apply projection if exists (Fused)
-            if projection is not None:
-                inputs_jax = projection(inputs_jax) # Assuming projection handles (1, T, F) or vmap handles it
-            
-            # Run Forward (Directly, bypassing batched_compute for state access)
-            # QuantumReservoir.forward returns (final_state, stacked_outputs)
-            # Note: We must ensure we call the method that returns state.
-            # 'forward' returns state. '__call__' does not.
-            final_state, outputs_jax = model.forward(state, inputs_jax)
-            
-            # Output is (1, Time, Out) -> Flatten to (Time, Out)
-            outputs_np = to_np_f64(outputs_jax[0])
-            
-            # Get last output for loop initialization - Keep Batch Dim (1, Out)
-            last_output = outputs_jax[:, -1, :] 
-            
-            # Log stats manually since we skipped batched_compute
-            print_feature_stats(outputs_np, "executor.py",f"5:Z:{split_name}")
-            
-            return outputs_np, final_state, last_output
-
-        # Standard Path
-        if projection is not None:
-            # Fused: projection + model forward in a single GPU pass
-            def fused_fn(x: JaxF64) -> JaxF64:
-                return model(projection(x))
-            return batched_compute(
-                fused_fn,
-                inputs,
-                batch_size,
-                desc=f"Proj+Extract {split_name}",
-                file="executor.py",
-                step="3 and 5.5"
-            ), None, None
-        else:
-            # No projection
-            fn = partial(model, split_name=None)
-            return batched_compute(
-                fn,
-                inputs,
-                batch_size,
-                desc=f"Extracting {split_name}",
-                file="executor.py",
-                step="5.5"
-            ), None, None

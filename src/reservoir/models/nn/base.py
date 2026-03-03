@@ -134,53 +134,71 @@ class BaseFlaxModel(BaseModel, ABC):
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
         print(f"\n[nn.base.py] === Training {self.__class__.__name__} ===")
-        # Inputs/Targets are already JaxF64 (Device Domain)
+        
         num_samples = inputs.shape[0]
-        num_batches = num_samples // self.batch_size
+        batch_size = self.batch_size
+        num_batches = num_samples // batch_size if batch_size > 0 else 0
         num_train_steps = self.epochs * num_batches  # Total training steps for scheduler
+        
+        if num_batches == 0:
+            print("[nn.base.py] Warning: Not enough samples for a single batch.")
+            return {}
 
         projection_layer = kwargs.get("projection_layer")
+        adapter = kwargs.get("adapter")
         
-        # Initialize State using the first sample (projected if necessary)
+        # Initialize State using the first sample (projected/adapted if necessary)
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
         
         sample_input = inputs[:1]
+        sample_target = targets[:1]
         if projection_layer is not None:
              sample_input = projection_layer(sample_input)
+        if adapter is not None:
+             sample_input = adapter(sample_input)
+             sample_target = adapter.align_targets(sample_target) if sample_target is not None else None
 
         if self._state is None:
             print("[nn.base.py] Initializing parameters...")
             self._state = self._init_train_state(init_key, sample_input, num_train_steps)
 
-        # JIT function
+        # Truncate and reshape into batches
+        limit = num_batches * batch_size
+        inputs_batched = inputs[:limit].reshape(num_batches, batch_size, *inputs.shape[1:])
+        targets_batched = targets[:limit].reshape(num_batches, batch_size, *targets.shape[1:])
+
+        # JIT compiled scan over batches
         @jax.jit
-        def train_step_jit(state, b_x, b_y):
-            if projection_layer is not None:
-                 b_x = projection_layer(b_x)
-            new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
-            return new_state, loss
+        def train_epoch_jit(state, epoch_inputs, epoch_targets):
+            def batch_step(carry_state, batch):
+                b_x, b_y = batch
+                if projection_layer is not None:
+                     b_x = projection_layer(b_x)
+                if adapter is not None:
+                     # Do not pass log_label inside JIT to avoid Concretization errors
+                     b_x = adapter(b_x)
+                     b_y = adapter.align_targets(b_y)
+                     
+                new_state, loss = BaseFlaxModel._train_step(carry_state, b_x, b_y, self.classification)
+                return new_state, loss
+            
+            final_state, losses = jax.lax.scan(batch_step, state, (epoch_inputs, epoch_targets))
+            return final_state, jnp.mean(losses)
 
         loss_history: list[float] = []
-        limit = num_batches * self.batch_size
 
         print(f"[nn.base.py] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
+        print(f"[nn.base.py] (Using jax.lax.scan over batches for maximum GPU performance)")
         pbar = tqdm(range(self.epochs), desc="[Train]", unit="ep")
 
         for _ in pbar:
-            batch_losses = []
-
-            for i in range(0, limit, self.batch_size):
-                b_x = inputs[i: i + self.batch_size]
-                b_y = targets[i: i + self.batch_size]
-
-                self._state, loss = train_step_jit(self._state, b_x, b_y)
-                batch_losses.append(float(loss))
-
-            if batch_losses:
-                avg_loss = float(jnp.mean(jnp.array(batch_losses)))
-                loss_history.append(avg_loss)
-                pbar.set_postfix({"loss": f"{avg_loss:.6f}"})
+            self._state, avg_loss = train_epoch_jit(self._state, inputs_batched, targets_batched)
+            
+            # Transfer mean loss to CPU once per epoch
+            avg_loss_cpu = float(avg_loss)
+            loss_history.append(avg_loss_cpu)
+            pbar.set_postfix({"loss": f"{avg_loss_cpu:.6f}"})
 
         self.trained = True
         final_loss = loss_history[-1] if loss_history else 0.0

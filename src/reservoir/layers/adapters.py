@@ -6,7 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import jax.numpy as jnp
-from beartype import beartype
+
 from reservoir.core.types import JaxF64, KwargsDict
 from reservoir.core.types import to_np_f64
 from reservoir.utils.reporting import print_feature_stats
@@ -16,7 +16,6 @@ from reservoir.utils.reporting import print_feature_stats
 # Abstract Base
 # ==========================================
 
-@beartype
 class Adapter(ABC):
     """ABC for Step 4 structural adapters that reshape data before model layers."""
 
@@ -36,7 +35,6 @@ class Adapter(ABC):
 # Concrete Adapters
 # ==========================================
 
-@beartype
 class Flatten(Adapter):
     """
     Structural adapter to flatten inputs between architectural steps.
@@ -65,7 +63,6 @@ class Flatten(Adapter):
         return targets
 
 
-@beartype
 class TimeDelayEmbedding(Adapter):
     """
     Sliding window embedding for time series.

@@ -3,7 +3,6 @@ from __future__ import annotations
 from beartype import beartype
 import jax
 import jax.numpy as jnp
-from tqdm.auto import tqdm
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from typing import TYPE_CHECKING
@@ -12,7 +11,6 @@ from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, Top
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
-from reservoir.utils.reporting import print_feature_stats
 from reservoir.utils.batched_compute import batched_compute
 
 if TYPE_CHECKING:
@@ -57,24 +55,6 @@ class DistillationModel(ClosedLoopGenerativeModel):
         teacher_outputs = self.teacher(inputs, **kwargs)
         return jax.lax.stop_gradient(teacher_outputs)
 
-    def _compute_teacher_targets_batched(self, inputs: JaxF64, batch_size: int, **kwargs) -> JaxF64:
-        """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
-        projection_layer = kwargs.get("projection_layer")
-        
-        def teacher_fn(x: JaxF64) -> JaxF64:
-            x_proj = projection_layer(x) if projection_layer is not None else x
-            return self.teacher(x_proj, **kwargs)
-
-        targets_np = batched_compute(
-            teacher_fn,
-            to_np_f64(inputs),
-            batch_size=batch_size,
-            desc="Teacher (Train set)",
-            file="model.py",
-            step="3A+5A+6A"
-        )
-        return to_jax_f64(targets_np)
-
     def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
@@ -83,22 +63,30 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print("[Distillation] Phase A: Teacher Target Generation")
         print("[Distillation] ==========================================")
 
-        # 改善点: kwargsを伝播させてprojection_layer等をTeacherに適用させる
+        projection_layer = kwargs.get("projection_layer")
         batch_sz = self.training_config.batch_size
-        teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=batch_sz, **kwargs)
+        
+        def teacher_fn(x: JaxF64) -> JaxF64:
+            x_proj = projection_layer(x) if projection_layer is not None else x
+            return jax.lax.stop_gradient(self.teacher(x_proj, **kwargs))
+
+        targets_np = batched_compute(
+            teacher_fn,
+            to_np_f64(inputs),
+            batch_size=batch_sz,
+            desc="Teacher (Train set)",
+            file="model.py",
+            step="3A+5A+6A"
+        )
+        teacher_targets = to_jax_f64(targets_np)
 
         print("\n[Distillation] ==========================================")
         print("[Distillation] Phase B: Student Model Training")
         print("[Distillation] ==========================================")
         print(f"[Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
-        projection_layer = kwargs.get("projection_layer")
-        
-        # 改善点: Student側でバッチ処理中に動的にProjectionを適用させるため、
-        # 事前に巨大な配列を作らず、生のinputsとkwargsをそのまま渡す
-        if projection_layer is not None:
-             print(f"[Distillation] Passing {type(projection_layer).__name__} to Student for dynamic application...")
-
+        # We pass raw inputs and teacher_targets. 
+        # FNNModel will handle the projection inside its JIT loop to avoid OOM.
         student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
 
         distill_mse = float(student_logs.get("final_loss", 0.0))
@@ -110,10 +98,24 @@ class DistillationModel(ClosedLoopGenerativeModel):
         """
         Distillation evaluation: compare student output with teacher output.
         """
-        if X.shape[0] > 4096:
-             teacher_targets = self._compute_teacher_targets_batched(X, batch_size=self.training_config.batch_size, **kwargs)
+        import jax
+        batch_sz = self.training_config.batch_size
+
+        def teacher_fn(x: JaxF64) -> JaxF64:
+            return jax.lax.stop_gradient(self.teacher(x, **kwargs))
+
+        if X.shape[0] > batch_sz:
+            targets_np = batched_compute(
+                teacher_fn,
+                to_np_f64(X),
+                batch_size=batch_sz,
+                desc="Teacher (Eval)",
+                file="model.py",
+                step="eval"
+            )
+            teacher_targets = to_jax_f64(targets_np)
         else:
-             teacher_targets = self._compute_teacher_targets(X, **kwargs)
+            teacher_targets = self._compute_teacher_targets(X, **kwargs)
 
         student_metrics = self.student.evaluate(X, teacher_targets)
         return student_metrics

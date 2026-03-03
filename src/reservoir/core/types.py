@@ -19,7 +19,8 @@ from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
-from typing import TypedDict, TYPE_CHECKING
+from typing import TypedDict, TYPE_CHECKING, Protocol, runtime_checkable
+from collections.abc import Iterator
 
 if TYPE_CHECKING:
     import reservoir.readout.base
@@ -31,6 +32,15 @@ if TYPE_CHECKING:
 NpF64 = Float64[np.ndarray, "..."]
 JaxF64 = Float64[Array, "..."]
 JaxKey = UInt32[Array, "..."]  # JAX PRNG key (uint32)
+
+BatchData = tuple[JaxF64, JaxF64 | None]
+BatchIterator = Iterator[BatchData]
+
+@runtime_checkable
+class DataLoaderProtocol(Protocol):
+    num_samples: int
+    batch_size: int
+    def __iter__(self) -> BatchIterator: ...
 
 class TrainLogs(TypedDict, total=False):
     """Strictly typed training logs to replace Dict[str, object]."""

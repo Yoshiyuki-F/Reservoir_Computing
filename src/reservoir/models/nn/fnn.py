@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from reservoir.training.presets import TrainingConfig
-from reservoir.core.types import JaxF64,  TrainLogs
+from reservoir.core.types import JaxF64, TrainLogs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence, Callable
@@ -70,23 +70,16 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
         super().__init__({"layer_dims": self.layer_dims}, classification=classification, training_config=training_config)
 
     def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
-        """Train with adapter-transformed inputs (and aligned targets if windowed)."""
-        # Check if inputs are already adapted (Step 4 done externally)
-        # Heuristic: if input feature dim matches the network's input layer dim
-        if inputs.ndim == 2 and inputs.shape[-1] == self.layer_dims[0]:
-            return super().train(inputs, targets)
-
-        # Log Step 4 (Adapter) only during training
+        """Train with optional on-the-fly projection and adaptation inside the batched loop."""
         adapter_name = self.adapter.__class__.__name__
         if self.window_size:
              adapter_name = f"TimeDelayEmbedding(k={self.window_size})"
 
-        x_log_label = f"{log_prefix}:{adapter_name}:X:train"
-        y_log_label = f"{log_prefix}:{adapter_name}:y:train"
-        adapted_inputs = self.adapter(inputs, log_label=x_log_label)
-        aligned_targets = self.adapter.align_targets(targets, log_label=y_log_label) if targets is not None else None
-
-        return super().train(adapted_inputs, aligned_targets)
+        kwargs["adapter"] = self.adapter
+        kwargs["log_prefix"] = log_prefix
+        
+        # We pass raw inputs directly to base class which will handle batching, projection, and adaptation
+        return super().train(inputs, targets, **kwargs)
 
     def predict(self, X: JaxF64, **kwargs) -> JaxF64:
         """Predict with optional dynamic projection and adapter-transformed inputs."""
