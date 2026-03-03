@@ -294,25 +294,13 @@ def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, 
     # 1. Model Type & Parameters
     if config is not None and hasattr(config, 'model') and config.model is not None and hasattr(config.model, 'label'):
         # Get base label from config
-        model_lbl = config.model.label
+        model_str = config.model.label
 
         # If n_qubits was omitted in QRC config, pull it from projection
-        if "q?" in model_lbl and hasattr(config, "projection") and config.projection:
+        if "q?" in model_str and hasattr(config, "projection") and config.projection:
             n_qubits = getattr(config.projection, "n_units", None)
             if n_qubits is not None:
-                model_lbl = model_lbl.replace("q?", f"q{n_qubits}")
-
-        # The original code prepended model_type_str (e.g. quantum_reservoir)
-        # and appended aggregation mode
-        agg = getattr(config.model, "aggregation", None)
-        agg_str = f"_{agg.value.upper()}" if agg else ""
-        
-        # Avoid prepending model_type_str if the label already starts with it or a variant
-        if model_lbl.startswith("ESN") or model_lbl.startswith("Passthrough") or model_lbl.startswith("FNN_") or model_lbl.startswith("Distill_"):
-            model_str = f"{model_type_str}_{model_lbl}{agg_str}"
-        else:
-            # QRC model label starts with q_str now, so prepend model_type_str
-            model_str = f"{model_type_str}_{model_lbl}{agg_str}"
+                model_str = model_str.replace("q?", f"q{n_qubits}")
     else:
         # Fallback
         model_str = str(model_type_str)

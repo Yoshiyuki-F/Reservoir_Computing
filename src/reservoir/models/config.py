@@ -461,7 +461,7 @@ class ClassicalReservoirConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        return f"ESN_sr{float(self.spectral_radius):.2f}_lr{float(self.leak_rate):.2f}"
+        return f"classical_reservoir_{self.aggregation.value.upper()}_sr{float(self.spectral_radius):.2f}_lr{float(self.leak_rate):.2f}_rc{float(self.rc_connectivity):.2f}"
 
 @dataclass(frozen=True)
 class DistillationConfig(ModelConfig):
@@ -492,8 +492,7 @@ class DistillationConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        layers = "x".join(str(w) for w in (self.student.hidden_layers or ()))
-        return f"Distill_{layers}"
+        return f"fnn_distillation_{self.student.label}_distilled_from_{self.teacher.label}"
 
 
 @dataclass(frozen=True)
@@ -524,9 +523,9 @@ class FNNConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        layers = "x".join(str(w) for w in (self.hidden_layers or ()))
+        layers = "-".join(str(w) for w in (self.hidden_layers or ()))
         w = f"_w{int(self.window_size)}" if self.window_size is not None else ""
-        return f"FNN_{layers}{w}"
+        return f"nn{layers}{w}"
 
 
 
@@ -551,7 +550,7 @@ class PassthroughConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        return "Passthrough"
+        return f"passthrough_{self.aggregation.value.upper()}"
 
 
 @dataclass(frozen=True)
@@ -623,7 +622,8 @@ class QuantumReservoirConfig(ModelConfig):
         # Note: n_qubits might be None, handled in reporting.py
         q = f"q{int(self.n_qubits)}" if self.n_qubits is not None else "q?"
         reup = "_reupT" if self.use_reuploading else "_reupF"
-        return f"{self.measurement_basis}_{q}_l{int(self.n_layers)}{reup}_lr{float(self.leak_rate):.4f}_f{float(self.feedback_scale):.4f}"
+        core = f"{self.measurement_basis}_{q}_l{int(self.n_layers)}{reup}_lr{float(self.leak_rate):.4f}_f{float(self.feedback_scale):.4f}"
+        return f"quantum_reservoir_{self.aggregation.value.upper()}_{core}"
 
 
 @dataclass(frozen=True)
@@ -646,7 +646,7 @@ class RidgeReadoutConfig(ReadoutConfig):
 
     @property
     def label(self) -> str:
-        return "Ridge"
+        return "RidgeCVRO"
 
 
 

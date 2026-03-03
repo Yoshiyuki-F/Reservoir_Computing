@@ -51,7 +51,9 @@ MinusOneToOne = MinMaxScalerConfig(
 )
 
 #---------------------------STEP 3--------------------------------------------------
-RP = RandomProjectionConfig(
+
+
+RP_REGRESSION = RandomProjectionConfig(
     n_units=64,
     # input_scale=1.0, #100
     input_scale=0.3478958243673553,  # 1200
@@ -61,8 +63,6 @@ RP = RandomProjectionConfig(
     bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
-
-
 
 CCP = CenterCropProjectionConfig(
     n_units=10,  # This becomes n_qubits for quantum reservoir
@@ -102,18 +102,29 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 
 "=============================================Classification Presets============================================"
 
+
+RP_MNIST = RandomProjectionConfig(
+    n_units=100,
+    input_scale=0.3543930218531782, #100
+    # input_scale=0.3478958243673553,  # 1200
+    input_connectivity=0.21745075681282766, #100
+    # input_connectivity=0.32024990697532185, # 1200
+    bias_scale=0.1725142451754484, #100
+    # bias_scale= 0.9911807193106197, # 1200
+    seed=1,
+)
+
 # -----------------------------------------------------------------------------
 # Dynamics Definitions
 # -----------------------------------------------------------------------------
+
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    # spectral_radius=1.45, #100
-    spectral_radius= 1.4707341636189577,  # 1200
-
-    # leak_rate= 0.66, #100
-    leak_rate= 0.5078438853580478, #1200
-
-    # rc_connectivity=0.457758485877939, #100
-    rc_connectivity=0.0760855941265183,  # 1200
+    spectral_radius= 1.921291918880454, #100
+    # spectral_radius= 1.4707341636189577,  # 1200
+    leak_rate= 0.36449529864842045, #100
+    # leak_rate= 0.5078438853580478, #1200
+    rc_connectivity=0.6784641706491135, #100
+    # rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
     aggregation=AggregationMode.MEAN,
@@ -121,18 +132,20 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 
 
 # -----------------------------------------------------------------------------
-
+'''
+uv run python -m reservoir.cli.main --model classical_reservoir --dataset mnist
+'''
 CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=MinMaxScalerConfig(
-        # feature_min=-0.07768410112268466, #100
-        feature_min=-0.6754946253854848,  # 1200
-        # feature_max=0.08160917176536134, #100
-        feature_max=0.8288112006441126,  # 1200
+        feature_min=-0.7675280665952444, #100
+        # feature_min=-0.6754946253854848,  # 1200
+        feature_max=0.35849784076318864, #100
+        # feature_max=0.8288112006441126,  # 1200
     ),
-    projection=RP,
+    projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
@@ -142,7 +155,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=ZeroToOne,
-    projection=RP,
+    projection=RP_MNIST,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
@@ -313,7 +326,7 @@ TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
     preprocess=StandardScalerConfig(),
-    projection=RP,
+    projection=RP_REGRESSION,
     model=DistillationConfig(
         teacher=TIME_RESERVOIR_DYNAMICS,
         student=FNNConfig(
