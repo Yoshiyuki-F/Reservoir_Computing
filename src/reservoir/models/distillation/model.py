@@ -69,7 +69,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
             teacher_fn,
             to_np_f64(inputs),
             batch_size=batch_size,
-            desc="Pre-computing Teacher",
+            desc="Pre-computing Teacher (Train set)",
             file="model.py",
             step="3A+5A+6A"
         )
