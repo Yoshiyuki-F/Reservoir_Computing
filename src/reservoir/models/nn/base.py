@@ -133,7 +133,7 @@ class BaseFlaxModel(BaseModel, ABC):
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
-        print("\n=== Step 5: Model Dynamics (Training/Warmup) [] ===")
+        print(f"\n[nn.base.py] === Training {self.__class__.__name__} ===")
         # Inputs/Targets are already JaxF64 (Device Domain)
         num_samples = inputs.shape[0]
         num_batches = num_samples // self.batch_size
