@@ -103,20 +103,20 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
 "=============================================Classification Presets============================================"
 
 MINMAX_MNIST = MinMaxScalerConfig(
-    # feature_min=-0.7675280665952444, #100
-    feature_min=-0.6754946253854848,  # 1200
-    # feature_max=0.35849784076318864, #100
-    feature_max=0.8288112006441126,  # 1200
+    feature_min=-0.7675280665952444, #100
+    # feature_min=-0.6754946253854848,  # 1200
+    feature_max=0.35849784076318864, #100
+    # feature_max=0.8288112006441126,  # 1200
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=1200,
-    # input_scale=0.3543930218531782, #100
-    input_scale=0.3478958243673553,  # 1200
-    # input_connectivity=0.21745075681282766, #100
-    input_connectivity=0.32024990697532185, # 1200
-    # bias_scale=0.1725142451754484, #100
-    bias_scale= 0.9911807193106197, # 1200
+    n_units=100,
+    input_scale=0.3543930218531782, #100
+    # input_scale=0.3478958243673553,  # 1200
+    input_connectivity=0.21745075681282766, #100
+    # input_connectivity=0.32024990697532185, # 1200
+    bias_scale=0.1725142451754484, #100
+    # bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
@@ -157,7 +157,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(10000, ),
+            hidden_layers=(100, ),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
