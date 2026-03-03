@@ -8,6 +8,7 @@ from __future__ import annotations
 from beartype import beartype
 import jax
 import jax.numpy as jnp
+import typing
 
 from reservoir.layers.aggregation import AggregationMode
 from reservoir.models.reservoir.base import Reservoir
@@ -72,7 +73,7 @@ class ClassicalReservoir(Reservoir):
         stacked = jnp.swapaxes(stacked, 0, 1)
         return final_states, stacked
 
-    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str | None = None, **_: KwargsDict) -> JaxF64:
+    def __call__(self, inputs: JaxF64, return_sequences: bool = False, split_name: str | None = None, **kwargs: typing.Any) -> JaxF64:
         """Process inputs. Accepts both 2D (Time, Features) and 3D (Batch, Time, Features). Output is 2D."""
         arr = inputs
         

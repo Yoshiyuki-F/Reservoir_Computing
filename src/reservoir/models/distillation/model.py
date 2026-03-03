@@ -8,10 +8,12 @@ from tqdm.auto import tqdm
 from reservoir.models.generative import ClosedLoopGenerativeModel
 from typing import TYPE_CHECKING
 
-from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, TopologyMeta
+from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, TopologyMeta, to_np_f64, to_jax_f64
 from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
+from reservoir.utils.reporting import print_feature_stats
+from reservoir.utils.batched_compute import batched_compute
 
 if TYPE_CHECKING:
     pass #ruff safe breaks this
@@ -57,52 +59,36 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def _compute_teacher_targets_batched(self, inputs: JaxF64, batch_size: int, **kwargs) -> JaxF64:
         """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
-        n_samples = inputs.shape[0]
+        def teacher_fn(x: JaxF64) -> JaxF64:
+            return self.teacher(x, **kwargs)
 
-        # 改善点: jax.eval_shape を使い、再計算なしで出力シェイプのみを取得
-        dummy_out = jax.eval_shape(lambda x: self.teacher(x, **kwargs), inputs[:1])
-        output_shape = (n_samples,) + dummy_out.shape[1:]
-        
-        targets = jnp.empty(output_shape)
-
-        @jax.jit
-        def step(x):
-             return self.teacher(x, **kwargs)
-
-        with tqdm(total=n_samples, desc="[Teacher]", unit="samples") as pbar:
-            for i in range(0, n_samples, batch_size):
-                end = min(i + batch_size, n_samples)
-                batch_x = inputs[i:end]
-                batch_out = step(batch_x)
-                targets = targets.at[i:end].set(batch_out)
-                pbar.update(end - i)
-
-        return targets
+        targets_np = batched_compute(
+            teacher_fn,
+            to_np_f64(inputs),
+            batch_size=batch_size,
+            desc="[Teacher Targets]",
+            file="model.py"
+        )
+        return to_jax_f64(targets_np)
 
     def train(self, inputs: JaxF64, targets: JaxF64 | None = None, log_prefix: str = "4", **kwargs) -> TrainLogs:
         """
         Orchestrate the distillation process with clear phase separation in logs.
         """
-        print("\n    [Distillation] ==========================================")
-        print("    [Distillation] Phase A: Teacher Target Generation")
-        print("    [Distillation] ==========================================")
+        print("\n[Distillation] ==========================================")
+        print("[Distillation] Phase A: Teacher Target Generation")
+        print("[Distillation] ==========================================")
 
         # 改善点: kwargsを伝播させてprojection_layer等をTeacherに適用させる
         batch_sz = self.training_config.batch_size
         teacher_targets = self._compute_teacher_targets_batched(inputs, batch_size=batch_sz, **kwargs)
-        
-        jax.debug.print("    [Distillation] Teacher Target Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(teacher_targets), s=jnp.std(teacher_targets))
 
-        print("\n    [Distillation] ==========================================")
-        print("    [Distillation] Phase B: Student Model Training")
-        print("    [Distillation] ==========================================")
-        print(f"    [Student] Training {self.student.__class__.__name__} to mimic Teacher...")
+        print("\n[Distillation] ==========================================")
+        print("[Distillation] Phase B: Student Model Training")
+        print("[Distillation] ==========================================")
+        print(f"[Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
-
-        # 改善点: student側のpredictにも念のためkwargsを渡す
-        student_outputs = self.student.predict(inputs)
-        jax.debug.print("    [Distillation] Student Output Stats: mean={m:.4f} std={s:.4f}", m=jnp.mean(student_outputs), s=jnp.std(student_outputs))
 
         distill_mse = float(student_logs.get("final_loss", 0.0))
         student_logs.setdefault("distill_mse", distill_mse)

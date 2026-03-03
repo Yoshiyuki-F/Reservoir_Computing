@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from reservoir.core.types import JaxF64, TrainLogs, ConfigDict, KwargsDict
 from jaxtyping import jaxtyped
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, Any
 from beartype import beartype
 
 from reservoir.layers.aggregation import AggregationMode
@@ -325,7 +325,7 @@ class QuantumReservoir(Reservoir[tuple[JaxF64, JaxF64 | None]]):
         inputs: JaxF64,
         return_sequences: bool = False,
         split_name: str | None = None,
-        **_: KwargsDict
+        **kwargs: Any
     ) -> JaxF64:
         arr, input_was_2d = self._prepare_input(inputs)
         

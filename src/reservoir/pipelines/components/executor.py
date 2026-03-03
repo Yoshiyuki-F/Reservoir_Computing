@@ -44,13 +44,27 @@ class PipelineExecutor:
         train_X = self.coordinator.get_train_inputs()
         projection = self.frontend_ctx.projection_layer
         
-        # Pass projection_layer to model.train() so models can compose it internally
-        # Explicit transition to Device Domain (JaxF64)
         train_y = self.frontend_ctx.processed_split.train_y
+
+        if projection is not None:
+            print(f"[executor.py] Applying {type(projection).__name__} to training data...")
+            from reservoir.utils.batched_compute import batched_compute
+            batch_size = getattr(self.dataset_meta.training, "batch_size", 2048) if self.dataset_meta.training else 2048
+            train_X_proj = batched_compute(
+                projection,
+                train_X,
+                batch_size=batch_size,
+                desc="[Step 3] Pre-computing Train Projection",
+                file="executor.py"
+            )
+            train_X_jax = to_jax_f64(train_X_proj)
+            del train_X_proj
+        else:
+            train_X_jax = to_jax_f64(train_X)
+            
         train_logs = self.stack.model.train(
-            to_jax_f64(train_X), 
+            train_X_jax, 
             to_jax_f64(train_y) if train_y is not None else None,
-            projection_layer=projection,
         )
 
 
@@ -263,12 +277,7 @@ class PipelineExecutor:
             return outputs_np, final_state, last_output
 
         # Standard Path
-        # DistillationModel handles projection internally for its teacher, 
-        # but its student (which is used during predict/extraction) takes RAW inputs.
-        # Fusing projection here would cause shape mismatches in the student.
-        is_distillation = isinstance(model, DistillationModel)
-
-        if projection is not None and not is_distillation:
+        if projection is not None:
             # Fused: projection + model forward in a single GPU pass
             def fused_fn(x: JaxF64) -> JaxF64:
                 return model(projection(x))
@@ -280,7 +289,7 @@ class PipelineExecutor:
                 file="executor.py"
             ), None, None
         else:
-            # No projection (already projected or no projection needed, or DistillationModel)
+            # No projection
             fn = partial(model, split_name=None)
             return batched_compute(
                 fn,
