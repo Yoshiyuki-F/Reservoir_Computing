@@ -206,7 +206,11 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
 """
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mnist
 """
-min, max= -0.23541677149636459, 0.1677064135326006
+min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
+scale = (max - min) / 2* bound
+relative_shift = (max + min)/2 * bound - (max - min)
+
+
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,

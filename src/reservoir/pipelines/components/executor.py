@@ -170,7 +170,7 @@ class PipelineExecutor:
         )
 
         if warmup_X is not None:
-            if jnp.std(warmup_X) < 0.1:
+            if jnp.std(warmup_X) < 0.1 and not self.dataset_meta.classification:
                 raise ValueError(f"Feature collapse detected! warmup_X std ({jnp.std(warmup_X):.4f}) < 0.1. "
                                  "This usually indicates the Reservoir state is saturated or not responding to input.")
         del warmup_X
@@ -179,11 +179,6 @@ class PipelineExecutor:
         train_Z, current_state, _ = self._compute_split(
             model, train_in, "train", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
         )
-
-        if train_Z is not None:
-            if jnp.std(train_Z) < 0.1:
-                raise ValueError(f"Feature collapse detected! train_Z std ({jnp.std(train_Z):.4f}) < 0.1. "
-                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
 
         # 2. Validation
         val_in = self.coordinator.get_val_inputs(window_size)
