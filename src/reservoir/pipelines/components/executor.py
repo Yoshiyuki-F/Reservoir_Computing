@@ -45,30 +45,16 @@ class PipelineExecutor:
         projection = self.frontend_ctx.projection_layer
         
         train_y = self.frontend_ctx.processed_split.train_y
-
-        if projection is not None:
-            print(f"[executor.py] Applying {type(projection).__name__} to training data...")
-            from reservoir.utils.batched_compute import batched_compute
-            batch_size = getattr(self.dataset_meta.training, "batch_size", 2048) if self.dataset_meta.training else 2048
-            train_X_proj = batched_compute(
-                projection,
-                train_X,
-                batch_size=batch_size,
-                desc="[Step 3] Pre-computing Train Projection",
-                file="executor.py"
-            )
-            train_X_jax = to_jax_f64(train_X_proj)
-            del train_X_proj
-        else:
-            train_X_jax = to_jax_f64(train_X)
             
         train_logs = self.stack.model.train(
-            train_X_jax, 
+            to_jax_f64(train_X), 
             to_jax_f64(train_y) if train_y is not None else None,
+            projection_layer=projection,
         )
 
 
         # Delegate extraction (Model does work, Coordinator provides input)
+        print("\n[executor.py] === Step 5.5: Extract Features (Output) ===")
         train_Z, val_Z, test_Z, val_final_info = self._extract_all_features(self.stack.model)
 
         # Step 6.5: Target Alignment (Delegate to Coordinator)
@@ -157,8 +143,6 @@ class PipelineExecutor:
         If projection_layer is deferred, fuse projection + model forward.
         """
 
-        print("\n[executor.py] === Step 5: Extract Features (Output) ===")
-
         window_size = getattr(model, 'input_window_size', 0)
         batch_size = self.dataset_meta.training.batch_size
         projection = self.frontend_ctx.projection_layer  # May be None
@@ -176,18 +160,21 @@ class PipelineExecutor:
         current_state = None
 
         train_in = self.coordinator.get_train_inputs()
-        warmup_len = len(train_in) // 2
-        warmup_in = train_in[:warmup_len] #50LT??
+        
+        warmup_X = None
+        if is_stateful:
+            warmup_len = len(train_in) // 2
+            warmup_in = train_in[:warmup_len] #50LT??
 
-        warmup_X, current_state, _ = self._compute_split(
-            model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
-        )
+            warmup_X, current_state, _ = self._compute_split(
+                model, warmup_in, "warmup", batch_size, projection=projection, initial_state=current_state, return_state=is_stateful
+            )
 
-        if warmup_X is not None:
-            if jnp.std(warmup_X) < 0.1 and not self.dataset_meta.classification:
-                raise ValueError(f"Feature collapse detected! warmup_X std ({jnp.std(warmup_X):.4f}) < 0.1. "
-                                 "This usually indicates the Reservoir state is saturated or not responding to input.")
-        del warmup_X
+            if warmup_X is not None:
+                if jnp.std(warmup_X) < 0.1 and not self.dataset_meta.classification:
+                    raise ValueError(f"Feature collapse detected! warmup_X std ({jnp.std(warmup_X):.4f}) < 0.1. "
+                                     "This usually indicates the Reservoir state is saturated or not responding to input.")
+            del warmup_X
 
         # 1. Train
         train_Z, current_state, _ = self._compute_split(
@@ -285,7 +272,7 @@ class PipelineExecutor:
                 fused_fn,
                 inputs,
                 batch_size,
-                desc=f"[Step 3 and 5 Proj+Extract] {split_name}",
+                desc=f"[Step 3 and 5.5 Proj+Extract] {split_name}",
                 file="executor.py"
             ), None, None
         else:
@@ -295,6 +282,6 @@ class PipelineExecutor:
                 fn,
                 inputs,
                 batch_size,
-                desc=f"[Step 5 Extracting] {split_name}",
+                desc=f"[Step 5.5 Extracting] {split_name}",
                 file="executor.py"
             ), None, None

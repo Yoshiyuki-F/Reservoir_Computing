@@ -59,14 +59,17 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def _compute_teacher_targets_batched(self, inputs: JaxF64, batch_size: int, **kwargs) -> JaxF64:
         """Compute teacher targets in batches to allow CPU offloading and avoid OOM."""
+        projection_layer = kwargs.get("projection_layer")
+        
         def teacher_fn(x: JaxF64) -> JaxF64:
-            return self.teacher(x, **kwargs)
+            x_proj = projection_layer(x) if projection_layer is not None else x
+            return self.teacher(x_proj, **kwargs)
 
         targets_np = batched_compute(
             teacher_fn,
             to_np_f64(inputs),
             batch_size=batch_size,
-            desc="[Teacher Targets]",
+            desc="6A",
             file="model.py"
         )
         return to_jax_f64(targets_np)
@@ -88,7 +91,28 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print("[Distillation] ==========================================")
         print(f"[Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
-        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
+        projection_layer = kwargs.get("projection_layer")
+        if projection_layer is not None:
+            # We must apply projection in batches to avoid OOM before passing to student.train
+            # Or we can just project the whole thing if it fits, but standard FNN train expects raw data to fit.
+            # Student.train handles its own batching. We will just pass the projection_layer down
+            # or pre-project here. To match OOM-safe, we pre-project.
+            def proj_fn(x: JaxF64) -> JaxF64:
+                return projection_layer(x)
+            
+            print(f"[Distillation] Applying {type(projection_layer).__name__} to Student inputs...")
+            inputs_proj_np = batched_compute(
+                proj_fn,
+                to_np_f64(inputs),
+                batch_size=batch_sz,
+                desc="[Step 3B] Pre-computing Student Projection",
+                file="model.py"
+            )
+            inputs_for_student = to_jax_f64(inputs_proj_np)
+        else:
+            inputs_for_student = inputs
+
+        student_logs = self.student.train(inputs_for_student, teacher_targets, log_prefix="4B", **kwargs) or {}
 
         distill_mse = float(student_logs.get("final_loss", 0.0))
         student_logs.setdefault("distill_mse", distill_mse)
