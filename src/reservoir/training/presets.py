@@ -9,7 +9,7 @@ from reservoir.training.config import TrainingConfig
 TRAINING_PRESETS: dict[str, TrainingConfig] = {
     "standard": TrainingConfig(
         name = "standard",
-        batch_size= 2048,
+        batch_size= 4096, #2048 31min
         epochs = 300,
         learning_rate = 0.006,
         seed= 0,
@@ -17,6 +17,9 @@ TRAINING_PRESETS: dict[str, TrainingConfig] = {
         # Learning Rate Scheduler
         scheduler_type="cosine",  # "cosine", "piecewise", or None
         warmup_epochs=10,
+
+        # JIT Scan
+        scan_chunk_size=50, #how many epochs as a chunk <=epochs
 
         # Data Splitting
         train_size=0.8,
@@ -33,6 +36,9 @@ TRAINING_PRESETS: dict[str, TrainingConfig] = {
         # Learning Rate Scheduler
         scheduler_type="cosine",  # "cosine", "piecewise", or None
         warmup_epochs=10,
+
+        # JIT Scan
+        scan_chunk_size=50,
 
         # Data Splitting
         train_size=0.8,

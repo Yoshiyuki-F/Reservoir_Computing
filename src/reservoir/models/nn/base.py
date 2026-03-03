@@ -133,76 +133,122 @@ class BaseFlaxModel(BaseModel, ABC):
         if targets is None:
             raise ValueError("BaseFlaxModel.train requires 'targets'.")
 
+        import time
+
         print(f"\n[nn.base.py] === Training {self.__class__.__name__} ===")
-        
-        num_samples = inputs.shape[0]
+
+        projection_layer = kwargs.get("projection_layer")
+        adapter = kwargs.get("adapter")
+
+        # ==============================================================
+        # Phase 1: Pre-compute adapter if safe (no projection → no OOM)
+        # Projection is kept inside scan body to avoid OOM on large outputs.
+        # ==============================================================
+        processed_x = inputs
+        processed_y = targets
+        apply_proj_in_scan = projection_layer is not None
+        apply_adapter_in_scan = False
+
+        if adapter is not None:
+            if apply_proj_in_scan:
+                # Projection output is large → adapter must also be in scan
+                apply_adapter_in_scan = True
+                print(f"[nn.base.py] Projection + adapter ({adapter.__class__.__name__}) will be applied per-batch inside JIT")
+            else:
+                # No projection → safe to pre-compute adapter
+                print(f"[nn.base.py] Pre-applying adapter ({adapter.__class__.__name__})...")
+                processed_x = adapter(processed_x)
+                processed_y = adapter.align_targets(processed_y)
+
+        # ==============================================================
+        # Phase 2: Setup batching
+        # ==============================================================
+        num_samples = processed_x.shape[0]
         batch_size = self.batch_size
         num_batches = num_samples // batch_size if batch_size > 0 else 0
-        num_train_steps = self.epochs * num_batches  # Total training steps for scheduler
-        
+        num_train_steps = self.epochs * num_batches
+
         if num_batches == 0:
             print("[nn.base.py] Warning: Not enough samples for a single batch.")
             return {}
 
-        projection_layer = kwargs.get("projection_layer")
-        adapter = kwargs.get("adapter")
-        
-        # Initialize State using the first sample (projected/adapted if necessary)
+        # Initialize model state using a processed sample
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
-        
-        sample_input = inputs[:1]
-        sample_target = targets[:1]
-        if projection_layer is not None:
-             sample_input = projection_layer(sample_input)
-        if adapter is not None:
-             sample_input = adapter(sample_input)
-             sample_target = adapter.align_targets(sample_target) if sample_target is not None else None
 
         if self._state is None:
             print("[nn.base.py] Initializing parameters...")
-            self._state = self._init_train_state(init_key, sample_input, num_train_steps)
+            sample = processed_x[:1]
+            if apply_proj_in_scan:
+                sample = projection_layer(sample)
+            if apply_adapter_in_scan:
+                sample = adapter(sample)
+            self._state = self._init_train_state(init_key, sample, num_train_steps)
 
-        # Truncate and reshape into batches
+        # Reshape into batches
         limit = num_batches * batch_size
-        inputs_batched = inputs[:limit].reshape(num_batches, batch_size, *inputs.shape[1:])
-        targets_batched = targets[:limit].reshape(num_batches, batch_size, *targets.shape[1:])
+        inputs_batched = processed_x[:limit].reshape(num_batches, batch_size, *processed_x.shape[1:])
+        targets_batched = processed_y[:limit].reshape(num_batches, batch_size, *processed_y.shape[1:])
 
-        # JIT compiled scan over batches
-        @jax.jit
-        def train_epoch_jit(state, epoch_inputs, epoch_targets):
-            def batch_step(carry_state, batch):
-                b_x, b_y = batch
-                if projection_layer is not None:
-                     b_x = projection_layer(b_x)
-                if adapter is not None:
-                     # Do not pass log_label inside JIT to avoid Concretization errors
-                     b_x = adapter(b_x)
-                     b_y = adapter.align_targets(b_y)
-                     
-                new_state, loss = BaseFlaxModel._train_step(carry_state, b_x, b_y, self.classification)
-                return new_state, loss
-            
-            final_state, losses = jax.lax.scan(batch_step, state, (epoch_inputs, epoch_targets))
-            return final_state, jnp.mean(losses)
+        # ==============================================================
+        # Phase 3: Nested jax.lax.scan (epochs × batches) — max speed
+        # Projection + adapter applied per-batch inside compiled scan.
+        # GPU→CPU sync only once per chunk (50 epochs).
+        # ==============================================================
+        classification = self.classification
+        scan_chunk = getattr(self.training_config, 'scan_chunk_size', 50)
+        CHUNK_SIZE = min(scan_chunk, self.epochs)
+        num_chunks = self.epochs // CHUNK_SIZE
+        remainder = self.epochs % CHUNK_SIZE
+
+        def _make_train_fn(length):
+            @jax.jit
+            def train_fn(state, data_x, data_y):
+                def epoch_body(st, _):
+                    def batch_body(s, batch):
+                        bx, by = batch
+                        if apply_proj_in_scan:
+                            bx = projection_layer(bx)
+                        if apply_adapter_in_scan:
+                            bx = adapter(bx)
+                            by = adapter.align_targets(by)
+                        new_s, loss = BaseFlaxModel._train_step(s, bx, by, classification)
+                        return new_s, loss
+                    s, losses = jax.lax.scan(batch_body, st, (data_x, data_y))
+                    return s, jnp.mean(losses)
+                return jax.lax.scan(epoch_body, state, None, length=length)
+            return train_fn
+
+        train_chunk = _make_train_fn(CHUNK_SIZE)
 
         loss_history: list[float] = []
+        proj_info = " (proj+adapt per-batch)" if apply_proj_in_scan else ""
+        print(f"[nn.base.py] Training: {self.epochs} epochs × {num_batches} batches/epoch{proj_info}")
+        print(f"[nn.base.py] (Nested jax.lax.scan: {CHUNK_SIZE}-epoch chunks)")
+        t_start = time.time()
+        pbar = tqdm(total=self.epochs, desc="[Train]", unit="ep")
 
-        print(f"[nn.base.py] Starting Loop: {self.epochs} epochs, {num_batches} batches/epoch.")
-        print(f"[nn.base.py] (Using jax.lax.scan over batches for maximum GPU performance)")
-        pbar = tqdm(range(self.epochs), desc="[Train]", unit="ep")
+        for _ in range(num_chunks):
+            self._state, chunk_losses = train_chunk(self._state, inputs_batched, targets_batched)
+            chunk_list = chunk_losses.tolist()
+            loss_history.extend(chunk_list)
+            pbar.update(CHUNK_SIZE)
+            pbar.set_postfix({"loss": f"{chunk_list[-1]:.6f}"})
 
-        for _ in pbar:
-            self._state, avg_loss = train_epoch_jit(self._state, inputs_batched, targets_batched)
-            
-            # Transfer mean loss to CPU once per epoch
-            avg_loss_cpu = float(avg_loss)
-            loss_history.append(avg_loss_cpu)
-            pbar.set_postfix({"loss": f"{avg_loss_cpu:.6f}"})
+        if remainder > 0:
+            train_rem = _make_train_fn(remainder)
+            self._state, rem_losses = train_rem(self._state, inputs_batched, targets_batched)
+            rem_list = rem_losses.tolist()
+            loss_history.extend(rem_list)
+            pbar.update(remainder)
+            pbar.set_postfix({"loss": f"{rem_list[-1]:.6f}"})
+
+        pbar.close()
+        elapsed = time.time() - t_start
+        print(f"[nn.base.py] Training complete in {elapsed:.1f}s. Final loss: {loss_history[-1]:.6f}")
 
         self.trained = True
-        final_loss = loss_history[-1] if loss_history else 0.0
-        return {"loss_history": loss_history, "final_loss": final_loss}
+        return {"loss_history": loss_history, "final_loss": loss_history[-1] if loss_history else 0.0}
 
 
     def predict(self, X: JaxF64) -> JaxF64:

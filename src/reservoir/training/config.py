@@ -27,6 +27,9 @@ class TrainingConfig:
     scheduler_type: str | None  # "cosine", "piecewise", or None (constant)
     warmup_epochs: int
 
+    # JIT Scan Optimization
+    scan_chunk_size: int  # Epochs per jax.lax.scan chunk (higher = faster, less progress updates)
+
     # Data Splitting
     train_size: float
     val_size: float
@@ -41,6 +44,7 @@ class TrainingConfig:
             "learning_rate": float(self.learning_rate),
             "scheduler_type": self.scheduler_type,
             "warmup_epochs": int(self.warmup_epochs),
+            "scan_chunk_size": int(self.scan_chunk_size),
             "seed": int(self.seed),
             "train_size": float(self.train_size),
             "val_size": float(self.val_size),
