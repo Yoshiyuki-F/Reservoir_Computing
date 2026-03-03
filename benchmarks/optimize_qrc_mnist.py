@@ -120,7 +120,8 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # Projection (BoundedAffinePCA — controls QC input range)
         scale = trial.suggest_float("scale", 0.00000001, 1.0)
-        relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
+        # relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
+        relative_shift = trial.suggest_float("relative_shift", 0.0, 0.0)
 
         # Reservoir
         n_layers = trial.suggest_int("n_layers", 1, 1)

@@ -210,7 +210,7 @@ min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
 scale = (max - min) / 2* bound
 relative_shift = (max + min)/2 * bound - (max - min)
 
-
+s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
@@ -218,16 +218,16 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=BoundedAffinePCAConfig(
         n_units=6,
-        scale=1.0,
-        relative_shift=0.0,
+        scale=s,
+        relative_shift=r,
         bound=math.pi,
     ),
     model=QuantumReservoirConfig(
         n_layers=1,
         seed=41,
         aggregation=AggregationMode.MEAN,
-        feedback_scale=1.158966855826672,    # a_fb=0.0 means no feedback (pure feedforward mode)
-        leak_rate=0.6845053452479826,         # No leaky integration (backward compatible)
+        feedback_scale=f,    # a_fb=0.0 means no feedback (pure feedforward mode)
+        leak_rate=lr,         # No leaky integration (backward compatible)
         measurement_basis="Z+ZZ",
         noise_type="clean",
         noise_prob=0.0,
