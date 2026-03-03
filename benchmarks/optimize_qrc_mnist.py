@@ -120,12 +120,15 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # Projection (BoundedAffinePCA — controls QC input range)
         scale = trial.suggest_float("scale", 0.00000001, 1.0)
+
         # relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
         relative_shift = trial.suggest_float("relative_shift", 0.0, 0.0)
 
         # Reservoir
         n_layers = trial.suggest_int("n_layers", 1, 1)
-        feedback_scale = trial.suggest_float("feedback_scale", 0.0, 3.5)
+        # feedback_scale = trial.suggest_float("feedback_scale", 0.0, 3.5)
+        feedback_scale = trial.suggest_float("feedback_scale", np.pi, np.pi)
+
         leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
 
         # === 2. Build Config ===
