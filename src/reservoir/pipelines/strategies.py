@@ -106,11 +106,11 @@ def optimize_ridge_vmap(
     all_val_preds_np = batched_compute(
         predict_batch_fn,
         all_weights_np,
-        batch_size=batch_size, 
-        desc="[Step 7 RidgeCV Search]",
-        file="strategies.py"
+        batch_size=batch_size,
+        desc="RidgeCV Search",
+        file="strategies.py",
+        step="7"
     )
-
     # 5. Score on CPU
     search_history: dict[float, float] = {}
     weight_norms: dict[float, float] = {}
@@ -398,8 +398,9 @@ class ClassificationStrategy(ReadoutStrategy):
             predict_model_batch,
             train_Z,
             batch_size=32,
-            desc="[Step 8 Train Pred]",
-            file="strategies.py"
+            desc="Train Pred",
+            file="strategies.py",
+            step="8"
         )
         train_pred = to_jax_f64(train_pred_np)
 
@@ -411,8 +412,9 @@ class ClassificationStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=32,
-                desc="[Step 8 Test Pred]",
-                file="strategies.py"
+                desc="Test Pred",
+                file="strategies.py",
+                step="8"
             )
             test_pred = to_jax_f64(test_pred_np)
 
@@ -757,10 +759,10 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
                 predict_model_batch,
                 test_Z,
                 batch_size=2048,
-                desc="[Step 8 Test Pred]",
-                file="strategies.py"
-             )
-             
+                desc="Test Pred",
+                file="strategies.py",
+                step="8"
+             )             
              if test_p_np is not None and test_y is not None:
                  metrics["test"] = {
                      self.metric_name: compute_score(test_p_np, test_y, self.metric_name)

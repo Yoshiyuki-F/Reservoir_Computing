@@ -69,8 +69,9 @@ class DistillationModel(ClosedLoopGenerativeModel):
             teacher_fn,
             to_np_f64(inputs),
             batch_size=batch_size,
-            desc="[Step 3A+5A+6A] Pre-computing Teacher",
-            file="model.py"
+            desc="Pre-computing Teacher",
+            file="model.py",
+            step="3A+5A+6A"
         )
         return to_jax_f64(targets_np)
 
@@ -105,8 +106,9 @@ class DistillationModel(ClosedLoopGenerativeModel):
                 proj_fn,
                 to_np_f64(inputs),
                 batch_size=batch_sz,
-                desc="[Step 3B] Pre-computing Student Projection",
-                file="model.py"
+                desc="Pre-computing Student Projection",
+                file="model.py",
+                step="3B"
             )
             inputs_for_student = to_jax_f64(inputs_proj_np)
         else:

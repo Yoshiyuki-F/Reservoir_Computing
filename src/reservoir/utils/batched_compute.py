@@ -21,6 +21,7 @@ def batched_compute(
     batch_size: int,
     desc: str,
     file: str,
+    step: str | None = None,
 ) -> NpF64:
     """
     データセット全体を一括でGPUに載せるとOOMになるため、
@@ -32,23 +33,27 @@ def batched_compute(
         inputs: 入力データ - 2D (T, F) or 3D (N, T, F)
         batch_size: バッチサイズ
         desc: tqdm進捗表示のラベル
+        file: 呼び出し元のファイル名
+        step: 実行ステップ (例: "3", "5.5")
 
     Returns:
         出力データ (numpy array on CPU)
     """
+    
+    display_desc = f"[Step {step}] {desc}" if step is not None else desc
     
     # Handle 2D input (T, F) - Regression time series
     # Check ndim on inputs (works for both np and jnp)
     if inputs.ndim == 2:
         inputs_jax = to_jax_f64(inputs)
 
-        print(f"[batched_compute.py] {desc} TimeSeries Processing Compile started...")
+        print(f"[batched_compute.py] {display_desc} TimeSeries Processing Compile started...")
         t0 = time.time()
         result_jax = fn(inputs_jax)
         result_np = to_np_f64(result_jax)  # Transfer to CPU
         elapsed = time.time() - t0
-        print(f"[batched_compute.py] {desc} TimeSeries Processing finished in {elapsed:.4f} seconds.")
-        print_feature_stats(result_np, "batched_compute.py", desc+" Output")
+        print(f"[{file}] {display_desc} TimeSeries Processing finished in {elapsed:.4f} seconds.")
+        print_feature_stats(result_np, file, display_desc)
         return result_np
     
     # 3D input (N, T, F) - Classification batching
@@ -79,11 +84,11 @@ def batched_compute(
 
     # 3. JITコンパイル済みの実行関数を用意
     @jax.jit
-    def step(x: JaxF64) -> JaxF64:
+    def step_fn(x: JaxF64) -> JaxF64:
         return fn(x)
 
     # 4. バッチ処理ループ (tqdm適用)
-    with tqdm(total=n_samples, desc=desc, unit="samples") as pbar:
+    with tqdm(total=n_samples, desc=display_desc, unit="samples") as pbar:
         for i in range(0, n_samples, batch_size):
             batch_end = min(i + batch_size, n_samples)
             current_batch_size = batch_end - i
@@ -91,7 +96,7 @@ def batched_compute(
             # (A) GPUでスライス & 計算
             batch_data = inputs[i:batch_end]
             batch_jax = to_jax_f64(batch_data)
-            batch_out_jax = step(batch_jax)
+            batch_out_jax = step_fn(batch_jax)
             
             # (B) Transfer to CPU directly into pre-allocated array
             out_start = i * expansion_factor
@@ -101,5 +106,5 @@ def batched_compute(
             # 進捗更新
             pbar.update(current_batch_size)
 
-    print_feature_stats(result_array, f"batched_compute.py + {file}",  desc+" Output")
+    print_feature_stats(result_array, file, display_desc)
     return result_array

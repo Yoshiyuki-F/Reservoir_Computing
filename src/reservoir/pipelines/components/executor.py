@@ -272,8 +272,9 @@ class PipelineExecutor:
                 fused_fn,
                 inputs,
                 batch_size,
-                desc=f"[Step 3 and 5.5 Proj+Extract] {split_name}",
-                file="executor.py"
+                desc=f"Proj+Extract {split_name}",
+                file="executor.py",
+                step="3 and 5.5"
             ), None, None
         else:
             # No projection
@@ -282,6 +283,7 @@ class PipelineExecutor:
                 fn,
                 inputs,
                 batch_size,
-                desc=f"[Step 5.5 Extracting] {split_name}",
-                file="executor.py"
+                desc=f"Extracting {split_name}",
+                file="executor.py",
+                step="5.5"
             ), None, None
