@@ -93,28 +93,13 @@ class DistillationModel(ClosedLoopGenerativeModel):
         print(f"[Student] Training {self.student.__class__.__name__} to mimic Teacher...")
 
         projection_layer = kwargs.get("projection_layer")
+        
+        # 改善点: Student側でバッチ処理中に動的にProjectionを適用させるため、
+        # 事前に巨大な配列を作らず、生のinputsとkwargsをそのまま渡す
         if projection_layer is not None:
-            # We must apply projection in batches to avoid OOM before passing to student.train
-            # Or we can just project the whole thing if it fits, but standard FNN train expects raw data to fit.
-            # Student.train handles its own batching. We will just pass the projection_layer down
-            # or pre-project here. To match OOM-safe, we pre-project.
-            def proj_fn(x: JaxF64) -> JaxF64:
-                return projection_layer(x)
-            
-            print(f"[Distillation] Applying {type(projection_layer).__name__} to Student inputs...")
-            inputs_proj_np = batched_compute(
-                proj_fn,
-                to_np_f64(inputs),
-                batch_size=batch_sz,
-                desc="Pre-computing Student Projection",
-                file="model.py",
-                step="3B"
-            )
-            inputs_for_student = to_jax_f64(inputs_proj_np)
-        else:
-            inputs_for_student = inputs
+             print(f"[Distillation] Passing {type(projection_layer).__name__} to Student for dynamic application...")
 
-        student_logs = self.student.train(inputs_for_student, teacher_targets, log_prefix="4B", **kwargs) or {}
+        student_logs = self.student.train(inputs, teacher_targets, log_prefix="4B", **kwargs) or {}
 
         distill_mse = float(student_logs.get("final_loss", 0.0))
         student_logs.setdefault("distill_mse", distill_mse)

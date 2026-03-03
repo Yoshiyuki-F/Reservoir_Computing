@@ -88,8 +88,12 @@ class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
 
         return super().train(adapted_inputs, aligned_targets)
 
-    def predict(self, X: JaxF64) -> JaxF64:
-        """Predict with adapter-transformed inputs."""
+    def predict(self, X: JaxF64, **kwargs) -> JaxF64:
+        """Predict with optional dynamic projection and adapter-transformed inputs."""
+        projection_layer = kwargs.get("projection_layer")
+        if projection_layer is not None:
+             X = projection_layer(X)
+             
         # Check if inputs are already adapted
         if X.ndim == 2 and X.shape[-1] == self.layer_dims[0]:
             return super().predict(X)

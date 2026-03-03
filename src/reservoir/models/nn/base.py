@@ -139,10 +139,15 @@ class BaseFlaxModel(BaseModel, ABC):
         num_batches = num_samples // self.batch_size
         num_train_steps = self.epochs * num_batches  # Total training steps for scheduler
 
-        # Initialize State
+        projection_layer = kwargs.get("projection_layer")
+        
+        # Initialize State using the first sample (projected if necessary)
         rng = jax.random.PRNGKey(self.seed)
         init_key, _ = jax.random.split(rng)
+        
         sample_input = inputs[:1]
+        if projection_layer is not None:
+             sample_input = projection_layer(sample_input)
 
         if self._state is None:
             print("[nn.base.py] Initializing parameters...")
@@ -151,6 +156,8 @@ class BaseFlaxModel(BaseModel, ABC):
         # JIT function
         @jax.jit
         def train_step_jit(state, b_x, b_y):
+            if projection_layer is not None:
+                 b_x = projection_layer(b_x)
             new_state, loss = BaseFlaxModel._train_step(state, b_x, b_y, self.classification)
             return new_state, loss
 
