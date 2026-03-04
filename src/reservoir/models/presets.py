@@ -182,7 +182,7 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(1000,1000),
+            hidden_layers=(),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
