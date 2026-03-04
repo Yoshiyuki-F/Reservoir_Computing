@@ -272,10 +272,10 @@ FNN_DISTILLATION_QUANTUM_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=QUANTUM_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(100,),
+            hidden_layers=(),
         ),
     ),
-    readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_RIDGE_READOUT,
 )
 
 
