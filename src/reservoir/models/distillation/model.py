@@ -102,7 +102,9 @@ class DistillationModel(ClosedLoopGenerativeModel):
         batch_sz = self.training_config.batch_size
 
         def teacher_fn(x: JaxF64) -> JaxF64:
-            return jax.lax.stop_gradient(self.teacher(x, **kwargs))
+            projection_layer = kwargs.get("projection_layer")
+            x_proj = projection_layer(x) if projection_layer is not None else x
+            return jax.lax.stop_gradient(self.teacher(x_proj, **kwargs))
 
         if X.shape[0] > batch_sz:
             targets_np = batched_compute(
@@ -117,7 +119,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
         else:
             teacher_targets = self._compute_teacher_targets(X, **kwargs)
 
-        student_metrics = self.student.evaluate(X, teacher_targets)
+        student_metrics = self.student.evaluate(X, teacher_targets, **kwargs)
         return student_metrics
 
     def get_topology_meta(self) -> TopologyMeta:

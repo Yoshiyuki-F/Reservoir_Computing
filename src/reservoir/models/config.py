@@ -488,8 +488,6 @@ class DistillationConfig(ModelConfig):
     def validate(self, context: str = "") -> DistillationConfig:
         prefix = f"{context}: " if context else ""
         self.teacher.validate(context=f"{prefix}teacher")
-        if not self.student.hidden_layers:
-            raise ValueError(f"{prefix}student.hidden_layers must contain at least one layer size.")
         if any(width < 0 for width in self.student.hidden_layers):
             raise ValueError(f"{prefix}student.hidden_layers values must be non negative.")
         return self

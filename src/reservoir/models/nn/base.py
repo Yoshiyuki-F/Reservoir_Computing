@@ -160,7 +160,7 @@ class BaseFlaxModel(BaseModel, ABC):
                     print(f"[nn.base.py] Input already 2D {processed_x.shape}, skipping adapter ({adapter.__class__.__name__})")
                 else:
                     print(f"[nn.base.py] Pre-applying adapter ({adapter.__class__.__name__})...")
-                    processed_x = adapter(processed_x)
+                    processed_x = adapter(processed_x, log_label="4:Flatten")
                     processed_y = adapter.align_targets(processed_y)
 
         # ==============================================================
@@ -185,7 +185,7 @@ class BaseFlaxModel(BaseModel, ABC):
             if apply_proj_in_scan:
                 sample = projection_layer(sample)
             if apply_adapter_in_scan:
-                sample = adapter(sample)
+                sample = adapter(sample, log_label="4:Flatten")
             self._state = self._init_train_state(init_key, sample, num_train_steps)
 
         # Reshape into batches

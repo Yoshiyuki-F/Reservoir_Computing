@@ -121,21 +121,21 @@ rs_denom = 2.0 * bound - maxminusmin
 rs = maxplusmin / rs_denom if rs_denom != 0 else 0.0
 
 BAS_MNIST = BoundedAffineScalerConfig(
-    # scale=0.5630129536792166,  # 100
-    scale=scale,  # 1200
-    # relative_shift=-0.4680118430007132, # 100
-    relative_shift=rs, # 1200
+    scale=0.5630129536792166,  # 100
+    # scale=scale,  # 1200
+    relative_shift=-0.4680118430007132, # 100
+    # relative_shift=rs, # 1200
     # bound=1.0,
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=1200,
-    # input_scale=0.3543930218531782, #100
-    input_scale=0.3478958243673553,  # 1200
-    # input_connectivity=0.21745075681282766, #100
-    input_connectivity=0.32024990697532185, # 1200
-    # bias_scale=0.1725142451754484, #100
-    bias_scale= 0.9911807193106197, # 1200
+    n_units=100,
+    input_scale=0.3543930218531782, #100
+    # input_scale=0.3478958243673553,  # 1200
+    input_connectivity=0.21745075681282766, #100
+    # input_connectivity=0.32024990697532185, # 1200
+    bias_scale=0.1725142451754484, #100
+    # bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
@@ -143,12 +143,12 @@ RP_MNIST = RandomProjectionConfig(
 ###------Dynamics-------------------------------------------------
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    # spectral_radius= 1.921291918880454, #100
-    spectral_radius= 1.4707341636189577,  # 1200
-    # leak_rate= 0.36449529864842045, #100
-    leak_rate= 0.5078438853580478, #1200
-    # rc_connectivity=0.6784641706491135, #100
-    rc_connectivity=0.0760855941265183,  # 1200
+    spectral_radius= 1.921291918880454, #100
+    # spectral_radius= 1.4707341636189577,  # 1200
+    leak_rate= 0.36449529864842045, #100
+    # leak_rate= 0.5078438853580478, #1200
+    rc_connectivity=0.6784641706491135, #100
+    # rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
     aggregation=AggregationMode.MEAN,
@@ -182,7 +182,7 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(100,),
+            hidden_layers=(1000,1000),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT

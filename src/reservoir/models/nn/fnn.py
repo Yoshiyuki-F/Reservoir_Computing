@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
+import jax
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
@@ -258,6 +259,12 @@ class FNN(nn.Module):
         if len(self.layer_dims) < 2:
             raise ValueError("layer_dims must include at least input and output dimensions")
 
+
+        # コンパイルが走るため、本番のバッチサイズ(>1)の時のみ出力するようにします。
+        is_training_batch = x.shape[0] > 1
+        if is_training_batch:
+            print(f"FNN Input Shape: {x.shape}")
+
         hidden_output = None
         # 入力次元(layer_dims[0])はスキップし、隠れ層以降の次元のみを使用する
         target_dims = self.layer_dims[1:]
@@ -265,6 +272,10 @@ class FNN(nn.Module):
         for idx, feat in enumerate(target_dims):
             # nn.Denseは入力次元を自動推論するため、features（出力次元）だけ指定すればOK
             x = nn.Dense(features=feat, dtype=jnp.float64, param_dtype=jnp.float64)(x)
+
+            if is_training_batch:
+                print(f"Layer {idx} output shape: {x.shape}")
+
             is_last = idx == len(target_dims) - 1
             if not is_last:
                 x = nn.relu(x)
