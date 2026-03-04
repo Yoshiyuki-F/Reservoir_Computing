@@ -324,7 +324,7 @@ def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, 
     # 4. Readout
     if config is not None and hasattr(config, 'readout') and config.readout is not None and hasattr(config.readout, 'label'):
         readout_lbl = config.readout.label
-        if hasattr(config.readout, 'hidden_layers') and config.readout.hidden_layers:
+        if hasattr(config.readout, 'hidden_layers') and config.readout.hidden_layers is not None:
             lr = float(getattr(training_obj, 'learning_rate', 0.0)) if training_obj else 0.0
             if lr > 0:
                 filename_parts.append(f"{readout_lbl}_LR{lr:.0e}")

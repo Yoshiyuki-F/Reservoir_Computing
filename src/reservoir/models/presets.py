@@ -154,7 +154,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT
+    readout=FNNReadoutConfig(hidden_layers=())
 )
 '''
 uv run python -m reservoir.cli.main --model fnn_distillation --dataset mnist

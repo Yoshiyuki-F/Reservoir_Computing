@@ -155,10 +155,13 @@ class BaseFlaxModel(BaseModel, ABC):
                 apply_adapter_in_scan = True
                 print(f"[nn.base.py] Projection + adapter ({adapter.__class__.__name__}) will be applied per-batch inside JIT")
             else:
-                # No projection → safe to pre-compute adapter
-                print(f"[nn.base.py] Pre-applying adapter ({adapter.__class__.__name__})...")
-                processed_x = adapter(processed_x)
-                processed_y = adapter.align_targets(processed_y)
+                # No projection → adapter can be pre-applied, but only if input is not already 2D
+                if processed_x.ndim <= 2:
+                    print(f"[nn.base.py] Input already 2D {processed_x.shape}, skipping adapter ({adapter.__class__.__name__})")
+                else:
+                    print(f"[nn.base.py] Pre-applying adapter ({adapter.__class__.__name__})...")
+                    processed_x = adapter(processed_x)
+                    processed_y = adapter.align_targets(processed_y)
 
         # ==============================================================
         # Phase 2: Setup batching

@@ -7,12 +7,12 @@ from beartype import beartype
 from reservoir.readout.base import ReadoutModule
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.fnn import FNNModel
+from reservoir.training.config import TrainingConfig
+from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from reservoir.training.config import TrainingConfig
-    from reservoir.core.types import JaxF64, ConfigDict, TrainLogs
 
 
 @beartype
