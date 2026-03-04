@@ -5,17 +5,12 @@ from abc import ABC, abstractmethod
 from reservoir.core.types import NpF64, to_np_f64, to_jax_f64, FitResultDict, JaxF64
 import jax
 import jax.numpy as jnp
-from typing import cast, TYPE_CHECKING
+from typing import Any, cast, Callable, TYPE_CHECKING
 import numpy as np
 
 
 from reservoir.utils.batched_compute import batched_compute
-from reservoir.utils.reporting import (
-    print_ridge_search_results, 
-    print_feature_stats, 
-    print_chaos_metrics,
-    plot_intermediate_regression_results
-)
+from reservoir.utils.reporting import print_chaos_metrics, print_ridge_search_results, plot_ridgecv_intermediates, print_feature_stats
 from reservoir.utils.metrics import compute_score, calculate_chaos_metrics
 
 if TYPE_CHECKING:
@@ -90,7 +85,7 @@ def optimize_ridge_vmap(
     @jax.jit
     def solve_ridge_vectorized(lams: JaxF64) -> JaxF64:
         def solve_one(lam_l: float) -> JaxF64:
-            return jax.scipy.linalg.solve(XtX + lam_l * identity, Xty, assume_a="pos")
+            return jax.scipy.linalg.solve(XtX + lam_l * identity, Xty)
         return jax.vmap(solve_one)(lams)
 
     lambdas_jax = jnp.array(lambda_candidates)
@@ -142,11 +137,10 @@ def optimize_ridge_vmap(
         norm = float(jnp.linalg.norm(w_coef))
         weight_norms[lam_val] = norm
         
-        # Optional: Save residuals for analysis if using NMSE (Regression)
-        if metric_name.lower() == "nmse":
-            energy = float(np.mean(t_eval**2))
-            res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
-            residuals_history[lam_val] = res_sq
+        # Always save residuals for analysis (BoxPlot)
+        energy = float(np.mean(t_eval**2))
+        res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
+        residuals_history[lam_val] = res_sq
 
         # Robust argmin with Stability Constraint (Norm <= 1000)
         if norm <= NORM_THRESHOLD:
@@ -219,6 +213,103 @@ class ReadoutStrategy(ABC):
         val_final_state: tuple | None = None, # New Argument
     ) -> FitResultDict:
         """Fit readout and return predictions/metrics."""
+        pass
+
+    def _optimize_and_plot_ridge(
+        self,
+        readout: ReadoutModule,
+        train_Z: NpF64,
+        val_Z: NpF64,
+        train_y: NpF64,
+        val_y: NpF64,
+        frontend_ctx: FrontendContext,
+        dataset_meta: DatasetMetadata,
+        pipeline_config: PipelineConfig,
+        topo_meta: TopologyMeta,
+        inverse_fn: Callable[[NpF64], NpF64] | None = None,
+        metric_name: str = "NMSE",
+    ) -> tuple[float | None, float | None, dict, dict, dict | None, NpF64 | None]:
+        """
+        Shared logic for RidgeCV optimization, model updating, and intermediate plotting.
+        Returns: best_lambda, best_score, search_history, weight_norms, residuals_history, val_pred_np
+        """
+        from reservoir.readout.ridge import RidgeCV, RidgeRegression
+        if not isinstance(readout, RidgeCV):
+            print("[strategies.py] No hyperparameter search needed for this readout.")
+            readout.fit(to_jax_f64(train_Z), to_jax_f64(train_y))
+            val_pred_jax = readout.predict(to_jax_f64(val_Z))
+            val_pred_np = to_np_f64(val_pred_jax) if val_pred_jax is not None else None
+            return None, None, {}, {}, {}, val_pred_np
+
+        print(f"[strategies.py] Optimizing RidgeCV ({metric_name}) over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
+        
+        # Prepare JAX inputs
+        X_jax = to_jax_f64(train_Z)
+        y_jax = to_jax_f64(train_y)
+        if y_jax.ndim == 1:
+            y_jax = y_jax[:, None]
+        val_X_jax = to_jax_f64(val_Z)
+        
+        # Feature Expansion (PolyRidge)
+        if hasattr(readout, "map_features"):
+            X_jax = readout.map_features(X_jax)
+            val_X_jax = readout.map_features(val_X_jax)
+        
+        batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
+        
+        best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, residuals_history = optimize_ridge_vmap(
+            lambda_candidates=readout.lambda_candidates,
+            use_intercept=readout.use_intercept,
+            train_Z=X_jax,
+            train_y=y_jax,
+            val_Z=val_X_jax,
+            val_y=val_y,
+            metric_name=metric_name.lower(),
+            inverse_fn=inverse_fn,
+            batch_size=batch_size_cfg
+        )
+        
+        print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
+        
+        # Re-instantiate best model
+        best_idx = list(readout.lambda_candidates).index(best_lambda)
+        readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
+        
+        if readout.use_intercept:
+            readout.best_model.intercept_ = all_weights[best_idx, 0].ravel()
+            readout.best_model.coef_ = all_weights[best_idx, 1:]
+        else:
+            readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
+            readout.best_model.coef_ = all_weights[best_idx]
+        
+        print_ridge_search_results(cast("FitResultDict", {
+            "search_history": search_history,
+            "best_lambda": best_lambda,
+            "weight_norms": weight_norms,
+            "residuals_history": residuals_history
+        }), metric_name=metric_name)
+        
+        # Immediate Plotting
+        try:
+            plot_ridgecv_intermediates(
+                residuals_hist=residuals_history,
+                weight_norms=weight_norms,
+                best_lambda=best_lambda,
+                best_score=best_score,
+                val_y=val_y,
+                val_pred_np=best_val_pred_np,
+                frontend_ctx=frontend_ctx,
+                topo_meta=topo_meta,
+                pipeline_config=pipeline_config,
+                dataset_meta=dataset_meta,
+                model_type_str=str(pipeline_config.model_type.value),
+                readout=readout,
+                metric_name=metric_name,
+            )
+        except Exception as e:
+            print(f"[Warning] Failed to generate intermediate plots: {e}")
+            
+        return best_lambda, best_score, search_history, weight_norms, residuals_history, best_val_pred_np
 
 
 class EndToEndStrategy(ReadoutStrategy):
@@ -322,70 +413,23 @@ class ClassificationStrategy(ReadoutStrategy):
         if tf_reshaped is None or ty_reshaped is None:
             raise ValueError("train_Z and train_y must not be None for ClassificationStrategy")
 
-        search_history: dict[float, float] = {}
-        weight_norms: dict[float, float] = {}
-        best_lambda: float | None = None
-        best_score = -float("inf")
+        if vf_reshaped is None or val_y is None:
+            raise ValueError("Validation data required for ClassificationStrategy readout optimization")
 
-        from reservoir.readout.ridge import RidgeCV, RidgeRegression
-        if isinstance(readout, RidgeCV):
-            # Optimization loop (Moving responsibility from Model to Strategy Mapper)
-            print(f"[strategies.py] Optimizing RidgeCV over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
-            
-            # Prepare JAX inputs
-            train_Z_jax = to_jax_f64(tf_reshaped)
-            train_y_jax = to_jax_f64(ty_reshaped)
-            if vf_reshaped is None or val_y is None:
-                raise ValueError("Validation data required for RidgeCV optimization")
-            val_Z_jax = to_jax_f64(vf_reshaped)
-
-            # Feature Expansion (PolyRidge)
-            if hasattr(readout, "map_features"):
-                train_Z_jax = readout.map_features(train_Z_jax)
-                val_Z_jax = readout.map_features(val_Z_jax)
-
-            # --- Use Shared Optimization Logic ---
-            batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
-            best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, _ = optimize_ridge_vmap(
-                lambda_candidates=readout.lambda_candidates,
-                use_intercept=readout.use_intercept,
-                train_Z=train_Z_jax,
-                train_y=train_y_jax,
-                val_Z=val_Z_jax,
-                val_y=val_y,
-                metric_name=self.metric_name,
-                inverse_fn=None,
-                batch_size=batch_size_cfg
-            )
-            
-            print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
-            
-            # Re-instantiate best model
-            readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
-            best_idx = list(readout.lambda_candidates).index(best_lambda)
-            
-            if readout.use_intercept:
-                readout.best_model.intercept_ = all_weights[best_idx, 0].ravel()
-                readout.best_model.coef_ = all_weights[best_idx, 1:]
-            else:
-                readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
-                readout.best_model.coef_ = all_weights[best_idx]
-
-            print_ridge_search_results(cast("FitResultDict", {
-                "search_history": search_history,
-                "weight_norms": weight_norms,
-                "best_lambda": best_lambda,
-                "best_score": best_score,
-            }), metric_name="Accuracy")
-            
-            # Reuse best validation prediction
-            val_pred_np = best_val_pred_np
-            val_pred = to_jax_f64(val_pred_np) # Keep consistent type if needed downstream, though we use np for metrics
-        else:
-            print("[strategies.py] No hyperparameter search needed for this readout.")
-            readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
-            val_pred = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
-            val_pred_np = to_np_f64(val_pred) if val_pred is not None else None
+        best_lambda, best_score, search_history, weight_norms, _, val_pred_np = self._optimize_and_plot_ridge(
+            readout=readout,
+            train_Z=tf_reshaped,
+            val_Z=vf_reshaped,
+            train_y=ty_reshaped,
+            val_y=val_y,
+            frontend_ctx=frontend_ctx,
+            dataset_meta=dataset_meta,
+            pipeline_config=pipeline_config,
+            topo_meta=topo_meta,
+            inverse_fn=None,
+            metric_name="Accuracy"
+        )
+        val_pred = to_jax_f64(val_pred_np) if val_pred_np is not None else None
 
         print("\n=== Step 8: Final Predictions (Classification):===")
 
@@ -494,105 +538,37 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         vf_reshaped = self._flatten_3d_to_2d(val_Z, "val states")
         vy_reshaped = val_y
 
-        from reservoir.readout.ridge import RidgeCV, RidgeRegression
-        if isinstance(readout, RidgeCV):
-             # Define helper for unscaling inputs to compute consistent metrics (Raw NMSE)
-             scaler = frontend_ctx.preprocessor
-             
-             def _inverse(arr: NpF64) -> NpF64:
-                 if scaler is None:
-                     return arr
-                 # Basic inverse logic assuming (N, features)
-                 shape = arr.shape
-                 try:
-                     # Check if 1D and needs 2D
-                     val = arr
-                     if val.ndim == 1:
-                         val = val.reshape(-1, 1) # Assume single feature if 1D
-                     # Use scaler
-                     inv = scaler.inverse_transform(val)
-                     return inv.reshape(shape)
-                 except (ValueError, TypeError):
-                     return arr
+        if vf_reshaped is None or val_y is None:
+            raise ValueError("Validation data required for ClosedLoopRegressionStrategy readout optimization")
 
-             print(f"[strategies.py] Optimizing RidgeCV (NMSE) over {len(readout.lambda_candidates)} candidates (JAX Vectorized)...")
-             
-             # Prepare JAX inputs
-             X_jax = to_jax_f64(tf_reshaped)
-             y_jax = to_jax_f64(ty_reshaped)
-             if y_jax.ndim == 1:
-                 y_jax = y_jax[:, None]
-             
-             if vf_reshaped is None or val_y is None:
-                 raise ValueError("Validation data required for RidgeCV optimization")
-             val_X_jax = to_jax_f64(vf_reshaped)
-             
-             # Feature Expansion (PolyRidge)
-             if hasattr(readout, "map_features"):
-                 X_jax = readout.map_features(X_jax)
-                 val_X_jax = readout.map_features(val_X_jax)
-             
-             # --- Use Shared Optimization Logic ---
-             batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
-             best_lambda, best_score, search_history, weight_norms, best_val_pred_np, all_weights, residuals_history = optimize_ridge_vmap(
-                lambda_candidates=readout.lambda_candidates,
-                use_intercept=readout.use_intercept,
-                train_Z=X_jax,
-                train_y=y_jax,
-                val_Z=val_X_jax,
-                val_y=val_y,
-                metric_name="nmse",
-                inverse_fn=_inverse,
-                batch_size=batch_size_cfg
-             )
-             
-             print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
-             best_idx = list(readout.lambda_candidates).index(best_lambda)
-             readout.best_model = RidgeRegression(ridge_lambda=best_lambda, use_intercept=readout.use_intercept)
-             if readout.use_intercept:
-                 readout.best_model.intercept_ = all_weights[best_idx, 0].ravel()
-                 readout.best_model.coef_ = all_weights[best_idx, 1:]
-             else:
-                 readout.best_model.intercept_ = jnp.zeros(all_weights.shape[-1])
-                 readout.best_model.coef_ = all_weights[best_idx]
-             
-             print_ridge_search_results(cast("FitResultDict", {
-                "search_history": search_history,
-                "best_lambda": best_lambda,
-                "weight_norms": weight_norms,
-                "residuals_history": residuals_history
-             }), metric_name="NMSE")
-             
-             # --- Step 7.5: Immediate Plotting (Standardized via reporting.py) ---
-             plot_intermediate_regression_results(
-                 residuals_hist=residuals_history,
-                 weight_norms=weight_norms,
-                 best_lambda=best_lambda,
-                 best_score=best_score,
-                 val_y=val_y,
-                 val_pred_np=best_val_pred_np,
-                 frontend_ctx=frontend_ctx,
-                 topo_meta=topo_meta,
-                 pipeline_config=pipeline_config,
-                 dataset_meta=dataset_meta,
-                 model_type_str=str(pipeline_config.model_type.value),
-                 readout=readout
-             )
-             
-             # Reuse best validation prediction
-             val_pred_np = best_val_pred_np
+        scaler = frontend_ctx.preprocessor
+         
+        def _inverse(arr: NpF64) -> NpF64:
+            if scaler is None:
+                return arr
+            shape = arr.shape
+            try:
+                val = arr
+                if val.ndim == 1:
+                    val = val.reshape(-1, 1)
+                inv = scaler.inverse_transform(val)
+                return inv.reshape(shape)
+            except (ValueError, TypeError):
+                return arr
 
-        else:
-             print("[strategies.py] No hyperparameter search needed for this readout.")
-             readout.fit(to_jax_f64(tf_reshaped), to_jax_f64(ty_reshaped))
-             best_lambda = None
-             best_score = None
-             search_history = {}
-             weight_norms = {}
-             residuals_history = {}
-             
-             val_pred_jax = readout.predict(to_jax_f64(val_Z)) if val_Z is not None else None
-             val_pred_np = to_np_f64(val_pred_jax) if val_pred_jax is not None else None
+        best_lambda, best_score, search_history, weight_norms, residuals_history, val_pred_np = self._optimize_and_plot_ridge(
+            readout=readout,
+            train_Z=tf_reshaped,
+            val_Z=vf_reshaped,
+            train_y=ty_reshaped,
+            val_y=val_y,
+            frontend_ctx=frontend_ctx,
+            dataset_meta=dataset_meta,
+            pipeline_config=pipeline_config,
+            topo_meta=topo_meta,
+            inverse_fn=_inverse,
+            metric_name="NMSE"
+        )
 
         # Display Validation Metrics (Open Loop) immediately
         if val_pred_np is not None and val_y is not None:

@@ -503,7 +503,7 @@ def _plot_regression_section(
     # Note: Lambda Search BoxPlot is now handled in strategies.py (Step 7.5)
 
 
-def plot_intermediate_regression_results(
+def plot_ridgecv_intermediates(
     residuals_hist: dict[float, np.ndarray] | None,
     weight_norms: dict[float, float] | None,
     best_lambda: float | None,
@@ -515,7 +515,8 @@ def plot_intermediate_regression_results(
     pipeline_config: PipelineConfig,
     dataset_meta: DatasetMetadata,
     model_type_str: str,
-    readout: ReadoutModule | None
+    readout: ReadoutModule | None,
+    metric_name: str = "NMSE",
 ) -> None:
     """Standardized intermediate plotting for Step 7 (Validation phase)."""
     try:
@@ -532,12 +533,12 @@ def plot_intermediate_regression_results(
                 residuals_hist, boxplot_filename,
                 title=f"Step 7: Lambda Search Residuals ({model_type_str})",
                 best_lambda=best_lambda,
-                metric_name="NMSE",
+                metric_name=metric_name,
                 weight_norms=weight_norms
             )
 
-        # 2. Validation Prediction Plot (Open-Loop)
-        if val_pred_np is not None and val_y is not None:
+        # 2. Validation Prediction Plot (Open-Loop) - ONLY for Regression
+        if val_pred_np is not None and val_y is not None and metric_name.lower() != "accuracy":
             val_plot_filename = f"outputs/{dataset_name}/{'_'.join(filename_parts)}_val_prediction.png"
             
             # Unscale for plotting if possible
@@ -558,7 +559,7 @@ def plot_intermediate_regression_results(
                 targets=val_y_raw,
                 predictions=val_p_raw,
                 filename=val_plot_filename,
-                title=f"Step 7: Val Open-Loop (NMSE: {best_score:.2e}, ||w||: {best_norm:.2e})"
+                title=f"Step 7: Val Open-Loop ({metric_name}: {best_score:.2e}, ||w||: {best_norm:.2e})"
             )
     except Exception as e:
         print(f"    [Warning] Intermediate plotting failed in reporting.py: {e}")
