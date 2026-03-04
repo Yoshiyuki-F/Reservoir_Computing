@@ -266,11 +266,9 @@ class FNN(nn.Module):
             print(f"FNN Input Shape: {x.shape}")
 
         hidden_output = None
-        # 入力次元(layer_dims[0])はスキップし、隠れ層以降の次元のみを使用する
         target_dims = self.layer_dims[1:]
 
         for idx, feat in enumerate(target_dims):
-            # nn.Denseは入力次元を自動推論するため、features（出力次元）だけ指定すればOK
             x = nn.Dense(features=feat, dtype=jnp.float64, param_dtype=jnp.float64)(x)
 
             if is_training_batch:

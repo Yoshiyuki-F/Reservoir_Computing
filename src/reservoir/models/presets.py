@@ -210,7 +210,7 @@ FNN_PRESET = PipelineConfig(
     preprocess=ZeroToOne,
     projection=None,
     model=FNNConfig(
-        hidden_layers=(100,),
+        hidden_layers=(),
     ),
     readout=None
 )
