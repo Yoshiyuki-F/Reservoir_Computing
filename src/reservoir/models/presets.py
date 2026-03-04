@@ -110,33 +110,43 @@ DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,100))
 # )
 
 
+feature_min, feature_max =-0.6754946253854848, 0.8288112006441126 # 1200
+
+#1200
+bound = 1.0
+maxminusmin:float = feature_max - feature_min
+maxplusmin:float = feature_max + feature_min
+scale = maxminusmin / (2.0 * bound)
+rs_denom = 2.0 * bound - maxminusmin
+rs = maxplusmin / rs_denom if rs_denom != 0 else 0.0
+
 BAS_MNIST = BoundedAffineScalerConfig(
-    scale=0.5630129536792166,  # 100
-    # scale=0.3478958243673553,  # 1200
-    relative_shift=-0.4680118430007132, # 100
-    # relative_shift=0.32024990697532185, # 1200
-    bound=1.0,
+    # scale=0.5630129536792166,  # 100
+    scale=scale,  # 1200
+    # relative_shift=-0.4680118430007132, # 100
+    relative_shift=rs, # 1200
+    # bound=1.0,
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=100,
-    input_scale=0.3543930218531782, #100
-    # input_scale=0.3478958243673553,  # 1200
-    input_connectivity=0.21745075681282766, #100
-    # input_connectivity=0.32024990697532185, # 1200
-    bias_scale=0.1725142451754484, #100
-    # bias_scale= 0.9911807193106197, # 1200
+    n_units=1200,
+    # input_scale=0.3543930218531782, #100
+    input_scale=0.3478958243673553,  # 1200
+    # input_connectivity=0.21745075681282766, #100
+    input_connectivity=0.32024990697532185, # 1200
+    # bias_scale=0.1725142451754484, #100
+    bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    spectral_radius= 1.921291918880454, #100
-    # spectral_radius= 1.4707341636189577,  # 1200
-    leak_rate= 0.36449529864842045, #100
-    # leak_rate= 0.5078438853580478, #1200
-    rc_connectivity=0.6784641706491135, #100
-    # rc_connectivity=0.0760855941265183,  # 1200
+    # spectral_radius= 1.921291918880454, #100
+    spectral_radius= 1.4707341636189577,  # 1200
+    # leak_rate= 0.36449529864842045, #100
+    leak_rate= 0.5078438853580478, #1200
+    # rc_connectivity=0.6784641706491135, #100
+    rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
     aggregation=AggregationMode.MEAN,
