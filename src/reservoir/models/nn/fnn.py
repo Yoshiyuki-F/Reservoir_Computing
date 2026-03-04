@@ -25,6 +25,10 @@ from reservoir.models.generative import ClosedLoopGenerativeModel
 from reservoir.layers.adapters import Adapter, Flatten, TimeDelayEmbedding
 
 
+# 全体の実行を通して、モデルの構造(Shape)を一度だけ出力するためのフラグ
+_LOGGED_ONCE = False
+
+
 @beartype
 class FNNModel(BaseFlaxModel, ClosedLoopGenerativeModel):
     """
@@ -253,17 +257,22 @@ class FNN(nn.Module):
 
     @nn.compact
     def __call__(self, x: JaxF64):
+        global _LOGGED_ONCE
         # assume x is already jax array from batched_compute
         if x.ndim != 2:
             raise ValueError(f"Expected 2D input (batch, features), got shape {x.shape}")
         if len(self.layer_dims) < 2:
             raise ValueError("layer_dims must include at least input and output dimensions")
 
-
-        # コンパイルが走るため、本番のバッチサイズ(>1)の時のみ出力するようにします。
+        # JAXのコンパイル（トレース）時に1回だけ呼ばれる通常のprintを使うことで、
+        # 自動的に「最初の1回（コンパイル時）」だけShape等が出力されます。
+        # _LOGGED_ONCEフラグを使って、訓練(batch>1)の最初の1バッチ/Shapeのみを出力します。
         is_training_batch = x.shape[0] > 1
-        if is_training_batch:
-            print(f"FNN Input Shape: {x.shape}")
+        should_log = is_training_batch and not _LOGGED_ONCE
+        
+        if should_log:
+            print(f"FNN Input Shape (Batchsize, Features) = {x.shape}")
+            _LOGGED_ONCE = True
 
         hidden_output = None
         target_dims = self.layer_dims[1:]
@@ -271,8 +280,8 @@ class FNN(nn.Module):
         for idx, feat in enumerate(target_dims):
             x = nn.Dense(features=feat, dtype=jnp.float64, param_dtype=jnp.float64)(x)
 
-            if is_training_batch:
-                print(f"Layer {idx} output shape: {x.shape}")
+            if should_log:
+                print(f"Layer {idx} output shape (Batchsize, Features) = {x.shape}")
 
             is_last = idx == len(target_dims) - 1
             if not is_last:
