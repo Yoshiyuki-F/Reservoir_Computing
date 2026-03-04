@@ -292,18 +292,22 @@ def get_projection_label(config: PipelineConfig, topo_meta: TopologyMeta) -> str
 
 def infer_filename_parts(topo_meta: TopologyMeta, training_obj: TrainingConfig, model_type_str: str, readout: ReadoutModule | None = None, config: PipelineConfig | None = None) -> list[str]:
     # 1. Model Type & Parameters
-    if config is not None and hasattr(config, 'model') and config.model is not None and hasattr(config.model, 'label'):
-        # Get base label from config
-        model_str = config.model.label
-
+    model_str = str(model_type_str)
+    
+    if config is not None:
+        # Some configs might be nested or we just need the underlying model config
+        curr_cfg = config
+        while hasattr(curr_cfg, 'model') and getattr(curr_cfg, 'model') is not None:
+            curr_cfg = getattr(curr_cfg, 'model')
+            
+        if hasattr(curr_cfg, 'label'):
+            model_str = curr_cfg.label
+            
         # If n_qubits was omitted in QRC config, pull it from projection
         if "q?" in model_str and hasattr(config, "projection") and config.projection:
             n_qubits = getattr(config.projection, "n_units", None)
             if n_qubits is not None:
                 model_str = model_str.replace("q?", f"q{n_qubits}")
-    else:
-        # Fallback
-        model_str = str(model_type_str)
 
     filename_parts: list[str] = [model_str]
 

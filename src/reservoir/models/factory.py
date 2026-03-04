@@ -30,6 +30,7 @@ class ModelFactory:
         input_dim: int | None = None,
         output_dim: int | None = None,
         input_shape: tuple[int, ...] | None = None,
+        classification: bool = False,
     ) -> ClosedLoopGenerativeModel:
 
         if input_dim is None or input_dim <= 0:
@@ -93,6 +94,7 @@ class ModelFactory:
                 training_config=training_cfg,
                 input_dim=int(flattened_dim),  # Effective input dimension (flattened/windowed)
                 output_dim=output_dim,
+                classification=classification,
             )
             
             # Attach topology metadata for FNN

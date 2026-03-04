@@ -43,6 +43,7 @@ class PipelineModelBuilder:
             input_dim=frontend_ctx.input_dim_for_factory,
             output_dim=meta_n_outputs,
             input_shape=frontend_ctx.input_shape_for_meta,
+            classification=dataset_meta.classification,
         )
 
         # 4. Build Topology Metadata

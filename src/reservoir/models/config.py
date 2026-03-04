@@ -530,7 +530,7 @@ class FNNConfig(ModelConfig):
     def label(self) -> str:
         layers = "-".join(str(w) for w in (self.hidden_layers or ()))
         w = f"_w{int(self.window_size)}" if self.window_size is not None else ""
-        return f"nn{layers}{w}"
+        return f"fnn_{'_'.join(str(w) for w in (self.hidden_layers or ()))}{w}"
 
 
 
