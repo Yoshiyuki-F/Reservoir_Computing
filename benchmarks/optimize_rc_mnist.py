@@ -149,14 +149,14 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # (BoundedAffine)
 
-        scale = trial.suggest_float("scale", 0.00000001, 1.0)
+        scale = trial.suggest_float("scale", 0.0, 1.0)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
         # relative_shift = trial.suggest_float("relative_shift", 0.0, 0.0)
 
 
         #=======Projection======================================================================
 
-        input_scale = trial.suggest_float("input_scale", 0.1, 1.0)
+        input_scale = trial.suggest_float("input_scale", 0.0, 1.0)
         # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
         input_connectivity = trial.suggest_float("input_connectivity", 0.0, 1.0)
@@ -339,15 +339,15 @@ def main():
         # (min, max, input_scale, input_connectivity, bias_scale, spectral_radius, leak_rate, rc_connectivity)
         (-1.0, 1.0,
          0.03203273936326348, 0.7789498820486052, 0.6664704836440828,
-         1.4068899032773172, 0.6854757236951003, 0.6213282741686085), # 0.8759999871253967
+         1.4068899032773172, 0.6854757236951003, 0.6213282741686085), # 0.8759999871253967 before warmup integration
 
         (0.0, 1.0,
          0.11524935267101843, 0.1381581069782872, 0.7862943891668603,
-         1.4537351265687286, 0.7352675282751304, 0.4402710000522045), #0.8798999786376953
+         1.4537351265687286, 0.7352675282751304, 0.4402710000522045), #0.8798999786376953 before warmup integration
 
         (-0.07768410112268466, 0.08160917176536134,
          1.0, 0.11458754901458218, 0.8295811429210161,
-         1.45, 0.66,0.457758485877939), #0.877
+         1.45, 0.66,0.457758485877939), #0.877 before warmup integration
 
         (-0.7675280665952444, 0.35849784076318864,
          0.3543930218531782, 0.21745075681282766, 0.1725142451754484,
