@@ -140,6 +140,8 @@ RP_MNIST = RandomProjectionConfig(
 )
 
 
+###------Dynamics-------------------------------------------------
+
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     # spectral_radius= 1.921291918880454, #100
     spectral_radius= 1.4707341636189577,  # 1200
@@ -150,6 +152,21 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 
     seed=42,
     aggregation=AggregationMode.MEAN,
+)
+
+# Quantum reservoir dynamics (Classification - MEAN aggregation)
+QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
+    n_layers=3,
+    seed=41,
+    aggregation=AggregationMode.MEAN,
+    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
+    leak_rate=1.0,         # No leaky integration (backward compatible)
+    measurement_basis="Z+ZZ",
+    noise_type="clean",
+    noise_prob=0.0,
+    readout_error=0.0,
+    n_trajectories=0,
+    use_reuploading=True,
 )
 
 
@@ -216,41 +233,29 @@ FNN_PRESET = PipelineConfig(
 # Quantum Reservoir Definitions
 # -----------------------------------------------------------------------------
 
-# Quantum reservoir dynamics (Classification - MEAN aggregation)
-QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
-    n_layers=3,
-    seed=41,
-    aggregation=AggregationMode.MEAN,
-    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
-    leak_rate=1.0,         # No leaky integration (backward compatible)
-    measurement_basis="Z+ZZ",
-    noise_type="clean",
-    noise_prob=0.0,
-    readout_error=0.0,
-    n_trajectories=0,
-    use_reuploading=True,
+min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
+scale = (max - min) / 2* bound
+relative_shift = (max + min)/2 * bound - (max - min)
+
+s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048
+QUANTUM_BAPCA = BoundedAffinePCAConfig(
+    n_units=10,
+    scale=s,
+    relative_shift=r,
+    bound=math.pi,
 )
 
 ### -----------------------------------------------------------------------------
 """
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mnist
 """
-min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
-scale = (max - min) / 2* bound
-relative_shift = (max + min)/2 * bound - (max - min)
 
-s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048
 QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=StandardScalerConfig(),
-    projection=BoundedAffinePCAConfig(
-        n_units=10,
-        scale=s,
-        relative_shift=r,
-        bound=math.pi,
-    ),
+    projection=QUANTUM_BAPCA,
     model=QuantumReservoirConfig(
         n_layers=1,
         seed=41,
@@ -267,28 +272,30 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 
-TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
-    name="quantum_reservoir",
-    model_type=Model.QUANTUM_RESERVOIR,
-    description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
-    projection=None, # No projection — MinMaxScaler output goes directly to R-gate
-    model=QuantumReservoirConfig(
-        n_qubits=6,
-        n_layers=7,
-        seed=42,
-        aggregation=AggregationMode.SEQUENCE,
-        feedback_scale=3.288848187732551,    # a_fb: R gate feedback scaling (paper default)
-        leak_rate=0.11967302052818608,         # Leaky integrator rate (tunable by optimizer)
-        measurement_basis="Z+ZZ",
-        noise_type="clean",
-        noise_prob=0.0,
-        readout_error=0.0,
-        n_trajectories=0,
-        use_reuploading=True,
-    ),
-    readout=DEFAULT_POLY_RIDGE_READOUT,
-)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 "=============================================Time series Presets================================================================================================================"
 
@@ -382,7 +389,30 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 )
 
 
+# --------------------------------------------------------------------------
 
+TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
+    name="quantum_reservoir",
+    model_type=Model.QUANTUM_RESERVOIR,
+    description="Quantum Gate-Based Reservoir Computing (Time Series)",
+    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
+    projection=None, # No projection — MinMaxScaler output goes directly to R-gate
+    model=QuantumReservoirConfig(
+        n_qubits=6,
+        n_layers=7,
+        seed=42,
+        aggregation=AggregationMode.SEQUENCE,
+        feedback_scale=3.288848187732551,    # a_fb: R gate feedback scaling (paper default)
+        leak_rate=0.11967302052818608,         # Leaky integrator rate (tunable by optimizer)
+        measurement_basis="Z+ZZ",
+        noise_type="clean",
+        noise_prob=0.0,
+        readout_error=0.0,
+        n_trajectories=0,
+        use_reuploading=True,
+    ),
+    readout=DEFAULT_POLY_RIDGE_READOUT,
+)
 
 
 "============================================================================================"
