@@ -184,8 +184,8 @@ def to_jax_f64(x: NpF64) -> JaxF64:
     - NaN/Inf が混入していたら即クラッシュ
     - jax.device_put で明示的にGPUへ転送
     """
-    # if np.any(np.isnan(x)):
-    #     raise ValueError(f"NaN detected at CPU→GPU boundary! shape={x.shape}")
+    if np.any(np.isnan(x)):
+        raise ValueError(f"NaN detected at CPU→GPU boundary! shape={x.shape}")
     if np.any(np.isinf(x)):
         raise ValueError(f"Inf detected at CPU→GPU boundary! shape={x.shape}")
     ret = jax.device_put(jnp.array(x, dtype=jnp.float64))
@@ -203,8 +203,8 @@ def to_np_f64(x: JaxF64) -> NpF64:
     - np.asarray で明示的にCPUへ回収
     """
     result = np.asarray(x, dtype=np.float64)
-    # if np.any(np.isnan(result)):
-    #     raise ValueError(f"NaN detected at GPU→CPU boundary! shape={result.shape}")
+    if np.any(np.isnan(result)):
+        raise ValueError(f"NaN detected at GPU→CPU boundary! shape={result.shape}")
     if np.any(np.isinf(result)):
         raise ValueError(f"Inf detected at GPU→CPU boundary! shape={result.shape}")
     return result

@@ -109,6 +109,13 @@ MINMAX_MNIST = MinMaxScalerConfig(
     feature_max=0.8288112006441126,  # 1200
 )
 
+
+BAS_MNIST = BoundedAffineScalerConfig(
+    scale=0.3478958243673553,  # 1200
+    relative_shift=0.32024990697532185, # 1200
+    bound=1.0,
+)
+
 RP_MNIST = RandomProjectionConfig(
     n_units=100,
     # input_scale=0.3543930218531782, #100
@@ -142,7 +149,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MINMAX_MNIST,
+    preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
@@ -154,7 +161,7 @@ FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
     description="Feedforward Neural Network with Reservoir Distillation",
-    preprocess=MINMAX_MNIST,
+    preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
@@ -169,7 +176,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
     model_type=Model.PASSTHROUGH,
     description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=MINMAX_MNIST,
+    preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,

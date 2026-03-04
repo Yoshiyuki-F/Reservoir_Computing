@@ -218,7 +218,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
                  # We still return valid accuracy, but mark it.
 
             print(f"Trial {trial.number}: Acc={accuracy:.4f}, λ={best_lambda} "
-                  f"(min={feature_min:.2f}, max={feature_max:.2f}, in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
+                  f"(scale={scale:.2f}, shift={relative_shift:.2f}, in={input_scale:.2f}, ic={input_connectivity:.2f}, bs={bias_scale:.2f}, sr={spectral_radius:.2f}, lr={leak_rate:.2f}, rc={rc_connectivity:.2f})")
 
             trial.set_user_attr("status", "success")
 
@@ -356,11 +356,12 @@ def main():
     ]
 
     for min, max, input_scale, input_connectivity, bias_scale, spectral_radius, leak_rate, rc_connectivity in historical_params:
-        bound = 1.0
+        bound = getattr(CLASSICAL_RESERVOIR_PRESET.preprocess, "bound", 1.0)
         maxminusmin = max - min
         maxplusmin = max + min
-        scale = maxminusmin / 2 * bound
-        rs = maxplusmin / 2* bound - maxminusmin
+        scale = maxminusmin / (2.0 * bound)
+        rs_denom = 2.0 * bound - maxminusmin
+        rs = maxplusmin / rs_denom if rs_denom != 0 else 0.0
 
         # あなたが見つけたベストな値を登録
         study.enqueue_trial({
