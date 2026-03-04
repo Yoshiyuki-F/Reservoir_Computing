@@ -54,7 +54,7 @@ class ModelFactory:
 
         if pipeline_enum in {Model.FNN_DISTILLATION_CLASSICAL, Model.FNN_DISTILLATION_QUANTUM}:
             if not isinstance(config.model, DistillationConfig):
-                raise TypeError(f"FNN_DISTILLATION pipeline requires DistillationConfig, got {type(config.model)}.")
+                raise TypeError(f"fnn_distillation_classical pipeline requires DistillationConfig, got {type(config.model)}.")
             return DistillationFactory.create_model(
                 distillation_config=config.model,
                 training=training_cfg,

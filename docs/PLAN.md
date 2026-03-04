@@ -56,7 +56,7 @@
 3.  **[Step 2]** `models/nn/base.py` の学習ループを、Generator を消費する形に書き換える。
 4.  **[Step 3]** `models/distillation/model.py` を改修し、Teacher のターゲット生成と Student の学習をバッチレベルで統合する（OOM対策コードの削除）。
 5.  **[Step 4]** `executor.py` を改修し、データの受け渡し方を Generator ベースに変更する。
-6.  **[Validation]** `uv run python -m reservoir.cli.main --model fnn_distillation --dataset mnist` を実行し、OOM が発生せず、クリーンなログが出力されることを確認する。
+6.  **[Validation]** `uv run python -m reservoir.cli.main --model fnn_distillation_classical --dataset mnist` を実行し、OOM が発生せず、クリーンなログが出力されることを確認する。
 7.  **[Cleanup]** `batched_compute.py` の整理と、`ARCHITECTURE.md` の更新。
 
 この設計変更により、「モデルはデータの出所や形状変換を知らなくてよい」「Executorはメモリ管理を知らなくてよい」という本来の Clean Architecture が達成されます。
