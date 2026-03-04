@@ -89,13 +89,19 @@ DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
 
-DEFAULT_POLY_RIDGE_READOUT = PolyRidgeReadoutConfig(
+DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
     use_intercept=True,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="square_only",
 )
 
+DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
+    use_intercept=True,
+    lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
+    degree=2,
+    mode="interaction_only",
+)
 
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,100))
 
@@ -190,17 +196,6 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
 
 
 
-PASSTHROUGH_PRESET = PipelineConfig(
-    name="passthrough",
-    model_type=Model.PASSTHROUGH,
-    description="Passthrough model (Projection -> Aggregation, no dynamics)",
-    preprocess=BAS_MNIST,
-    projection=RP_MNIST,
-    model=PassthroughConfig(
-        aggregation=AggregationMode.MEAN,
-    ),
-    readout=DEFAULT_RIDGE_READOUT
-)
 
 
 FNN_PRESET = PipelineConfig(
@@ -219,14 +214,15 @@ FNN_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 # Quantum Reservoir Definitions
 # -----------------------------------------------------------------------------
+#
+# min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
+# scale = (max - min) / 2* bound
+# relative_shift = (max + min)/2 * bound - (max - min)
 
-min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
-scale = (max - min) / 2* bound
-relative_shift = (max + min)/2 * bound - (max - min)
-
-s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048
+s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
+# s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
 QUANTUM_BAPCA = BoundedAffinePCAConfig(
-    n_units=10,
+    n_units=6,
     scale=s,
     relative_shift=r,
     bound=math.pi,
@@ -238,8 +234,8 @@ QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
     n_layers=1,
     seed=41,
     aggregation=AggregationMode.MEAN,
-    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
-    leak_rate=1.0,         # No leaky integration (backward compatible)
+    feedback_scale=f,    # a_fb=0.0 means no feedback (pure feedforward mode)
+    leak_rate=lr,         # No leaky integration (backward compatible)
     measurement_basis="Z+ZZ",
     noise_type="clean",
     noise_prob=0.0,
@@ -260,7 +256,7 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=QUANTUM_BAPCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_POLY_RIDGE_READOUT,
+    readout=DEFAULT_RIDGE_READOUT,
 )
 
 
@@ -284,8 +280,20 @@ FNN_DISTILLATION_QUANTUM_PRESET = PipelineConfig(
 
 
 
-
-
+PASSTHROUGH_PRESET = PipelineConfig(
+    name="passthrough",
+    model_type=Model.PASSTHROUGH,
+    description="Passthrough model (Projection -> Aggregation, no dynamics)",
+    # preprocess=BAS_MNIST,
+    # projection=RP_MNIST,
+    preprocess=StandardScalerConfig(),
+    projection=QUANTUM_BAPCA,
+    model=PassthroughConfig(
+        aggregation=AggregationMode.MEAN,
+    ),
+    # readout= DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    readout=DEFAULT_RIDGE_READOUT
+)
 
 
 
@@ -416,7 +424,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         n_trajectories=0,
         use_reuploading=True,
     ),
-    readout=DEFAULT_POLY_RIDGE_READOUT,
+    readout=DEFAULT_POLY_SQUARE_ONLY_READOUT,
 )
 
 
