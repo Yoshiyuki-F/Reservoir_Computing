@@ -51,9 +51,8 @@ class Flatten(Adapter):
         else:
             result = X.flatten()
 
-        if log_label is not None:
-            print_feature_stats(to_np_f64(result), "adapter.py", log_label)
-
+        label = log_label if log_label is not None else "4:Flatten"
+        print_feature_stats(to_np_f64(result), "adapter.py", label)
         return result
 
     def align_targets(self, targets: JaxF64, log_label: str | None = None, params: KwargsDict | None = None) -> JaxF64:
