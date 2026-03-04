@@ -472,7 +472,7 @@ class DistillationConfig(ModelConfig):
     """Configuration for distilling reservoir dynamics into a Student FNN."""
     """Step 5 and 6 distillation fnn dynamics parameters."""
 
-    teacher: ClassicalReservoirConfig
+    teacher: ClassicalReservoirConfig | QuantumReservoirConfig
     student: FNNConfig
 
     def __post_init__(self) -> None:
@@ -497,7 +497,8 @@ class DistillationConfig(ModelConfig):
     @property
     def label(self) -> str:
         layers = "-".join(str(w) for w in (self.student.hidden_layers or ()))
-        return f"fnn_distillation_{layers}"
+        prefix = "fnn_distillation_quantum" if isinstance(self.teacher, QuantumReservoirConfig) else "fnn_distillation_classical"
+        return f"{prefix}_{layers}"
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,8 @@ class Model(enum.StrEnum):
 
     CLASSICAL_RESERVOIR = "classical_reservoir"
     FNN = "fnn"
-    FNN_DISTILLATION = "fnn_distillation"
+    FNN_DISTILLATION_CLASSICAL = "fnn_distillation_classical"
+    FNN_DISTILLATION_QUANTUM = "fnn_distillation_quantum"
     RNN_DISTILLATION = "rnn-distillation"
     QUANTUM_RESERVOIR = "quantum_reservoir"
     PASSTHROUGH = "passthrough"

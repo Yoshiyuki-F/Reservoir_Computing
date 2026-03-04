@@ -154,21 +154,6 @@ CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
     aggregation=AggregationMode.MEAN,
 )
 
-# Quantum reservoir dynamics (Classification - MEAN aggregation)
-QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
-    n_layers=3,
-    seed=41,
-    aggregation=AggregationMode.MEAN,
-    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
-    leak_rate=1.0,         # No leaky integration (backward compatible)
-    measurement_basis="Z+ZZ",
-    noise_type="clean",
-    noise_prob=0.0,
-    readout_error=0.0,
-    n_trajectories=0,
-    use_reuploading=True,
-)
-
 
 # -----------------------------------------------------------------------------
 '''
@@ -186,22 +171,24 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
 )
 
 '''
-uv run python -m reservoir.cli.main --model fnn_distillation --dataset mnist
+uv run python -m reservoir.cli.main --model fnn_distillation_classical --dataset mnist
 '''
-FNN_DISTILLATION_PRESET = PipelineConfig(
-    name="fnn_distillation",
-    model_type=Model.FNN_DISTILLATION,
-    description="Feedforward Neural Network with Reservoir Distillation",
+FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
+    name="fnn_distillation_classical",
+    model_type=Model.FNN_DISTILLATION_CLASSICAL,
+    description="Feedforward Neural Network with Classical Reservoir Distillation",
     preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(1000,1000),
+            hidden_layers=(100,),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
 )
+
+
 
 PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
@@ -245,6 +232,22 @@ QUANTUM_BAPCA = BoundedAffinePCAConfig(
     bound=math.pi,
 )
 
+
+# Quantum reservoir dynamics (Classification - MEAN aggregation)
+QUANTUM_RESERVOIR_DYNAMICS = QuantumReservoirConfig(
+    n_layers=1,
+    seed=41,
+    aggregation=AggregationMode.MEAN,
+    feedback_scale=0.0,    # a_fb=0.0 means no feedback (pure feedforward mode)
+    leak_rate=1.0,         # No leaky integration (backward compatible)
+    measurement_basis="Z+ZZ",
+    noise_type="clean",
+    noise_prob=0.0,
+    readout_error=0.0,
+    n_trajectories=0,
+    use_reuploading=True,
+)
+
 ### -----------------------------------------------------------------------------
 """
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mnist
@@ -256,26 +259,28 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     description="Quantum Gate-Based Reservoir Computing",
     preprocess=StandardScalerConfig(),
     projection=QUANTUM_BAPCA,
-    model=QuantumReservoirConfig(
-        n_layers=1,
-        seed=41,
-        aggregation=AggregationMode.MEAN,
-        feedback_scale=f,    # a_fb=0.0 means no feedback (pure feedforward mode)
-        leak_rate=lr,         # No leaky integration (backward compatible)
-        measurement_basis="Z+ZZ",
-        noise_type="clean",
-        noise_prob=0.0,
-        readout_error=0.0,
-        n_trajectories=0,
-        use_reuploading=True,
-    ),
+    model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_POLY_RIDGE_READOUT,
 )
 
 
-
-
-
+'''
+uv run python -m reservoir.cli.main --model fnn_distillation_quantum --dataset mnist
+'''
+FNN_DISTILLATION_QUANTUM_PRESET = PipelineConfig(
+    name="fnn_distillation_quantum",
+    model_type=Model.FNN_DISTILLATION_QUANTUM,
+    description="Feedforward Neural Network with Quantum Reservoir Distillation",
+    preprocess=StandardScalerConfig(),
+    projection=QUANTUM_BAPCA,
+    model=DistillationConfig(
+        teacher=QUANTUM_RESERVOIR_DYNAMICS,
+        student=FNNConfig(
+            hidden_layers=(100,),
+        ),
+    ),
+    readout=DEFAULT_RIDGE_READOUT
+)
 
 
 
@@ -344,10 +349,10 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT
 )
 
-TIME_FNN_DISTILLATION_PRESET = PipelineConfig(
-    name="fnn_distillation",
-    model_type=Model.FNN_DISTILLATION,
-    description="Feedforward Neural Network with Reservoir Distillation",
+TIME_FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
+    name="fnn_distillation_classical",
+    model_type=Model.FNN_DISTILLATION_CLASSICAL,
+    description="Feedforward Neural Network with Classical Reservoir Distillation",
     preprocess=StandardScalerConfig(),
     projection=RP_REGRESSION,
     model=DistillationConfig(
@@ -422,14 +427,15 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
 SPECIFIC_PRESETS: dict[tuple[Model, bool], PipelineConfig] = {
     (Model.CLASSICAL_RESERVOIR, True): CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, True): FNN_PRESET,
-    (Model.FNN_DISTILLATION, True): FNN_DISTILLATION_PRESET,
+    (Model.FNN_DISTILLATION_CLASSICAL, True): FNN_DISTILLATION_CLASSICAL_PRESET,
+    (Model.FNN_DISTILLATION_QUANTUM, True): FNN_DISTILLATION_QUANTUM_PRESET,
     (Model.PASSTHROUGH, True): PASSTHROUGH_PRESET,
     (Model.QUANTUM_RESERVOIR, True): QUANTUM_RESERVOIR_PRESET,
 
     (Model.CLASSICAL_RESERVOIR, False): TIME_CLASSICAL_RESERVOIR_PRESET,
     (Model.FNN, False): WINDOWED_FNN_PRESET,
     (Model.PASSTHROUGH, False): TIME_PASSTHROUGH_PRESET,
-    (Model.FNN_DISTILLATION, False): TIME_FNN_DISTILLATION_PRESET,
+    (Model.FNN_DISTILLATION_CLASSICAL, False): TIME_FNN_DISTILLATION_CLASSICAL_PRESET,
     (Model.QUANTUM_RESERVOIR, False): TIME_QUANTUM_RESERVOIR_PRESET,
 }
 

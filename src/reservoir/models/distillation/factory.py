@@ -9,12 +9,14 @@ from reservoir.models.identifiers import Model
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.models.distillation.model import DistillationModel
 from reservoir.models.reservoir.classical import ClassicalReservoir
+from reservoir.models.reservoir.quantum.model import QuantumReservoir
+from reservoir.models.config import QuantumReservoirConfig
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from reservoir.core.types import TopologyMeta
     from reservoir.training.presets import TrainingConfig
-    from reservoir.models.presets import DistillationConfig
+    from reservoir.models.config import DistillationConfig
 
 
 class DistillationFactory:
@@ -48,15 +50,32 @@ class DistillationFactory:
              batch_size = int(input_shape[0])
              time_steps = int(input_shape[1])
 
-        #1. create teacher
-        teacher_node = ClassicalReservoir(
-            n_units=projected_input_dim,
-            spectral_radius=teacher_cfg.spectral_radius,
-            leak_rate=teacher_cfg.leak_rate,
-            rc_connectivity=teacher_cfg.rc_connectivity,
-            seed=teacher_cfg.seed,
-            aggregation_mode=teacher_cfg.aggregation,
-        )
+        #1. create teacher (Classical or Quantum)
+        if isinstance(teacher_cfg, QuantumReservoirConfig):
+            n_qubits = projected_input_dim  # Projection output feeds directly as qubits
+            teacher_node = QuantumReservoir(
+                n_qubits=n_qubits,
+                n_layers=teacher_cfg.n_layers,
+                seed=teacher_cfg.seed,
+                aggregation_mode=teacher_cfg.aggregation,
+                feedback_scale=teacher_cfg.feedback_scale,
+                leak_rate=teacher_cfg.leak_rate,
+                measurement_basis=teacher_cfg.measurement_basis,
+                noise_type=teacher_cfg.noise_type,
+                noise_prob=teacher_cfg.noise_prob,
+                readout_error=teacher_cfg.readout_error,
+                n_trajectories=teacher_cfg.n_trajectories,
+                use_reuploading=teacher_cfg.use_reuploading,
+            )
+        else:
+            teacher_node = ClassicalReservoir(
+                n_units=projected_input_dim,
+                spectral_radius=teacher_cfg.spectral_radius,
+                leak_rate=teacher_cfg.leak_rate,
+                rc_connectivity=teacher_cfg.rc_connectivity,
+                seed=teacher_cfg.seed,
+                aggregation_mode=teacher_cfg.aggregation,
+            )
         teacher_feature_dim = teacher_node.get_feature_dim(time_steps=time_steps)
 
         #2. configure student FNN input dimension based on window or flatten
@@ -89,8 +108,10 @@ class DistillationFactory:
             training_config=training,
         )
 
+        is_quantum = isinstance(teacher_cfg, QuantumReservoirConfig)
+        pipeline_type = Model.FNN_DISTILLATION_QUANTUM if is_quantum else Model.FNN_DISTILLATION_CLASSICAL
         topo_meta: TopologyMeta = {
-            "type": Model.FNN_DISTILLATION.value.upper(),
+            "type": pipeline_type.value.upper(),
             "shapes": {
                 "input": input_shape,
                 "preprocessed": None,  # preprocessing happens upstream

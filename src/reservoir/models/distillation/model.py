@@ -5,10 +5,10 @@ import jax
 import jax.numpy as jnp
 
 from reservoir.models.generative import ClosedLoopGenerativeModel
+from reservoir.models.reservoir.base import Reservoir
 from typing import TYPE_CHECKING
 
 from reservoir.core.types import JaxF64, TrainLogs, EvalMetrics, KwargsDict, TopologyMeta, to_np_f64, to_jax_f64
-from reservoir.models.reservoir.classical import ClassicalReservoir
 from reservoir.models.nn.fnn import FNNModel
 from reservoir.training.presets import TrainingConfig
 from reservoir.utils.batched_compute import batched_compute
@@ -33,7 +33,7 @@ class DistillationModel(ClosedLoopGenerativeModel):
 
     def __init__(
         self,
-        teacher: ClassicalReservoir,
+        teacher: Reservoir,
         student: FNNModel,
         training_config: TrainingConfig | None = None,
     ):
