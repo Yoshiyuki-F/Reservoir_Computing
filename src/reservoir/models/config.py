@@ -233,11 +233,12 @@ class AffineScalerConfig(PreprocessingConfig):
 class BoundedAffineScalerConfig(PreprocessingConfig):
     """Step 2 parameters for Bounded Affine Scaler.
 
-    MinMax[-1,1] → Affine with shift = relative_shift * (1 - scale).
-    Guarantees output ∈ [-1, 1] for any parameter combination.
+    MinMax[-1,1] → Affine with shift = relative_shift * bound * (1 - scale).
+    Guarantees output ∈ [-bound, bound] for any valid parameter combination.
     """
     scale: float            # Contraction factor in (0, 1]
     relative_shift: float   # Shift proportion in [-1, 1]
+    bound: float = 1.0      # Absolute maximum boundary
 
     def validate(self, context: str = "bounded_affine_scaler") -> BoundedAffineScalerConfig:
         prefix = f"{context}: "
@@ -245,6 +246,8 @@ class BoundedAffineScalerConfig(PreprocessingConfig):
             raise ValueError(f"{prefix}scale must be in (0, 1].")
         if not (-1.0 <= float(self.relative_shift) <= 1.0):
             raise ValueError(f"{prefix}relative_shift must be in [-1, 1].")
+        if float(self.bound) <= 0.0:
+            raise ValueError(f"{prefix}bound must be > 0.")
         return self
 
     def to_dict(self) -> ConfigDict:
@@ -252,13 +255,14 @@ class BoundedAffineScalerConfig(PreprocessingConfig):
             "method": "bounded_affine_scaler",
             "scale": float(self.scale),
             "relative_shift": float(self.relative_shift),
+            "bound": float(self.bound),
         }
 
     @property
     def label(self) -> str:
-        s, rs = float(self.scale), float(self.relative_shift)
-        shift = rs * (1.0 - s)
-        return f"Min{-s + shift:.2f}Max{s + shift:.2f}"
+        s, rs, b = float(self.scale), float(self.relative_shift), float(self.bound)
+        shift = rs * b * (1.0 - s)
+        return f"Min{-s*b + shift:.2f}Max{s*b + shift:.2f}"
 
 
 @dataclass(frozen=True)
@@ -492,7 +496,8 @@ class DistillationConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        return f"fnn_distillation_{self.student.label}"
+        layers = "-".join(str(w) for w in (self.student.hidden_layers or ()))
+        return f"fnn_distillation_{layers}"
 
 
 @dataclass(frozen=True)

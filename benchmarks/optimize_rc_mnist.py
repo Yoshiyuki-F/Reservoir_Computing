@@ -37,7 +37,7 @@ from reservoir.models.presets import (  # noqa: E402
 from reservoir.models.config import (  # noqa: E402
     MinMaxScalerConfig,
     PolyRidgeReadoutConfig,
-    RandomProjectionConfig,
+    RandomProjectionConfig, BoundedAffineScalerConfig,
 )
 from reservoir.data.identifiers import Dataset  # noqa: E402
 
@@ -59,8 +59,8 @@ READOUT_MAP = {
 
 
 def build_config(
-        feature_min: float,
-        feature_max: float,
+        scale: float,
+        relative_shift: float,
         input_scale: float,
         input_connectivity: float,
         bias_scale: float,
@@ -77,15 +77,25 @@ def build_config(
 
 
 
-    # Update Preprocess (MinMaxScaler)
-    if isinstance(base.preprocess, MinMaxScalerConfig):
+    # # Update Preprocess (MinMaxScaler)
+    # if isinstance(base.preprocess, MinMaxScalerConfig):
+    #     new_prep = dataclasses.replace(
+    #         base.preprocess,
+    #         feature_min=feature_min,
+    #         feature_max=feature_max,
+    #     )
+
+    if isinstance(base.preprocess, BoundedAffineScalerConfig):
         new_prep = dataclasses.replace(
             base.preprocess,
-            feature_min=feature_min,
-            feature_max=feature_max,
+            scale=scale,
+            relative_shift=relative_shift,
         )
+
     else:
+        # Fallback to original if not MinMaxScalerConfig
         new_prep = base.preprocess
+
 
     # Ensure base projection is RandomProjectionConfig
     if isinstance(base.projection, RandomProjectionConfig):
@@ -129,9 +139,20 @@ def make_objective(readout_config, dataset_enum: Dataset):
         
         # === 1. Suggest Parameters ===
 
-        # Preprocess
-        feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
-        feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
+
+        #=======Projection======================================================================
+
+        # feature_min = trial.suggest_float("feature_min", -1.0, 0.0)
+        # feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
+
+
+
+        # (BoundedAffine)
+
+        scale = trial.suggest_float("scale", 0.00000001, 1.0)
+        relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
+        # relative_shift = trial.suggest_float("relative_shift", 0.0, 0.0)
+
 
         #=======Projection======================================================================
 
@@ -158,8 +179,8 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         # === 2. Build Config ===
         config = build_config(
-            feature_min=feature_min,
-            feature_max=feature_max,
+            scale=scale,
+            relative_shift=relative_shift,
             input_scale=input_scale,
             input_connectivity=input_connectivity,
             bias_scale=bias_scale,
@@ -177,11 +198,6 @@ def make_objective(readout_config, dataset_enum: Dataset):
             # === 4. Extract & Store ALL Metrics ===
             test_results = results.get("test", {})
             train_results = results.get("train", {})
-            
-            # Accuracy metric keys might vary, check reporter logic
-            # Typically 'accuracy' or 'test_score'
-            # In reporter.py: results["test"] = {metric_name: test_score, ...}
-            # metric_name comes from ModelStack.metric
             
             # For classification, look for 'accuracy'
             accuracy = test_results.get("accuracy", 0.0)
@@ -253,7 +269,7 @@ def derive_names(readout_key: str, dataset_name: str):
         proj_tag = type(proj).__name__.replace("Config", "")
 
     # Study Name: optimize_rc_{Dataset}_{Preprocess}_{Projection}_{Readout}
-    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai2"
+    study_name = f"optimize_rc_{dataset_name.upper()}_{prep_tag}_{proj_tag}_{readout_key}_kai3"
     db_name = "optimize_rc.db" # Shared DB for RC optimization
     
     return study_name, db_name
@@ -318,6 +334,48 @@ def main():
         direction="maximize", # Maximize Accuracy
         load_if_exists=True
     )
+
+    historical_params = [
+        # (min, max, input_scale, input_connectivity, bias_scale, spectral_radius, leak_rate, rc_connectivity)
+        (-1.0, 1.0,
+         0.03203273936326348, 0.7789498820486052, 0.6664704836440828,
+         1.4068899032773172, 0.6854757236951003, 0.6213282741686085), # 0.8759999871253967
+
+        (0.0, 1.0,
+         0.11524935267101843, 0.1381581069782872, 0.7862943891668603,
+         1.4537351265687286, 0.7352675282751304, 0.4402710000522045), #0.8798999786376953
+
+        (-0.07768410112268466, 0.08160917176536134,
+         1.0, 0.11458754901458218, 0.8295811429210161,
+         1.45, 0.66,0.457758485877939), #0.877
+
+        (-0.7675280665952444, 0.35849784076318864,
+         0.3543930218531782, 0.21745075681282766, 0.1725142451754484,
+         1.921291918880454, 0.36449529864842045,0.6784641706491135), #id15 0.8753
+
+    ]
+
+    for min, max, input_scale, input_connectivity, bias_scale, spectral_radius, leak_rate, rc_connectivity in historical_params:
+        bound = 1.0
+        maxminusmin = max - min
+        maxplusmin = max + min
+        scale = maxminusmin / 2 * bound
+        rs = maxplusmin / 2* bound - maxminusmin
+
+        # あなたが見つけたベストな値を登録
+        study.enqueue_trial({
+            "scale":scale,
+            "relative_shift": rs,
+            "input_scale": input_scale,
+            "input_connectivity": input_connectivity,
+            "bias_scale": bias_scale,
+            "spectral_radius": spectral_radius,
+            "leak_rate": leak_rate,
+            "rc_connectivity": rc_connectivity,
+        })
+
+
+
 
     print("=" * 60)
     print("Optuna RC Hyperparameter Search (MNIST)")

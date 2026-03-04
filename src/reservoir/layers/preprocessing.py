@@ -270,7 +270,7 @@ class AffineScaler(Preprocessor):
 class BoundedAffineScaler(Preprocessor):
     """MinMax[-1,1] followed by a bounded affine transformation.
 
-    Guarantees output ∈ [-1, 1] for any (scale, relative_shift) pair.
+    Guarantees output ∈ [-bound, bound] for any valid parameter combination.
 
     Parameters
     ----------
@@ -278,33 +278,31 @@ class BoundedAffineScaler(Preprocessor):
         Contraction factor in (0, 1].
     relative_shift : float
         Shift proportion in [-1, 1].  The actual shift is
-        ``relative_shift * (1 - scale)`` so the affine image can never
-        exceed [-1, 1].
+        ``relative_shift * bound * (1 - scale)`` so the affine image can never
+        exceed [-bound, bound].
+    bound : float
+        Maximum absolute boundary limit.
 
     Math
     ----
     x_norm = MinMax(X, feature_min=-1, feature_max=1)
-    shift  = relative_shift * (1 - scale)
-    y      = scale * x_norm + shift        # ∈ [-1, 1] always
+    shift  = relative_shift * bound * (1 - scale)
+    y      = (scale * bound) * x_norm + shift        # ∈ [-bound, bound] always
 
-    min = scale * (-1) + shift = -scale + relative_shift * (1 - scale)
-    max = scale * (1) + shift = scale + relative_shift * (1 - scale)
-
-
-    scale = (max - min) / 2
-    relative_shift = (max + min) / (2 × (1 - scale))
-                    = (max + min) / (2 - max + min)
+    min = (scale * bound) * (-1) + shift = -scale * bound + relative_shift * bound * (1 - scale)
+    max = (scale * bound) * (1) + shift = scale * bound + relative_shift * bound * (1 - scale)
     """
 
-    def __init__(self, scale: float, relative_shift: float):
-        self.scale = scale
-        self.relative_shift = relative_shift
+    def __init__(self, scale: float, relative_shift: float, bound: float = 1.0):
+        self.scale = float(scale)
+        self.relative_shift = float(relative_shift)
+        self.bound = float(bound)
         # Compute the actual shift from the relative parameter
-        self._shift = relative_shift * (1.0 - scale)
+        self._shift = self.relative_shift * self.bound * (1.0 - self.scale)
 
         # Internal stages: reuse existing implementations
         self._minmax = MinMaxScaler(feature_min=-1.0, feature_max=1.0)
-        self._affine = AffineScaler(input_scale=scale, shift=self._shift)
+        self._affine = AffineScaler(input_scale=self.scale * self.bound, shift=self._shift)
 
     def fit(self, X: NpF64) -> BoundedAffineScaler:
         self._minmax.fit(X)
@@ -325,12 +323,13 @@ class BoundedAffineScaler(Preprocessor):
             "type": "bounded_affine_scaler",
             "scale": self.scale,
             "relative_shift": self.relative_shift,
+            "bound": self.bound,
         }
 
     @property
     def label(self) -> str:
-        f_min = -self.scale + self._shift
-        f_max = self.scale + self._shift
+        f_min = -(self.bound * self.scale) + self._shift
+        f_max = (self.bound * self.scale) + self._shift
         return f"Min{f_min:.2f}Max{f_max:.2f}"
 
 
@@ -381,7 +380,7 @@ def register_preprocessors(
     if BoundedAffineScalerConfigClass is not None:
         @create_preprocessor.register(BoundedAffineScalerConfigClass)
         def _(config) -> Preprocessor:
-            return BoundedAffineScaler(scale=config.scale, relative_shift=config.relative_shift)
+            return BoundedAffineScaler(scale=config.scale, relative_shift=config.relative_shift, bound=config.bound)
 
 
 __all__ = [

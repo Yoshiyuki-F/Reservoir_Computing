@@ -97,7 +97,7 @@ DEFAULT_POLY_RIDGE_READOUT = PolyRidgeReadoutConfig(
 )
 
 
-DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,))
+DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,100))
 
 
 "=============================================Classification Presets============================================"
@@ -110,7 +110,7 @@ MINMAX_MNIST = MinMaxScalerConfig(
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=1200,
+    n_units=100,
     # input_scale=0.3543930218531782, #100
     input_scale=0.3478958243673553,  # 1200
     # input_connectivity=0.21745075681282766, #100
@@ -147,7 +147,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
 )
-
+'''
+uv run python -m reservoir.cli.main --model fnn_distillation --dataset mnist
+'''
 FNN_DISTILLATION_PRESET = PipelineConfig(
     name="fnn_distillation",
     model_type=Model.FNN_DISTILLATION,
