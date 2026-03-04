@@ -19,7 +19,7 @@ TRAINING_PRESETS: dict[str, TrainingConfig] = {
         warmup_epochs=10,
 
         # JIT Scan
-        scan_chunk_size=50, #how many epochs as a chunk <=epochs
+        scan_chunk_size=1, #how many epochs as a chunk <=epochs (updating the same pointer)
 
         # Data Splitting
         train_size=0.8,

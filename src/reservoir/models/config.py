@@ -492,7 +492,7 @@ class DistillationConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        return f"fnn_distillation_{self.student.label}_distilled_from_{self.teacher.label}"
+        return f"fnn_distillation_{self.student.label}"
 
 
 @dataclass(frozen=True)
