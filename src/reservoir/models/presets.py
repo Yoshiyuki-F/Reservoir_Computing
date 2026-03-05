@@ -219,10 +219,10 @@ FNN_PRESET = PipelineConfig(
 # scale = (max - min) / 2* bound
 # relative_shift = (max + min)/2 * bound - (max - min)
 
-s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
-# s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
+# s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
+s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
 QUANTUM_BAPCA = BoundedAffinePCAConfig(
-    n_units=6,
+    n_units=10,
     scale=s,
     relative_shift=r,
     bound=math.pi,
@@ -278,7 +278,9 @@ FNN_DISTILLATION_QUANTUM_PRESET = PipelineConfig(
     readout=DEFAULT_RIDGE_READOUT,
 )
 
-
+'''
+uv run python -m reservoir.cli.main --model passthrough --dataset mnist
+'''
 
 PASSTHROUGH_PRESET = PipelineConfig(
     name="passthrough",
@@ -291,8 +293,8 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
-    # readout= DEFAULT_POLY_INTERACTION_ONLY_READOUT
-    readout=DEFAULT_RIDGE_READOUT
+    readout= DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    # readout=DEFAULT_RIDGE_READOUT
 )
 
 
