@@ -85,19 +85,19 @@ PCA = PCAProjectionConfig(
 
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
-    use_intercept=True,
+    use_intercept=False,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
 )
 
 DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
-    use_intercept=True,
+    use_intercept=False,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="square_only",
 )
 
 DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
-    use_intercept=True,
+    use_intercept=False,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="interaction_only",
@@ -172,8 +172,10 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     preprocess=BAS_MNIST,
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
-    readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
+    # readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
     # readout=DEFAULT_RIDGE_READOUT
+    # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
+    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 '''
@@ -256,7 +258,9 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=QUANTUM_BAPCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
-    readout=DEFAULT_RIDGE_READOUT,
+    readout=DEFAULT_RIDGE_READOUT
+    # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
+    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 
@@ -293,7 +297,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
-    readout= DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    readout= DEFAULT_POLY_SQUARE_ONLY_READOUT
     # readout=DEFAULT_RIDGE_READOUT
 )
 
