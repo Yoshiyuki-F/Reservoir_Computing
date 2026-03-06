@@ -127,21 +127,21 @@ rs_denom = 2.0 * bound - maxminusmin
 rs = maxplusmin / rs_denom if rs_denom != 0 else 0.0
 
 BAS_MNIST = BoundedAffineScalerConfig(
-    scale=0.5630129536792166,  # 100
-    # scale=scale,  # 1200
-    relative_shift=-0.4680118430007132, # 100
-    # relative_shift=rs, # 1200
-    # bound=1.0,
+    # scale=0.5630129536792166,  # 100
+    scale=scale,  # 1200
+    # relative_shift=-0.4680118430007132, # 100
+    relative_shift=rs, # 1200
+    bound=1.0,
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=100,
-    input_scale=0.3543930218531782, #100
-    # input_scale=0.3478958243673553,  # 1200
-    input_connectivity=0.21745075681282766, #100
-    # input_connectivity=0.32024990697532185, # 1200
-    bias_scale=0.1725142451754484, #100
-    # bias_scale= 0.9911807193106197, # 1200
+    n_units=1200,
+    # input_scale=0.3543930218531782, #100
+    input_scale=0.3478958243673553,  # 1200
+    # input_connectivity=0.21745075681282766, #100
+    input_connectivity=0.32024990697532185, # 1200
+    # bias_scale=0.1725142451754484, #100
+    bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
@@ -149,12 +149,12 @@ RP_MNIST = RandomProjectionConfig(
 ###------Dynamics-------------------------------------------------
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    spectral_radius= 1.921291918880454, #100
-    # spectral_radius= 1.4707341636189577,  # 1200
-    leak_rate= 0.36449529864842045, #100
-    # leak_rate= 0.5078438853580478, #1200
-    rc_connectivity=0.6784641706491135, #100
-    # rc_connectivity=0.0760855941265183,  # 1200
+    # spectral_radius= 1.921291918880454, #100
+    spectral_radius= 1.4707341636189577,  # 1200
+    # leak_rate= 0.36449529864842045, #100
+    leak_rate= 0.5078438853580478, #1200
+    # rc_connectivity=0.6784641706491135, #100
+    rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
     aggregation=AggregationMode.MEAN,
@@ -173,9 +173,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     # readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
-    # readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_RIDGE_READOUT
     # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
-    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 '''
@@ -221,10 +221,10 @@ FNN_PRESET = PipelineConfig(
 # scale = (max - min) / 2* bound
 # relative_shift = (max + min)/2 * bound - (max - min)
 
-# s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
-s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
+s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
+# s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
 QUANTUM_BAPCA = BoundedAffinePCAConfig(
-    n_units=10,
+    n_units=6,
     scale=s,
     relative_shift=r,
     bound=math.pi,
