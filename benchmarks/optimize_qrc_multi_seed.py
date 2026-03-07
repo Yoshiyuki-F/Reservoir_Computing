@@ -1,8 +1,8 @@
 """
-Optuna Hyperparameter Search for Quantum Reservoir Computing (Lorenz/Multi-Seed).
+Optuna Hyperparameter Search for Quantum Reservoir Computing (Multi-Seed).
 Usage:
-uv run python benchmarks/optimize_qrc_lorenz.py --dataset lorenz
-uv run python benchmarks/optimize_qrc_lorenz.py --trials 100
+uv run python benchmarks/optimize_qrc_multi_seed.py --dataset lorenz
+uv run python benchmarks/optimize_qrc_multi_seed.py --trials 100
 uv run optuna-dashboard sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype_mean_vpt.db
 """
 import os
@@ -52,8 +52,9 @@ VALID_BASES = ("Z", "ZZ", "Z+ZZ")
 
 
 def build_config(
-        feature_min: float,
-        feature_max: float,
+        scale: float,
+        relative_shift: float,
+        bound: float,
         n_layers: int,
         feedback_scale: float,
         leak_rate: float,
@@ -66,16 +67,17 @@ def build_config(
     """
     Build a PipelineConfig with dynamically updated parameters.
     
-    feature_min/max is applied via MinMaxScalerConfig (preprocessing).
+    scale, relative_shift, bound are applied via BoundedAffineScalerConfig (preprocessing).
     projection is None (Step 3 skipped).
     """
-    from reservoir.models.config import MinMaxScalerConfig
+    from reservoir.models.config import BoundedAffineScalerConfig
     base = TIME_QUANTUM_RESERVOIR_PRESET
 
-    # Update preprocessing (MinMaxScaler)
-    new_preprocess = MinMaxScalerConfig(
-        feature_min=feature_min, 
-        feature_max=feature_max,
+    # Update preprocessing (BoundedAffineScaler)
+    new_preprocess = BoundedAffineScalerConfig(
+        scale=scale, 
+        relative_shift=relative_shift,
+        bound=bound
     )
 
     # Update model (feedback_scale, leak_rate, measurement_basis, seed)
@@ -108,9 +110,10 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         """
         # === 1. Suggest Parameters ===
 
-        # ======================== Preprocessing (MinMax) ====================
-        feature_max = trial.suggest_float("feature_max", 0.0, 1.0)
-        feature_min = trial.suggest_float("feature_min",  -9.735743764947846e-05,  -9.735743764947846e-05)
+        # ======================== Preprocessing (Bounded Affine) ====================
+        scale = trial.suggest_float("scale", 0.001, 1.0)
+        relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
+        bound = trial.suggest_float("bound", 0.001, np.pi)
 
         # ======================== Reservoir ==================================
         n_layers = trial.suggest_categorical("n_layers", [1, 2, 3, 5, 7])
@@ -121,12 +124,13 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         seeds = [40, 41, 42, 43, 44]
         vpts = []
         
-        print(f"Trial {trial.number}: Starting (min={feature_min:.3f}, max={feature_max:.3f}, fb={feedback_scale:.3f}, lr={leak_rate:.3f})")
+        print(f"Trial {trial.number}: Starting (scale={scale:.3f}, shift={relative_shift:.3f}, bound={bound:.3f}, fb={feedback_scale:.3f}, lr={leak_rate:.3f})")
 
         for seed in seeds:
             config = build_config(
-                feature_min,
-                feature_max,
+                scale,
+                relative_shift,
+                bound,
                 n_layers,
                 feedback_scale,
                 leak_rate,
@@ -225,7 +229,7 @@ def derive_names(dataset_enum: Dataset, measurement_basis: str, readout_key: str
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search (Lorenz Mean VPT)")
+    parser = argparse.ArgumentParser(description="Optuna QRC Hyperparameter Search (Multi-Seed Mean VPT)")
     parser.add_argument("--trials", type=int, default=500,
                         help="Number of optimization trials (default: 500)")
     parser.add_argument("--dataset", type=str, default="lorenz",
@@ -290,8 +294,8 @@ def main():
     proj_type_name = type(base.projection).__name__
     proj_tag = proj_type_name.lower().replace("config", "")
 
-    # Updated scaler tag for MinMaxScaler
-    scaler_tag = "minmax"
+    # Updated scaler tag for BoundedAffineScaler
+    scaler_tag = "bounded_affine"
 
     study_name, db_name = derive_names(dataset_enum, measurement_basis, readout_key, proj_tag, n_qubits, scaler_tag, use_reuploading)
 
