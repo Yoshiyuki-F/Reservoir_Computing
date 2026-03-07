@@ -113,7 +113,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         # ======================== Preprocessing (Bounded Affine) ====================
         scale = trial.suggest_float("scale", 0.001, 1.0)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
-        bound = trial.suggest_float("bound", 0.001, np.pi)
+        bound = np.pi  # Fixed to pi to maintain bijective mapping
 
         # ======================== Reservoir ==================================
         n_layers = trial.suggest_categorical("n_layers", [1, 2, 3, 5, 7])
