@@ -627,7 +627,7 @@ class QuantumReservoirConfig(ModelConfig):
         q = f"q{int(self.n_qubits)}" if self.n_qubits is not None else "q?"
         reup = "_reupT" if self.use_reuploading else "_reupF"
         core = f"{self.measurement_basis}_{q}_l{int(self.n_layers)}{reup}_lr{float(self.leak_rate):.4f}_f{float(self.feedback_scale):.4f}"
-        return f"quantum_reservoir_{self.aggregation.value.upper()}_{core}"
+        return f"quantum_reservoir_{self.aggregation.value.upper()}_{core}_seed{int(self.seed)}"
 
 
 @dataclass(frozen=True)
