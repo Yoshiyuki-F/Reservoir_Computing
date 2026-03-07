@@ -197,9 +197,9 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
 )
 
 
-
-
-
+'''
+uv run python -m reservoir.cli.main --model fnn --dataset mnist
+'''
 FNN_PRESET = PipelineConfig(
     name="fnn",
     model_type=Model.FNN,
@@ -207,7 +207,7 @@ FNN_PRESET = PipelineConfig(
     preprocess=ZeroToOne,
     projection=None,
     model=FNNConfig(
-        hidden_layers=(),
+        hidden_layers=(30,),
     ),
     readout=None
 )
