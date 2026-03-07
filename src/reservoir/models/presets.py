@@ -418,6 +418,9 @@ delta, fs, lr = 0.051530102020046965, 0.3250313716590034, 0.25286631335831844 #5
 #200 epoches 7_1
 delta, fs, lr = 0.1078748553880034, 0.041285353537763435, 0.9971216923880815 #7_41 9.163636363636364
 
+
+
+delta, fs, lr = 0.10, 0, 1.0 #no leaky integration, no feedback
 '''
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset lorenz
 '''
@@ -428,9 +431,9 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=7,
+        n_qubits=5,
         n_layers=1,
-        seed=44,
+        seed=40,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=fs,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)
