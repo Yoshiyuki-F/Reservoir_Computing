@@ -1,7 +1,7 @@
 """
 Optuna Hyperparameter Search for Quantum Reservoir Computing.
 Usage:
-uv run python benchmarks/optimize_qrc.py
+uv run python benchmarks/optimize_qrc.py --dataset lorenz
 uv run python benchmarks/optimize_qrc.py --trials 100
 Visualization:
 uv run optuna-dashboard  sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype.db
@@ -118,7 +118,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # feature_max = trial.suggest_float("delta", 0.6516478039657447, 0.6516478039657447) #MG-F
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 1, 3)
+        n_layers = trial.suggest_int("n_layers", 1, 1)
         # n_layers = trial.suggest_int("n_layers", 7, 7) #MG-T
         # n_layers = trial.suggest_int("n_layers", 5, 5) #MG-F
         #
@@ -277,8 +277,6 @@ def main():
         dataset_enum = Dataset.MACKEY_GLASS
     elif dataset_name == "lorenz":
         dataset_enum = Dataset.LORENZ
-    elif dataset_name == "lorenz96":
-        dataset_enum = Dataset.LORENZ96
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
