@@ -113,8 +113,8 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         feature_min = trial.suggest_float("feature_min",  -9.735743764947846e-05,  -9.735743764947846e-05)
 
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_int("n_layers", 1, 1)
-        feedback_scale = trial.suggest_float("feedback_scale", 0, 2)
+        n_layers = trial.suggest_categorical("n_layers", [1, 2, 3, 5, 7])
+        feedback_scale = trial.suggest_float("feedback_scale", 0, 3.5)
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
 
         # === 2. Run Pipeline over multiple seeds ===
@@ -219,7 +219,7 @@ def derive_names(dataset_enum: Dataset, measurement_basis: str, readout_key: str
     """Derive DB filename and study name from the variant combination."""
     reupload_str = "reupTrue" if use_reuploading else "reupFalse"
     dataset_str = dataset_enum.value
-    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_mean_vpt_fb<2"
+    study_name = f"qrc_{dataset_str}_vpt_{scaler_type}0_{proj_type}_q{n_qubits}_{measurement_basis}_{readout_key}_{reupload_str}_mean_vpt_fb<3.5"
     db_name = f"optuna_qrc_{proj_type}_mean_vpt.db"          # one DB per projection type
     return study_name, db_name
 
