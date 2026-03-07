@@ -428,9 +428,9 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=7,
+        n_qubits=11,
         n_layers=1,
-        seed=44,
+        seed=41,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=fs,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)

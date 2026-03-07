@@ -77,7 +77,7 @@ def print_chaos_metrics(metrics: EvalMetrics, header: str | None = None) -> None
     vpt_steps = int(metrics.get("vpt_steps", 0.0))
     vpt_lt = float(metrics.get("vpt_lt", 0.0))
     vpt_threshold = float(metrics.get("vpt_threshold", 0.4))
-    print(f"VPT       : {vpt_steps} steps ({vpt_lt:.2f} LT) @ threshold={vpt_threshold}")
+    print(f"VPT       : {vpt_steps} steps ({vpt_lt} LT) @ threshold={vpt_threshold}")
 
 
 
