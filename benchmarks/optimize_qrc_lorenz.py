@@ -241,6 +241,8 @@ def main():
                         help="Override Optuna study name")
     parser.add_argument("--storage", type=str, default=None,
                         help="Override Optuna storage URL")
+    parser.add_argument("--enqueue-csv", type=str, default=None,
+                        help="Path to a CSV file to enqueue trials from (e.g. filtered_optuna_results.csv)")
     args = parser.parse_args()
 
     try:
@@ -320,6 +322,31 @@ def main():
     print(f"  Readout          : {readout_key}")
     print(f"  Re-uploading     : {use_reuploading}")
     print("=" * 60)
+
+    # --- Enqueue from CSV if provided ---
+    if args.enqueue_csv:
+        import csv
+        csv_path = Path(args.enqueue_csv)
+        if csv_path.exists():
+            print(f"\\n[+] Enqueueing trials from {csv_path}...")
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                count = 0
+                for row in reader:
+                    params = {}
+                    for k, v in row.items():
+                        if k.startswith('params_'):
+                            param_name = k.replace('params_', '')
+                            try:
+                                params[param_name] = float(v)
+                            except ValueError:
+                                pass
+                    if params:
+                        study.enqueue_trial(params, skip_if_exists=True)
+                        count += 1
+            print(f"[+] Successfully enqueued {count} trials.\\n")
+        else:
+            print(f"\\n[!] Warning: CSV file not found at {csv_path}\\n")
 
     # --- Run ---
     objective_fn = make_objective(measurement_basis, readout_config, use_reuploading, dataset_enum)

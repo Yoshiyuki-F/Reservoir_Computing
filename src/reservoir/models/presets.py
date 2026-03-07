@@ -413,14 +413,11 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 # delta, fs, lr = 0.029014891695261672, 2.3162433911393165, 0.829880311841115 #5_42 7.418181818181818
 # delta, fs, lr = 0.0552541001499716, 2.6803338998884767, 0.4707800087677259 #5_42 7.5 unstable
 
-#500epochs 7_1
-delta, fs, lr = 0.051530102020046965, 0.3250313716590034, 0.25286631335831844 #5_41 8.854545454545455
-#200 epoches 7_1
-delta, fs, lr = 0.1078748553880034, 0.041285353537763435, 0.9971216923880815 #7_41 9.163636363636364
+# fb<2
+# q5 100 trials
+delta, fs, lr = 0.04531012160886314, 0.06881757656255799, 0.8558424190253158
 
 
-
-delta, fs, lr = 0.10, 0, 1.0 #no leaky integration, no feedback
 '''
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset lorenz
 '''
@@ -431,9 +428,9 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=5,
+        n_qubits=7,
         n_layers=1,
-        seed=40,
+        seed=44,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=fs,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)
