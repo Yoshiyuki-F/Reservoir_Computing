@@ -37,6 +37,7 @@ dependencies = [
     # hyper parameter optimization
     "optuna",
     "optuna-dashboard",
+    "ipykernel>=7.2.0",
 ]
 
 
