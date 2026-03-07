@@ -33,7 +33,15 @@ def _get_qubit_offsets(n_qubits: int) -> "JaxF64":
 # --- Performance Optimization Helpers ---
 
 
-def _get_paper_R_unitary(theta: JaxF64) -> JaxF64:
+def _get_input_unitaries(u_vec: "JaxF64", n_qubits: int) -> "JaxF64":
+    """Computes input unitaries with per-qubit diversification offsets."""
+    indices = jnp.arange(n_qubits) % u_vec.shape[0]
+    base_angles = u_vec[indices]
+    offsets = _get_qubit_offsets(n_qubits)
+    return jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
+
+
+def _get_paper_R_unitary(theta: "JaxF64") -> "JaxF64":
     """Compute fused 4x4 unitary for the Paper R gate (vmap safe).
     Analytically pre-computed to avoid kron and matmul overhead.
     """
@@ -276,11 +284,8 @@ def _step_jit(
     use_remat,
     use_reuploading,
 ):
-    # Per-qubit input diversification: add pre-computed angular offsets
-    indices = jnp.arange(n_qubits) % input_slice.shape[0]
-    base_angles = input_slice[indices]
-    offsets = _get_qubit_offsets(n_qubits)
-    input_unitaries = jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
+    # Per-qubit input diversification
+    input_unitaries = _get_input_unitaries(input_slice, n_qubits)
     return _step_logic(
         state,
         input_unitaries,
@@ -346,14 +351,8 @@ def _forward_jit(
 ):
     T, B, D = inputs_time_major.shape
 
-    def get_step_unitaries(u_vec):
-        # Per-qubit input diversification: add pre-computed angular offsets
-        indices = jnp.arange(n_qubits) % D
-        base_angles = u_vec[indices]
-        offsets = _get_qubit_offsets(n_qubits)
-        return jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
-
     # 1. Pre-compute all unitaries for the entire sequence (Time, Batch, N, 4, 4)
+    get_step_unitaries = partial(_get_input_unitaries, n_qubits=n_qubits)
     all_input_unitaries = jax.vmap(jax.vmap(get_step_unitaries))(inputs_time_major)
 
     # 2. Execute full sequence in one shot (No chunking boilerplate)
