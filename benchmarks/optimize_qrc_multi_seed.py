@@ -2,7 +2,7 @@
 Optuna Hyperparameter Search for Quantum Reservoir Computing (Multi-Seed).
 Usage:
 uv run python benchmarks/optimize_qrc_multi_seed.py --dataset lorenz
-uv run python benchmarks/optimize_qrc_multi_seed.py --trials 500
+uv run python benchmarks/optimize_qrc_multi_seed.py --dataset mackey_glass --trials 500 --enqueue-csv benchmarks/filtered_optuna_results.csv
 uv run optuna-dashboard sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype_mean_vpt.db
 """
 import os
@@ -345,6 +345,32 @@ def main():
                                 params[param_name] = float(v)
                             except ValueError:
                                 pass
+                    
+                    # Convert legacy MinMax params (feature_min/max) to BoundedAffine params (scale/shift)
+                    if 'feature_max' in params:
+                        f_max = params.pop('feature_max')
+                        # If feature_min was fixed and not in the CSV, use the known fixed value for Lorenz/MG
+                        f_min = params.pop('feature_min', 0)
+                        bound = np.pi
+                        
+                        # Mathematical conversion from MinMax [-1, 1] output bounds to BoundedAffine space
+                        # BoundedAffine formula: output = X_norm * (scale * bound) + relative_shift * bound * (1 - scale)
+                        # So max_out = scale * bound + relative_shift * bound * (1 - scale) = f_max
+                        #    min_out = -scale * bound + relative_shift * bound * (1 - scale) = f_min
+                        scale = (f_max - f_min) / (2 * bound)
+                        if scale < 1.0:
+                            relative_shift = (f_max + f_min) / (2 * bound * (1.0 - scale))
+                        else:
+                            relative_shift = 0.0
+                        
+                        # Ensure values are within Optuna search space bounds to avoid enqueue errors
+                        params['scale'] = max(0.001, min(1.0, scale))
+                        params['relative_shift'] = max(-1.0, min(1.0, relative_shift))
+                        
+                    # If n_layers is missing from the old CSV, default it to 1
+                    if 'n_layers' not in params:
+                        params['n_layers'] = 1
+                        
                     if params:
                         study.enqueue_trial(params, skip_if_exists=True)
                         count += 1

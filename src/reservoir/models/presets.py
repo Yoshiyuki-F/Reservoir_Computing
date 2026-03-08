@@ -217,7 +217,7 @@ FNN_PRESET = PipelineConfig(
 # Quantum Reservoir Definitions
 # -----------------------------------------------------------------------------
 #
-# min, max, bound= -0.23541677149636459, 0.1677064135326006, 1
+# min, max, bound= -0.23541677149636459, 0.1677064135326006, np.pi
 # scale = (max - min) / 2* bound
 # relative_shift = (max + min)/2 * bound - (max - min)
 
@@ -428,7 +428,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=6,
+        n_qubits=10,
         n_layers=1,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
