@@ -412,13 +412,7 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 
 # --------------------------------------------------------------------------
-# fb > 2
-# delta, fs, lr = 0.029014891695261672, 2.3162433911393165, 0.829880311841115 #5_42 7.418181818181818
-# delta, fs, lr = 0.0552541001499716, 2.6803338998884767, 0.4707800087677259 #5_42 7.5 unstable
-
-# fb<2
-# q5 100 trials
-delta, fs, lr = 0.04531012160886314, 0.06881757656255799, 0.8558424190253158
+scale, rs, f, lr = 0.03811568272497027, 0.039626056938894795, 2.3536203916302614, 0.17091909220487084 #q10 mg
 
 
 '''
@@ -428,14 +422,18 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
     model_type=Model.QUANTUM_RESERVOIR,
     description="Quantum Gate-Based Reservoir Computing (Time Series)",
-    preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
+    preprocess=BoundedAffineScalerConfig(
+        scale=scale,
+        relative_shift=rs,
+        bound=np.pi,
+    ),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
         n_qubits=10,
         n_layers=1,
-        seed=41,
+        seed=44,
         aggregation=AggregationMode.SEQUENCE,
-        feedback_scale=fs,    # a_fb: R gate feedback scaling (paper default)
+        feedback_scale=f,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)
         measurement_basis="Z+ZZ",
         noise_type="clean",
