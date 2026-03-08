@@ -465,7 +465,7 @@ class ClassicalReservoirConfig(ModelConfig):
 
     @property
     def label(self) -> str:
-        return f"classical_reservoir_{self.aggregation.value.upper()}_sr{float(self.spectral_radius):.2f}_lr{float(self.leak_rate):.2f}_rc{float(self.rc_connectivity):.2f}"
+        return f"classical_reservoir_{self.aggregation.value.upper()}_sr{float(self.spectral_radius):.2f}_lr{float(self.leak_rate):.2f}_rc{float(self.rc_connectivity):.2f}_seed{int(self.seed)}"
 
 @dataclass(frozen=True)
 class DistillationConfig(ModelConfig):

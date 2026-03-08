@@ -339,25 +339,28 @@ TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 )
 
 # -------------------------------------------------------------------------------
-
+'''
+uv run python -m reservoir.cli.main --model classical_reservoir --dataset mackey_glass
+'''
+n, seed, mn, mx, scale, ic, bs, sr, lr, rc = 64, 42, -1.252115, 0.197144, 0.780619, 0.486849, 0.676372, 1.198058, 0.553195, 0.983015
 
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MinMaxScalerConfig(feature_min=0.0, feature_max=0.04387396511208059),
+    preprocess=MinMaxScalerConfig(feature_min=mn, feature_max=mx),
     projection=RandomProjectionConfig(
-        n_units=1024,
-        input_scale=0.5021672479393327,
-        input_connectivity=0.48415316598538416,
-        bias_scale=1.2287247970196717,
-        seed=42,
+        n_units=n,
+        input_scale=scale,
+        input_connectivity=ic,
+        bias_scale=bs,
+        seed=seed,
     ),
     model=ClassicalReservoirConfig(
-        spectral_radius=1.190314226578602,
-        leak_rate= 0.28133317330437824,
-        rc_connectivity=0.5421776698098623,
-        seed=42,
+        spectral_radius=sr,
+        leak_rate= lr,
+        rc_connectivity=rc,
+        seed=seed,
         aggregation=AggregationMode.SEQUENCE,
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -428,7 +431,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=MinMaxScalerConfig(feature_min=-9.735743764947846e-05, feature_max=delta),
     projection=None, # No projection — MinMaxScaler output goes directly to R-gate
     model=QuantumReservoirConfig(
-        n_qubits=10,
+        n_qubits=11,
         n_layers=1,
         seed=41,
         aggregation=AggregationMode.SEQUENCE,
