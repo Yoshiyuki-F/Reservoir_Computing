@@ -29,42 +29,7 @@ def _get_qubit_offsets(n_qubits: int) -> "JaxF64":
     """
     return jnp.linspace(0.0, jnp.pi, n_qubits, endpoint=False)
 
-
-# --- Performance Optimization Helpers ---
-
-
-def _get_input_unitaries(u_vec: "JaxF64", n_qubits: int) -> "JaxF64":
-    """Computes input unitaries with per-qubit diversification offsets."""
-    indices = jnp.arange(n_qubits) % u_vec.shape[0]
-    base_angles = u_vec[indices]
-    offsets = _get_qubit_offsets(n_qubits)
-    return jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
-
-
-def _get_paper_R_unitary(theta: "JaxF64") -> "JaxF64":
-    """Compute fused 4x4 unitary for the Paper R gate (vmap safe).
-    Analytically pre-computed to avoid kron and matmul overhead.
-    """
-    c = jnp.cos(theta / 2.0)
-    s = -1.0j * jnp.sin(theta / 2.0)
-    zm = c + s
-    zp = c - s
-
-    c2 = c * c
-    s2 = s * s
-    cs = c * s
-
-    return jnp.stack(
-        [
-            jnp.stack([zm * c2, zm * cs, zm * cs, zm * s2], axis=-1),
-            jnp.stack([zp * cs, zp * c2, zp * s2, zp * cs], axis=-1),
-            jnp.stack([zp * cs, zp * s2, zp * c2, zp * cs], axis=-1),
-            jnp.stack([zm * s2, zm * cs, zm * cs, zm * c2], axis=-1),
-        ],
-        axis=-2,
-    )
-
-
+# --- used in model.py
 
 def _get_fused_rotation_matrix(params: JaxF64) -> JaxF64:
     """Fuse RX, RY, RZ rotations into a single 2x2 unitary matrix."""
@@ -96,6 +61,50 @@ def _get_fused_rotation_matrix(params: JaxF64) -> JaxF64:
 
     return jnp.matmul(rot_z(tz), jnp.matmul(rot_y(ty), rot_x(tx)))
 
+# --- Performance Optimization Helpers ---
+
+def _get_paper_R_unitary(theta: "JaxF64") -> "JaxF64":
+    """Compute fused 4x4 unitary for the Paper R gate (vmap safe).
+    Analytically pre-computed to avoid kron and matmul overhead.
+    """
+    c = jnp.cos(theta / 2.0)
+    s = -1.0j * jnp.sin(theta / 2.0)
+    zm = c + s
+    zp = c - s
+
+    c2 = c * c
+    s2 = s * s
+    cs = c * s
+
+    return jnp.stack(
+        [
+            jnp.stack([zm * c2, zm * cs, zm * cs, zm * s2], axis=-1),
+            jnp.stack([zp * cs, zp * c2, zp * s2, zp * cs], axis=-1),
+            jnp.stack([zp * cs, zp * s2, zp * c2, zp * cs], axis=-1),
+            jnp.stack([zm * s2, zm * cs, zm * cs, zm * c2], axis=-1),
+        ],
+        axis=-2,
+    )
+
+def _get_input_unitaries(u_vec: "JaxF64", n_qubits: int) -> "JaxF64":
+    """Computes input unitaries with per-qubit diversification offsets."""
+    indices = jnp.arange(n_qubits) % u_vec.shape[0]
+    base_angles = u_vec[indices]
+    offsets = _get_qubit_offsets(n_qubits)
+    return jax.vmap(_get_paper_R_unitary)(base_angles + offsets)
+
+
+def _get_fused_input_and_feedback(input_unitaries: JaxF64, feedback_val: JaxF64, feedback_scale: float) -> JaxF64:
+    """Computes feedback unitaries and fuses them with the input unitaries."""
+    fb_unitaries = jax.vmap(_get_paper_R_unitary)(feedback_val * feedback_scale)
+
+    # SWAP trick: align feedback qubit ordering (i+1, i) → (i, i+1) before fusing.
+    # This is essentially free in JAX (index remap, no FLOPs).
+    swap_idx = jnp.array([0, 2, 1, 3])
+    fb_swapped = fb_unitaries[:, swap_idx, :][:, :, swap_idx]
+    return jnp.matmul(fb_swapped, input_unitaries)
+
+
 
 # --- Core Step Logic ---
 
@@ -116,13 +125,7 @@ def _make_circuit_logic(
     is_noisy = noise_type != "clean"
     is_mc = rng_key is not None
 
-    fb_unitaries = jax.vmap(_get_paper_R_unitary)(feedback_val * feedback_scale)
-
-    # SWAP trick: align feedback qubit ordering (i+1, i) → (i, i+1) before fusing.
-    # This is essentially free in JAX (index remap, no FLOPs).
-    swap_idx = jnp.array([0, 2, 1, 3])
-    fb_swapped = fb_unitaries[:, swap_idx, :][:, :, swap_idx]
-    fused_unitaries = jnp.matmul(fb_swapped, input_unitaries)
+    fused_unitaries = _get_fused_input_and_feedback(input_unitaries, feedback_val, feedback_scale)
 
     c = tc.Circuit(n_qubits)
     # Encoding: Fused Input + Feedback (applied to same pairs)
@@ -188,9 +191,7 @@ def _make_circuit_logic(
 
         if use_reuploading:
             for enc_q_idx in range(n_qubits):
-                lc.unitary(  # type: ignore
-                    enc_q_idx, (enc_q_idx + 1) % n_qubits, unitary=input_unitaries[enc_q_idx]
-                )
+                lc.unitary(enc_q_idx, (enc_q_idx + 1) % n_qubits, unitary=input_unitaries[enc_q_idx])  # type: ignore
             for noise_q_idx in range(n_qubits):
                 apply_noise([noise_q_idx])
 
