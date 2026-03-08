@@ -1,7 +1,7 @@
 """
 Optuna Hyperparameter Search for Quantum Reservoir Computing (Multi-Seed).
 Usage:
-uv run python benchmarks/optimize_qrc_multi_seed.py --dataset lorenz
+uv run python benchmarks/optimize_qrc_multi_seed.py --dataset mackey_glass
 uv run python benchmarks/optimize_qrc_multi_seed.py --dataset mackey_glass --trials 500 --enqueue-csv benchmarks/filtered_optuna_results.csv
 uv run optuna-dashboard sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optuna_qrc_nonetype_mean_vpt.db
 """
@@ -116,7 +116,9 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
         bound = np.pi  # Fixed to pi to maintain bijective mapping
 
         # ======================== Reservoir ==================================
-        n_layers = trial.suggest_categorical("n_layers", [1])
+        # n_layers = trial.suggest_categorical("n_layers", [1, 2, 3,4,5,6,7])
+        n_layers = 1 # Fixed to 1 for stability in multi-seed evaluation
+
         feedback_scale = trial.suggest_float("feedback_scale", 0, np.pi)
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
 
