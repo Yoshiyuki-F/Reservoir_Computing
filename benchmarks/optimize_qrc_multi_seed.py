@@ -144,20 +144,32 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
                 results: dict[str] = run_pipeline(config, dataset_enum)
 
                 test_results = results.get("test", {})
+                val_results = results.get("validation", {}) # Reporter uses "validation"
                 train_results = results.get("train", {})
-                chaos = test_results.get("chaos_metrics", {})
+                
+                test_chaos = test_results.get("chaos_metrics", {})
+                # For validation, metrics are flat in val_results due to Strategy logic
+                val_chaos = val_results
 
                 vpt_lt = test_results.get("vpt_lt", 0.0)
+                val_vpt_lt = val_results.get("vpt_lt", 0.0)
                 best_lambda = train_results.get("best_lambda", None)
                 
                 if best_lambda is not None:
                     trial.set_user_attr(f"best_lambda_seed{seed}", float(best_lambda))
 
-                # Store chaos metrics per seed
+                # Store TEST chaos metrics per seed
                 for key in ["var_ratio", "vpt_steps", "vpt_lt"]:
-                    val = chaos.get(key, None)
+                    val = test_chaos.get(key, None)
                     if val is not None:
                         trial.set_user_attr(f"{key}_seed{seed}", float(val))
+
+                # Store VALIDATION chaos metrics per seed (prefix with val_)
+                for key in ["mse", "nmse", "nrmse", "mase", "ndei",
+                            "var_ratio", "correlation", "vpt_steps", "vpt_lt"]:
+                    val = val_chaos.get(key, None)
+                    if val is not None:
+                        trial.set_user_attr(f"val_{key}_seed{seed}", float(val))
 
                 if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                     print(f"    Seed {seed}: FAILED (VPT=0). Failing early.")
@@ -167,7 +179,7 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
                 
                 vpts.append(vpt_lt)
                 trial.set_user_attr(f"vpt_lt_seed{seed}", float(vpt_lt))
-                print(f"    Seed {seed}: VPT={vpt_lt:.2f} LT")
+                print(f"    Seed {seed}: VPT={vpt_lt:.2f} LT (Val VPT={val_vpt_lt:.2f})")
 
             except DivergenceError as e:
                 print(f"    Seed {seed}: FAILED (Diverged) - {e}. Failing early.")

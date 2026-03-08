@@ -323,7 +323,7 @@ PASSTHROUGH_PRESET = PipelineConfig(
 # -----------------------------------------------------------------------------
 
 TIME_PROJECTION = RandomProjectionConfig(
-    n_units=64,
+    n_units=1024,
     input_scale=0.1,
     input_connectivity=1.0,
     bias_scale=0.1,
@@ -350,7 +350,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=MinMaxScalerConfig(feature_min=mn, feature_max=mx),
     projection=RandomProjectionConfig(
-        n_units=64,
+        n_units=1024,
         input_scale=scale,
         input_connectivity=ic,
         bias_scale=bs,

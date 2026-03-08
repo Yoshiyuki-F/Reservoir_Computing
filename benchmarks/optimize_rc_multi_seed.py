@@ -17,6 +17,9 @@ uv run python benchmarks/optimize_rc_multi_seed.py --dataset lorenz
 uv run python benchmarks/optimize_rc_multi_seed.py --dataset mackey_glass --trials 100
 Visualization:
 uv run optuna-dashboard sqlite:////home/yoshi/PycharmProjects/Reservoir/benchmarks/optimize_rc_mean_vpt.db
+
+uv run python benchmarks/optimize_rc_multi_seed.py --dataset mackey_glass --enqueue-csv benchmarks/filtered_optuna_results.csv
+
 """
 
 import argparse
@@ -174,21 +177,33 @@ def make_objective(readout_config, dataset_enum: Dataset):
                 results: dict[str] = run_pipeline(config, dataset_enum)
 
                 test_results = results.get("test", {})
+                val_results = results.get("validation", {})  # Reporter uses "validation"
                 train_results = results.get("train", {})
-                chaos = test_results.get("chaos_metrics", {})
+                
+                test_chaos = test_results.get("chaos_metrics", {})
+                # For validation, metrics are flat in val_results due to Strategy logic
+                val_chaos = val_results 
 
                 vpt_lt = test_results.get("vpt_lt", 0.0)
+                val_vpt_lt = val_results.get("vpt_lt", 0.0)
                 best_lambda = train_results.get("best_lambda", None)
 
                 if best_lambda is not None:
                     trial.set_user_attr(f"best_lambda_seed{seed}", float(best_lambda))
 
-                # Store chaos metrics per seed
+                # Store TEST chaos metrics per seed
                 for key in ["mse", "nmse", "nrmse", "mase", "ndei",
                             "var_ratio", "correlation", "vpt_steps", "vpt_lt", "vpt_threshold"]:
-                    val = chaos.get(key, None)
+                    val = test_chaos.get(key, None)
                     if val is not None:
                         trial.set_user_attr(f"{key}_seed{seed}", float(val))
+
+                # Store VALIDATION chaos metrics per seed (prefix with val_)
+                for key in ["mse", "nmse", "nrmse", "mase", "ndei",
+                            "var_ratio", "correlation", "vpt_steps", "vpt_lt"]:
+                    val = val_chaos.get(key, None)
+                    if val is not None:
+                        trial.set_user_attr(f"val_{key}_seed{seed}", float(val))
 
                 if vpt_lt is None or math.isnan(vpt_lt) or vpt_lt <= 0:
                     print(f"    Seed {seed}: FAILED (VPT=0). Failing early.")
@@ -198,7 +213,7 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
                 vpts.append(vpt_lt)
                 trial.set_user_attr(f"vpt_lt_seed{seed}", float(vpt_lt))
-                print(f"    Seed {seed}: VPT={vpt_lt:.2f} LT, MSE={chaos.get('mse',0):.5f}, λ={best_lambda:.2e}")
+                print(f"    Seed {seed}: VPT={vpt_lt:.2f} LT (Val VPT={val_vpt_lt:.2f}), MSE={test_chaos.get('mse',0):.5f}, λ={best_lambda:.2e}")
 
             except DivergenceError as e:
                 print(f"    Seed {seed}: FAILED (Diverged) - {e}. Failing early.")
@@ -363,6 +378,27 @@ def main():
                                 params[param_name] = float(v)
                             except ValueError:
                                 pass
+                    
+                    # Convert legacy MinMax params (feature_min/max) to BoundedAffine params (scale/shift)
+                    if 'feature_max' in params:
+                        f_max = params.pop('feature_max')
+                        # feature_min が CSV にない場合はデフォルトの 0 (または -1) を想定
+                        f_min = params.pop('feature_min', 0.0)
+                        bound = np.pi
+                        
+                        # Mathematical conversion to BoundedAffine space:
+                        # scale = (max - min) / (2 * bound)
+                        # shift = (max + min) / (2 * bound * (1 - scale))
+                        scale = (f_max - f_min) / (2 * bound)
+                        if scale < 1.0:
+                            relative_shift = (f_max + f_min) / (2 * bound * (1.0 - scale))
+                        else:
+                            relative_shift = 0.0
+                        
+                        # 探索範囲内にクリップしてエラーを防止
+                        params['scale'] = max(0.001, min(1.0, scale))
+                        params['relative_shift'] = max(-1.0, min(1.0, relative_shift))
+                    
                     if params:
                         study.enqueue_trial(params, skip_if_exists=True)
                         count += 1

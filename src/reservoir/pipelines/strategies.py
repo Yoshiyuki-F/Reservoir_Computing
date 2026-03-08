@@ -597,11 +597,14 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
             val_metrics_chaos = calculate_chaos_metrics(val_y_raw, val_pred_raw, dt=dt, lyapunov_time_unit=ltu)
             print_chaos_metrics(val_metrics_chaos)
-            # if float(val_metrics_chaos.get("vpt_lt", 0.0)) < 3:
-                # print(f"    [Warning] Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT (Threshold: 3.0)")
-                # raise ValueError(f"Validation VPT too low: {val_metrics_chaos.get('vpt_lt'):.2f} LT")
+
+            # Store validation chaos metrics
+            if "validation" not in metrics:
+                metrics["validation"] = {}
+            metrics["validation"].update(val_metrics_chaos)
+            metrics["validation"]["vpt_lt"] = val_metrics_chaos.get("vpt_lt", 0.0)
+
             if float(val_metrics_chaos.get("nmse", 0.0)) > 1e-5:
-                # print(f"    [Warning] Validation NMSE too high: {val_metrics_chaos.get('nmse'):.4f} (Threshold: 1.0)")
                 raise ValueError(f"Validation NMSE too high: {val_metrics_chaos.get('nmse'):.10f}")
 
         # Test Generation ===============================================================================================================================
