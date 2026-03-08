@@ -350,7 +350,7 @@ TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     description="Echo State Network (Classical Reservoir Computing)",
     preprocess=MinMaxScalerConfig(feature_min=mn, feature_max=mx),
     projection=RandomProjectionConfig(
-        n_units=n,
+        n_units=64,
         input_scale=scale,
         input_connectivity=ic,
         bias_scale=bs,
