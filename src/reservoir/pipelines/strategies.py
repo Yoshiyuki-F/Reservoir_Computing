@@ -519,6 +519,7 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
         if readout is None:
             raise ValueError("Readout must be provided for ClosedLoopRegressionStrategy")
 
+        metrics: dict[str, dict[str, Any]] = {}
 
         proj_fn = None
         # Check pipeline_config for projection, not dataset_meta
@@ -599,10 +600,10 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
             print_chaos_metrics(val_metrics_chaos)
 
             # Store validation chaos metrics
-            if "validation" not in metrics:
-                metrics["validation"] = {}
-            metrics["validation"].update(val_metrics_chaos)
-            metrics["validation"]["vpt_lt"] = val_metrics_chaos.get("vpt_lt", 0.0)
+            if "val" not in metrics:
+                metrics["val"] = {}
+            metrics["val"].update(val_metrics_chaos)
+            metrics["val"]["vpt_lt"] = val_metrics_chaos.get("vpt_lt", 0.0)
 
             if float(val_metrics_chaos.get("nmse", 0.0)) > 1e-5:
                 raise ValueError(f"Validation NMSE too high: {val_metrics_chaos.get('nmse'):.10f}")
@@ -720,16 +721,15 @@ class ClosedLoopRegressionStrategy(ReadoutStrategy):
 
         # Calculate Predictions (Open Loop) - Batched
         # Skip Train Prediction for Regression task to save time
-        metrics: dict[str, dict[str, float]] = {}
         if train_y is not None:
              metrics["train"] = {self.metric_name: 0.0} # Placeholder or skip
         
         # Val (if needed, though Strategy optimized on it)
         # val_pred_np should already be set from RidgeCV or Else block above
         if val_pred_np is not None and val_y is not None:
-            metrics["validation"] = {
-                self.metric_name: compute_score(val_pred_np, val_y, self.metric_name)
-            }
+            if "val" not in metrics:
+                 metrics["val"] = {}
+            metrics["val"][self.metric_name] = compute_score(val_pred_np, val_y, self.metric_name)
 
         # Test - Automatically skipped if test_Z is None (from executor.py)
         if test_Z is not None and readout is not None:

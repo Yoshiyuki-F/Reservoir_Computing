@@ -66,13 +66,13 @@ def print_chaos_metrics(metrics: EvalMetrics, header: str | None = None) -> None
     
     # Direct access from strictly typed EvalMetrics
     # Optional fields use 0.0 or inf as defaults to prevent crashes if not present
-    print(f"MSE       : {metrics.get('mse', 0.0):.5f}")
-    print(f"NMSE      : {metrics.get('nmse', float('inf')):.5f}")
-    print(f"NRMSE     : {metrics.get('nrmse', float('inf')):.5f}")
-    print(f"MASE      : {metrics.get('mase', float('inf')):.5f}")
-    print(f"NDEI      : {metrics.get('ndei', float('inf')):.5f} (Target < 0.1)")
-    print(f"Var Ratio : {metrics.get('var_ratio', 0.0):.5f} (Target ~ 1.0)")
-    print(f"Corr      : {metrics.get('correlation', 0.0):.5f} (Target > 0.95)")
+    print(f"MSE       : {metrics.get('mse', 0.0):}")
+    print(f"NMSE      : {metrics.get('nmse', float('inf')):}")
+    print(f"NRMSE     : {metrics.get('nrmse', float('inf')):}")
+    print(f"MASE      : {metrics.get('mase', float('inf')):}")
+    print(f"NDEI      : {metrics.get('ndei', float('inf')):} (Target < 0.1)")
+    print(f"Var Ratio : {metrics.get('var_ratio', 0.0):} (Target ~ 1.0)")
+    print(f"Corr      : {metrics.get('correlation', 0.0):} (Target > 0.95)")
     
     vpt_steps = int(metrics.get("vpt_steps", 0.0))
     vpt_lt = float(metrics.get("vpt_lt", 0.0))
