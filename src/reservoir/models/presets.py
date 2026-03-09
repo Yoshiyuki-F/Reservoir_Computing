@@ -86,7 +86,8 @@ PCA = PCAProjectionConfig(
 
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     use_intercept=False,
-    lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist())
+    lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
+    norm_threshold=100.0,
 )
 
 DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
@@ -94,6 +95,7 @@ DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="square_only",
+    norm_threshold=100.0,
 )
 
 DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
@@ -101,6 +103,7 @@ DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="interaction_only",
+    norm_threshold=100.0,
 )
 
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,100))
@@ -431,7 +434,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model=QuantumReservoirConfig(
         n_qubits=10,
         n_layers=1,
-        seed=44,
+        seed=40,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=f,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)
@@ -442,7 +445,13 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         n_trajectories=0,
         use_reuploading=True,
     ),
-    readout=DEFAULT_POLY_SQUARE_ONLY_READOUT,
+    readout= PolyRidgeReadoutConfig(
+        use_intercept=False,
+        lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
+        degree=2,
+        mode="square_only",
+        norm_threshold=2000.0,
+    ),
 )
 
 

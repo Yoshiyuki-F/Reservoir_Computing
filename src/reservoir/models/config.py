@@ -634,6 +634,7 @@ class QuantumReservoirConfig(ModelConfig):
 class RidgeReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/defaults)."""
     use_intercept: bool
+    norm_threshold: float
     lambda_candidates: tuple[float, ...] | None = None
 
     def validate(self, context: str = "ridgereadout") -> RidgeReadoutConfig:
@@ -643,7 +644,7 @@ class RidgeReadoutConfig(ReadoutConfig):
         return self
 
     def to_dict(self) -> ConfigDict:
-        result: ConfigDict = {"use_intercept": bool(self.use_intercept)}
+        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "norm_threshold": float(self.norm_threshold)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -662,6 +663,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
     lambda_candidates: tuple[float, ...] | None
     degree: int
     mode: Literal["full", "square_only", "interaction_only"]
+    norm_threshold: float
 
     def validate(self, context: str = "polyridgereadout") -> PolyRidgeReadoutConfig:
         if self.lambda_candidates is not None:
@@ -674,7 +676,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
         return self
 
     def to_dict(self) -> ConfigDict:
-        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode)}
+        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode), "norm_threshold": float(self.norm_threshold)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result

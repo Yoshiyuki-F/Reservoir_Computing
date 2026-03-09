@@ -38,6 +38,7 @@ class ReadoutFactory:
                 lambda_candidates=candidates,
                 degree=config.degree,
                 mode=config.mode,
+                norm_threshold=getattr(config, "norm_threshold", 100.0)
             )
 
         # Ridgeの場合
@@ -50,7 +51,8 @@ class ReadoutFactory:
             
             return RidgeCV(
                 use_intercept=config.use_intercept,
-                lambda_candidates=candidates
+                lambda_candidates=candidates,
+                norm_threshold=getattr(config, "norm_threshold", 100.0)
             )
 
         # FNNの場合

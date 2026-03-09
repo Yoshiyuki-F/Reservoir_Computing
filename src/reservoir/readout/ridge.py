@@ -134,13 +134,15 @@ class RidgeCV(ReadoutModule):
     def __init__(
         self, 
         lambda_candidates: tuple[float, ...],
-        use_intercept: bool = True
+        use_intercept: bool = True,
+        norm_threshold: float = 100.0
     ):
         if not lambda_candidates:
             raise ValueError("lambda_candidates must not be empty.")
 
         self.lambda_candidates = lambda_candidates
         self.use_intercept = use_intercept
+        self.norm_threshold = norm_threshold
         self.best_model: RidgeRegression | None = None
 
         # Initialize default model with first candidate (state consistency)
@@ -175,6 +177,7 @@ class RidgeCV(ReadoutModule):
         data = self.best_model.to_dict() if self.best_model else {}
         res: ConfigDict = dict(data)
         res["lambda_candidates"] = tuple(self.lambda_candidates)
+        res["norm_threshold"] = self.norm_threshold
         return res
 
     @classmethod
@@ -187,6 +190,10 @@ class RidgeCV(ReadoutModule):
         else:
              candidates = tuple(float(x) for x in candidates_list)
              
-        instance = cls(lambda_candidates=candidates, use_intercept=bool(d.get("use_intercept", True)))
+        instance = cls(
+            lambda_candidates=candidates, 
+            use_intercept=bool(d.get("use_intercept", True)),
+            norm_threshold=float(d.get("norm_threshold", 100.0))
+        )
         instance.best_model = RidgeRegression.from_dict(data)
         return instance

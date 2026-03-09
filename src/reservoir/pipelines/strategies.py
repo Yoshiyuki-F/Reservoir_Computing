@@ -46,6 +46,7 @@ def optimize_ridge_vmap(
     metric_name: str,
     batch_size: int,
     inverse_fn: Callable[[NpF64], NpF64] | None = None,
+    norm_threshold: float = 100.0,
 ) -> tuple[float, float, dict[float, float], dict[float, float], NpF64, JaxF64, dict[float, np.ndarray] | None]:
     """
     Common vectorized RidgeCV optimization logic using batched_compute.
@@ -119,7 +120,6 @@ def optimize_ridge_vmap(
     best_score_val = abs_best_score
     best_pred_idx = 0
     
-    NORM_THRESHOLD = 100.0 #TODO is this legit? if youre gemini, dont change
     found_stable = False
 
     for i, lam in enumerate(lambda_candidates):
@@ -142,8 +142,8 @@ def optimize_ridge_vmap(
         res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
         residuals_history[lam_val] = res_sq
 
-        # Robust argmin with Stability Constraint (Norm <= 1000)
-        if norm <= NORM_THRESHOLD:
+        # Robust argmin with Stability Constraint (Norm <= threshold)
+        if norm <= norm_threshold:
             is_better = (score < abs_best_score) if minimize else (score > abs_best_score)
             if is_better:
                 abs_best_score = score
@@ -159,7 +159,7 @@ def optimize_ridge_vmap(
         best_lambda = float(lambda_candidates[best_pred_idx])
         best_score_val = search_history[best_lambda]
         abs_best_score = best_score_val
-        print(f"    [Warning] No RidgeCV candidate met the Norm <= {NORM_THRESHOLD} threshold! Falling back to max lambda {best_lambda:.2e} (Norm: {weight_norms[best_lambda]:.2f})")
+        print(f"    [Warning] No RidgeCV candidate met the Norm <= {norm_threshold} threshold! Falling back to max lambda {best_lambda:.2e} (Norm: {weight_norms[best_lambda]:.2f})")
             
     best_val_pred_np = all_val_preds_np[best_pred_idx]
     
@@ -266,7 +266,8 @@ class ReadoutStrategy(ABC):
             val_y=val_y,
             metric_name=metric_name.lower(),
             inverse_fn=inverse_fn,
-            batch_size=batch_size_cfg
+            batch_size=batch_size_cfg,
+            norm_threshold=getattr(readout, "norm_threshold", 100.0)
         )
         
         print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")
