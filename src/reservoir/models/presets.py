@@ -450,7 +450,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
         degree=2,
         mode="square_only",
-        norm_threshold=5000.0,
+        norm_threshold=4000.0,
     ),
 )
 
