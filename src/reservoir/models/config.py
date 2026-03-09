@@ -683,7 +683,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
 
     @property
     def label(self) -> str:
-        return f"PolyRidge_d{int(self.degree)}_{self.mode}"
+        return f"PolyRidge_d{int(self.degree)}_{self.mode}_norm{float(self.norm_threshold):.2f}"
 
 
 @dataclass(frozen=True)
