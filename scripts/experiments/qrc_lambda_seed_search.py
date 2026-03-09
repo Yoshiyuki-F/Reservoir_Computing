@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import io
@@ -17,7 +18,7 @@ def main():
     seeds = [41, 42, 43]
     dataset = Dataset("mackey_glass") 
     
-    results = []
+    csv_path = "scripts/experiments/qrc_lambda_seed_results.csv"
     
     for seed in seeds:
         for lam in lambda_candidates:
@@ -78,27 +79,22 @@ def main():
             
             vpt_lt = None
             if not error_occurred:
-                # Extract metrics
-                metrics = res.get("metrics", {})
-                if "test" in metrics and "vpt_lt" in metrics["test"]:
-                    vpt_lt = metrics["test"]["vpt_lt"]
-                elif "test_vpt_lt" in res:
-                    vpt_lt = res["test_vpt_lt"]
-                elif "chaos_results" in res and res["chaos_results"] is not None:
-                    vpt_lt = res["chaos_results"].get("vpt_lt")
+                # Correctly extract vpt_lt from the reporter's output structure
+                vpt_lt = res.get("test", {}).get("vpt_lt")
 
-            results.append({
+            row = {
                 "seed": seed,
                 "lambda": lam,
                 "vpt_lt": vpt_lt,
                 "diverged": diverged,
                 "error": error_occurred
-            })
+            }
             print(f"Result -> VPT_LT: {vpt_lt}, Diverged: {diverged}, Error: {error_occurred is not None}")
-                    
-    df = pd.DataFrame(results)
-    df.to_csv("scripts/experiments/qrc_lambda_seed_results.csv", index=False)
-    print("Done! Saved to scripts/experiments/qrc_lambda_seed_results.csv")
+            
+            # Save to CSV incrementally so we don't lose data
+            df = pd.DataFrame([row])
+            header = not os.path.exists(csv_path)
+            df.to_csv(csv_path, mode='a', header=header, index=False)
 
 if __name__ == "__main__":
     main()
