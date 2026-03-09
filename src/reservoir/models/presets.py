@@ -434,7 +434,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     model=QuantumReservoirConfig(
         n_qubits=10,
         n_layers=1,
-        seed=40,
+        seed=41,
         aggregation=AggregationMode.SEQUENCE,
         feedback_scale=f,    # a_fb: R gate feedback scaling (paper default)
         leak_rate=lr,         # Leaky integrator rate (tunable by optimizer)
@@ -450,7 +450,7 @@ TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
         lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
         degree=2,
         mode="square_only",
-        norm_threshold=700.0,
+        norm_threshold=5000.0,
     ),
 )
 
