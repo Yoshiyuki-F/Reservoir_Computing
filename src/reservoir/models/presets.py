@@ -412,11 +412,11 @@ WINDOWED_FNN_PRESET = PipelineConfig(
 
 
 # --------------------------------------------------------------------------
-scale, rs, f, lr = 0.03811568272497027, 0.039626056938894795, 2.3536203916302614, 0.17091909220487084 #q10 mg
-
-
+scale, rs, f, lr = 0.038015263451324666, 0.19041335672406576, 2.6764652369291992, 0.1732129929337844 #q10 mg
 '''
 uv run python -m reservoir.cli.main --model quantum_reservoir --dataset lorenz
+uv run python -m reservoir.cli.main --model quantum_reservoir --dataset mackey_glass
+
 '''
 TIME_QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     name="quantum_reservoir",
