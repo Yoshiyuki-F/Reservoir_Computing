@@ -130,21 +130,21 @@ rs_denom = 2.0 * bound - maxminusmin
 rs = maxplusmin / rs_denom if rs_denom != 0 else 0.0
 
 BAS_MNIST = BoundedAffineScalerConfig(
-    # scale=0.5630129536792166,  # 100
-    scale=scale,  # 1200
-    # relative_shift=-0.4680118430007132, # 100
-    relative_shift=rs, # 1200
+    scale=0.5630129536792166,  # 100
+    # scale=scale,  # 1200
+    relative_shift=-0.4680118430007132, # 100
+    # relative_shift=rs, # 1200
     bound=1.0,
 )
 
 RP_MNIST = RandomProjectionConfig(
-    n_units=1200,
-    # input_scale=0.3543930218531782, #100
-    input_scale=0.3478958243673553,  # 1200
-    # input_connectivity=0.21745075681282766, #100
-    input_connectivity=0.32024990697532185, # 1200
-    # bias_scale=0.1725142451754484, #100
-    bias_scale= 0.9911807193106197, # 1200
+    n_units=100,
+    input_scale=0.3543930218531782, #100
+    # input_scale=0.3478958243673553,  # 1200
+    input_connectivity=0.21745075681282766, #100
+    # input_connectivity=0.32024990697532185, # 1200
+    bias_scale=0.1725142451754484, #100
+    # bias_scale= 0.9911807193106197, # 1200
     seed=1,
 )
 
@@ -152,12 +152,12 @@ RP_MNIST = RandomProjectionConfig(
 ###------Dynamics-------------------------------------------------
 
 CLASSICAL_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
-    # spectral_radius= 1.921291918880454, #100
-    spectral_radius= 1.4707341636189577,  # 1200
-    # leak_rate= 0.36449529864842045, #100
-    leak_rate= 0.5078438853580478, #1200
-    # rc_connectivity=0.6784641706491135, #100
-    rc_connectivity=0.0760855941265183,  # 1200
+    spectral_radius= 1.921291918880454, #100
+    # spectral_radius= 1.4707341636189577,  # 1200
+    leak_rate= 0.36449529864842045, #100
+    # leak_rate= 0.5078438853580478, #1200
+    rc_connectivity=0.6784641706491135, #100
+    # rc_connectivity=0.0760855941265183,  # 1200
 
     seed=42,
     aggregation=AggregationMode.MEAN,
@@ -193,7 +193,7 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(),
+            hidden_layers=(250, 250),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -262,8 +262,6 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     projection=QUANTUM_BAPCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
     readout=DEFAULT_RIDGE_READOUT
-    # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
-    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 
@@ -345,16 +343,23 @@ TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 '''
 uv run python -m reservoir.cli.main --model classical_reservoir --dataset mackey_glass
 '''
-n, seed, mn, mx, scale, ic, bs, sr, lr, rc = 64, 42, -1.252115, 0.197144, 0.780619, 0.486849, 0.676372, 1.198058, 0.553195, 0.983015
+n, seed, scale, rs, i_s, ic, bs, sr, lr, rc = (1024, 44,
+                                               0.8436431187151687, -0.12528935376091327,
+                                               0.458864613612307, 0.4965598702058054, 0.23917186182,
+                                               0.7715076993575791, 0.401461974556713, 0.8893440178514834)
 
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",
     model_type=Model.CLASSICAL_RESERVOIR,
     description="Echo State Network (Classical Reservoir Computing)",
-    preprocess=MinMaxScalerConfig(feature_min=mn, feature_max=mx),
+    preprocess=BoundedAffineScalerConfig(
+        scale=scale,
+        relative_shift=rs,
+        bound=np.pi,
+    ),
     projection=RandomProjectionConfig(
-        n_units=1024,
-        input_scale=scale,
+        n_units=n,
+        input_scale=i_s,
         input_connectivity=ic,
         bias_scale=bs,
         seed=seed,

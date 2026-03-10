@@ -75,16 +75,6 @@ def build_config(
     base = CLASSICAL_RESERVOIR_PRESET
 
 
-
-
-    # # Update Preprocess (MinMaxScaler)
-    # if isinstance(base.preprocess, MinMaxScalerConfig):
-    #     new_prep = dataclasses.replace(
-    #         base.preprocess,
-    #         feature_min=feature_min,
-    #         feature_max=feature_max,
-    #     )
-
     if isinstance(base.preprocess, BoundedAffineScalerConfig):
         new_prep = dataclasses.replace(
             base.preprocess,
@@ -255,11 +245,6 @@ def derive_names(readout_key: str, dataset_name: str):
         prep_tag = "MinMaX"
     else:
         prep_tag = preprocess_name
-    
-    # Custom MinMax tag
-    if isinstance(base.preprocess, MinMaxScalerConfig):
-        # prep_tag = f"Min{int(base.preprocess.feature_min)}Max{int(base.preprocess.feature_max)}"
-        prep_tag = f"MinMax"
 
     # Projection
     proj = base.projection
