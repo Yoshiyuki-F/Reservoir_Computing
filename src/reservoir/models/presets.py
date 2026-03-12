@@ -193,7 +193,7 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(250, 250),
+            hidden_layers=(1000, ),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
@@ -343,10 +343,10 @@ TIME_RESERVOIR_DYNAMICS = ClassicalReservoirConfig(
 '''
 uv run python -m reservoir.cli.main --model classical_reservoir --dataset mackey_glass
 '''
-n, seed, scale, rs, i_s, ic, bs, sr, lr, rc = (1024, 44,
-                                               0.8436431187151687, -0.12528935376091327,
-                                               0.458864613612307, 0.4965598702058054, 0.23917186182,
-                                               0.7715076993575791, 0.401461974556713, 0.8893440178514834)
+n, seed, scale, rs, i_s, ic, bs, sr, lr, rc = (1024, 43,
+                                               0.9931276629248719, -0.07502047166961824,
+                                               0.1929080674483568, 0.41994880827163866, 0.8454564628001286,
+                                               1.3419461715056762, 0.9619528144715261, 0.6101109566279057)
 
 TIME_CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     name="classical_reservoir",

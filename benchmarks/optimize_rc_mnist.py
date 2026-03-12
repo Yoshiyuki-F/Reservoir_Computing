@@ -141,30 +141,23 @@ def make_objective(readout_config, dataset_enum: Dataset):
 
         scale = trial.suggest_float("scale", 0.0, 1.0)
         relative_shift = trial.suggest_float("relative_shift", -1.0, 1.0)
-        # relative_shift = trial.suggest_float("relative_shift", 0.0, 0.0)
 
 
         #=======Projection======================================================================
 
         input_scale = trial.suggest_float("input_scale", 0.0, 1.0)
-        # input_scale = trial.suggest_float("input_scale", 1.0, 1.0)
 
         input_connectivity = trial.suggest_float("input_connectivity", 0.0, 1.0)
-        # input_connectivity = trial.suggest_float("input_connectivity", 0.7789498820486052, 0.7789498820486052)
 
         bias_scale = trial.suggest_float("bias_scale", 0.0, 1.0)
-        # bias_scale = trial.suggest_float("bias_scale", 0.6664704836440828, 0.6664704836440828)
 
 
         # Reservoir
         spectral_radius = trial.suggest_float("spectral_radius", 0.5, 2.5)
-        # spectral_radius = trial.suggest_float("spectral_radius", 1.45, 1.45)
 
         leak_rate = trial.suggest_float("leak_rate", 0.0, 1.0)
-        # leak_rate = trial.suggest_float("leak_rate", 0.66, 0.66)
 
         rc_connectivity = trial.suggest_float("rc_connectivity", 0.0, 1.0)
-        # rc_connectivity = trial.suggest_float("rc_connectivity", 0.6784641706491135,  0.6784641706491135)
 
 
         # === 2. Build Config ===
