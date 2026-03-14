@@ -224,10 +224,10 @@ FNN_PRESET = PipelineConfig(
 # scale = (max - min) / 2* bound
 # relative_shift = (max + min)/2 * bound - (max - min)
 
-# s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
-s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
+s, r, f, lr = 0.3084006355114488, -0.01206032906534976, 3.196929844938574, 0.15402317414946048 #6
+# s, r, f, lr = 0.6090938771390537, 0.0, 3.141592653589793,  0.1616784879347744 # 10
 QUANTUM_BAPCA = BoundedAffinePCAConfig(
-    n_units=10,
+    n_units=6,
     scale=s,
     relative_shift=r,
     bound=math.pi,
@@ -261,10 +261,10 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=QUANTUM_BAPCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
-    # readout=DEFAULT_RIDGE_READOUT
-    readout = FNNReadoutConfig(
-        hidden_layers=(55, )
-    )
+    readout=DEFAULT_RIDGE_READOUT
+    # readout = FNNReadoutConfig(
+    #     hidden_layers=(55, )
+    # )
 )
 
 
