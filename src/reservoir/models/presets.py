@@ -261,9 +261,9 @@ QUANTUM_RESERVOIR_PRESET = PipelineConfig(
     preprocess=StandardScalerConfig(),
     projection=QUANTUM_BAPCA,
     model=QUANTUM_RESERVOIR_DYNAMICS,
-    # readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_RIDGE_READOUT
     # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
-    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
     # readout = FNNReadoutConfig(
     #     hidden_layers=(55, )
     # )
