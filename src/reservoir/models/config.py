@@ -652,7 +652,7 @@ class RidgeReadoutConfig(ReadoutConfig):
     @property
     def label(self) -> str:
         norm_label = "None" if self.norm_threshold is None else f"{float(self.norm_threshold):.2f}"
-        return f"RidgeCVRO_norm{norm_label}"
+        return f"RidgeCVRO_norm{norm_label}_intercept{use_intercept}"
 
 
 
@@ -690,7 +690,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
     @property
     def label(self) -> str:
         norm_label = "None" if self.norm_threshold is None else f"{float(self.norm_threshold):.2f}"
-        return f"PolyRidge_d{int(self.degree)}_{self.mode}_norm{norm_label}"
+        return f"PolyRidge_d{int(self.degree)}_{self.mode}_norm{norm_label}_intercept{use_intercept}"
 
 
 @dataclass(frozen=True)
