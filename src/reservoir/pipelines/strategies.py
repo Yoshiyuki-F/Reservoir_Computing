@@ -36,6 +36,90 @@ class DivergenceError(ValueError):
         self.stats: dict[str, float] = stats
 
 
+_RIDGE_FEATURE_BATCH_BUDGET_BYTES = 128 * 1024 * 1024
+_RIDGE_SOLVE_BATCH_BUDGET_BYTES = 512 * 1024 * 1024
+
+
+def _augment_design_matrix(features: JaxF64, use_intercept: bool) -> JaxF64:
+    """Append an intercept column when requested."""
+    if not use_intercept:
+        return features
+    ones = jnp.ones((features.shape[0], 1), dtype=features.dtype)
+    return jnp.concatenate([ones, features], axis=1)
+
+
+def _resolve_ridge_feature_batch_size(
+    train_Z: JaxF64,
+    batch_size: int,
+    use_intercept: bool,
+    feature_mapper: Callable[[JaxF64], JaxF64] | None,
+) -> tuple[int, int]:
+    """Estimate a safe sample chunk size for feature expansion on GPU."""
+    if train_Z.shape[0] == 0:
+        return max(1, batch_size), int(train_Z.shape[1])
+
+    sample_features = train_Z[:1]
+    if feature_mapper is not None:
+        sample_features = feature_mapper(sample_features)
+
+    expanded_dim = int(sample_features.shape[1])
+    design_dim = expanded_dim + int(use_intercept)
+    bytes_per_sample = max(1, design_dim * np.dtype(np.float64).itemsize)
+    budget_limited = max(1, _RIDGE_FEATURE_BATCH_BUDGET_BYTES // bytes_per_sample)
+    feature_batch_size = max(1, min(int(batch_size), int(budget_limited), int(train_Z.shape[0])))
+    return feature_batch_size, expanded_dim
+
+
+def _resolve_ridge_lambda_chunk_size(n_features: int, n_candidates: int) -> int:
+    """Limit how many lambda systems are solved at once for large feature spaces."""
+    matrix_bytes = max(1, n_features * n_features * np.dtype(np.float64).itemsize)
+    chunk_size = max(1, _RIDGE_SOLVE_BATCH_BUDGET_BYTES // matrix_bytes)
+    return max(1, min(int(n_candidates), int(chunk_size)))
+
+
+def _accumulate_ridge_normal_equations(
+    train_Z: JaxF64,
+    train_y: JaxF64,
+    use_intercept: bool,
+    feature_mapper: Callable[[JaxF64], JaxF64] | None,
+    sample_batch_size: int,
+    expanded_dim: int,
+) -> tuple[JaxF64, JaxF64]:
+    """Build XtX and Xty without materializing the full expanded training matrix."""
+    y_train_mat = train_y if train_y.ndim > 1 else train_y[:, None]
+    n_targets = int(y_train_mat.shape[1])
+
+    n_features = expanded_dim + int(use_intercept)
+    pad_size = (-int(train_Z.shape[0])) % sample_batch_size
+    if pad_size > 0:
+        x_pad = [(0, pad_size)] + [(0, 0)] * (train_Z.ndim - 1)
+        y_pad = [(0, pad_size)] + [(0, 0)] * (y_train_mat.ndim - 1)
+        train_Z = jnp.pad(train_Z, tuple(x_pad))
+        y_train_mat = jnp.pad(y_train_mat, tuple(y_pad))
+
+    n_chunks = max(1, int(train_Z.shape[0]) // sample_batch_size)
+    chunked_train_Z = train_Z.reshape((n_chunks, sample_batch_size, *train_Z.shape[1:]))
+    chunked_train_y = y_train_mat.reshape((n_chunks, sample_batch_size, *y_train_mat.shape[1:]))
+
+    XtX0 = jnp.zeros((n_features, n_features), dtype=train_Z.dtype)
+    Xty0 = jnp.zeros((n_features, n_targets), dtype=train_Z.dtype)
+
+    @jax.jit
+    def scan_accumulate(x_chunks: JaxF64, y_chunks: JaxF64) -> tuple[JaxF64, JaxF64]:
+        def scan_step(carry: tuple[JaxF64, JaxF64], batch: tuple[JaxF64, JaxF64]) -> tuple[tuple[JaxF64, JaxF64], None]:
+            xtx_acc, xty_acc = carry
+            x_batch, y_batch = batch
+            mapped_batch = feature_mapper(x_batch) if feature_mapper is not None else x_batch
+            x_aug = _augment_design_matrix(mapped_batch, use_intercept)
+            next_carry = (xtx_acc + (x_aug.T @ x_aug), xty_acc + (x_aug.T @ y_batch))
+            return next_carry, None
+
+        (XtX, Xty), _ = jax.lax.scan(scan_step, (XtX0, Xty0), (x_chunks, y_chunks))
+        return XtX, Xty
+
+    return scan_accumulate(chunked_train_Z, chunked_train_y)
+
+
 def optimize_ridge_vmap(
     lambda_candidates: tuple[float, ...],
     use_intercept: bool,
@@ -47,6 +131,7 @@ def optimize_ridge_vmap(
     batch_size: int,
     inverse_fn: Callable[[NpF64], NpF64] | None = None,
     norm_threshold: float = 100.0,
+    feature_mapper: Callable[[JaxF64], JaxF64] | None = None,
 ) -> tuple[float, float, dict[float, float], dict[float, float], NpF64, JaxF64, dict[float, np.ndarray] | None]:
     """
     Common vectorized RidgeCV optimization logic using batched_compute.
@@ -60,29 +145,38 @@ def optimize_ridge_vmap(
         all_weights (all candidate weights)
         residuals_history (optional, for regression analysis)
     """
-    from typing import Callable
-    
-    # 1. Add Intercept if needed
-    if use_intercept:
-        ones_train = jnp.ones((train_Z.shape[0], 1))
-        X_train_aug = jnp.concatenate([ones_train, train_Z], axis=1)
-        ones_val = jnp.ones((val_Z.shape[0], 1))
-        val_Z_aug = jnp.concatenate([ones_val, val_Z], axis=1)
-    else:
-        X_train_aug = train_Z
-        val_Z_aug = val_Z
-
-    # 2. Precompute XtX and Xty
+    # 1. Precompute XtX and Xty without materializing the full expanded train design.
     y_train_mat = train_y
     if y_train_mat.ndim == 1:
         y_train_mat = y_train_mat[:, None]
 
-    XtX = X_train_aug.T @ X_train_aug
-    Xty = X_train_aug.T @ y_train_mat
-    n_features = XtX.shape[0]
-    identity = jnp.eye(n_features)
+    feature_batch_size, expanded_dim = _resolve_ridge_feature_batch_size(
+        train_Z=train_Z,
+        batch_size=batch_size,
+        use_intercept=use_intercept,
+        feature_mapper=feature_mapper,
+    )
+    if feature_mapper is not None:
+        print(
+            f"[strategies.py] RidgeCV normal equations: chunked feature expansion "
+            f"(expanded_dim={expanded_dim}, chunk_size={feature_batch_size})."
+        )
 
-    # 3. Vectorized Solver
+    XtX, Xty = _accumulate_ridge_normal_equations(
+        train_Z=train_Z,
+        train_y=y_train_mat,
+        use_intercept=use_intercept,
+        feature_mapper=feature_mapper,
+        sample_batch_size=feature_batch_size,
+        expanded_dim=expanded_dim,
+    )
+
+    mapped_val_Z = feature_mapper(val_Z) if feature_mapper is not None else val_Z
+    val_Z_aug = _augment_design_matrix(mapped_val_Z, use_intercept)
+    n_features = XtX.shape[0]
+    identity = jnp.eye(n_features, dtype=XtX.dtype)
+
+    # 2. Solve ridge systems, chunking lambda batches for large feature spaces.
     @jax.jit
     def solve_ridge_vectorized(lams: JaxF64) -> JaxF64:
         def solve_one(lam_l: float) -> JaxF64:
@@ -90,9 +184,21 @@ def optimize_ridge_vmap(
         return jax.vmap(solve_one)(lams)
 
     lambdas_jax = jnp.array(lambda_candidates)
-    all_weights = solve_ridge_vectorized(lambdas_jax) # (N_lam, N_feat, N_out)
+    lambda_chunk_size = _resolve_ridge_lambda_chunk_size(int(n_features), len(lambda_candidates))
+    if lambda_chunk_size < len(lambda_candidates):
+        print(
+            f"[strategies.py] RidgeCV solve: splitting {len(lambda_candidates)} lambdas "
+            f"into chunks of {lambda_chunk_size} for {int(n_features)} features."
+        )
 
-    # 4. Batched Prediction
+    weight_chunks: list[JaxF64] = []
+    for start in range(0, len(lambda_candidates), lambda_chunk_size):
+        stop = min(start + lambda_chunk_size, len(lambda_candidates))
+        weight_chunks.append(solve_ridge_vectorized(lambdas_jax[start:stop]))
+
+    all_weights = jnp.concatenate(weight_chunks, axis=0) # (N_lam, N_feat, N_out)
+
+    # 3. Batched validation prediction over lambda chunks.
     def predict_batch_fn(weights_batch: JaxF64) -> JaxF64:
         return jnp.einsum("sf,bfo->bso", val_Z_aug, weights_batch)
 
@@ -102,12 +208,12 @@ def optimize_ridge_vmap(
     all_val_preds_np = batched_compute(
         predict_batch_fn,
         all_weights_np,
-        batch_size=batch_size,
+        batch_size=lambda_chunk_size,
         desc="RidgeCV Search",
         file="strategies.py",
         step="7"
     )
-    # 5. Score on CPU
+    # 4. Score on CPU
     search_history: dict[float, float] = {}
     weight_norms: dict[float, float] = {}
     residuals_history: dict[float, np.ndarray] = {}
@@ -249,11 +355,7 @@ class ReadoutStrategy(ABC):
         if y_jax.ndim == 1:
             y_jax = y_jax[:, None]
         val_X_jax = to_jax_f64(val_Z)
-        
-        # Feature Expansion (PolyRidge)
-        if hasattr(readout, "map_features"):
-            X_jax = readout.map_features(X_jax)
-            val_X_jax = readout.map_features(val_X_jax)
+        feature_mapper = getattr(readout, "map_features", None)
         
         batch_size_cfg = int(dataset_meta.training.batch_size) if dataset_meta.training and dataset_meta.training.batch_size else 32
         
@@ -267,7 +369,8 @@ class ReadoutStrategy(ABC):
             metric_name=metric_name.lower(),
             inverse_fn=inverse_fn,
             batch_size=batch_size_cfg,
-            norm_threshold=getattr(readout, "norm_threshold", 100.0)
+            norm_threshold=getattr(readout, "norm_threshold", 100.0),
+            feature_mapper=feature_mapper,
         )
         
         print(f"[strategies.py] Best Lambda: {best_lambda:.5e} (Score: {best_score:.5f})")

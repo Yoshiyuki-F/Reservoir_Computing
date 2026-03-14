@@ -87,7 +87,7 @@ PCA = PCAProjectionConfig(
 DEFAULT_RIDGE_READOUT = RidgeReadoutConfig(
     use_intercept=False,
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
-    norm_threshold=100.0,
+    norm_threshold=20000.0,
 )
 
 DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
@@ -95,7 +95,7 @@ DEFAULT_POLY_SQUARE_ONLY_READOUT = PolyRidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="square_only",
-    norm_threshold=100.0,
+    norm_threshold=20000.0,
 )
 
 DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
@@ -103,7 +103,7 @@ DEFAULT_POLY_INTERACTION_ONLY_READOUT = PolyRidgeReadoutConfig(
     lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
     degree=2,
     mode="interaction_only",
-    norm_threshold=100.0,
+    norm_threshold=None,
 )
 
 DEFAULT_FNN_READOUT = FNNReadoutConfig(hidden_layers=(100,100))
@@ -176,9 +176,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     # readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
-    # readout=DEFAULT_RIDGE_READOUT
+    readout=DEFAULT_RIDGE_READOUT
     # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
-    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 '''
