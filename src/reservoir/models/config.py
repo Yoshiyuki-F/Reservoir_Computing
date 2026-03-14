@@ -651,7 +651,8 @@ class RidgeReadoutConfig(ReadoutConfig):
 
     @property
     def label(self) -> str:
-        return "RidgeCVRO"
+        norm_label = "None" if self.norm_threshold is None else f"{float(self.norm_threshold):.2f}"
+        return f"RidgeCVRO_norm{norm_label}"
 
 
 
