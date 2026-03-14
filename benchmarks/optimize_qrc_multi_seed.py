@@ -117,7 +117,6 @@ def make_objective(measurement_basis: str, readout_config, use_reuploading: bool
 
         # ======================== Reservoir ==================================
         # n_layers = trial.suggest_categorical("n_layers", [1, 2, 3,4,5,6,7])
-        n_layers = 1 # Fixed to 1 for stability in multi-seed evaluation
 
         feedback_scale = trial.suggest_float("feedback_scale", 0, np.pi)
         leak_rate = trial.suggest_float("leak_rate", 0, 1)
