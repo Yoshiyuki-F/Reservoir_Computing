@@ -36,7 +36,7 @@ class PolyRidgeReadout(RidgeCV):
         use_intercept: bool,
         degree,
         mode: Literal["full", "square_only", "interaction_only"],
-        norm_threshold: float = 100.0
+        norm_threshold: float | None
     ) -> None:
         super().__init__(lambda_candidates=lambda_candidates, use_intercept=use_intercept, norm_threshold=norm_threshold)
         self.degree = degree

@@ -130,7 +130,7 @@ def optimize_ridge_vmap(
     metric_name: str,
     batch_size: int,
     inverse_fn: Callable[[NpF64], NpF64] | None = None,
-    norm_threshold: float = 100.0,
+    norm_threshold: float | None = None,
     feature_mapper: Callable[[JaxF64], JaxF64] | None = None,
 ) -> tuple[float, float, dict[float, float], dict[float, float], NpF64, JaxF64, dict[float, np.ndarray] | None]:
     """
@@ -248,8 +248,9 @@ def optimize_ridge_vmap(
         res_sq = (p_eval.ravel() - t_eval.ravel()) ** 2 / (energy + 1e-12)
         residuals_history[lam_val] = res_sq
 
-        # Robust argmin with Stability Constraint (Norm <= threshold)
-        if norm <= norm_threshold:
+        # Robust argmin with optional stability constraint (None => no cap)
+        within_threshold = norm_threshold is None or norm <= norm_threshold
+        if within_threshold:
             is_better = (score < abs_best_score) if minimize else (score > abs_best_score)
             if is_better:
                 abs_best_score = score

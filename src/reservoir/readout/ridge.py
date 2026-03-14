@@ -23,6 +23,7 @@ class _RidgeData(TypedDict, total=False):
     coef: tuple[float, ...] | None
     intercept: tuple[float, ...] | float | None
     lambda_candidates: tuple[float, ...]
+    norm_threshold: float | None
 
 class RidgeRegression(ReadoutModule):
     """
@@ -135,7 +136,7 @@ class RidgeCV(ReadoutModule):
         self, 
         lambda_candidates: tuple[float, ...],
         use_intercept: bool = True,
-        norm_threshold: float = 100.0
+        norm_threshold: float | None = 100.0
     ):
         if not lambda_candidates:
             raise ValueError("lambda_candidates must not be empty.")
@@ -193,7 +194,7 @@ class RidgeCV(ReadoutModule):
         instance = cls(
             lambda_candidates=candidates, 
             use_intercept=bool(d.get("use_intercept", True)),
-            norm_threshold=float(d.get("norm_threshold", 100.0))
+            norm_threshold=(float(d["norm_threshold"]) if d.get("norm_threshold") is not None else None)
         )
         instance.best_model = RidgeRegression.from_dict(data)
         return instance

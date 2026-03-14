@@ -634,7 +634,7 @@ class QuantumReservoirConfig(ModelConfig):
 class RidgeReadoutConfig(ReadoutConfig):
     """Step 7 readout configuration (structure/defaults)."""
     use_intercept: bool
-    norm_threshold: float
+    norm_threshold: float | None
     lambda_candidates: tuple[float, ...] | None = None
 
     def validate(self, context: str = "ridgereadout") -> RidgeReadoutConfig:
@@ -644,7 +644,7 @@ class RidgeReadoutConfig(ReadoutConfig):
         return self
 
     def to_dict(self) -> ConfigDict:
-        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "norm_threshold": float(self.norm_threshold)}
+        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "norm_threshold": (float(self.norm_threshold) if self.norm_threshold is not None else None)}
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
@@ -663,7 +663,7 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
     lambda_candidates: tuple[float, ...] | None
     degree: int
     mode: Literal["full", "square_only", "interaction_only"]
-    norm_threshold: float
+    norm_threshold: float | None
 
     def validate(self, context: str = "polyridgereadout") -> PolyRidgeReadoutConfig:
         if self.lambda_candidates is not None:
@@ -676,14 +676,20 @@ class PolyRidgeReadoutConfig(ReadoutConfig):
         return self
 
     def to_dict(self) -> ConfigDict:
-        result: ConfigDict = {"use_intercept": bool(self.use_intercept), "degree": int(self.degree), "mode": str(self.mode), "norm_threshold": float(self.norm_threshold)}
+        result: ConfigDict = {
+            "use_intercept": bool(self.use_intercept),
+            "degree": int(self.degree),
+            "mode": str(self.mode),
+            "norm_threshold": (float(self.norm_threshold) if self.norm_threshold is not None else None),
+        }
         if self.lambda_candidates is not None:
             result["lambda_candidates"] = [float(v) for v in self.lambda_candidates]
         return result
 
     @property
     def label(self) -> str:
-        return f"PolyRidge_d{int(self.degree)}_{self.mode}_norm{float(self.norm_threshold):.2f}"
+        norm_label = "None" if self.norm_threshold is None else f"{float(self.norm_threshold):.2f}"
+        return f"PolyRidge_d{int(self.degree)}_{self.mode}_norm{norm_label}"
 
 
 @dataclass(frozen=True)
@@ -702,6 +708,5 @@ class FNNReadoutConfig(ReadoutConfig):
     def label(self) -> str:
         layers = "x".join(str(w) for w in (self.hidden_layers or ()))
         return f"FNNReadout_{layers}"
-
 
 
