@@ -176,11 +176,7 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     # readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
-    readout = RidgeReadoutConfig(
-        use_intercept=True,
-        lambda_candidates=tuple(np.logspace(-12, 3, 30).tolist()),
-        norm_threshold=None,
-    )
+    readout=DEFAULT_RIDGE_READOUT
     # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
     # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
@@ -197,7 +193,7 @@ FNN_DISTILLATION_CLASSICAL_PRESET = PipelineConfig(
     model=DistillationConfig(
         teacher=CLASSICAL_RESERVOIR_DYNAMICS,
         student=FNNConfig(
-            hidden_layers=(1000, ),
+            hidden_layers=(250,),
         ),
     ),
     readout=DEFAULT_RIDGE_READOUT
