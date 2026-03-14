@@ -176,9 +176,9 @@ CLASSICAL_RESERVOIR_PRESET = PipelineConfig(
     projection=RP_MNIST,
     model=CLASSICAL_RESERVOIR_DYNAMICS,
     # readout=FNNReadoutConfig(hidden_layers=(1000, 1000))
-    readout=DEFAULT_RIDGE_READOUT
+    # readout=DEFAULT_RIDGE_READOUT
     # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
-    # readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
 )
 
 '''
