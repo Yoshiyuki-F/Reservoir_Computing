@@ -304,10 +304,12 @@ PASSTHROUGH_PRESET = PipelineConfig(
     model=PassthroughConfig(
         aggregation=AggregationMode.MEAN,
     ),
-    # readout= DEFAULT_POLY_SQUARE_ONLY_READOUT
-    readout = FNNReadoutConfig(
-        hidden_layers=(55,)
-    )
+    # readout=DEFAULT_RIDGE_READOUT
+    # readout=DEFAULT_POLY_SQUARE_ONLY_READOUT
+    readout=DEFAULT_POLY_INTERACTION_ONLY_READOUT
+    # readout = FNNReadoutConfig(
+    #     hidden_layers=(55,)
+    # )
 )
 
 

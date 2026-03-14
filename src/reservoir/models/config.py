@@ -298,7 +298,7 @@ class RandomProjectionConfig(ProjectionConfig):
 
     @property
     def label(self) -> str:
-        return f"RP{int(self.n_units)}_is{float(self.input_scale):.2f}_c{float(self.input_connectivity):.2f}_bs{float(self.bias_scale):.2f}"
+        return f"RP{int(self.n_units)}_is{float(self.input_scale):.2f}_c{float(self.input_connectivity):.2f}_bs{float(self.bias_scale):.2f}_seed{int(self.seed):d}"
 
 @dataclass(frozen=True)
 class CenterCropProjectionConfig(ProjectionConfig):
