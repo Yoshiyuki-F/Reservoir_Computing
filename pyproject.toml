@@ -1,12 +1,12 @@
 [project]
 name = "reservoir"
-version = "0.1.0"
+version = "0.2.0"
 description = "JAX-based Reservoir Computing with GPU acceleration"
 authors = [
     { name = "yoshi", email = "yossyf1147@gmail.com" }
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13.12"
 dependencies = [
     "numpy",
     #visualization
@@ -24,6 +24,7 @@ dependencies = [
     "ruff",
     #Quantum
     "tensorcircuit-ng[jax]",
+    "qiskit", # just to test for transpiled circuit depth in superconductive hardware
     #mnist dataset
     "torch", #CPU version
     "torchvision", #CPU version
@@ -37,8 +38,8 @@ dependencies = [
     # hyper parameter optimization
     "optuna",
     "optuna-dashboard",
-    "ipykernel>=7.2.0",
-    "qiskit>=2.3.0",
+    #jupiter notebook
+    "ipykernel",
 ]
 
 
