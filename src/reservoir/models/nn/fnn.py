@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 from beartype import beartype
 import flax.linen as nn
 import jax.numpy as jnp
-import jax
 
 from reservoir.models.config import FNNConfig
 from reservoir.models.nn.base import BaseFlaxModel
